@@ -1,0 +1,5 @@
+{"timestamp":"2026-07-07T10:14:22.381Z","level":"INFO","subsystem":"Startup","eventCode":"SESSION_START","message":"Telemetry session initialized","entityId":"SYS-001"}
+{"timestamp":"2026-07-07T10:14:23.014Z","level":"WARN","subsystem":"Tracking","eventCode":"TRACK_LOST","message":"Track 402 lost for 1200ms","entityId":"TRK-402"}
+{"timestamp":"2026-07-07T10:14:24.219Z","level":"ERROR","subsystem":"Comms","eventCode":"PACKET_DROP","message":"Packet loss exceeded threshold","entityId":"LINK-A"}
+{"timestamp":"2026-07-07T10:14:26.844Z","level":"INFO","subsystem":"Tracking","eventCode":"TRACK_REACQUIRED","message":"Track 402 reacquired","entityId":"TRK-402"}
+{"timestamp":"2026-07-07T10:14:29.102Z","level":"WARN","subsystem":"Power","eventCode":"VOLTAGE_DIP","message":"Voltage dipped below nominal range","entityId":"PWR-02"}

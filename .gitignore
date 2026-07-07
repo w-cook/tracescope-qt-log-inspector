@@ -1,0 +1,24 @@
+# Build output
+build/
+cmake-build-*/
+out/
+
+# Qt Creator / CMake user files
+*.user
+*.user.*
+CMakeUserPresets.json
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Compiled artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.obj
+*.o
+*.pdb
