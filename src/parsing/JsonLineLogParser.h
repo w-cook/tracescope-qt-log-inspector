@@ -10,4 +10,5 @@ class JsonLineLogParser
 {
 public:
     QVector<TelemetryEvent> parseLines(const QStringList &lines) const;
+    QVector<TelemetryEvent> parseFile(const QString &filePath) const;
 };

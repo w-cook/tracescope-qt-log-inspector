@@ -27,14 +27,14 @@ Implemented:
 - CMake-based build setup
 - Basic main window shell
 - Telemetry event domain type
-- JSON Lines parser placeholder
-- Qt Test project scaffold
+- JSON Lines parser for structured telemetry events
+- Parser behavior for valid records, empty lines, and malformed JSON
+- Qt Test coverage for parser foundation
 - Sample telemetry log file
 
 Not implemented yet:
 - File open/import workflow
-- JSONL parsing logic
-- Table population
+- Table population from parsed files
 - Filtering
 - Search
 - Event detail panel
