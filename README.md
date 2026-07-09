@@ -31,15 +31,19 @@ Implemented:
 - Parser behavior for valid records, empty lines, and malformed JSON
 - Qt Test coverage for parser foundation
 - Sample telemetry log file
+- File open/import workflow for local log files
+- Table display for parsed telemetry events
+- Basic session summary counts by severity
+- Parser support for reading JSON Lines files from disk
 
 Not implemented yet:
-- File open/import workflow
-- Table population from parsed files
-- Filtering
+- Severity filtering
+- Subsystem filtering
 - Search
 - Event detail panel
-- Summary panel
-- Export
+- Grouped warnings/errors
+- Export filtered results
+- Timeline or chart-style visualization
 
 ## Tech Stack
 
