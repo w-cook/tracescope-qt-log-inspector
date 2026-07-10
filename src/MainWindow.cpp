@@ -9,11 +9,19 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QComboBox>
+#include <QHBoxLayout>
+#include <QLineEdit>
+#include <QSet>
+#include <utility>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       summaryLabel(new QLabel("No log file loaded.")),
-      eventTable(new QTableWidget(0, 5))
+      eventTable(new QTableWidget(0, 5)),
+      levelFilterCombo(new QComboBox(this)),
+      subsystemFilterCombo(new QComboBox(this)),
+      searchInput(new QLineEdit(this))
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
     resize(1100, 700);
@@ -55,6 +63,7 @@ void MainWindow::buildLayout()
     auto *layout = new QVBoxLayout(central);
 
     layout->addWidget(summaryLabel);
+    buildFilterControls(layout);
     layout->addWidget(eventTable);
 
     setCentralWidget(central);
@@ -88,8 +97,10 @@ void MainWindow::loadLogFile(const QString &filePath)
             );
     }
 
-    populateTable(currentEvents);
-    updateSummary(currentEvents, filePath);
+    refreshSubsystemFilterOptions();
+    applyFilters();
+
+    currentFilePath = filePath;
 }
 
 void MainWindow::populateTable(const QVector<TelemetryEvent> &events)
@@ -131,11 +142,93 @@ void MainWindow::updateSummary(
     }
 
     summaryLabel->setText(
-        QString("Loaded %1 events from %2 | INFO: %3 | WARN: %4 | ERROR: %5")
+        QString("Showing %1 of %2 events from %3 | INFO: %4 | WARN: %5 | ERROR: %6")
             .arg(events.size())
+            .arg(currentEvents.size())
             .arg(filePath)
             .arg(infoCount)
             .arg(warningCount)
             .arg(errorCount)
         );
+}
+
+void MainWindow::buildFilterControls(QVBoxLayout *layout)
+{
+    levelFilterCombo->addItem("All levels", "");
+    levelFilterCombo->addItem("INFO", "INFO");
+    levelFilterCombo->addItem("WARN", "WARN");
+    levelFilterCombo->addItem("ERROR", "ERROR");
+
+    subsystemFilterCombo->addItem("All subsystems", "");
+
+    searchInput->setPlaceholderText("Search timestamp, level, subsystem, code, message, or entity ID...");
+
+    auto *filterLayout = new QHBoxLayout();
+
+    filterLayout->addWidget(levelFilterCombo);
+    filterLayout->addWidget(subsystemFilterCombo);
+    filterLayout->addWidget(searchInput);
+
+    layout->addLayout(filterLayout);
+
+    connect(levelFilterCombo, &QComboBox::currentIndexChanged, this, [this]() {
+        applyFilters();
+    });
+
+    connect(subsystemFilterCombo, &QComboBox::currentIndexChanged, this, [this]() {
+        applyFilters();
+    });
+
+    connect(searchInput, &QLineEdit::textChanged, this, [this]() {
+        applyFilters();
+    });
+}
+
+TelemetryFilterCriteria MainWindow::currentFilterCriteria() const
+{
+    TelemetryFilterCriteria criteria;
+    criteria.level = levelFilterCombo->currentData().toString();
+    criteria.subsystem = subsystemFilterCombo->currentData().toString();
+    criteria.searchText = searchInput->text();
+
+    return criteria;
+}
+
+void MainWindow::applyFilters()
+{
+    filteredEvents = eventFilter.apply(currentEvents, currentFilterCriteria());
+
+    populateTable(filteredEvents);
+    updateSummary(filteredEvents, currentFilePath);
+}
+
+void MainWindow::refreshSubsystemFilterOptions()
+{
+    const QString selectedSubsystem = subsystemFilterCombo->currentData().toString();
+
+    subsystemFilterCombo->blockSignals(true);
+    subsystemFilterCombo->clear();
+    subsystemFilterCombo->addItem("All subsystems", "");
+
+    QSet<QString> subsystems;
+
+    for (const TelemetryEvent &event : std::as_const(currentEvents)) {
+        if (!event.subsystem.isEmpty()) {
+            subsystems.insert(event.subsystem);
+        }
+    }
+
+    const QList<QString> sortedSubsystems = QList<QString>(subsystems.begin(), subsystems.end());
+
+    for (const QString &subsystem : sortedSubsystems) {
+        subsystemFilterCombo->addItem(subsystem, subsystem);
+    }
+
+    const int previousIndex = subsystemFilterCombo->findData(selectedSubsystem);
+
+    if (previousIndex >= 0) {
+        subsystemFilterCombo->setCurrentIndex(previousIndex);
+    }
+
+    subsystemFilterCombo->blockSignals(false);
 }

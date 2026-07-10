@@ -20,8 +20,6 @@ The project is intended to demonstrate a practical native desktop workflow for e
 
 ## Current Status
 
-Initial project foundation.
-
 Implemented:
 - Qt Widgets application scaffold
 - CMake-based build setup
@@ -35,11 +33,13 @@ Implemented:
 - Table display for parsed telemetry events
 - Basic session summary counts by severity
 - Parser support for reading JSON Lines files from disk
-
-Not implemented yet:
 - Severity filtering
 - Subsystem filtering
-- Search
+- Text search across event fields
+- Filtered summary count display
+- Qt Test coverage for filtering logic
+
+Not implemented yet:
 - Event detail panel
 - Grouped warnings/errors
 - Export filtered results

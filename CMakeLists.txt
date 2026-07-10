@@ -16,6 +16,9 @@ qt_add_executable(TraceScope
     src/domain/TelemetryEvent.h
     src/parsing/JsonLineLogParser.h
     src/parsing/JsonLineLogParser.cpp
+    src/filtering/TelemetryFilterCriteria.h
+    src/filtering/TelemetryEventFilter.h
+    src/filtering/TelemetryEventFilter.cpp
 )
 
 target_link_libraries(TraceScope
