@@ -13,12 +13,16 @@
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QSet>
+#include <QGroupBox>
+#include <QPlainTextEdit>
+#include <QStringList>
 #include <utility>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       summaryLabel(new QLabel("No log file loaded.")),
       eventTable(new QTableWidget(0, 5)),
+      eventDetailText(new QPlainTextEdit(this)),
       levelFilterCombo(new QComboBox(this)),
       subsystemFilterCombo(new QComboBox(this)),
       searchInput(new QLineEdit(this))
@@ -65,6 +69,7 @@ void MainWindow::buildLayout()
     layout->addWidget(summaryLabel);
     buildFilterControls(layout);
     layout->addWidget(eventTable);
+    buildDetailPanel(layout);
 
     setCentralWidget(central);
 }
@@ -120,6 +125,8 @@ void MainWindow::populateTable(const QVector<TelemetryEvent> &events)
 
     eventTable->resizeColumnsToContents();
     eventTable->horizontalHeader()->setStretchLastSection(true);
+    eventTable->clearSelection();
+    clearEventDetail();
 }
 
 void MainWindow::updateSummary(
@@ -231,4 +238,55 @@ void MainWindow::refreshSubsystemFilterOptions()
     }
 
     subsystemFilterCombo->blockSignals(false);
+}
+
+void MainWindow::buildDetailPanel(QVBoxLayout *layout)
+{
+    auto *detailGroup = new QGroupBox("Selected Event Details", this);
+
+    eventDetailText->setReadOnly(true);
+    eventDetailText->setPlaceholderText("Select an event row to inspect details.");
+    eventDetailText->setMinimumHeight(140);
+
+    auto *detailLayout = new QVBoxLayout(detailGroup);
+    detailLayout->addWidget(eventDetailText);
+
+    layout->addWidget(detailGroup);
+
+    connect(eventTable, &QTableWidget::itemSelectionChanged, this, [this]() {
+        updateEventDetailFromSelection();
+    });
+}
+
+void MainWindow::updateEventDetailFromSelection()
+{
+    const int row = eventTable->currentRow();
+
+    if (row < 0 || row >= filteredEvents.size()) {
+        clearEventDetail();
+        return;
+    }
+
+    displayEventDetail(filteredEvents[row]);
+}
+
+void MainWindow::displayEventDetail(const TelemetryEvent &event)
+{
+    QStringList lines;
+
+    lines << "Timestamp: " + event.timestamp;
+    lines << "Level: " + event.level;
+    lines << "Subsystem: " + event.subsystem;
+    lines << "Event Code: " + event.eventCode;
+    lines << "Entity ID: " + event.entityId;
+    lines << "";
+    lines << "Message:";
+    lines << event.message;
+
+    eventDetailText->setPlainText(lines.join("\n"));
+}
+
+void MainWindow::clearEventDetail()
+{
+    eventDetailText->clear();
 }

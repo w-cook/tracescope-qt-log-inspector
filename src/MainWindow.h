@@ -14,6 +14,7 @@ class QTableWidget;
 class QComboBox;
 class QLineEdit;
 class QVBoxLayout;
+class QPlainTextEdit;
 
 class MainWindow : public QMainWindow
 {
@@ -25,12 +26,12 @@ public:
 private:
     QLabel *summaryLabel;
     QTableWidget *eventTable;
+    QPlainTextEdit *eventDetailText;
 
-    JsonLineLogParser parser;
     QVector<TelemetryEvent> currentEvents;
-
     QVector<TelemetryEvent> filteredEvents;
 
+    JsonLineLogParser parser;
     TelemetryEventFilter eventFilter;
 
     QComboBox *levelFilterCombo;
@@ -48,5 +49,9 @@ private:
     void buildFilterControls(QVBoxLayout *layout);
     void applyFilters();
     void refreshSubsystemFilterOptions();
+    void buildDetailPanel(QVBoxLayout *layout);
+    void updateEventDetailFromSelection();
+    void displayEventDetail(const TelemetryEvent &event);
+    void clearEventDetail();
     TelemetryFilterCriteria currentFilterCriteria() const;
 };

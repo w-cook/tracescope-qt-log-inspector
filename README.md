@@ -38,9 +38,10 @@ Implemented:
 - Text search across event fields
 - Filtered summary count display
 - Qt Test coverage for filtering logic
+- Selected event detail panel
+- Row selection workflow for inspecting parsed telemetry events
 
 Not implemented yet:
-- Event detail panel
 - Grouped warnings/errors
 - Export filtered results
 - Timeline or chart-style visualization
