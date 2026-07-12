@@ -19,6 +19,9 @@ qt_add_executable(TraceScope
     src/filtering/TelemetryFilterCriteria.h
     src/filtering/TelemetryEventFilter.h
     src/filtering/TelemetryEventFilter.cpp
+    src/analysis/TelemetryIssueGroup.h
+    src/analysis/TelemetryIssueAnalyzer.h
+    src/analysis/TelemetryIssueAnalyzer.cpp
 )
 
 target_link_libraries(TraceScope

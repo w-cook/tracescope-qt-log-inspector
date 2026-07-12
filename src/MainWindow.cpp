@@ -23,6 +23,7 @@ MainWindow::MainWindow(QWidget *parent)
       summaryLabel(new QLabel("No log file loaded.")),
       eventTable(new QTableWidget(0, 5)),
       eventDetailText(new QPlainTextEdit(this)),
+      issueSummaryTable(new QTableWidget(0, 4)),
       levelFilterCombo(new QComboBox(this)),
       subsystemFilterCombo(new QComboBox(this)),
       searchInput(new QLineEdit(this))
@@ -69,6 +70,7 @@ void MainWindow::buildLayout()
     layout->addWidget(summaryLabel);
     buildFilterControls(layout);
     layout->addWidget(eventTable);
+    buildIssueSummaryPanel(layout);
     buildDetailPanel(layout);
 
     setCentralWidget(central);
@@ -207,6 +209,7 @@ void MainWindow::applyFilters()
 
     populateTable(filteredEvents);
     updateSummary(filteredEvents, currentFilePath);
+    updateIssueSummary(filteredEvents);
 }
 
 void MainWindow::refreshSubsystemFilterOptions()
@@ -289,4 +292,57 @@ void MainWindow::displayEventDetail(const TelemetryEvent &event)
 void MainWindow::clearEventDetail()
 {
     eventDetailText->clear();
+}
+
+void MainWindow::buildIssueSummaryPanel(QVBoxLayout *layout)
+{
+    auto *issueGroup = new QGroupBox("Grouped Warnings and Errors", this);
+
+    issueSummaryTable->setHorizontalHeaderLabels({
+        "Subsystem",
+        "Warnings",
+        "Errors",
+        "Total"
+    });
+
+    issueSummaryTable->horizontalHeader()->setStretchLastSection(true);
+    issueSummaryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    issueSummaryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    issueSummaryTable->setMaximumHeight(180);
+
+    auto *issueLayout = new QVBoxLayout(issueGroup);
+    issueLayout->addWidget(issueSummaryTable);
+
+    layout->addWidget(issueGroup);
+}
+
+void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
+{
+    const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(events);
+
+    issueSummaryTable->setRowCount(groups.size());
+
+    for (int row = 0; row < groups.size(); ++row) {
+        const TelemetryIssueGroup &group = groups[row];
+
+        issueSummaryTable->setItem(row, 0, new QTableWidgetItem(group.subsystem));
+        issueSummaryTable->setItem(
+            row,
+            1,
+            new QTableWidgetItem(QString::number(group.warningCount))
+            );
+        issueSummaryTable->setItem(
+            row,
+            2,
+            new QTableWidgetItem(QString::number(group.errorCount))
+            );
+        issueSummaryTable->setItem(
+            row,
+            3,
+            new QTableWidgetItem(QString::number(group.totalCount()))
+            );
+    }
+
+    issueSummaryTable->resizeColumnsToContents();
+    issueSummaryTable->horizontalHeader()->setStretchLastSection(true);
 }

@@ -40,9 +40,11 @@ Implemented:
 - Qt Test coverage for filtering logic
 - Selected event detail panel
 - Row selection workflow for inspecting parsed telemetry events
+- Grouped warning/error summary by subsystem
+- Filter-aware grouped issue counts
+- Qt Test coverage for grouped issue analysis
 
 Not implemented yet:
-- Grouped warnings/errors
 - Export filtered results
 - Timeline or chart-style visualization
 

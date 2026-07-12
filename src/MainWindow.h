@@ -8,6 +8,7 @@
 #include "parsing/JsonLineLogParser.h"
 #include "filtering/TelemetryEventFilter.h"
 #include "filtering/TelemetryFilterCriteria.h"
+#include "analysis/TelemetryIssueAnalyzer.h"
 
 class QLabel;
 class QTableWidget;
@@ -15,6 +16,7 @@ class QComboBox;
 class QLineEdit;
 class QVBoxLayout;
 class QPlainTextEdit;
+class QGroupBox;
 
 class MainWindow : public QMainWindow
 {
@@ -27,12 +29,14 @@ private:
     QLabel *summaryLabel;
     QTableWidget *eventTable;
     QPlainTextEdit *eventDetailText;
+    QTableWidget *issueSummaryTable;
 
     QVector<TelemetryEvent> currentEvents;
     QVector<TelemetryEvent> filteredEvents;
 
     JsonLineLogParser parser;
     TelemetryEventFilter eventFilter;
+    TelemetryIssueAnalyzer issueAnalyzer;
 
     QComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
@@ -53,5 +57,7 @@ private:
     void updateEventDetailFromSelection();
     void displayEventDetail(const TelemetryEvent &event);
     void clearEventDetail();
+    void buildIssueSummaryPanel(QVBoxLayout *layout);
+    void updateIssueSummary(const QVector<TelemetryEvent> &events);
     TelemetryFilterCriteria currentFilterCriteria() const;
 };

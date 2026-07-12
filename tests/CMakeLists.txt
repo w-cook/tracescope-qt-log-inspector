@@ -28,3 +28,19 @@ target_link_libraries(FilterTests
 )
 
 add_test(NAME FilterTests COMMAND FilterTests)
+
+qt_add_executable(IssueAnalyzerTests
+    IssueAnalyzerTests.cpp
+    ../src/analysis/TelemetryIssueGroup.h
+    ../src/analysis/TelemetryIssueAnalyzer.h
+    ../src/analysis/TelemetryIssueAnalyzer.cpp
+    ../src/domain/TelemetryEvent.h
+)
+
+target_link_libraries(IssueAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(NAME IssueAnalyzerTests COMMAND IssueAnalyzerTests)
