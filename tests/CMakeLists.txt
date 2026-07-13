@@ -44,3 +44,18 @@ target_link_libraries(IssueAnalyzerTests
 )
 
 add_test(NAME IssueAnalyzerTests COMMAND IssueAnalyzerTests)
+
+qt_add_executable(CsvExporterTests
+    CsvExporterTests.cpp
+    ../src/exporting/TelemetryCsvExporter.h
+    ../src/exporting/TelemetryCsvExporter.cpp
+    ../src/domain/TelemetryEvent.h
+)
+
+target_link_libraries(CsvExporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(NAME CsvExporterTests COMMAND CsvExporterTests)

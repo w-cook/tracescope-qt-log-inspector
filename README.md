@@ -43,10 +43,14 @@ Implemented:
 - Grouped warning/error summary by subsystem
 - Filter-aware grouped issue counts
 - Qt Test coverage for grouped issue analysis
+- Export filtered telemetry events to CSV
+- CSV export support for currently visible filtered results
+- Qt Test coverage for CSV exporter behavior
 
 Not implemented yet:
-- Export filtered results
 - Timeline or chart-style visualization
+- Screenshots
+- Final README polish
 
 ## Tech Stack
 

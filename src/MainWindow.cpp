@@ -47,6 +47,16 @@ void MainWindow::createMenus()
     });
 
     fileMenu->addAction(openAction);
+
+    auto *exportAction = new QAction("&Export Filtered Results...", this);
+    exportAction->setShortcut(QKeySequence::Save);
+
+    connect(exportAction, &QAction::triggered, this, [this]() {
+        exportFilteredResults();
+    });
+
+    fileMenu->addSeparator();
+    fileMenu->addAction(exportAction);
 }
 
 void MainWindow::buildLayout()
@@ -345,4 +355,46 @@ void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
 
     issueSummaryTable->resizeColumnsToContents();
     issueSummaryTable->horizontalHeader()->setStretchLastSection(true);
+}
+
+void MainWindow::exportFilteredResults()
+{
+    if (filteredEvents.isEmpty()) {
+        QMessageBox::information(
+            this,
+            "No Events to Export",
+            "There are no currently visible telemetry events to export."
+            );
+
+        return;
+    }
+
+    const QString filePath = QFileDialog::getSaveFileName(
+        this,
+        "Export Filtered Telemetry Events",
+        "filtered-telemetry-events.csv",
+        "CSV Files (*.csv);;All Files (*)"
+        );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const bool exported = csvExporter.exportToFile(filteredEvents, filePath);
+
+    if (!exported) {
+        QMessageBox::warning(
+            this,
+            "Export Failed",
+            "TraceScope could not export the filtered telemetry events."
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        "Export Complete",
+        QString("Exported %1 telemetry events.").arg(filteredEvents.size())
+        );
 }

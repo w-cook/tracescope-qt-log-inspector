@@ -9,6 +9,7 @@
 #include "filtering/TelemetryEventFilter.h"
 #include "filtering/TelemetryFilterCriteria.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
+#include "exporting/TelemetryCsvExporter.h"
 
 class QLabel;
 class QTableWidget;
@@ -37,6 +38,7 @@ private:
     JsonLineLogParser parser;
     TelemetryEventFilter eventFilter;
     TelemetryIssueAnalyzer issueAnalyzer;
+    TelemetryCsvExporter csvExporter;
 
     QComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
@@ -51,6 +53,7 @@ private:
     void populateTable(const QVector<TelemetryEvent> &events);
     void updateSummary(const QVector<TelemetryEvent> &events, const QString &filePath);
     void buildFilterControls(QVBoxLayout *layout);
+    TelemetryFilterCriteria currentFilterCriteria() const;
     void applyFilters();
     void refreshSubsystemFilterOptions();
     void buildDetailPanel(QVBoxLayout *layout);
@@ -59,5 +62,5 @@ private:
     void clearEventDetail();
     void buildIssueSummaryPanel(QVBoxLayout *layout);
     void updateIssueSummary(const QVector<TelemetryEvent> &events);
-    TelemetryFilterCriteria currentFilterCriteria() const;
+    void exportFilteredResults();
 };

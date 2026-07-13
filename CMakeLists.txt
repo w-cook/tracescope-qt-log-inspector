@@ -22,6 +22,8 @@ qt_add_executable(TraceScope
     src/analysis/TelemetryIssueGroup.h
     src/analysis/TelemetryIssueAnalyzer.h
     src/analysis/TelemetryIssueAnalyzer.cpp
+    src/exporting/TelemetryCsvExporter.h
+    src/exporting/TelemetryCsvExporter.cpp
 )
 
 target_link_libraries(TraceScope
