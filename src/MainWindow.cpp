@@ -3,6 +3,8 @@
 #include <QAction>
 #include <QFileDialog>
 #include <QHeaderView>
+#include <QScrollBar>
+#include <QAbstractScrollArea>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -16,7 +18,17 @@
 #include <QGroupBox>
 #include <QPlainTextEdit>
 #include <QStringList>
+#include <QSizePolicy>
+#include <QSplitter>
+#include <QtCharts/QBarCategoryAxis>
+#include <QtCharts/QBarSeries>
+#include <QtCharts/QBarSet>
+#include <QtCharts/QChart>
+#include <QtCharts/QChartView>
+#include <QtCharts/QValueAxis>
+#include <QtCharts/QLegend>
 #include <utility>
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -24,12 +36,13 @@ MainWindow::MainWindow(QWidget *parent)
       eventTable(new QTableWidget(0, 5)),
       eventDetailText(new QPlainTextEdit(this)),
       issueSummaryTable(new QTableWidget(0, 4)),
+      timelineChartView(new QChartView(this)),
       levelFilterCombo(new QComboBox(this)),
       subsystemFilterCombo(new QComboBox(this)),
       searchInput(new QLineEdit(this))
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
-    resize(1100, 700);
+    resize(1100, 760);
 
     createMenus();
     buildLayout();
@@ -61,6 +74,24 @@ void MainWindow::createMenus()
 
 void MainWindow::buildLayout()
 {
+    auto *centralWidget = new QWidget(this);
+    auto *layout = new QVBoxLayout(centralWidget);
+
+    layout->addWidget(summaryLabel);
+    buildFilterControls(layout);
+
+    auto *timelineGroup = buildTimelinePanel();
+
+    auto *eventsGroup = new QGroupBox("Telemetry Events", this);
+    auto *eventsLayout = new QVBoxLayout(eventsGroup);
+
+    eventTable->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Expanding
+        );
+
+    eventTable->setColumnCount(6);
+
     eventTable->setHorizontalHeaderLabels({
         "Timestamp",
         "Level",
@@ -70,20 +101,49 @@ void MainWindow::buildLayout()
         "Message"
     });
 
-    eventTable->horizontalHeader()->setStretchLastSection(true);
+    eventTable->setAlternatingRowColors(true);
     eventTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    eventTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    eventTable->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    auto *central = new QWidget(this);
-    auto *layout = new QVBoxLayout(central);
+    eventsLayout->addWidget(eventTable);
 
-    layout->addWidget(summaryLabel);
-    buildFilterControls(layout);
-    layout->addWidget(eventTable);
-    buildIssueSummaryPanel(layout);
-    buildDetailPanel(layout);
+    auto *issueSummaryGroup = buildIssueSummaryPanel();
+    auto *detailGroup = buildDetailPanel();
 
-    setCentralWidget(central);
+    auto *bottomSplitter = new QSplitter(Qt::Horizontal, this);
+
+    bottomSplitter->addWidget(issueSummaryGroup);
+    bottomSplitter->addWidget(detailGroup);
+
+    bottomSplitter->setStretchFactor(0, 0);
+    bottomSplitter->setStretchFactor(1, 1);
+
+    bottomSplitter->setCollapsible(0, false);
+    bottomSplitter->setCollapsible(1, false);
+
+    bottomSplitter->setSizes({
+        issueSummaryTable->minimumWidth() + 30,
+        1000
+    });
+
+    auto *mainSplitter = new QSplitter(Qt::Vertical, this);
+    mainSplitter->addWidget(timelineGroup);
+    mainSplitter->addWidget(eventsGroup);
+    mainSplitter->addWidget(bottomSplitter);
+
+    mainSplitter->setStretchFactor(0, 2);
+    mainSplitter->setStretchFactor(1, 5);
+    mainSplitter->setStretchFactor(2, 2);
+
+    mainSplitter->setCollapsible(0, false);
+    mainSplitter->setCollapsible(1, false);
+    mainSplitter->setCollapsible(2, false);
+
+    mainSplitter->setSizes(QList<int>{220, 350, 250});
+
+    layout->addWidget(mainSplitter, 1);
+
+    setCentralWidget(centralWidget);
 }
 
 void MainWindow::openLogFile()
@@ -220,6 +280,7 @@ void MainWindow::applyFilters()
     populateTable(filteredEvents);
     updateSummary(filteredEvents, currentFilePath);
     updateIssueSummary(filteredEvents);
+    updateTimelineChart(filteredEvents);
 }
 
 void MainWindow::refreshSubsystemFilterOptions()
@@ -253,22 +314,27 @@ void MainWindow::refreshSubsystemFilterOptions()
     subsystemFilterCombo->blockSignals(false);
 }
 
-void MainWindow::buildDetailPanel(QVBoxLayout *layout)
+QGroupBox *MainWindow::buildDetailPanel()
 {
-    auto *detailGroup = new QGroupBox("Selected Event Details", this);
+    auto *detailGroup =
+        new QGroupBox("Selected Event Details", this);
 
     eventDetailText->setReadOnly(true);
-    eventDetailText->setPlaceholderText("Select an event row to inspect details.");
-    eventDetailText->setMinimumHeight(140);
+    eventDetailText->setPlaceholderText(
+        "Select a telemetry event to view its details."
+        );
 
     auto *detailLayout = new QVBoxLayout(detailGroup);
     detailLayout->addWidget(eventDetailText);
 
-    layout->addWidget(detailGroup);
+    connect(
+        eventTable,
+        &QTableWidget::itemSelectionChanged,
+        this,
+        &MainWindow::updateEventDetailFromSelection
+        );
 
-    connect(eventTable, &QTableWidget::itemSelectionChanged, this, [this]() {
-        updateEventDetailFromSelection();
-    });
+    return detailGroup;
 }
 
 void MainWindow::updateEventDetailFromSelection()
@@ -304,10 +370,12 @@ void MainWindow::clearEventDetail()
     eventDetailText->clear();
 }
 
-void MainWindow::buildIssueSummaryPanel(QVBoxLayout *layout)
+QGroupBox *MainWindow::buildIssueSummaryPanel()
 {
-    auto *issueGroup = new QGroupBox("Grouped Warnings and Errors", this);
+    auto *issueSummaryGroup =
+        new QGroupBox("Grouped Warnings and Errors", this);
 
+    issueSummaryTable->setColumnCount(4);
     issueSummaryTable->setHorizontalHeaderLabels({
         "Subsystem",
         "Warnings",
@@ -315,15 +383,29 @@ void MainWindow::buildIssueSummaryPanel(QVBoxLayout *layout)
         "Total"
     });
 
-    issueSummaryTable->horizontalHeader()->setStretchLastSection(true);
-    issueSummaryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    issueSummaryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    issueSummaryTable->setMaximumHeight(180);
+    issueSummaryTable->horizontalHeader()->setSectionResizeMode(
+        QHeaderView::ResizeToContents
+        );
 
-    auto *issueLayout = new QVBoxLayout(issueGroup);
+    issueSummaryTable->horizontalHeader()->setStretchLastSection(false);
+    issueSummaryTable->horizontalHeader()->resizeSections(
+        QHeaderView::ResizeToContents
+        );
+
+    const int requiredTableWidth =
+        issueSummaryTable->verticalHeader()->width()
+        + issueSummaryTable->horizontalHeader()->length()
+        + issueSummaryTable->frameWidth() * 2
+        + issueSummaryTable->verticalScrollBar()->sizeHint().width()
+        + 8;
+
+    issueSummaryTable->setMinimumWidth(requiredTableWidth);
+    issueSummaryTable->setAlternatingRowColors(true);
+
+    auto *issueLayout = new QVBoxLayout(issueSummaryGroup);
     issueLayout->addWidget(issueSummaryTable);
 
-    layout->addWidget(issueGroup);
+    return issueSummaryGroup;
 }
 
 void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
@@ -353,8 +435,18 @@ void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
             );
     }
 
-    issueSummaryTable->resizeColumnsToContents();
-    issueSummaryTable->horizontalHeader()->setStretchLastSection(true);
+    issueSummaryTable->horizontalHeader()->resizeSections(
+        QHeaderView::ResizeToContents
+        );
+
+    const int requiredTableWidth =
+        issueSummaryTable->verticalHeader()->width()
+        + issueSummaryTable->horizontalHeader()->length()
+        + issueSummaryTable->frameWidth() * 2
+        + issueSummaryTable->verticalScrollBar()->sizeHint().width()
+        + 8;
+
+    issueSummaryTable->setMinimumWidth(requiredTableWidth);
 }
 
 void MainWindow::exportFilteredResults()
@@ -397,4 +489,80 @@ void MainWindow::exportFilteredResults()
         "Export Complete",
         QString("Exported %1 telemetry events.").arg(filteredEvents.size())
         );
+}
+
+QGroupBox *MainWindow::buildTimelinePanel()
+{
+    auto *timelineGroup =
+        new QGroupBox("Event Counts Over Time", this);
+
+    timelineChartView->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Expanding
+        );
+
+    timelineChartView->setMinimumHeight(190);
+    timelineChartView->setRenderHint(QPainter::Antialiasing);
+
+    auto *timelineLayout = new QVBoxLayout(timelineGroup);
+    timelineLayout->addWidget(timelineChartView);
+
+    return timelineGroup;
+}
+
+void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
+{
+    const auto buckets = timelineAnalyzer.groupEventsByMinute(events);
+
+    if (buckets.isEmpty()) {
+        auto *chart = new QChart();
+        chart->setTitle("No events to display");
+        timelineChartView->setChart(chart);
+        return;
+    }
+
+    auto *infoSet = new QBarSet("INFO");
+    auto *warnSet = new QBarSet("WARN");
+    auto *errorSet = new QBarSet("ERROR");
+
+    QStringList categories;
+
+    for (const EventCountBucket &bucket : buckets) {
+        categories << bucket.label;
+        *infoSet << bucket.infoCount;
+        *warnSet << bucket.warningCount;
+        *errorSet << bucket.errorCount;
+    }
+
+    auto *series = new QBarSeries();
+    series->append(infoSet);
+    series->append(warnSet);
+    series->append(errorSet);
+
+    auto *chart = new QChart();
+    chart->addSeries(series);
+    chart->setTitle("Filtered Event Counts by Minute");
+    chart->setAnimationOptions(QChart::NoAnimation);
+    chart->legend()->setAlignment(Qt::AlignRight);
+
+    auto *axisX = new QBarCategoryAxis();
+    axisX->append(categories);
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    auto *axisY = new QValueAxis();
+    axisY->setTitleText("Events");
+    axisY->setLabelFormat("%d");
+
+    int maxTotal = 1;
+
+    for (const EventCountBucket &bucket : buckets) {
+        maxTotal = std::max(maxTotal, bucket.totalCount());
+    }
+
+    axisY->setRange(0, maxTotal);
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    timelineChartView->setChart(chart);
 }

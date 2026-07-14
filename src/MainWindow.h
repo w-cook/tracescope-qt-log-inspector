@@ -10,6 +10,7 @@
 #include "filtering/TelemetryFilterCriteria.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/TelemetryCsvExporter.h"
+#include "analysis/EventTimelineAnalyzer.h"
 
 class QLabel;
 class QTableWidget;
@@ -18,6 +19,7 @@ class QLineEdit;
 class QVBoxLayout;
 class QPlainTextEdit;
 class QGroupBox;
+class QChartView;
 
 class MainWindow : public QMainWindow
 {
@@ -38,6 +40,7 @@ private:
     JsonLineLogParser parser;
     TelemetryEventFilter eventFilter;
     TelemetryIssueAnalyzer issueAnalyzer;
+    EventTimelineAnalyzer timelineAnalyzer;
     TelemetryCsvExporter csvExporter;
 
     QComboBox *levelFilterCombo;
@@ -45,6 +48,8 @@ private:
     QLineEdit *searchInput;
 
     QString currentFilePath;
+
+    QChartView *timelineChartView;
 
     void buildLayout();
     void createMenus();
@@ -56,11 +61,13 @@ private:
     TelemetryFilterCriteria currentFilterCriteria() const;
     void applyFilters();
     void refreshSubsystemFilterOptions();
-    void buildDetailPanel(QVBoxLayout *layout);
+    QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();
     void displayEventDetail(const TelemetryEvent &event);
     void clearEventDetail();
-    void buildIssueSummaryPanel(QVBoxLayout *layout);
+    QGroupBox *buildIssueSummaryPanel();
     void updateIssueSummary(const QVector<TelemetryEvent> &events);
     void exportFilteredResults();
+    QGroupBox *buildTimelinePanel();
+    void updateTimelineChart(const QVector<TelemetryEvent> &events);
 };

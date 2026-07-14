@@ -59,3 +59,19 @@ target_link_libraries(CsvExporterTests
 )
 
 add_test(NAME CsvExporterTests COMMAND CsvExporterTests)
+
+qt_add_executable(EventTimelineAnalyzerTests
+    EventTimelineAnalyzerTests.cpp
+    ../src/analysis/EventCountBucket.h
+    ../src/analysis/EventTimelineAnalyzer.h
+    ../src/analysis/EventTimelineAnalyzer.cpp
+    ../src/domain/TelemetryEvent.h
+)
+
+target_link_libraries(EventTimelineAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(NAME EventTimelineAnalyzerTests COMMAND EventTimelineAnalyzerTests)
