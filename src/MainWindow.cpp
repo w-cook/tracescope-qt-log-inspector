@@ -70,6 +70,20 @@ void MainWindow::createMenus()
 
     fileMenu->addSeparator();
     fileMenu->addAction(exportAction);
+
+    auto *helpMenu = menuBar()->addMenu("&Help");
+
+    auto *aboutAction = new QAction("&About TraceScope", this);
+
+    connect(aboutAction, &QAction::triggered, this, [this]() {
+        QMessageBox::about(
+            this,
+            "About TraceScope",
+            "TraceScope is a Qt/C++ telemetry log inspector for loading, filtering, visualizing, and exporting structured diagnostic log files."
+            );
+    });
+
+    helpMenu->addAction(aboutAction);
 }
 
 void MainWindow::buildLayout()
