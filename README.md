@@ -1,85 +1,182 @@
 # TraceScope — Qt Telemetry Log Inspector
 
-TraceScope is a native Qt/C++ desktop application for loading, filtering, visualizing, and inspecting structured telemetry or diagnostic log files.
+TraceScope is a native Qt/C++ desktop application for loading, filtering, visualizing, inspecting, and exporting structured telemetry or diagnostic log files.
 
-The project is intended to demonstrate a practical native desktop workflow for engineers, QA testers, support teams, and field technicians who need to inspect logs from simulated devices, services, sensors, or diagnostic systems.
+It is designed as a practical diagnostic utility for file-based logs produced by simulated devices, services, sensors, QA runs, field-support packages, or engineering test systems.
 
-## Planned v1 Scope
+## Features
 
-- Open/import local JSON Lines telemetry log files
+- Open local JSON Lines telemetry log files
 - Parse structured log records into C++ domain objects
-- Display events in a table
-- Filter by severity level
-- Filter by subsystem
-- Search event text
-- Display selected event details
-- Show session summary counts
-- Export filtered results
-- Include unit tests for parser and filtering logic
-- Include sample log files and screenshots
+- Display telemetry events in a sortable table
+- Filter events by severity level
+- Filter events by subsystem
+- Search across timestamp, level, subsystem, event code, message, and entity ID
+- Inspect the complete details of a selected event
+- View session-level event counts
+- Group warnings and errors by subsystem
+- Visualize filtered event counts over time
+- Export the currently visible filtered results to CSV
+- Use included sample log files for local demonstration and testing
 
-## Current Status
+## Screenshots
 
-Implemented:
-- Qt Widgets application scaffold
-- CMake-based build setup
-- Basic main window shell
-- Telemetry event domain type
-- JSON Lines parser for structured telemetry events
-- Parser behavior for valid records, empty lines, and malformed JSON
-- Qt Test coverage for parser foundation
-- Sample telemetry log file
-- File open/import workflow for local log files
-- Table display for parsed telemetry events
-- Basic session summary counts by severity
-- Parser support for reading JSON Lines files from disk
-- Severity filtering
-- Subsystem filtering
-- Text search across event fields
-- Filtered summary count display
-- Qt Test coverage for filtering logic
-- Selected event detail panel
-- Row selection workflow for inspecting parsed telemetry events
-- Grouped warning/error summary by subsystem
-- Filter-aware grouped issue counts
-- Qt Test coverage for grouped issue analysis
-- Export filtered telemetry events to CSV
-- CSV export support for currently visible filtered results
-- Qt Test coverage for CSV exporter behavior
+### TraceScope Dashboard
 
-Not implemented yet:
-- Timeline or chart-style visualization
-- Screenshots
-- Final README polish
+The main dashboard combines session summary information, filtering controls, an event-count timeline, the telemetry event table, grouped issue counts, and selected-event details.
+
+![TraceScope Dashboard](docs/screenshots/tracescope-dashboard.png)
+
+### Filtered Warnings
+
+Severity, subsystem, and text filters update the event table, summary information, grouped issue panel, and timeline chart together.
+
+![TraceScope Filtered Warnings](docs/screenshots/tracescope-filtered-warnings.png)
+
+### Exported CSV
+
+The export workflow writes the currently filtered event set to a CSV file for additional review or sharing.
+
+![TraceScope Exported CSV](docs/screenshots/tracescope-exported-csv.png)
 
 ## Tech Stack
 
-- C++
+- C++17
+- Qt 6
 - Qt Widgets
+- Qt Charts
 - CMake
 - Qt Test
 
 ## Sample Log Format
 
-TraceScope v1 will use JSON Lines records like:
+TraceScope v1 reads newline-delimited JSON records. Each line represents one telemetry event:
 
 ```json
 {"timestamp":"2026-07-07T10:14:22.381Z","level":"WARN","subsystem":"Tracking","eventCode":"TRACK_LOST","message":"Track 402 lost for 1200ms","entityId":"TRK-402"}
 ```
 
-## Why This Project Exists
+Each event includes:
 
-This project is designed as a practical native diagnostic tool rather than a web app. A desktop workflow makes sense for file-based telemetry, QA logs, hardware test logs, simulation output, and field-support diagnostic packages.
+- `timestamp`
+- `level`
+- `subsystem`
+- `eventCode`
+- `message`
+- `entityId`
+
+Sample files are included in the `samples/` directory.
+
+## Project Structure
+
+```text
+src/
+├── analysis/    # Grouped issue counts and event timeline analysis
+├── domain/      # Telemetry event and session models
+├── exporting/   # Filtered CSV export
+├── filtering/   # Severity, subsystem, and text filtering
+├── parsing/     # JSON Lines parsing
+└── ui/          # Qt Widgets interface
+
+tests/           # Qt Test coverage for core logic
+samples/         # Example telemetry sessions
+docs/screenshots # Portfolio screenshots
+```
 
 ## Running Locally
 
-Requirements:
+### Requirements
+
 - Qt 6
+- Qt Charts
 - CMake
-- C++17-compatible compiler
+- A C++17-compatible compiler
 
-Configure and build with CMake through Qt Creator, or from a terminal using your local Qt/CMake setup.
+### Qt Creator
 
-## Project Status
+1. Open the repository's root `CMakeLists.txt` in Qt Creator.
+2. Select a Qt 6 kit that includes Qt Charts.
+3. Configure and build the project.
+4. Run the `TraceScope` target.
+5. Open one of the included files from the `samples/` directory.
 
-This project is in early development.
+### Command Line
+
+From the repository root, using a configured development environment:
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+Run the generated `TraceScope` executable from the build directory.
+
+## Running Tests
+
+From the repository root:
+
+```bash
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+The test suite covers core behavior including:
+
+- JSON Lines parsing
+- file parsing
+- event filtering
+- grouped warning and error analysis
+- timeline bucket analysis
+- CSV export
+
+## Current Status
+
+TraceScope v1 is feature-complete for portfolio demonstration.
+
+Implemented:
+
+- JSON Lines file import
+- telemetry event parsing
+- event table display
+- severity and subsystem filtering
+- full-field text search
+- selected event details
+- grouped warning and error summaries
+- filter-aware event-count timeline chart
+- CSV export for filtered results
+- sample telemetry sessions
+- automated tests for core parser, filtering, analysis, and export logic
+
+Not implemented:
+
+- packaged installer or release bundle
+- multi-file session comparison
+- event bookmarks or annotations
+- advanced burst or anomaly detection
+- live log streaming
+
+## Design Goals
+
+TraceScope was built to demonstrate practical native application development rather than a production monitoring platform. The project emphasizes:
+
+- clear separation between parsing, filtering, analysis, exporting, and UI concerns
+- testable non-UI application logic
+- a compact diagnostic workflow for inspecting structured logs
+- responsive filtering across multiple views
+- an employer-facing C++/Qt portfolio project with conservative, defensible claims
+
+## Possible Future Improvements
+
+- Compare multiple telemetry sessions
+- Add bookmarks and analyst notes
+- Detect warning or error bursts
+- Support additional structured log formats
+- Add configurable chart intervals
+- Package the application for easier installation
+- Add live or streaming log ingestion
+
+## License
+
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
+
+TraceScope uses Qt Charts, which is available to open-source users under the GNU General Public License v3.0.
