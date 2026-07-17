@@ -1,0 +1,15 @@
+{"timestamp":"2026-07-07T11:01:21.104Z","level":"INFO","subsystem":"Startup","eventCode":"SESSION_START","message":"Diagnostic session initialized for field package FP-304","entityId":"SYS-304"}
+{"timestamp":"2026-07-07T11:01:34.412Z","level":"INFO","subsystem":"Sensors","eventCode":"SENSOR_ONLINE","message":"Sensor array A reported online status","entityId":"SNS-A"}
+{"timestamp":"2026-07-07T11:01:46.619Z","level":"WARN","subsystem":"Tracking","eventCode":"TRACK_JITTER","message":"Track 118 position jitter exceeded smoothing threshold","entityId":"TRK-118"}
+{"timestamp":"2026-07-07T11:02:26.447Z","level":"WARN","subsystem":"Comms","eventCode":"LATENCY_SPIKE","message":"Link latency exceeded 250ms threshold","entityId":"LINK-A"}
+{"timestamp":"2026-07-07T11:02:55.503Z","level":"ERROR","subsystem":"Comms","eventCode":"PACKET_DROP","message":"Packet loss exceeded threshold during telemetry burst","entityId":"LINK-A"}
+{"timestamp":"2026-07-07T11:02:59.733Z","level":"INFO","subsystem":"Tracking","eventCode":"TRACK_UPDATE","message":"Track 118 updated with corrected heading","entityId":"TRK-118"}
+{"timestamp":"2026-07-07T11:03:13.191Z","level":"WARN","subsystem":"Power","eventCode":"VOLTAGE_DIP","message":"Voltage dipped below nominal range for 900ms","entityId":"PWR-02"}
+{"timestamp":"2026-07-07T11:03:42.318Z","level":"ERROR","subsystem":"Sensors","eventCode":"SENSOR_TIMEOUT","message":"Sensor array B failed to respond within timeout window","entityId":"SNS-B"}
+{"timestamp":"2026-07-07T11:03:48.449Z","level":"WARN","subsystem":"Navigation","eventCode":"NAV_DRIFT","message":"Navigation solution drift exceeded tolerance","entityId":"NAV-01"}
+{"timestamp":"2026-07-07T11:03:52.816Z","level":"INFO","subsystem":"Comms","eventCode":"LINK_RECOVERED","message":"Telemetry link recovered after packet loss event","entityId":"LINK-A"}
+{"timestamp":"2026-07-07T11:04:11.222Z","level":"ERROR","subsystem":"Tracking","eventCode":"TRACK_LOST","message":"Track 118 lost for 1500ms","entityId":"TRK-118"}
+{"timestamp":"2026-07-07T11:04:16.541Z","level":"WARN","subsystem":"Thermal","eventCode":"TEMP_RISE","message":"Processor temperature exceeded warning threshold","entityId":"CPU-01"}
+{"timestamp":"2026-07-07T11:04:37.608Z","level":"ERROR","subsystem":"Power","eventCode":"BATTERY_FAILOVER","message":"Battery failover triggered after unstable voltage reading","entityId":"PWR-02"}
+{"timestamp":"2026-07-07T11:04:46.805Z","level":"INFO","subsystem":"Navigation","eventCode":"NAV_STABLE","message":"Navigation solution returned to stable range","entityId":"NAV-01"}
+{"timestamp":"2026-07-07T11:04:57.903Z","level":"INFO","subsystem":"Shutdown","eventCode":"SESSION_COMPLETE","message":"Diagnostic session completed with warnings and errors","entityId":"SYS-304"}
