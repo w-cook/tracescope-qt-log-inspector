@@ -568,13 +568,19 @@ void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
     axisY->setTitleText("Events");
     axisY->setLabelFormat("%d");
 
-    int maxTotal = 1;
+    int maxCount = 1;
 
     for (const EventCountBucket &bucket : buckets) {
-        maxTotal = std::max(maxTotal, bucket.totalCount());
+        maxCount = std::max(maxCount, bucket.infoCount);
+        maxCount = std::max(maxCount, bucket.warningCount);
+        maxCount = std::max(maxCount, bucket.errorCount);
     }
 
-    axisY->setRange(0, maxTotal);
+    axisY->setRange(0, maxCount);
+    axisY->setTickType(QValueAxis::TicksDynamic);
+    axisY->setTickAnchor(0);
+    axisY->setTickInterval(1);
+
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
