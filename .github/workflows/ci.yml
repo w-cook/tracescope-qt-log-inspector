@@ -195,13 +195,12 @@ jobs:
           Write-Host "Packaged TraceScope executable started successfully."
 
       - name: Upload portable Windows ZIP
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.WINDOWS_PACKAGE_NAME }}
           path: dist/${{ env.WINDOWS_PACKAGE_NAME }}.zip
+          archive: false
           if-no-files-found: error
           retention-days: 14
-          compression-level: 0
 
   ubuntu-build-and-test:
     name: Linux x86_64 — GCC Build, Test, and Package
@@ -352,13 +351,12 @@ jobs:
           echo "Packaged TraceScope AppImage started successfully."
 
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.LINUX_PACKAGE_NAME }}
           path: dist/${{ env.LINUX_PACKAGE_NAME }}.AppImage
+          archive: false
           if-no-files-found: error
           retention-days: 14
-          compression-level: 0
 
   package-samples:
     name: Sample Logs — Package and Verify
@@ -462,10 +460,9 @@ jobs:
           du -h "$archive_path"
 
       - name: Upload sample logs ZIP
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.SAMPLES_PACKAGE_NAME }}
           path: dist/${{ env.SAMPLES_PACKAGE_NAME }}.zip
+          archive: false
           if-no-files-found: error
           retention-days: 14
-          compression-level: 0
