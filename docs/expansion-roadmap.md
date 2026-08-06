@@ -26,7 +26,7 @@ The expansion will follow these principles:
 * Keep analysis deterministic and explainable.
 * Keep employer-facing claims conservative and directly supported by the implementation.
 * Avoid paid infrastructure and unnecessary external services.
-* Complete each phase with passing tests and a downloadable Windows build.
+* Complete each phase with passing tests and downloadable Windows and Linux packages.
 
 ## Current Prototype Baseline
 
@@ -135,9 +135,17 @@ Reusable import profiles will use versioned, human-readable JSON so developers c
 
 ### Phase 0 — CI, Packaging, and Prototype Release Baseline
 
-Establish repeatable cross-platform verification and a downloadable baseline for the completed original prototype.
+**Status: Completed in `v0.1.0`.**
 
-Planned deliverables:
+Established repeatable cross-platform verification and a downloadable baseline for the completed original prototype.
+
+The `TraceScope 0.1.0 — Original Prototype` prerelease was published with:
+
+* `TraceScope-v0.1.0-windows-x64.zip`
+* `TraceScope-v0.1.0-linux-x86_64.AppImage`
+* `TraceScope-v0.1.0-samples.zip`
+
+Completed deliverables:
 
 * GitHub Actions workflow
 * Windows and Linux builds
@@ -158,6 +166,8 @@ Planned deliverables:
 * README build and release instructions
 
 ### Phase 1 — Flexible Record and Import Domain
+
+**Status: Current active phase.**
 
 Replace rigid event assumptions with a flexible investigation domain.
 

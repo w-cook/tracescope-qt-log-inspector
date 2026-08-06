@@ -333,15 +333,14 @@ Implemented:
 
 ### Expansion
 
-The configurable workbench expansion is in progress.
+The configurable workbench expansion is in progress. The packaged original-prototype release baseline was completed and published as the `v0.1.0` prerelease.
 
 Current expansion priorities are:
 
-1. publish the packaged original-prototype release baseline;
-2. introduce a flexible canonical investigation record;
-3. move JSON Lines behavior behind a reusable importer abstraction;
-4. replace the fixed table with Qt’s model/view architecture;
-5. add versioned import profiles and import configuration workflows.
+1. introduce a flexible canonical investigation record;
+2. move JSON Lines behavior behind a reusable importer abstraction;
+3. replace the fixed table with Qt’s model/view architecture;
+4. add versioned import profiles and import configuration workflows.
 
 See the [expansion roadmap](docs/expansion-roadmap.md) for the complete planned sequence.
 
