@@ -11,12 +11,12 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
-  PACKAGE_NAME: TraceScope-v0.1.0-windows-x64
-  LINUX_PACKAGE_NAME: TraceScope-0.1.0-x86_64
+  WINDOWS_PACKAGE_NAME: TraceScope-v0.1.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v0.1.0-linux-x86_64
 
 jobs:
   windows-build-and-test:
-    name: Windows — MinGW Build and Test
+    name: Windows x64 — MinGW Build, Test, and Package
     runs-on: windows-latest
 
     steps:
@@ -72,7 +72,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           $distRoot = Join-Path $PWD "dist"
-          $deployDir = Join-Path $distRoot $env:PACKAGE_NAME
+          $deployDir = Join-Path $distRoot $env:WINDOWS_PACKAGE_NAME
           $executable = Join-Path $deployDir "TraceScope.exe"
 
           if (Test-Path $distRoot) {
@@ -96,7 +96,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $deployDir = Join-Path $PWD "dist\$env:PACKAGE_NAME"
+          $deployDir = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME"
 
           $requiredFiles = @(
             "TraceScope.exe",
@@ -131,8 +131,8 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $deployDir = Join-Path $PWD "dist\$env:PACKAGE_NAME"
-          $zipPath = Join-Path $PWD "dist\$env:PACKAGE_NAME.zip"
+          $deployDir = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME"
+          $zipPath = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME.zip"
 
           if (Test-Path $zipPath) {
             Remove-Item $zipPath -Force
@@ -155,7 +155,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $zipPath = Join-Path $PWD "dist\$env:PACKAGE_NAME.zip"
+          $zipPath = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME.zip"
           $smokeRoot = Join-Path $env:RUNNER_TEMP "tracescope-package-smoke-test"
 
           if (Test-Path $smokeRoot) {
@@ -196,14 +196,14 @@ jobs:
       - name: Upload portable Windows ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: dist/${{ env.PACKAGE_NAME }}.zip
+          name: ${{ env.WINDOWS_PACKAGE_NAME }}
+          path: dist/${{ env.WINDOWS_PACKAGE_NAME }}.zip
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
 
   ubuntu-build-and-test:
-    name: Ubuntu 22.04 — GCC Build, Test, and Package
+    name: Linux x86_64 — GCC Build, Test, and Package
     runs-on: ubuntu-22.04
 
     steps:
