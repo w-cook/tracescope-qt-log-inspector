@@ -1,4 +1,6 @@
-# TraceScope Project Plan
+# TraceScope Original Prototype Plan
+
+> Historical document: This plan records the initial development scope used to build the completed fixed-schema TraceScope prototype. Current and planned expansion work is documented in [expansion-roadmap.md](expansion-roadmap.md).
 
 ## Phase 1 — Foundation
 - Qt Widgets shell

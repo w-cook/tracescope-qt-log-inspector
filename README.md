@@ -183,7 +183,8 @@ Flexible field mapping and additional formats are part of the expansion roadmap 
     └── ci.yml                     # Windows, Linux, and sample packaging workflow
 
 docs/
-├── expansion-roadmap.md           # Planned expansion architecture and phases
+├── original-prototype-plan.md    # Historical initial implementation plan
+├── expansion-roadmap.md          # Current expansion architecture and phases
 └── screenshots/                   # Portfolio screenshots
 
 packaging/
