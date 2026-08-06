@@ -13,6 +13,7 @@ env:
   BUILD_TYPE: Release
   WINDOWS_PACKAGE_NAME: TraceScope-v0.1.0-windows-x64
   LINUX_PACKAGE_NAME: TraceScope-v0.1.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v0.1.0-samples
 
 jobs:
   windows-build-and-test:
@@ -355,6 +356,116 @@ jobs:
         with:
           name: ${{ env.LINUX_PACKAGE_NAME }}
           path: dist/${{ env.LINUX_PACKAGE_NAME }}.AppImage
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  package-samples:
+    name: Sample Logs — Package and Verify
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify source samples
+        run: |
+          set -euxo pipefail
+
+          test -d samples
+          test -f samples/telemetry-session-003.jsonl
+
+          sample_count="$(find samples -type f | wc -l)"
+          test "$sample_count" -gt 0
+
+          echo "Found $sample_count sample files."
+
+      - name: Assemble sample logs archive
+        run: |
+          set -euxo pipefail
+
+          package_dir="dist/$SAMPLES_PACKAGE_NAME"
+          archive_path="dist/$SAMPLES_PACKAGE_NAME.zip"
+
+          rm -rf dist
+          mkdir -p "$package_dir/samples"
+
+          cp README.md "$package_dir/"
+          cp LICENSE "$package_dir/"
+          cp -R samples/. "$package_dir/samples/"
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          dist = Path("dist")
+          package_name = os.environ["SAMPLES_PACKAGE_NAME"]
+          source = dist / package_name
+          archive_path = dist / f"{package_name}.zip"
+
+          with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
+              for path in sorted(source.rglob("*")):
+                  if path.is_file():
+                      archive.write(path, path.relative_to(dist))
+
+          print(f"Created {archive_path}")
+          PY
+
+      - name: Verify sample logs archive
+        run: |
+          set -euxo pipefail
+
+          package_dir="dist/$SAMPLES_PACKAGE_NAME"
+          archive_path="dist/$SAMPLES_PACKAGE_NAME.zip"
+
+          test -f "$package_dir/README.md"
+          test -f "$package_dir/LICENSE"
+          test -f "$package_dir/samples/telemetry-session-003.jsonl"
+          test -f "$archive_path"
+
+          source_count="$(find samples -type f | wc -l)"
+          packaged_count="$(find "$package_dir/samples" -type f | wc -l)"
+
+          test "$source_count" -eq "$packaged_count"
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          package_name = os.environ["SAMPLES_PACKAGE_NAME"]
+          archive_path = Path("dist") / f"{package_name}.zip"
+
+          required_entries = {
+              f"{package_name}/README.md",
+              f"{package_name}/LICENSE",
+              f"{package_name}/samples/telemetry-session-003.jsonl",
+          }
+
+          with ZipFile(archive_path) as archive:
+              entries = set(archive.namelist())
+
+          missing = required_entries - entries
+
+          if missing:
+              raise SystemExit(
+                  "Missing required archive entries: "
+                  + ", ".join(sorted(missing))
+              )
+
+          print("Verified required archive entries:")
+          for entry in sorted(required_entries):
+              print(f" - {entry}")
+          PY
+
+          du -h "$archive_path"
+
+      - name: Upload sample logs ZIP
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.SAMPLES_PACKAGE_NAME }}
+          path: dist/${{ env.SAMPLES_PACKAGE_NAME }}.zip
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
