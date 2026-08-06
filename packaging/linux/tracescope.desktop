@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=TraceScope
+Comment=Inspect, filter, visualize, and export structured telemetry logs
+Exec=TraceScope
+Icon=tracescope
+Terminal=false
+Categories=Development;Utility;
+Keywords=logs;telemetry;diagnostics;analysis;Qt;

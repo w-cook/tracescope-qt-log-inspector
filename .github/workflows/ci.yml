@@ -12,6 +12,7 @@ env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
   PACKAGE_NAME: TraceScope-v0.1.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-0.1.0-x86_64
 
 jobs:
   windows-build-and-test:
@@ -202,8 +203,8 @@ jobs:
           compression-level: 0
 
   ubuntu-build-and-test:
-    name: Ubuntu — GCC Build and Test
-    runs-on: ubuntu-latest
+    name: Ubuntu 22.04 — GCC Build, Test, and Package
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check out repository
@@ -243,3 +244,117 @@ jobs:
           --test-dir build
           --build-config ${{ env.BUILD_TYPE }}
           --output-on-failure
+
+      - name: Download pinned Linux packaging tools
+        run: |
+          set -euxo pipefail
+
+          mkdir -p packaging-tools
+
+          curl \
+            --fail \
+            --location \
+            --retry 3 \
+            --output packaging-tools/linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
+
+          curl \
+            --fail \
+            --location \
+            --retry 3 \
+            --output packaging-tools/linuxdeploy-plugin-qt-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
+
+          chmod +x packaging-tools/*.AppImage
+
+      - name: Assemble Linux AppDir and AppImage
+        run: |
+          set -euxo pipefail
+
+          rm -rf AppDir dist
+          mkdir -p AppDir/usr/share/doc/tracescope
+          mkdir -p AppDir/usr/share/tracescope/samples
+          mkdir -p dist
+
+          cp README.md AppDir/usr/share/doc/tracescope/
+          cp LICENSE AppDir/usr/share/doc/tracescope/
+          cp -R samples/. AppDir/usr/share/tracescope/samples/
+
+          export PATH="$PWD/packaging-tools:$PATH"
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export VERSION="0.1.0"
+          export ARCH="x86_64"
+          export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
+          export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
+
+          test -x "$QMAKE"
+
+          packaging-tools/linuxdeploy-x86_64.AppImage \
+            --appimage-extract-and-run \
+            --appdir AppDir \
+            --executable build/TraceScope \
+            --desktop-file packaging/linux/tracescope.desktop \
+            --icon-file packaging/linux/tracescope.svg \
+            --plugin qt \
+            --output appimage
+
+      - name: Verify Linux package contents
+        run: |
+          set -euxo pipefail
+
+          test -f AppDir/AppRun
+          test -x AppDir/usr/bin/TraceScope
+          test -f AppDir/tracescope.desktop
+          test -e AppDir/tracescope.svg
+
+          test -f AppDir/usr/share/doc/tracescope/README.md
+          test -f AppDir/usr/share/doc/tracescope/LICENSE
+          test -f AppDir/usr/share/tracescope/samples/telemetry-session-003.jsonl
+
+          test -x "dist/$LINUX_PACKAGE_NAME.AppImage"
+
+          find AppDir -name 'libQt6Core.so*' -print -quit | grep -q .
+          find AppDir -name 'libQt6Gui.so*' -print -quit | grep -q .
+          find AppDir -name 'libQt6Widgets.so*' -print -quit | grep -q .
+          find AppDir -name 'libQt6Charts.so*' -print -quit | grep -q .
+          find AppDir -path '*/platforms/libqxcb.so' -print -quit | grep -q .
+          find AppDir -path '*/platforms/libqoffscreen.so' -print -quit | grep -q .
+
+          file "dist/$LINUX_PACKAGE_NAME.AppImage"
+          du -h "dist/$LINUX_PACKAGE_NAME.AppImage"
+
+      - name: Smoke-test Linux AppImage
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+
+          appimage="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
+          log="$RUNNER_TEMP/tracescope-appimage-smoke-test.log"
+
+          APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" >"$log" 2>&1 &
+          process_id=$!
+
+          sleep 5
+
+          if ! kill -0 "$process_id" 2>/dev/null; then
+            wait "$process_id" || true
+            cat "$log"
+            echo "The packaged TraceScope AppImage exited during startup."
+            exit 1
+          fi
+
+          kill "$process_id"
+          wait "$process_id" || true
+
+          cat "$log"
+          echo "Packaged TraceScope AppImage started successfully."
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.LINUX_PACKAGE_NAME }}
+          path: dist/${{ env.LINUX_PACKAGE_NAME }}.AppImage
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
