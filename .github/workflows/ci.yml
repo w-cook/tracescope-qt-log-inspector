@@ -1,0 +1,468 @@
+name: TraceScope CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.10.3"
+  BUILD_TYPE: Release
+  WINDOWS_PACKAGE_NAME: TraceScope-v0.1.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v0.1.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v0.1.0-samples
+
+jobs:
+  windows-build-and-test:
+    name: Windows x64 — MinGW Build, Test, and Package
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Qt and MinGW
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: qtcharts
+          tools: tools_mingw1310,qt.tools.win64_mingw1310
+          cache: false
+
+      - name: Display tool versions
+        shell: pwsh
+        run: |
+          cmake --version
+          ninja --version
+          g++ --version
+          qmake --version
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake
+          -S .
+          -B build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DCMAKE_CXX_COMPILER=g++.exe
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          ctest
+          --test-dir build
+          --build-config ${{ env.BUILD_TYPE }}
+          --output-on-failure
+
+      - name: Assemble portable Windows deployment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $distRoot = Join-Path $PWD "dist"
+          $deployDir = Join-Path $distRoot $env:WINDOWS_PACKAGE_NAME
+          $executable = Join-Path $deployDir "TraceScope.exe"
+
+          if (Test-Path $distRoot) {
+            Remove-Item $distRoot -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
+
+          Copy-Item "build\TraceScope.exe" $executable
+          Copy-Item "README.md" $deployDir
+          Copy-Item "LICENSE" $deployDir
+          Copy-Item "samples" $deployDir -Recurse
+
+          windeployqt `
+            --release `
+            --compiler-runtime `
+            $executable
+
+      - name: Verify deployed Windows files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $deployDir = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME"
+
+          $requiredFiles = @(
+            "TraceScope.exe",
+            "Qt6Core.dll",
+            "Qt6Gui.dll",
+            "Qt6Widgets.dll",
+            "Qt6Charts.dll",
+            "platforms\qwindows.dll",
+            "libgcc_s_seh-1.dll",
+            "libstdc++-6.dll",
+            "libwinpthread-1.dll",
+            "README.md",
+            "LICENSE",
+            "samples\telemetry-session-003.jsonl"
+          )
+
+          foreach ($relativePath in $requiredFiles) {
+            $fullPath = Join-Path $deployDir $relativePath
+
+            if (-not (Test-Path $fullPath)) {
+              throw "Required deployment file is missing: $relativePath"
+            }
+          }
+
+          Write-Host "Verified required deployment files:"
+          $requiredFiles | ForEach-Object {
+            Write-Host " - $_"
+          }
+
+      - name: Create portable Windows ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $deployDir = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME"
+          $zipPath = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME.zip"
+
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+
+          Compress-Archive `
+            -Path $deployDir `
+            -DestinationPath $zipPath `
+            -CompressionLevel Optimal
+
+          if (-not (Test-Path $zipPath)) {
+            throw "Portable Windows ZIP was not created."
+          }
+
+          Write-Host "Created package:"
+          Get-Item $zipPath | Format-List FullName, Length
+
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $zipPath = Join-Path $PWD "dist\$env:WINDOWS_PACKAGE_NAME.zip"
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "tracescope-package-smoke-test"
+
+          if (Test-Path $smokeRoot) {
+            Remove-Item $smokeRoot -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $smokeRoot -Force | Out-Null
+          Expand-Archive -Path $zipPath -DestinationPath $smokeRoot
+
+          $executable = Get-ChildItem `
+            -Path $smokeRoot `
+            -Filter "TraceScope.exe" `
+            -File `
+            -Recurse |
+            Select-Object -First 1
+
+          if ($null -eq $executable) {
+            throw "TraceScope.exe was not found after extracting the ZIP."
+          }
+
+          $env:QT_QPA_PLATFORM = "offscreen"
+
+          $process = Start-Process `
+            -FilePath $executable.FullName `
+            -WorkingDirectory $executable.DirectoryName `
+            -PassThru
+
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            throw "The packaged TraceScope executable exited during startup with code $($process.ExitCode)."
+          }
+
+          Stop-Process -Id $process.Id -Force
+
+          Write-Host "Packaged TraceScope executable started successfully."
+
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.WINDOWS_PACKAGE_NAME }}.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  ubuntu-build-and-test:
+    name: Linux x86_64 — GCC Build, Test, and Package
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          modules: qtcharts
+          install-deps: true
+          cache: false
+
+      - name: Display tool versions
+        run: |
+          cmake --version
+          g++ --version
+          qmake --version
+
+      - name: Configure
+        run: >
+          cmake
+          -S .
+          -B build
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          ctest
+          --test-dir build
+          --build-config ${{ env.BUILD_TYPE }}
+          --output-on-failure
+
+      - name: Download pinned Linux packaging tools
+        run: |
+          set -euxo pipefail
+
+          mkdir -p packaging-tools
+
+          curl \
+            --fail \
+            --location \
+            --retry 3 \
+            --output packaging-tools/linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
+
+          curl \
+            --fail \
+            --location \
+            --retry 3 \
+            --output packaging-tools/linuxdeploy-plugin-qt-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
+
+          chmod +x packaging-tools/*.AppImage
+
+      - name: Assemble Linux AppDir and AppImage
+        run: |
+          set -euxo pipefail
+
+          rm -rf AppDir dist
+          mkdir -p AppDir/usr/share/doc/tracescope
+          mkdir -p AppDir/usr/share/tracescope/samples
+          mkdir -p dist
+
+          cp README.md AppDir/usr/share/doc/tracescope/
+          cp LICENSE AppDir/usr/share/doc/tracescope/
+          cp -R samples/. AppDir/usr/share/tracescope/samples/
+
+          export PATH="$PWD/packaging-tools:$PATH"
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export VERSION="0.1.0"
+          export ARCH="x86_64"
+          export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
+          export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
+
+          test -x "$QMAKE"
+
+          packaging-tools/linuxdeploy-x86_64.AppImage \
+            --appimage-extract-and-run \
+            --appdir AppDir \
+            --executable build/TraceScope \
+            --desktop-file packaging/linux/tracescope.desktop \
+            --icon-file packaging/linux/tracescope.svg \
+            --plugin qt \
+            --output appimage
+
+      - name: Verify Linux package contents
+        run: |
+          set -euxo pipefail
+
+          test -f AppDir/AppRun
+          test -x AppDir/usr/bin/TraceScope
+          test -f AppDir/tracescope.desktop
+          test -e AppDir/tracescope.svg
+
+          test -f AppDir/usr/share/doc/tracescope/README.md
+          test -f AppDir/usr/share/doc/tracescope/LICENSE
+          test -f AppDir/usr/share/tracescope/samples/telemetry-session-003.jsonl
+
+          test -x "dist/$LINUX_PACKAGE_NAME.AppImage"
+
+          find AppDir -name 'libQt6Core.so*' -print -quit | grep -q .
+          find AppDir -name 'libQt6Gui.so*' -print -quit | grep -q .
+          find AppDir -name 'libQt6Widgets.so*' -print -quit | grep -q .
+          find AppDir -name 'libQt6Charts.so*' -print -quit | grep -q .
+          find AppDir -path '*/platforms/libqxcb.so' -print -quit | grep -q .
+          find AppDir -path '*/platforms/libqoffscreen.so' -print -quit | grep -q .
+
+          file "dist/$LINUX_PACKAGE_NAME.AppImage"
+          du -h "dist/$LINUX_PACKAGE_NAME.AppImage"
+
+      - name: Smoke-test Linux AppImage
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+
+          appimage="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
+          log="$RUNNER_TEMP/tracescope-appimage-smoke-test.log"
+
+          APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" >"$log" 2>&1 &
+          process_id=$!
+
+          sleep 5
+
+          if ! kill -0 "$process_id" 2>/dev/null; then
+            wait "$process_id" || true
+            cat "$log"
+            echo "The packaged TraceScope AppImage exited during startup."
+            exit 1
+          fi
+
+          kill "$process_id"
+          wait "$process_id" || true
+
+          cat "$log"
+          echo "Packaged TraceScope AppImage started successfully."
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.LINUX_PACKAGE_NAME }}.AppImage
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  package-samples:
+    name: Sample Logs — Package and Verify
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify source samples
+        run: |
+          set -euxo pipefail
+
+          test -d samples
+          test -f samples/telemetry-session-003.jsonl
+
+          sample_count="$(find samples -type f | wc -l)"
+          test "$sample_count" -gt 0
+
+          echo "Found $sample_count sample files."
+
+      - name: Assemble sample logs archive
+        run: |
+          set -euxo pipefail
+
+          package_dir="dist/$SAMPLES_PACKAGE_NAME"
+          archive_path="dist/$SAMPLES_PACKAGE_NAME.zip"
+
+          rm -rf dist
+          mkdir -p "$package_dir/samples"
+
+          cp README.md "$package_dir/"
+          cp LICENSE "$package_dir/"
+          cp -R samples/. "$package_dir/samples/"
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          dist = Path("dist")
+          package_name = os.environ["SAMPLES_PACKAGE_NAME"]
+          source = dist / package_name
+          archive_path = dist / f"{package_name}.zip"
+
+          with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
+              for path in sorted(source.rglob("*")):
+                  if path.is_file():
+                      archive.write(path, path.relative_to(dist))
+
+          print(f"Created {archive_path}")
+          PY
+
+      - name: Verify sample logs archive
+        run: |
+          set -euxo pipefail
+
+          package_dir="dist/$SAMPLES_PACKAGE_NAME"
+          archive_path="dist/$SAMPLES_PACKAGE_NAME.zip"
+
+          test -f "$package_dir/README.md"
+          test -f "$package_dir/LICENSE"
+          test -f "$package_dir/samples/telemetry-session-003.jsonl"
+          test -f "$archive_path"
+
+          source_count="$(find samples -type f | wc -l)"
+          packaged_count="$(find "$package_dir/samples" -type f | wc -l)"
+
+          test "$source_count" -eq "$packaged_count"
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          package_name = os.environ["SAMPLES_PACKAGE_NAME"]
+          archive_path = Path("dist") / f"{package_name}.zip"
+
+          required_entries = {
+              f"{package_name}/README.md",
+              f"{package_name}/LICENSE",
+              f"{package_name}/samples/telemetry-session-003.jsonl",
+          }
+
+          with ZipFile(archive_path) as archive:
+              entries = set(archive.namelist())
+
+          missing = required_entries - entries
+
+          if missing:
+              raise SystemExit(
+                  "Missing required archive entries: "
+                  + ", ".join(sorted(missing))
+              )
+
+          print("Verified required archive entries:")
+          for entry in sorted(required_entries):
+              print(f" - {entry}")
+          PY
+
+          du -h "$archive_path"
+
+      - name: Upload sample logs ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.SAMPLES_PACKAGE_NAME }}.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
