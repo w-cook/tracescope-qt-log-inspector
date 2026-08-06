@@ -1,0 +1,108 @@
+name: TraceScope CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.10.3"
+  BUILD_TYPE: Release
+
+jobs:
+  windows-build-and-test:
+    name: Windows — MinGW Build and Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt and MinGW
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: qtcharts
+          tools: tools_mingw1310,qt.tools.win64_mingw1310
+          cache: false
+
+      - name: Display tool versions
+        shell: pwsh
+        run: |
+          cmake --version
+          ninja --version
+          g++ --version
+          qmake --version
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake
+          -S .
+          -B build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DCMAKE_CXX_COMPILER=g++.exe
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          ctest
+          --test-dir build
+          --build-config ${{ env.BUILD_TYPE }}
+          --output-on-failure
+
+  ubuntu-build-and-test:
+    name: Ubuntu — GCC Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          modules: qtcharts
+          install-deps: true
+          cache: false
+
+      - name: Display tool versions
+        run: |
+          cmake --version
+          g++ --version
+          qmake --version
+
+      - name: Configure
+        run: >
+          cmake
+          -S .
+          -B build
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          ctest
+          --test-dir build
+          --build-config ${{ env.BUILD_TYPE }}
+          --output-on-failure
