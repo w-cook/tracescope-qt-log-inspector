@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Qt and MinGW
         uses: jurplel/install-qt-action@v4
@@ -194,7 +194,7 @@ jobs:
           Write-Host "Packaged TraceScope executable started successfully."
 
       - name: Upload portable Windows ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WINDOWS_PACKAGE_NAME }}
           path: dist/${{ env.WINDOWS_PACKAGE_NAME }}.zip
@@ -208,7 +208,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -351,7 +351,7 @@ jobs:
           echo "Packaged TraceScope AppImage started successfully."
 
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.LINUX_PACKAGE_NAME }}
           path: dist/${{ env.LINUX_PACKAGE_NAME }}.AppImage
