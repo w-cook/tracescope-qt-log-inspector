@@ -5,10 +5,23 @@
 #include <QVector>
 
 #include "../domain/TelemetryEvent.h"
+#include "../importing/ImportResult.h"
 
 class JsonLineLogParser
 {
 public:
-    QVector<TelemetryEvent> parseLines(const QStringList &lines) const;
-    QVector<TelemetryEvent> parseFile(const QString &filePath) const;
+    ImportResult importLines(
+        const QStringList &lines,
+        const QString &sourcePath = {}
+        ) const;
+
+    ImportResult importFile(const QString &filePath) const;
+
+    QVector<TelemetryEvent> parseLines(
+        const QStringList &lines
+        ) const;
+
+    QVector<TelemetryEvent> parseFile(
+        const QString &filePath
+        ) const;
 };

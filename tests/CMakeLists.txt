@@ -3,6 +3,18 @@ qt_add_executable(ParserTests
     ../src/parsing/JsonLineLogParser.h
     ../src/parsing/JsonLineLogParser.cpp
     ../src/domain/TelemetryEvent.h
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
 )
 
 target_link_libraries(ParserTests
