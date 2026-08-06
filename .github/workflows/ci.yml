@@ -11,6 +11,7 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
+  PACKAGE_NAME: TraceScope-v0.1.0-windows-x64
 
 jobs:
   windows-build-and-test:
@@ -63,6 +64,142 @@ jobs:
           --test-dir build
           --build-config ${{ env.BUILD_TYPE }}
           --output-on-failure
+
+      - name: Assemble portable Windows deployment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $distRoot = Join-Path $PWD "dist"
+          $deployDir = Join-Path $distRoot $env:PACKAGE_NAME
+          $executable = Join-Path $deployDir "TraceScope.exe"
+
+          if (Test-Path $distRoot) {
+            Remove-Item $distRoot -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
+
+          Copy-Item "build\TraceScope.exe" $executable
+          Copy-Item "README.md" $deployDir
+          Copy-Item "LICENSE" $deployDir
+          Copy-Item "samples" $deployDir -Recurse
+
+          windeployqt `
+            --release `
+            --compiler-runtime `
+            $executable
+
+      - name: Verify deployed Windows files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $deployDir = Join-Path $PWD "dist\$env:PACKAGE_NAME"
+
+          $requiredFiles = @(
+            "TraceScope.exe",
+            "Qt6Core.dll",
+            "Qt6Gui.dll",
+            "Qt6Widgets.dll",
+            "Qt6Charts.dll",
+            "platforms\qwindows.dll",
+            "libgcc_s_seh-1.dll",
+            "libstdc++-6.dll",
+            "libwinpthread-1.dll",
+            "README.md",
+            "LICENSE",
+            "samples\telemetry-session-003.jsonl"
+          )
+
+          foreach ($relativePath in $requiredFiles) {
+            $fullPath = Join-Path $deployDir $relativePath
+
+            if (-not (Test-Path $fullPath)) {
+              throw "Required deployment file is missing: $relativePath"
+            }
+          }
+
+          Write-Host "Verified required deployment files:"
+          $requiredFiles | ForEach-Object {
+            Write-Host " - $_"
+          }
+
+      - name: Create portable Windows ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $deployDir = Join-Path $PWD "dist\$env:PACKAGE_NAME"
+          $zipPath = Join-Path $PWD "dist\$env:PACKAGE_NAME.zip"
+
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+
+          Compress-Archive `
+            -Path $deployDir `
+            -DestinationPath $zipPath `
+            -CompressionLevel Optimal
+
+          if (-not (Test-Path $zipPath)) {
+            throw "Portable Windows ZIP was not created."
+          }
+
+          Write-Host "Created package:"
+          Get-Item $zipPath | Format-List FullName, Length
+
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $zipPath = Join-Path $PWD "dist\$env:PACKAGE_NAME.zip"
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "tracescope-package-smoke-test"
+
+          if (Test-Path $smokeRoot) {
+            Remove-Item $smokeRoot -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $smokeRoot -Force | Out-Null
+          Expand-Archive -Path $zipPath -DestinationPath $smokeRoot
+
+          $executable = Get-ChildItem `
+            -Path $smokeRoot `
+            -Filter "TraceScope.exe" `
+            -File `
+            -Recurse |
+            Select-Object -First 1
+
+          if ($null -eq $executable) {
+            throw "TraceScope.exe was not found after extracting the ZIP."
+          }
+
+          $env:QT_QPA_PLATFORM = "offscreen"
+
+          $process = Start-Process `
+            -FilePath $executable.FullName `
+            -WorkingDirectory $executable.DirectoryName `
+            -PassThru
+
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            throw "The packaged TraceScope executable exited during startup with code $($process.ExitCode)."
+          }
+
+          Stop-Process -Id $process.Id -Force
+
+          Write-Host "Packaged TraceScope executable started successfully."
+
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: dist/${{ env.PACKAGE_NAME }}.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
 
   ubuntu-build-and-test:
     name: Ubuntu — GCC Build and Test
