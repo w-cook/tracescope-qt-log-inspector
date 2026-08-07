@@ -6,23 +6,27 @@ TraceScope is a native Qt/C++ desktop application for loading, filtering, visual
 
 The completed original prototype provides a focused investigation workflow for a built-in JSON Lines telemetry format. TraceScope is now being expanded into a configurable native log-analysis workbench with multiple built-in formats and reusable import profiles.
 
+The `v0.2.0` release established the flexible investigation-record and import domain that subsequent importer, model/view, profile, and multi-format work will build on.
+
 TraceScope is intended for file-based logs produced by applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems.
 
 ## Downloads
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The original prototype package set uses these filenames:
+The current `v0.2.0` prerelease package set uses these filenames:
 
 ```text
-TraceScope-v0.1.0-windows-x64.zip
-TraceScope-v0.1.0-linux-x86_64.AppImage
-TraceScope-v0.1.0-samples.zip
+TraceScope-v0.2.0-windows-x64.zip
+TraceScope-v0.2.0-linux-x86_64.AppImage
+TraceScope-v0.2.0-samples.zip
 ```
+
+The historical `v0.1.0` prerelease remains available as the packaged baseline for the completed original prototype.
 
 ### Windows
 
-1. Download `TraceScope-v0.1.0-windows-x64.zip`.
+1. Download `TraceScope-v0.2.0-windows-x64.zip`.
 2. Extract the complete ZIP to a local directory.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory.
@@ -31,29 +35,29 @@ The Windows package includes the required Qt libraries, plugins, and MinGW runti
 
 ### Linux
 
-1. Download `TraceScope-v0.1.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.2.0-linux-x86_64.AppImage`.
 2. Make the file executable:
 
 ```bash
-chmod +x TraceScope-v0.1.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.2.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.1.0-linux-x86_64.AppImage
+./TraceScope-v0.2.0-linux-x86_64.AppImage
 ```
 
 The AppImage contains TraceScope and its required Qt dependencies. The same demonstration logs are also available through the standalone sample archive.
 
 ### Sample Logs
 
-Download `TraceScope-v0.1.0-samples.zip` for a platform-neutral copy of all included demonstration logs.
+Download `TraceScope-v0.2.0-samples.zip` for a platform-neutral copy of all included demonstration logs.
 
 After extraction, the archive contains:
 
 ```text
-TraceScope-v0.1.0-samples/
+TraceScope-v0.2.0-samples/
 ├── README.md
 ├── LICENSE
 └── samples/
@@ -66,6 +70,14 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 
 - Open local JSON Lines telemetry log files
 - Parse structured records into C++ domain objects
+- Preserve an optional typed canonical investigation record alongside source-specific data
+- Parse canonical severity values into a typed severity representation
+- Parse ISO timestamps with timezone-offset and millisecond support
+- Preserve noncanonical JSON fields as dynamic custom attributes
+- Preserve raw source records and source file/record metadata
+- Generate deterministic stable record identities
+- Return structured import results with processed, imported, and skipped counts
+- Report structured import diagnostics for malformed or partially mappable records
 - Display telemetry events in a sortable table
 - Filter events by severity
 - Filter events by subsystem
@@ -81,6 +93,8 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - Produce a portable Linux x86_64 AppImage through automated CI
 - Produce a platform-neutral sample-log ZIP
 - Smoke-test packaged Windows and Linux applications in CI
+
+The current desktop UI intentionally preserves the original investigation workflow while the new flexible import architecture is introduced behind it.
 
 ## Screenshots
 
@@ -112,16 +126,24 @@ The planned product position is:
 
 The expansion will not claim to automatically understand every arbitrary log format. Import behavior will remain explicit and reproducible through built-in importers and versioned profiles.
 
-Planned capabilities include:
+Completed expansion foundations include:
 
-- configurable JSON Lines imports
+- optional canonical investigation fields
+- typed severity and timestamp parsing
+- preservation of custom source attributes
+- raw source and source-location preservation
+- stable record identities
+- structured import results and diagnostics
+
+The current active phase is moving JSON Lines ingestion behind a reusable importer abstraction and making canonical JSON field paths configurable.
+
+Planned capabilities after that include:
+
+- reusable import profiles
+- import preview and configuration workflows
 - CSV and TSV imports
 - structured JSON document imports
 - regex-configurable plain-text imports
-- optional canonical investigation fields
-- preservation of custom source attributes
-- reusable import profiles
-- import preview and diagnostics
 - dynamic table columns
 - responsive large-file processing
 - multiple investigation sessions
@@ -156,13 +178,13 @@ The trusted local Windows development baseline uses Qt 6.11.1 with MinGW 64-bit.
 
 ## Current Sample Format
 
-The original prototype reads newline-delimited JSON records. Each line represents one telemetry event:
+The currently exposed built-in format is newline-delimited JSON. Each line represents one telemetry record:
 
 ```json
 {"timestamp":"2026-07-07T10:14:22.381Z","level":"WARN","subsystem":"Tracking","eventCode":"TRACK_LOST","message":"Track 402 lost for 1200ms","entityId":"TRK-402"}
 ```
 
-The current built-in schema includes:
+The original built-in field names are:
 
 - `timestamp`
 - `level`
@@ -171,9 +193,11 @@ The current built-in schema includes:
 - `message`
 - `entityId`
 
-Sample files are included in the repository’s `samples` directory, the Windows package, the Linux AppImage, and the standalone sample archive.
+As of `v0.2.0`, these values are normalized into a flexible investigation record in which canonical fields are optional. Unknown JSON fields are preserved as custom attributes, and the raw source plus source-location metadata are retained.
 
-Flexible field mapping and additional formats are part of the expansion roadmap and are not yet implemented in the original prototype.
+The existing JSON Lines parser still recognizes the original field names directly so the current sample files and UI remain compatible. Configurable JSON field paths are being introduced in the current importer-abstraction phase.
+
+Sample files are included in the repository’s `samples` directory, the Windows package, the Linux AppImage, and the standalone sample archive.
 
 ## Project Structure
 
@@ -196,10 +220,11 @@ samples/                            # Example telemetry sessions
 
 src/
 ├── analysis/                      # Grouped issue and timeline analysis
-├── domain/                        # Telemetry event model
+├── domain/                        # Legacy telemetry model plus flexible investigation-record domain
 ├── exporting/                     # Filtered CSV export
 ├── filtering/                     # Severity, subsystem, and text filtering
-├── parsing/                       # JSON Lines parsing
+├── importing/                     # Import results and diagnostics
+├── parsing/                       # Current JSON Lines parsing and compatibility adapters
 ├── MainWindow.cpp                 # Current Qt Widgets UI orchestration
 ├── MainWindow.h
 └── main.cpp
@@ -254,11 +279,22 @@ The current CTest suite includes:
 - `IssueAnalyzerTests`
 - `CsvExporterTests`
 - `EventTimelineAnalyzerTests`
+- `RecordSeverityTests`
+- `InvestigationRecordTests`
+- `ImportResultTests`
 
 Together, these tests cover:
 
 - JSON Lines parsing
 - file parsing
+- optional canonical fields
+- typed severity parsing
+- timestamp parsing
+- custom-attribute preservation
+- raw source and source metadata
+- stable record identity behavior
+- structured import results and diagnostics
+- malformed and non-object JSON handling
 - event filtering
 - grouped warning and error analysis
 - timeline bucket analysis
@@ -279,7 +315,7 @@ The GitHub Actions workflow runs three parallel jobs with read-only repository p
 - deploys Qt and compiler dependencies with `windeployqt`
 - verifies required runtime files
 - includes documentation and sample logs
-- creates `TraceScope-v0.1.0-windows-x64.zip`
+- creates `TraceScope-v0.2.0-windows-x64.zip`
 - extracts and starts the packaged executable
 - uploads the ZIP as a workflow artifact
 
@@ -292,7 +328,7 @@ The GitHub Actions workflow runs three parallel jobs with read-only repository p
 - runs all registered CTest tests
 - assembles an AppDir
 - deploys Qt dependencies with `linuxdeploy`
-- creates `TraceScope-v0.1.0-linux-x86_64.AppImage`
+- creates `TraceScope-v0.2.0-linux-x86_64.AppImage`
 - starts the AppImage using the offscreen Qt platform
 - uploads the AppImage as a workflow artifact
 
@@ -301,7 +337,7 @@ The GitHub Actions workflow runs three parallel jobs with read-only repository p
 - verifies that the repository contains sample files
 - copies all samples into a platform-neutral package
 - verifies that the packaged count matches the source count
-- creates `TraceScope-v0.1.0-samples.zip`
+- creates `TraceScope-v0.2.0-samples.zip`
 - uploads the ZIP as a workflow artifact
 
 Workflow artifacts are used to validate candidate packages. Approved packages are attached permanently to GitHub Releases.
@@ -310,7 +346,7 @@ Workflow artifacts are used to validate candidate packages. Approved packages ar
 
 ### Original Prototype
 
-The original prototype is complete for its fixed JSON Lines telemetry schema.
+The original prototype is complete for its fixed JSON Lines telemetry schema and was packaged as the `v0.1.0` prerelease.
 
 Implemented:
 
@@ -333,14 +369,19 @@ Implemented:
 
 ### Expansion
 
-The configurable workbench expansion is in progress. The packaged original-prototype release baseline was completed and published as the `v0.1.0` prerelease.
+The configurable workbench expansion is in progress.
 
-Current expansion priorities are:
+`v0.2.0` completed the flexible record and import-domain foundation, including optional typed canonical fields, dynamic custom attributes, raw-source preservation, source metadata, stable record identities, import results, and structured diagnostics.
 
-1. introduce a flexible canonical investigation record;
-2. move JSON Lines behavior behind a reusable importer abstraction;
-3. replace the fixed table with Qt’s model/view architecture;
-4. add versioned import profiles and import configuration workflows.
+The current active phase is **Importer Abstraction and Configurable JSON Lines**. Current priorities are:
+
+1. introduce a common `ILogImporter` abstraction;
+2. add an importer registry;
+3. move the existing JSON Lines behavior behind a dedicated importer;
+4. support configurable JSON field paths while preserving compatibility with the existing sample files;
+5. add comprehensive importer-focused tests.
+
+Later phases will move the table to Qt model/view architecture and add versioned import profiles, import configuration workflows, additional formats, and broader investigation features.
 
 See the [expansion roadmap](docs/expansion-roadmap.md) for the complete planned sequence.
 
@@ -349,7 +390,7 @@ See the [expansion roadmap](docs/expansion-roadmap.md) for the complete planned 
 TraceScope emphasizes:
 
 - practical native desktop development
-- clear separation of parsing, filtering, analysis, exporting, and UI concerns
+- clear separation of parsing, importing, filtering, analysis, exporting, and UI concerns
 - testable non-UI application logic
 - explicit and reproducible import behavior
 - preservation of source information
