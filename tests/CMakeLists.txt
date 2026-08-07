@@ -3,6 +3,18 @@ qt_add_executable(ParserTests
     ../src/parsing/JsonLineLogParser.h
     ../src/parsing/JsonLineLogParser.cpp
     ../src/domain/TelemetryEvent.h
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
 )
 
 target_link_libraries(ParserTests
@@ -12,6 +24,64 @@ target_link_libraries(ParserTests
 )
 
 add_test(NAME ParserTests COMMAND ParserTests)
+
+qt_add_executable(RecordSeverityTests
+    RecordSeverityTests.cpp
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+)
+
+target_link_libraries(RecordSeverityTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(NAME RecordSeverityTests COMMAND RecordSeverityTests)
+
+qt_add_executable(InvestigationRecordTests
+    InvestigationRecordTests.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(InvestigationRecordTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationRecordTests
+    COMMAND InvestigationRecordTests
+)
+
+qt_add_executable(ImportResultTests
+    ImportResultTests.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(ImportResultTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportResultTests
+    COMMAND ImportResultTests
+)
 
 qt_add_executable(FilterTests
     FilterTests.cpp
