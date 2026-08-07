@@ -99,6 +99,14 @@ Completed release milestones:
 * Linux asset: `TraceScope-v0.2.0-linux-x86_64.AppImage`
 * Sample asset: `TraceScope-v0.2.0-samples.zip`
 
+### `v0.3.0` — Importer Abstraction and Configurable JSON Lines
+
+* Release title: `TraceScope 0.3.0 — Importer Abstraction and Configurable JSON Lines`
+* Status: release candidate
+* Windows asset: `TraceScope-v0.3.0-windows-x64.zip`
+* Linux asset: `TraceScope-v0.3.0-linux-x86_64.AppImage`
+* Sample asset: `TraceScope-v0.3.0-samples.zip`
+
 ## Canonical Investigation Record
 
 `v0.2.0` introduced a common flexible investigation record with optional standard fields:
@@ -135,17 +143,17 @@ Implemented foundations:
 * timestamp parsing
 * source metadata
 * stable record identity
-* JSON Lines parsing into the flexible import domain
-* compatibility adapters for the original telemetry-event workflow
-
-The current active phase adds:
-
-* `ILogImporter`
-* importer registry
+* `ILogImporter` abstraction
+* internal importer registry
 * dedicated JSON Lines importer
-* configurable JSON field paths
-* compatibility with existing sample files
-* comprehensive importer tests
+* configurable dot-delimited JSON field paths
+* nested JSON object-path mapping
+* default mappings compatible with the original JSON Lines samples
+* preservation of source attributes when nested mappings are used
+* compatibility adapter for the original telemetry-event workflow
+* importer-focused automated tests
+
+The current active phase builds the Qt model/view layer that will allow the flexible investigation-record domain to reach the table UI without returning to fixed-schema widget logic.
 
 Later phases will add:
 
@@ -219,20 +227,27 @@ Completed deliverables:
 
 ### Phase 2 — Importer Abstraction and Configurable JSON Lines
 
-**Status: Current active phase.**
+**Status: Completed for `v0.3.0`.**
 
 Move existing JSON Lines behavior behind the common importer architecture.
 
-Planned deliverables:
+Completed deliverables:
 
 * `ILogImporter`
 * importer registry
-* JSON Lines importer
-* configurable JSON field paths
-* compatibility with existing sample files
+* dedicated JSON Lines importer
+* configurable dot-delimited JSON field paths
+* nested object-path mapping
+* default mappings compatible with existing sample files
+* source-attribute preservation for nested mappings
+* legacy parser compatibility adapter for the existing UI
 * comprehensive importer tests
+* local full-suite and UI regression verification
+* `v0.3.0` release packaging and cross-platform verification pending release closeout
 
 ### Phase 3 — Qt Model/View Architecture
+
+**Status: Current active phase.**
 
 Replace the fixed table implementation and reduce UI orchestration responsibilities in `MainWindow`.
 
