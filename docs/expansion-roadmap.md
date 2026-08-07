@@ -102,7 +102,7 @@ Completed release milestones:
 ### `v0.3.0` — Importer Abstraction and Configurable JSON Lines
 
 * Release title: `TraceScope 0.3.0 — Importer Abstraction and Configurable JSON Lines`
-* Status: release candidate
+* Status: prerelease
 * Windows asset: `TraceScope-v0.3.0-windows-x64.zip`
 * Linux asset: `TraceScope-v0.3.0-linux-x86_64.AppImage`
 * Sample asset: `TraceScope-v0.3.0-samples.zip`
@@ -227,7 +227,7 @@ Completed deliverables:
 
 ### Phase 2 — Importer Abstraction and Configurable JSON Lines
 
-**Status: Completed for `v0.3.0`.**
+**Status: Completed in `v0.3.0`.**
 
 Move existing JSON Lines behavior behind the common importer architecture.
 
@@ -243,7 +243,7 @@ Completed deliverables:
 * legacy parser compatibility adapter for the existing UI
 * comprehensive importer tests
 * local full-suite and UI regression verification
-* `v0.3.0` release packaging and cross-platform verification pending release closeout
+* `v0.3.0` prerelease and downloadable package verification
 
 ### Phase 3 — Qt Model/View Architecture
 
