@@ -44,6 +44,7 @@ qt_add_executable(TraceScope
     src/importing/ImporterRegistry.cpp
     src/importing/JsonLinesImporter.h
     src/importing/JsonLinesImporter.cpp
+    src/importing/JsonLinesImportConfig.h
 )
 
 target_link_libraries(TraceScope

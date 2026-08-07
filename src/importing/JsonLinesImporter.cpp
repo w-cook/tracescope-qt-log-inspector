@@ -1,13 +1,19 @@
 #include "JsonLinesImporter.h"
 
+#include <optional>
+#include <utility>
+
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
 #include <QSet>
+#include <QStringList>
 #include <QTextStream>
+#include <QVariant>
 
 #include "../domain/RecordIdentity.h"
 #include "../domain/RecordSeverity.h"
@@ -16,15 +22,6 @@
 
 namespace
 {
-const QSet<QString> canonicalFieldNames {
-    QStringLiteral("timestamp"),
-    QStringLiteral("level"),
-    QStringLiteral("subsystem"),
-    QStringLiteral("eventCode"),
-    QStringLiteral("message"),
-    QStringLiteral("entityId")
-};
-
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
     qint64 recordNumber
@@ -35,24 +32,62 @@ RecordSourceMetadata createSourceMetadata(
     source.recordNumber = recordNumber;
 
     if (!sourcePath.isEmpty()) {
-        source.sourceName = QFileInfo(sourcePath).fileName();
+        source.sourceName =
+            QFileInfo(sourcePath).fileName();
     }
 
     return source;
 }
 
-std::optional<QString> readOptionalString(
+QJsonValue readJsonPath(
     const QJsonObject &object,
-    const QString &fieldName
+    const QString &path
     )
 {
-    const QJsonValue value = object.value(fieldName);
+    const QString trimmedPath = path.trimmed();
+
+    if (trimmedPath.isEmpty()) {
+        return QJsonValue(QJsonValue::Undefined);
+    }
+
+    const QStringList segments =
+        trimmedPath.split(QLatin1Char('.'));
+
+    QJsonValue currentValue(object);
+
+    for (const QString &segment : segments) {
+        if (segment.isEmpty() ||
+            !currentValue.isObject()) {
+            return QJsonValue(
+                QJsonValue::Undefined
+                );
+        }
+
+        currentValue =
+            currentValue.toObject().value(segment);
+
+        if (currentValue.isUndefined()) {
+            return currentValue;
+        }
+    }
+
+    return currentValue;
+}
+
+std::optional<QString> readOptionalString(
+    const QJsonObject &object,
+    const QString &path
+    )
+{
+    const QJsonValue value =
+        readJsonPath(object, path);
 
     if (!value.isString()) {
         return std::nullopt;
     }
 
-    const QString text = value.toString().trimmed();
+    const QString text =
+        value.toString().trimmed();
 
     if (text.isEmpty()) {
         return std::nullopt;
@@ -66,7 +101,8 @@ void appendDiagnostic(
     const QString &code,
     const QString &message,
     ImportDiagnosticSeverity severity,
-    const std::optional<RecordSourceMetadata> &source = std::nullopt
+    const std::optional<RecordSourceMetadata> &source =
+    std::nullopt
     )
 {
     ImportDiagnostic diagnostic;
@@ -78,16 +114,52 @@ void appendDiagnostic(
     result.diagnostics.append(diagnostic);
 }
 
+QSet<QString> mappedTopLevelFields(
+    const JsonLinesImportConfig &config
+    )
+{
+    QSet<QString> fields;
+
+    const QStringList paths {
+        config.timestampPath,
+        config.severityPath,
+        config.subsystemPath,
+        config.eventCodePath,
+        config.entityIdPath,
+        config.messagePath
+    };
+
+    for (const QString &path : paths) {
+        const QString trimmedPath = path.trimmed();
+
+        if (trimmedPath.isEmpty()) {
+            continue;
+        }
+
+        if (!trimmedPath.contains(
+                QLatin1Char('.')
+                )) {
+            fields.insert(trimmedPath);
+        }
+    }
+
+    return fields;
+}
+
 QHash<QString, QVariant> readCustomAttributes(
-    const QJsonObject &object
+    const QJsonObject &object,
+    const JsonLinesImportConfig &config
     )
 {
     QHash<QString, QVariant> attributes;
 
+    const QSet<QString> mappedFields =
+        mappedTopLevelFields(config);
+
     for (auto iterator = object.constBegin();
          iterator != object.constEnd();
          ++iterator) {
-        if (canonicalFieldNames.contains(iterator.key())) {
+        if (mappedFields.contains(iterator.key())) {
             continue;
         }
 
@@ -104,6 +176,7 @@ InvestigationRecord createInvestigationRecord(
     const QJsonObject &object,
     const QString &rawSource,
     const RecordSourceMetadata &source,
+    const JsonLinesImportConfig &config,
     ImportResult &result
     )
 {
@@ -112,25 +185,30 @@ InvestigationRecord createInvestigationRecord(
     record.rawSource = rawSource;
     record.source = source;
 
-    record.recordId = createStableRecordIdentity(
-        source,
-        rawSource
-        );
+    record.recordId =
+        createStableRecordIdentity(
+            source,
+            rawSource
+            );
 
-    const auto timestampText = readOptionalString(
-        object,
-        QStringLiteral("timestamp")
-        );
+    const auto timestampText =
+        readOptionalString(
+            object,
+            config.timestampPath
+            );
 
     if (timestampText.has_value()) {
-        record.timestamp = parseRecordTimestamp(
-            *timestampText
-            );
+        record.timestamp =
+            parseRecordTimestamp(
+                *timestampText
+                );
 
         if (!record.timestamp.has_value()) {
             appendDiagnostic(
                 result,
-                QStringLiteral("INVALID_TIMESTAMP"),
+                QStringLiteral(
+                    "INVALID_TIMESTAMP"
+                    ),
                 QStringLiteral(
                     "The timestamp value could not be parsed."
                     ),
@@ -140,20 +218,24 @@ InvestigationRecord createInvestigationRecord(
         }
     }
 
-    const auto severityText = readOptionalString(
-        object,
-        QStringLiteral("level")
-        );
+    const auto severityText =
+        readOptionalString(
+            object,
+            config.severityPath
+            );
 
     if (severityText.has_value()) {
-        record.severity = parseRecordSeverity(
-            *severityText
-            );
+        record.severity =
+            parseRecordSeverity(
+                *severityText
+                );
 
         if (!record.severity.has_value()) {
             appendDiagnostic(
                 result,
-                QStringLiteral("UNMAPPED_SEVERITY"),
+                QStringLiteral(
+                    "UNMAPPED_SEVERITY"
+                    ),
                 QStringLiteral(
                     "The severity value could not be mapped."
                     ),
@@ -163,31 +245,45 @@ InvestigationRecord createInvestigationRecord(
         }
     }
 
-    record.subsystem = readOptionalString(
-        object,
-        QStringLiteral("subsystem")
-        );
+    record.subsystem =
+        readOptionalString(
+            object,
+            config.subsystemPath
+            );
 
-    record.eventCode = readOptionalString(
-        object,
-        QStringLiteral("eventCode")
-        );
+    record.eventCode =
+        readOptionalString(
+            object,
+            config.eventCodePath
+            );
 
-    record.message = readOptionalString(
-        object,
-        QStringLiteral("message")
-        );
+    record.entityId =
+        readOptionalString(
+            object,
+            config.entityIdPath
+            );
 
-    record.entityId = readOptionalString(
-        object,
-        QStringLiteral("entityId")
-        );
+    record.message =
+        readOptionalString(
+            object,
+            config.messagePath
+            );
 
     record.customAttributes =
-        readCustomAttributes(object);
+        readCustomAttributes(
+            object,
+            config
+            );
 
     return record;
 }
+}
+
+JsonLinesImporter::JsonLinesImporter(
+    JsonLinesImportConfig config
+    )
+    : config(std::move(config))
+{
 }
 
 QString JsonLinesImporter::id() const
@@ -210,8 +306,11 @@ ImportResult JsonLinesImporter::importLines(
     for (qsizetype index = 0;
          index < lines.size();
          ++index) {
-        const QString rawSource = lines.at(index);
-        const QString trimmed = rawSource.trimmed();
+        const QString rawSource =
+            lines.at(index);
+
+        const QString trimmed =
+            rawSource.trimmed();
 
         if (trimmed.isEmpty()) {
             continue;
@@ -237,10 +336,14 @@ ImportResult JsonLinesImporter::importLines(
             QJsonParseError::NoError) {
             appendDiagnostic(
                 result,
-                QStringLiteral("MALFORMED_JSON"),
+                QStringLiteral(
+                    "MALFORMED_JSON"
+                    ),
                 QStringLiteral(
                     "The source record is not valid JSON: %1"
-                    ).arg(parseError.errorString()),
+                    ).arg(
+                        parseError.errorString()
+                        ),
                 ImportDiagnosticSeverity::Error,
                 source
                 );
@@ -251,7 +354,9 @@ ImportResult JsonLinesImporter::importLines(
         if (!document.isObject()) {
             appendDiagnostic(
                 result,
-                QStringLiteral("JSON_VALUE_NOT_OBJECT"),
+                QStringLiteral(
+                    "JSON_VALUE_NOT_OBJECT"
+                    ),
                 QStringLiteral(
                     "The JSON source record must be an object."
                     ),
@@ -267,6 +372,7 @@ ImportResult JsonLinesImporter::importLines(
                 document.object(),
                 rawSource,
                 source,
+                config,
                 result
                 )
             );
@@ -295,7 +401,9 @@ ImportResult JsonLinesImporter::importFile(
 
         appendDiagnostic(
             result,
-            QStringLiteral("FILE_OPEN_FAILED"),
+            QStringLiteral(
+                "FILE_OPEN_FAILED"
+                ),
             QStringLiteral(
                 "The source file could not be opened: %1"
                 ).arg(file.errorString()),

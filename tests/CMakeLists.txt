@@ -16,6 +16,7 @@ qt_add_executable(ParserTests
     ../src/importing/ImportDiagnostic.cpp
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
+    ../src/importing/JsonLinesImportConfig.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
 )
@@ -179,6 +180,7 @@ qt_add_executable(JsonLinesImporterTests
     ../src/importing/ILogImporter.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonLinesImportConfig.h
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
     ../src/importing/ImportResult.h
