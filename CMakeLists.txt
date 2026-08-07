@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.1.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,6 +42,8 @@ qt_add_executable(TraceScope
     src/importing/ILogImporter.h
     src/importing/ImporterRegistry.h
     src/importing/ImporterRegistry.cpp
+    src/importing/JsonLinesImporter.h
+    src/importing/JsonLinesImporter.cpp
 )
 
 target_link_libraries(TraceScope

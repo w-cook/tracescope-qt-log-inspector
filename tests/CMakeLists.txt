@@ -11,10 +11,13 @@ qt_add_executable(ParserTests
     ../src/domain/RecordTimestamp.cpp
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
+    ../src/importing/ILogImporter.h
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
 )
 
 target_link_libraries(ParserTests
@@ -169,4 +172,34 @@ target_link_libraries(ImporterRegistryTests
 add_test(
     NAME ImporterRegistryTests
     COMMAND ImporterRegistryTests
+)
+
+qt_add_executable(JsonLinesImporterTests
+    JsonLinesImporterTests.cpp
+    ../src/importing/ILogImporter.h
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(JsonLinesImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME JsonLinesImporterTests
+    COMMAND JsonLinesImporterTests
 )
