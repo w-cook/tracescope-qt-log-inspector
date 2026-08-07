@@ -145,3 +145,28 @@ target_link_libraries(EventTimelineAnalyzerTests
 )
 
 add_test(NAME EventTimelineAnalyzerTests COMMAND EventTimelineAnalyzerTests)
+
+qt_add_executable(ImporterRegistryTests
+    ImporterRegistryTests.cpp
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImporterRegistry.h
+    ../src/importing/ImporterRegistry.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(ImporterRegistryTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImporterRegistryTests
+    COMMAND ImporterRegistryTests
+)

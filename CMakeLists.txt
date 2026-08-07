@@ -39,6 +39,9 @@ qt_add_executable(TraceScope
     src/importing/ImportDiagnostic.cpp
     src/importing/ImportResult.h
     src/importing/ImportResult.cpp
+    src/importing/ILogImporter.h
+    src/importing/ImporterRegistry.h
+    src/importing/ImporterRegistry.cpp
 )
 
 target_link_libraries(TraceScope
