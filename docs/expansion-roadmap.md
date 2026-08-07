@@ -167,11 +167,11 @@ Completed deliverables:
 
 ### Phase 1 — Flexible Record and Import Domain
 
-**Status: Current active phase.**
+**Status: Completed in `v0.2.0`.**
 
 Replace rigid event assumptions with a flexible investigation domain.
 
-Planned deliverables:
+Completed deliverables:
 
 * optional typed canonical fields
 * typed severity representation
