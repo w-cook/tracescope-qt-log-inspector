@@ -30,7 +30,7 @@ The expansion will follow these principles:
 
 ## Current Prototype Baseline
 
-The original prototype currently uses:
+The original prototype uses:
 
 * C++17
 * Qt 6
@@ -40,7 +40,7 @@ The original prototype currently uses:
 * Qt Test
 * MinGW 64-bit on Windows
 
-Implemented capabilities include:
+Original-prototype capabilities include:
 
 * JSON Lines log loading
 * structured telemetry parsing
@@ -56,9 +56,11 @@ Implemented capabilities include:
 * included sample log files
 * automated tests for parsing, filtering, grouped analysis, timeline analysis, and CSV export
 
-The current implementation uses a fixed telemetry-event structure, a hard-coded JSON Lines parser, a `QTableWidget`-based event display, and a `MainWindow` that owns substantial application state and UI orchestration.
+The original prototype UI remains based on a fixed telemetry-event presentation, a `QTableWidget` event display, and a `MainWindow` that owns substantial application state and UI orchestration.
 
-These constraints form the starting point for the expansion rather than defects in the completed original prototype.
+Beginning with `v0.2.0`, the ingestion layer also includes a flexible investigation-record and import domain. The existing parser retains compatibility adapters so the original UI remains operational while the new architecture is introduced incrementally.
+
+These original constraints form the starting point for the expansion rather than defects in the completed prototype.
 
 ## Release Discipline
 
@@ -79,18 +81,27 @@ Each completed development phase should produce:
 
 GitHub Actions artifacts are used for build verification. Approved packages are then attached to GitHub Releases as permanent employer-facing downloads.
 
-The original prototype package set is:
+Completed release milestones:
 
-* Tag: `v0.1.0`
+### `v0.1.0` — Original Prototype
+
 * Release title: `TraceScope 0.1.0 — Original Prototype`
 * Status: prerelease
 * Windows asset: `TraceScope-v0.1.0-windows-x64.zip`
 * Linux asset: `TraceScope-v0.1.0-linux-x86_64.AppImage`
 * Sample asset: `TraceScope-v0.1.0-samples.zip`
 
+### `v0.2.0` — Flexible Record and Import Domain
+
+* Release title: `TraceScope 0.2.0 — Flexible Record and Import Domain`
+* Status: prerelease
+* Windows asset: `TraceScope-v0.2.0-windows-x64.zip`
+* Linux asset: `TraceScope-v0.2.0-linux-x86_64.AppImage`
+* Sample asset: `TraceScope-v0.2.0-samples.zip`
+
 ## Canonical Investigation Record
 
-The flexible-ingestion architecture will introduce a common investigation record with optional standard fields such as:
+`v0.2.0` introduced a common flexible investigation record with optional standard fields:
 
 * timestamp
 * severity
@@ -99,33 +110,52 @@ The flexible-ingestion architecture will introduce a common investigation record
 * entity ID
 * message
 
-The record will also preserve:
+The record also preserves:
 
 * custom source attributes
 * the raw source record
 * source file information
 * source line or record number
-* import diagnostics
 * stable record identity
 
-Missing canonical fields should not automatically invalidate an otherwise useful source record. Features that require a timestamp, severity, event code, or another specific field may be unavailable when that field is absent, while unrelated inspection and search features should remain usable.
+Import processing separately returns structured diagnostics that can identify malformed records or canonical values that could not be mapped.
 
-## Planned Import Architecture
+Missing canonical fields do not automatically invalidate an otherwise useful source record. Features that require a timestamp, severity, event code, or another specific field may be unavailable when that field is absent, while unrelated inspection and future search features can continue to use the preserved record content.
 
-The planned ingestion design includes concepts such as:
+The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsing, dynamic custom attributes, raw-source preservation, source metadata, deterministic stable identities, import results, and import diagnostics.
+
+## Import Architecture
+
+Implemented foundations:
+
+* flexible investigation record
+* import result
+* import diagnostic
+* typed severity parsing
+* timestamp parsing
+* source metadata
+* stable record identity
+* JSON Lines parsing into the flexible import domain
+* compatibility adapters for the original telemetry-event workflow
+
+The current active phase adds:
 
 * `ILogImporter`
 * importer registry
-* import profile
-* field mapping
-* severity mapping
+* dedicated JSON Lines importer
+* configurable JSON field paths
+* compatibility with existing sample files
+* comprehensive importer tests
+
+Later phases will add:
+
+* import profiles
+* field mapping configuration
+* severity mapping configuration
 * timestamp configuration
 * import preview
-* import result
-* import diagnostic
-* flexible investigation record
-
-The existing JSON Lines parser will become the first implementation behind the importer abstraction.
+* profile validation and persistence
+* additional built-in formats
 
 Importers will be registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
@@ -182,8 +212,14 @@ Completed deliverables:
 * stable record identity
 * import results
 * import diagnostics
+* compatibility with the existing prototype UI and sample workflow
+* expanded automated test coverage for the new domain and parser behavior
+* Windows and Linux CI verification
+* `v0.2.0` prerelease and downloadable package verification
 
 ### Phase 2 — Importer Abstraction and Configurable JSON Lines
+
+**Status: Current active phase.**
 
 Move existing JSON Lines behavior behind the common importer architecture.
 
