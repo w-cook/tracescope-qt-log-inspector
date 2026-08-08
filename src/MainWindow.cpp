@@ -28,6 +28,7 @@
 #include <QtCharts/QValueAxis>
 #include <QtCharts/QLegend>
 #include <algorithm>
+#include <utility>
 
 #include "compatibility/TelemetryEventAdapter.h"
 
@@ -425,10 +426,41 @@ void MainWindow::displayEventDetail(
 
     lines << "";
     lines << "Message:";
-
     lines << record.message.value_or(
         QString()
         );
+
+    if (!record.customAttributes.isEmpty()) {
+        lines << "";
+        lines << "Custom Attributes:";
+
+        QStringList attributeKeys =
+            record.customAttributes.keys();
+
+        std::sort(
+            attributeKeys.begin(),
+            attributeKeys.end(),
+            [](const QString &left, const QString &right) {
+                return left.compare(
+                           right,
+                           Qt::CaseInsensitive
+                           ) < 0;
+            }
+            );
+
+        for (
+            const QString &key :
+            std::as_const(attributeKeys)
+            ) {
+            lines << QString("%1: %2")
+            .arg(
+                key,
+                record.customAttributes
+                    .value(key)
+                    .toString()
+                );
+        }
+    }
 
     eventDetailText->setPlainText(
         lines.join("\n")
