@@ -115,6 +115,14 @@ Completed release milestones:
 * Linux asset: `TraceScope-v0.4.0-linux-x86_64.AppImage`
 * Sample asset: `TraceScope-v0.4.0-samples.zip`
 
+### `v0.4.1` — Dynamic Attribute CSV Export
+
+* Release title: `TraceScope 0.4.1 — Dynamic Attribute CSV Export`
+* Status: prerelease
+* Windows asset: `TraceScope-v0.4.1-windows-x64.zip`
+* Linux asset: `TraceScope-v0.4.1-linux-x86_64.AppImage`
+* Sample asset: `TraceScope-v0.4.1-samples.zip`
+
 ## Canonical Investigation Record
 
 `v0.2.0` introduced a common flexible investigation record with optional standard fields:
@@ -276,12 +284,22 @@ Completed deliverables:
 * `InvestigationController` decomposition for record, filter, subsystem, visibility, and source/proxy coordination
 * migration of the primary event display from `QTableWidget` to `QTableView`
 * preservation of session summaries, grouped warning/error analysis, timeline visualization, selected-event inspection, and filtered CSV export
-* compatibility adapter for remaining telemetry-oriented analysis and export components
+* compatibility adapter for remaining telemetry-oriented analysis components
 * `dynamic-attributes-session.jsonl` demonstration sample with heterogeneous custom fields and multi-minute timeline activity
 * automated coverage for the table model, filter proxy, and investigation controller
 * local full-suite and UI regression verification
 * Windows and Linux CI verification
 * `v0.4.0` prerelease and downloadable package verification
+
+Post-release patch completed in `v0.4.1`:
+
+* investigation-record CSV export without conversion back to the legacy telemetry model
+* preservation of dynamic custom attributes in filtered CSV output
+* deterministic custom-column ordering across the visible record set
+* blank cells for custom attributes absent from individual records
+* retained CSV escaping for canonical and custom values
+* compact JSON serialization for structured custom values
+* expanded CSV exporter regression coverage
 
 ### Phase 4 — Import Profiles and Preview Logic
 
@@ -453,11 +471,10 @@ Planned deliverables:
 
 ### Phase 15 — Reporting and Export
 
-Expand investigation output while retaining the existing CSV workflow.
+Expand investigation output beyond the existing investigation-record CSV workflow.
 
 Planned deliverables:
 
-* dynamic custom-field CSV export
 * findings export
 * selected-record copy as JSON
 * selected-record copy as formatted text

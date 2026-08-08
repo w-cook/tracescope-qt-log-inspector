@@ -6,7 +6,7 @@ TraceScope is a native Qt/C++ desktop application for loading, filtering, visual
 
 The completed original prototype provides a focused investigation workflow for a built-in JSON Lines telemetry format. TraceScope is now being expanded into a configurable native log-analysis workbench with reusable import profiles and additional built-in formats planned through a phased roadmap.
 
-The `v0.2.0` release established the flexible investigation-record and import domain. `v0.3.0` added the common importer architecture, a dedicated JSON Lines importer, and configurable JSON field paths. `v0.4.0` brings that flexible record model into the desktop investigation workflow through Qt model/view architecture, dynamic custom-attribute columns, proxy sorting and filtering, and reduced UI orchestration in `MainWindow`.
+The `v0.2.0` release established the flexible investigation-record and import domain. `v0.3.0` added the common importer architecture, a dedicated JSON Lines importer, and configurable JSON field paths. `v0.4.0` brought that flexible record model into the desktop investigation workflow through Qt model/view architecture, dynamic custom-attribute columns, proxy sorting and filtering, and reduced UI orchestration in `MainWindow`. `v0.4.1` extends that workflow so filtered CSV exports preserve the dynamic custom attributes associated with visible investigation records.
 
 TraceScope is intended for file-based logs produced by applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems.
 
@@ -14,19 +14,19 @@ TraceScope is intended for file-based logs produced by applications, services, s
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The `v0.4.0` package set uses these filenames:
+The `v0.4.1` package set uses these filenames:
 
 ```text
-TraceScope-v0.4.0-windows-x64.zip
-TraceScope-v0.4.0-linux-x86_64.AppImage
-TraceScope-v0.4.0-samples.zip
+TraceScope-v0.4.1-windows-x64.zip
+TraceScope-v0.4.1-linux-x86_64.AppImage
+TraceScope-v0.4.1-samples.zip
 ```
 
-The historical `v0.1.0` through `v0.3.0` prereleases remain available as earlier development milestones.
+The historical `v0.1.0` through `v0.4.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.4.0-windows-x64.zip`.
+1. Download `TraceScope-v0.4.1-windows-x64.zip`.
 2. Extract the complete ZIP to a local directory.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory.
@@ -35,29 +35,29 @@ The Windows package includes the required Qt libraries, plugins, and MinGW runti
 
 ### Linux
 
-1. Download `TraceScope-v0.4.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.4.1-linux-x86_64.AppImage`.
 2. Make the file executable:
 
 ```bash
-chmod +x TraceScope-v0.4.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.4.1-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.4.0-linux-x86_64.AppImage
+./TraceScope-v0.4.1-linux-x86_64.AppImage
 ```
 
 The AppImage contains TraceScope and its required Qt dependencies. The same demonstration logs are also available through the standalone sample archive.
 
 ### Sample Logs
 
-Download `TraceScope-v0.4.0-samples.zip` for a platform-neutral copy of all included demonstration logs.
+Download `TraceScope-v0.4.1-samples.zip` for a platform-neutral copy of all included demonstration logs.
 
 After extraction, the archive contains:
 
 ```text
-TraceScope-v0.4.0-samples/
+TraceScope-v0.4.1-samples/
 ├── README.md
 ├── LICENSE
 └── samples/
@@ -100,7 +100,7 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - View session-level event counts
 - Group warnings and errors by subsystem
 - Visualize filtered event counts in minute-based timeline buckets
-- Export the currently visible filtered telemetry results to CSV
+- Export the currently visible filtered investigation records to CSV with canonical and dynamic custom-attribute columns
 - Use included sample files for demonstration and testing
 - Build and test the application on Windows and Linux through GitHub Actions
 - Produce a portable Windows x64 ZIP through automated CI
@@ -108,7 +108,7 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - Produce a platform-neutral sample-log ZIP
 - Smoke-test packaged Windows and Linux applications in CI
 
-The desktop UI now consumes flexible `InvestigationRecord` data directly for the primary event table, filtering, searching, and selected-record inspection. Existing telemetry-oriented analysis, timeline, and CSV export components remain connected through a compatibility adapter so the established investigation workflow continues to operate while later phases expand those components.
+The desktop UI now consumes flexible `InvestigationRecord` data directly for the primary event table, filtering, searching, selected-record inspection, and CSV export. Existing telemetry-oriented analysis and timeline components remain connected through a compatibility adapter so the established investigation workflow continues to operate while later phases expand those components.
 
 Configurable JSON field paths are implemented and tested at the importer layer but are not yet exposed through an end-user configuration interface.
 
@@ -128,7 +128,7 @@ Severity, subsystem, and text filters update the event table, summary informatio
 
 ### Exported CSV
 
-The export workflow writes the currently filtered telemetry event set to a CSV file for additional review or sharing.
+The export workflow writes the currently filtered investigation-record set to CSV, preserving canonical fields and the custom attributes present in the visible records.
 
 ![TraceScope Exported CSV](docs/screenshots/tracescope-exported-csv.png)
 
@@ -161,7 +161,8 @@ Completed expansion foundations include:
 - correct proxy-to-source selection mapping
 - selected-record display of custom attributes
 - focused model coordination through `InvestigationController`
-- backward compatibility with the established analysis, timeline, export, and sample workflows
+- investigation-record CSV export with dynamic custom-attribute columns
+- backward compatibility with the established analysis, timeline, and sample workflows
 - automated tests for the flexible domain, importer architecture, model/view layer, and controller behavior
 
 The current active phase is **Import Profiles and Preview Logic**. It will define the reusable, versioned configuration model needed to save field mappings, severity aliases, timestamp rules, validation behavior, and deterministic import previews.
@@ -228,6 +229,8 @@ As of `v0.3.0`, JSON Lines canonical fields are resolved through configurable do
 
 As of `v0.4.0`, preserved custom attributes are exposed directly in the desktop investigation table as dynamic columns, included in text search, and shown in selected-record details. A source file does not need to use the same set of custom attributes on every record.
 
+As of `v0.4.1`, filtered CSV export operates directly on visible `InvestigationRecord` values. The exporter preserves the six established canonical columns, appends the union of custom-attribute keys in deterministic case-insensitive order, leaves missing per-record attributes blank, retains CSV escaping, and serializes structured custom values such as arrays and objects as compact JSON.
+
 For example:
 
 ```json
@@ -264,7 +267,7 @@ src/
 ├── compatibility/                 # Flexible-record adapters for legacy telemetry-oriented components
 ├── controllers/                   # Investigation model/proxy coordination
 ├── domain/                        # Legacy telemetry model plus flexible investigation-record domain
-├── exporting/                     # Filtered CSV export
+├── exporting/                     # Investigation-record CSV export with dynamic custom attributes
 ├── filtering/                     # Legacy telemetry filtering retained for compatibility/tests
 ├── importing/                     # Import contracts, registry, JSON Lines importer, configuration, results, and diagnostics
 ├── models/                        # Investigation table and filter proxy models
@@ -354,7 +357,11 @@ Together, these tests cover:
 - legacy telemetry filtering behavior
 - grouped warning and error analysis
 - timeline bucket analysis
-- CSV export
+- canonical-field CSV export compatibility
+- dynamic custom-attribute CSV columns
+- deterministic custom-column ordering and blank missing-value cells in CSV export
+- CSV escaping for canonical and custom values
+- compact JSON serialization for structured custom values
 - canonical investigation table columns
 - dynamic custom-attribute columns
 - deterministic dynamic-column ordering
@@ -382,7 +389,7 @@ The GitHub Actions workflow runs three parallel jobs with read-only repository p
 - verifies required runtime files
 - verifies that the dynamic-attributes demonstration sample is packaged
 - includes documentation and sample logs
-- creates `TraceScope-v0.4.0-windows-x64.zip`
+- creates `TraceScope-v0.4.1-windows-x64.zip`
 - extracts and starts the packaged executable
 - uploads the ZIP as a workflow artifact
 
@@ -396,7 +403,7 @@ The GitHub Actions workflow runs three parallel jobs with read-only repository p
 - assembles an AppDir
 - deploys Qt dependencies with `linuxdeploy`
 - verifies that the dynamic-attributes demonstration sample is packaged
-- creates `TraceScope-v0.4.0-linux-x86_64.AppImage`
+- creates `TraceScope-v0.4.1-linux-x86_64.AppImage`
 - starts the AppImage using the offscreen Qt platform
 - uploads the AppImage as a workflow artifact
 
@@ -406,7 +413,7 @@ The GitHub Actions workflow runs three parallel jobs with read-only repository p
 - copies all samples into a platform-neutral package
 - verifies that the packaged count matches the source count
 - verifies required entries in the generated archive
-- creates `TraceScope-v0.4.0-samples.zip`
+- creates `TraceScope-v0.4.1-samples.zip`
 - uploads the ZIP as a workflow artifact
 
 Workflow artifacts are used to validate candidate packages. Approved packages are attached permanently to GitHub Releases.
@@ -444,7 +451,9 @@ The configurable workbench expansion is in progress.
 
 `v0.3.0` completed the importer-abstraction phase. It added a common `ILogImporter` contract, an internal importer registry, a dedicated `JsonLinesImporter`, configurable dot-delimited JSON field mappings, nested object-path support, importer-focused automated tests, and compatibility behavior for the existing workflow.
 
-`v0.4.0` completes the Qt model/view architecture phase. The primary event display now uses `QTableView`, `InvestigationTableModel`, and `InvestigationFilterProxyModel`; custom attributes appear as dynamic columns and participate in search; selections remain correctly mapped after sorting and filtering; selected-record details expose dynamic attributes; and `InvestigationController` removes model/proxy coordination from `MainWindow`. The existing summary, grouped-issue, timeline, and filtered CSV workflows remain operational through the compatibility layer.
+`v0.4.0` completed the Qt model/view architecture phase. The primary event display uses `QTableView`, `InvestigationTableModel`, and `InvestigationFilterProxyModel`; custom attributes appear as dynamic columns and participate in search; selections remain correctly mapped after sorting and filtering; selected-record details expose dynamic attributes; and `InvestigationController` removes model/proxy coordination from `MainWindow`.
+
+`v0.4.1` is a focused patch release that moves filtered CSV export onto the flexible investigation-record model. CSV output now preserves dynamic custom attributes, uses deterministic custom-column ordering across the visible record set, leaves unavailable values blank, and retains CSV escaping and structured-value serialization.
 
 The current active phase is **Import Profiles and Preview Logic**. Current priorities are:
 
