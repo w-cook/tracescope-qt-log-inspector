@@ -4,11 +4,12 @@
 #include <QFileDialog>
 #include <QHeaderView>
 #include <QScrollBar>
-#include <QAbstractScrollArea>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QTableWidget>
+#include <QTableView>
+#include <QItemSelectionModel>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QComboBox>
@@ -30,17 +31,23 @@
 #include <utility>
 #include <algorithm>
 
+#include "compatibility/TelemetryEventAdapter.h"
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-      summaryLabel(new QLabel("No log file loaded.")),
-      eventTable(new QTableWidget(0, 5)),
-      eventDetailText(new QPlainTextEdit(this)),
-      issueSummaryTable(new QTableWidget(0, 4)),
-      timelineChartView(new QChartView(this)),
-      levelFilterCombo(new QComboBox(this)),
-      subsystemFilterCombo(new QComboBox(this)),
-      searchInput(new QLineEdit(this))
+    summaryLabel(new QLabel("No log file loaded.")),
+    eventTable(new QTableView(this)),
+    eventDetailText(new QPlainTextEdit(this)),
+    issueSummaryTable(new QTableWidget(0, 4)),
+    eventModel(new InvestigationTableModel(this)),
+    eventProxyModel(new InvestigationFilterProxyModel(this)),
+    timelineChartView(new QChartView(this)),
+    levelFilterCombo(new QComboBox(this)),
+    subsystemFilterCombo(new QComboBox(this)),
+    searchInput(new QLineEdit(this))
 {
+    eventProxyModel->setSourceModel(eventModel);
+
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
     resize(1100, 760);
 
@@ -99,25 +106,31 @@ void MainWindow::buildLayout()
     auto *eventsGroup = new QGroupBox("Telemetry Events", this);
     auto *eventsLayout = new QVBoxLayout(eventsGroup);
 
+    eventTable->setModel(eventProxyModel);
+
     eventTable->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Expanding
         );
 
-    eventTable->setColumnCount(6);
-
-    eventTable->setHorizontalHeaderLabels({
-        "Timestamp",
-        "Level",
-        "Subsystem",
-        "Event Code",
-        "Entity ID",
-        "Message"
-    });
-
     eventTable->setAlternatingRowColors(true);
-    eventTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    eventTable->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    eventTable->setSelectionBehavior(
+        QAbstractItemView::SelectRows
+        );
+
+    eventTable->setSelectionMode(
+        QAbstractItemView::SingleSelection
+        );
+
+    eventTable->setSortingEnabled(true);
+
+    eventTable->sortByColumn(
+        -1,
+        Qt::AscendingOrder
+        );
+
+    eventTable->horizontalHeader()->setStretchLastSection(true);
 
     eventsLayout->addWidget(eventTable);
 
@@ -178,9 +191,14 @@ void MainWindow::openLogFile()
 
 void MainWindow::loadLogFile(const QString &filePath)
 {
-    currentEvents = parser.parseFile(filePath);
+    const ImportResult result =
+        parser.importFile(filePath);
 
-    if (currentEvents.isEmpty()) {
+    currentFilePath = filePath;
+
+    eventModel->setRecords(result.records);
+
+    if (result.records.isEmpty()) {
         QMessageBox::warning(
             this,
             "No Events Loaded",
@@ -191,28 +209,8 @@ void MainWindow::loadLogFile(const QString &filePath)
     refreshSubsystemFilterOptions();
     applyFilters();
 
-    currentFilePath = filePath;
-}
-
-void MainWindow::populateTable(const QVector<TelemetryEvent> &events)
-{
-    eventTable->setRowCount(events.size());
-
-    for (int row = 0; row < events.size(); ++row) {
-        const TelemetryEvent &event = events[row];
-
-        eventTable->setItem(row, 0, new QTableWidgetItem(event.timestamp));
-        eventTable->setItem(row, 1, new QTableWidgetItem(event.level));
-        eventTable->setItem(row, 2, new QTableWidgetItem(event.subsystem));
-        eventTable->setItem(row, 3, new QTableWidgetItem(event.eventCode));
-        eventTable->setItem(row, 4, new QTableWidgetItem(event.entityId));
-        eventTable->setItem(row, 5, new QTableWidgetItem(event.message));
-    }
-
     eventTable->resizeColumnsToContents();
     eventTable->horizontalHeader()->setStretchLastSection(true);
-    eventTable->clearSelection();
-    clearEventDetail();
 }
 
 void MainWindow::updateSummary(
@@ -235,9 +233,12 @@ void MainWindow::updateSummary(
     }
 
     summaryLabel->setText(
-        QString("Showing %1 of %2 events from %3 | INFO: %4 | WARN: %5 | ERROR: %6")
+        QString(
+            "Showing %1 of %2 events from %3 | "
+            "INFO: %4 | WARN: %5 | ERROR: %6"
+            )
             .arg(events.size())
-            .arg(currentEvents.size())
+            .arg(eventModel->rowCount())
             .arg(filePath)
             .arg(infoCount)
             .arg(warningCount)
@@ -254,7 +255,9 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     subsystemFilterCombo->addItem("All subsystems", "");
 
-    searchInput->setPlaceholderText("Search timestamp, level, subsystem, code, message, or entity ID...");
+    searchInput->setPlaceholderText(
+        "Search canonical fields and custom attributes..."
+        );
 
     auto *filterLayout = new QHBoxLayout();
 
@@ -277,55 +280,142 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
     });
 }
 
-TelemetryFilterCriteria MainWindow::currentFilterCriteria() const
-{
-    TelemetryFilterCriteria criteria;
-    criteria.level = levelFilterCombo->currentData().toString();
-    criteria.subsystem = subsystemFilterCombo->currentData().toString();
-    criteria.searchText = searchInput->text();
-
-    return criteria;
-}
-
 void MainWindow::applyFilters()
 {
-    filteredEvents = eventFilter.apply(currentEvents, currentFilterCriteria());
+    eventProxyModel->setSeverityFilter(
+        levelFilterCombo->currentData().toString()
+        );
 
-    populateTable(filteredEvents);
-    updateSummary(filteredEvents, currentFilePath);
-    updateIssueSummary(filteredEvents);
-    updateTimelineChart(filteredEvents);
+    eventProxyModel->setSubsystemFilter(
+        subsystemFilterCombo->currentData().toString()
+        );
+
+    eventProxyModel->setSearchText(
+        searchInput->text()
+        );
+
+    eventTable->clearSelection();
+    clearEventDetail();
+
+    const QVector<InvestigationRecord> records =
+        visibleRecords();
+
+    const QVector<TelemetryEvent> events =
+        toTelemetryEvents(records);
+
+    updateSummary(
+        events,
+        currentFilePath
+        );
+
+    updateIssueSummary(events);
+    updateTimelineChart(events);
 }
 
 void MainWindow::refreshSubsystemFilterOptions()
 {
-    const QString selectedSubsystem = subsystemFilterCombo->currentData().toString();
+    const QString selectedSubsystem =
+        subsystemFilterCombo->currentData().toString();
 
     subsystemFilterCombo->blockSignals(true);
     subsystemFilterCombo->clear();
-    subsystemFilterCombo->addItem("All subsystems", "");
+
+    subsystemFilterCombo->addItem(
+        "All subsystems",
+        ""
+        );
 
     QSet<QString> subsystems;
 
-    for (const TelemetryEvent &event : std::as_const(currentEvents)) {
-        if (!event.subsystem.isEmpty()) {
-            subsystems.insert(event.subsystem);
+    const QVector<InvestigationRecord> &records =
+        eventModel->records();
+
+    for (const InvestigationRecord &record : records) {
+        if (record.subsystem.has_value()
+            && !record.subsystem->isEmpty()) {
+            subsystems.insert(
+                record.subsystem.value()
+                );
         }
     }
 
-    const QList<QString> sortedSubsystems = QList<QString>(subsystems.begin(), subsystems.end());
+    QList<QString> sortedSubsystems =
+        subsystems.values();
 
-    for (const QString &subsystem : sortedSubsystems) {
-        subsystemFilterCombo->addItem(subsystem, subsystem);
+    std::sort(
+        sortedSubsystems.begin(),
+        sortedSubsystems.end(),
+        [](const QString &left, const QString &right) {
+            return left.compare(
+                       right,
+                       Qt::CaseInsensitive
+                       ) < 0;
+        }
+        );
+
+    for (
+        const QString &subsystem :
+        std::as_const(sortedSubsystems)
+        ) {
+        subsystemFilterCombo->addItem(
+            subsystem,
+            subsystem
+            );
     }
 
-    const int previousIndex = subsystemFilterCombo->findData(selectedSubsystem);
+    const int previousIndex =
+        subsystemFilterCombo->findData(
+            selectedSubsystem
+            );
 
     if (previousIndex >= 0) {
-        subsystemFilterCombo->setCurrentIndex(previousIndex);
+        subsystemFilterCombo->setCurrentIndex(
+            previousIndex
+            );
     }
 
     subsystemFilterCombo->blockSignals(false);
+}
+
+QVector<InvestigationRecord> MainWindow::visibleRecords() const
+{
+    QVector<InvestigationRecord> records;
+
+    records.reserve(
+        eventProxyModel->rowCount()
+        );
+
+    for (
+        int proxyRow = 0;
+        proxyRow < eventProxyModel->rowCount();
+        ++proxyRow
+        ) {
+        const QModelIndex proxyIndex =
+            eventProxyModel->index(
+                proxyRow,
+                0
+                );
+
+        const QModelIndex sourceIndex =
+            eventProxyModel->mapToSource(
+                proxyIndex
+                );
+
+        if (!sourceIndex.isValid()) {
+            continue;
+        }
+
+        const InvestigationRecord *record =
+            eventModel->recordAt(
+                sourceIndex.row()
+                );
+
+        if (record != nullptr) {
+            records.append(*record);
+        }
+    }
+
+    return records;
 }
 
 QGroupBox *MainWindow::buildDetailPanel()
@@ -342,10 +432,15 @@ QGroupBox *MainWindow::buildDetailPanel()
     detailLayout->addWidget(eventDetailText);
 
     connect(
-        eventTable,
-        &QTableWidget::itemSelectionChanged,
+        eventTable->selectionModel(),
+        &QItemSelectionModel::currentRowChanged,
         this,
-        &MainWindow::updateEventDetailFromSelection
+        [this](
+            const QModelIndex &,
+            const QModelIndex &
+            ) {
+            updateEventDetailFromSelection();
+        }
         );
 
     return detailGroup;
@@ -353,30 +448,86 @@ QGroupBox *MainWindow::buildDetailPanel()
 
 void MainWindow::updateEventDetailFromSelection()
 {
-    const int row = eventTable->currentRow();
+    const QModelIndex proxyIndex =
+        eventTable->currentIndex();
 
-    if (row < 0 || row >= filteredEvents.size()) {
+    if (!proxyIndex.isValid()) {
         clearEventDetail();
         return;
     }
 
-    displayEventDetail(filteredEvents[row]);
+    const QModelIndex sourceIndex =
+        eventProxyModel->mapToSource(
+            proxyIndex
+            );
+
+    if (!sourceIndex.isValid()) {
+        clearEventDetail();
+        return;
+    }
+
+    const InvestigationRecord *record =
+        eventModel->recordAt(
+            sourceIndex.row()
+            );
+
+    if (record == nullptr) {
+        clearEventDetail();
+        return;
+    }
+
+    displayEventDetail(*record);
 }
 
-void MainWindow::displayEventDetail(const TelemetryEvent &event)
+void MainWindow::displayEventDetail(
+    const InvestigationRecord &record
+    )
 {
     QStringList lines;
 
-    lines << "Timestamp: " + event.timestamp;
-    lines << "Level: " + event.level;
-    lines << "Subsystem: " + event.subsystem;
-    lines << "Event Code: " + event.eventCode;
-    lines << "Entity ID: " + event.entityId;
+    lines << "Timestamp: "
+                 + (
+                     record.timestamp.has_value()
+                         ? record.timestamp->toString(
+                               Qt::ISODateWithMs
+                               )
+                         : QString()
+                     );
+
+    lines << "Level: "
+                 + (
+                     record.severity.has_value()
+                         ? recordSeverityToString(
+                               record.severity.value()
+                               )
+                         : QString()
+                     );
+
+    lines << "Subsystem: "
+                 + record.subsystem.value_or(
+                     QString()
+                     );
+
+    lines << "Event Code: "
+                 + record.eventCode.value_or(
+                     QString()
+                     );
+
+    lines << "Entity ID: "
+                 + record.entityId.value_or(
+                     QString()
+                     );
+
     lines << "";
     lines << "Message:";
-    lines << event.message;
 
-    eventDetailText->setPlainText(lines.join("\n"));
+    lines << record.message.value_or(
+        QString()
+        );
+
+    eventDetailText->setPlainText(
+        lines.join("\n")
+        );
 }
 
 void MainWindow::clearEventDetail()
@@ -465,7 +616,13 @@ void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
 
 void MainWindow::exportFilteredResults()
 {
-    if (filteredEvents.isEmpty()) {
+    const QVector<InvestigationRecord> records =
+        visibleRecords();
+
+    const QVector<TelemetryEvent> events =
+        toTelemetryEvents(records);
+
+    if (events.isEmpty()) {
         QMessageBox::information(
             this,
             "No Events to Export",
@@ -475,18 +632,23 @@ void MainWindow::exportFilteredResults()
         return;
     }
 
-    const QString filePath = QFileDialog::getSaveFileName(
-        this,
-        "Export Filtered Telemetry Events",
-        "filtered-telemetry-events.csv",
-        "CSV Files (*.csv);;All Files (*)"
-        );
+    const QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            "Export Filtered Telemetry Events",
+            "filtered-telemetry-events.csv",
+            "CSV Files (*.csv);;All Files (*)"
+            );
 
     if (filePath.isEmpty()) {
         return;
     }
 
-    const bool exported = csvExporter.exportToFile(filteredEvents, filePath);
+    const bool exported =
+        csvExporter.exportToFile(
+            events,
+            filePath
+            );
 
     if (!exported) {
         QMessageBox::warning(
@@ -501,7 +663,9 @@ void MainWindow::exportFilteredResults()
     QMessageBox::information(
         this,
         "Export Complete",
-        QString("Exported %1 telemetry events.").arg(filteredEvents.size())
+        QString(
+            "Exported %1 telemetry events."
+            ).arg(events.size())
         );
 }
 

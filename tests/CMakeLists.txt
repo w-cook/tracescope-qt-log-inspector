@@ -2,6 +2,8 @@ qt_add_executable(ParserTests
     ParserTests.cpp
     ../src/parsing/JsonLineLogParser.h
     ../src/parsing/JsonLineLogParser.cpp
+    ../src/compatibility/TelemetryEventAdapter.h
+    ../src/compatibility/TelemetryEventAdapter.cpp
     ../src/domain/TelemetryEvent.h
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordSeverity.h

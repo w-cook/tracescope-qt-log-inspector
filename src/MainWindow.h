@@ -2,17 +2,18 @@
 
 #include <QMainWindow>
 #include <QVector>
-#include <QSet>
 
+#include "domain/InvestigationRecord.h"
 #include "domain/TelemetryEvent.h"
 #include "parsing/JsonLineLogParser.h"
-#include "filtering/TelemetryEventFilter.h"
-#include "filtering/TelemetryFilterCriteria.h"
+#include "models/InvestigationTableModel.h"
+#include "models/InvestigationFilterProxyModel.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/TelemetryCsvExporter.h"
 #include "analysis/EventTimelineAnalyzer.h"
 
 class QLabel;
+class QTableView;
 class QTableWidget;
 class QComboBox;
 class QLineEdit;
@@ -30,15 +31,14 @@ public:
 
 private:
     QLabel *summaryLabel;
-    QTableWidget *eventTable;
+    QTableView *eventTable;
     QPlainTextEdit *eventDetailText;
     QTableWidget *issueSummaryTable;
 
-    QVector<TelemetryEvent> currentEvents;
-    QVector<TelemetryEvent> filteredEvents;
+    InvestigationTableModel *eventModel;
+    InvestigationFilterProxyModel *eventProxyModel;
 
     JsonLineLogParser parser;
-    TelemetryEventFilter eventFilter;
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     TelemetryCsvExporter csvExporter;
@@ -55,19 +55,34 @@ private:
     void createMenus();
     void openLogFile();
     void loadLogFile(const QString &filePath);
-    void populateTable(const QVector<TelemetryEvent> &events);
-    void updateSummary(const QVector<TelemetryEvent> &events, const QString &filePath);
+
+    void updateSummary(
+        const QVector<TelemetryEvent> &events,
+        const QString &filePath
+        );
+
     void buildFilterControls(QVBoxLayout *layout);
-    TelemetryFilterCriteria currentFilterCriteria() const;
     void applyFilters();
     void refreshSubsystemFilterOptions();
+
+    QVector<InvestigationRecord> visibleRecords() const;
+
     QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();
-    void displayEventDetail(const TelemetryEvent &event);
+    void displayEventDetail(
+        const InvestigationRecord &record
+        );
     void clearEventDetail();
+
     QGroupBox *buildIssueSummaryPanel();
-    void updateIssueSummary(const QVector<TelemetryEvent> &events);
+    void updateIssueSummary(
+        const QVector<TelemetryEvent> &events
+        );
+
     void exportFilteredResults();
+
     QGroupBox *buildTimelinePanel();
-    void updateTimelineChart(const QVector<TelemetryEvent> &events);
+    void updateTimelineChart(
+        const QVector<TelemetryEvent> &events
+        );
 };
