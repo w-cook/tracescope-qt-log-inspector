@@ -11,9 +11,9 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
-  WINDOWS_PACKAGE_NAME: TraceScope-v0.3.0-windows-x64
-  LINUX_PACKAGE_NAME: TraceScope-v0.3.0-linux-x86_64
-  SAMPLES_PACKAGE_NAME: TraceScope-v0.3.0-samples
+  WINDOWS_PACKAGE_NAME: TraceScope-v0.4.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v0.4.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v0.4.0-samples
 
 jobs:
   windows-build-and-test:
@@ -111,7 +111,8 @@ jobs:
             "libwinpthread-1.dll",
             "README.md",
             "LICENSE",
-            "samples\telemetry-session-003.jsonl"
+            "samples\telemetry-session-003.jsonl",
+            "samples\dynamic-attributes-session.jsonl"
           )
 
           foreach ($relativePath in $requiredFiles) {
@@ -282,7 +283,7 @@ jobs:
 
           export PATH="$PWD/packaging-tools:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export VERSION="0.3.0"
+          export VERSION="0.4.0"
           export ARCH="x86_64"
           export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
           export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
@@ -310,6 +311,7 @@ jobs:
           test -f AppDir/usr/share/doc/tracescope/README.md
           test -f AppDir/usr/share/doc/tracescope/LICENSE
           test -f AppDir/usr/share/tracescope/samples/telemetry-session-003.jsonl
+          test -f AppDir/usr/share/tracescope/samples/dynamic-attributes-session.jsonl
 
           test -x "dist/$LINUX_PACKAGE_NAME.AppImage"
 
@@ -372,6 +374,7 @@ jobs:
 
           test -d samples
           test -f samples/telemetry-session-003.jsonl
+          test -f samples/dynamic-attributes-session.jsonl
 
           sample_count="$(find samples -type f | wc -l)"
           test "$sample_count" -gt 0
@@ -420,6 +423,7 @@ jobs:
           test -f "$package_dir/README.md"
           test -f "$package_dir/LICENSE"
           test -f "$package_dir/samples/telemetry-session-003.jsonl"
+          test -f "$package_dir/samples/dynamic-attributes-session.jsonl"
           test -f "$archive_path"
 
           source_count="$(find samples -type f | wc -l)"
@@ -439,6 +443,7 @@ jobs:
               f"{package_name}/README.md",
               f"{package_name}/LICENSE",
               f"{package_name}/samples/telemetry-session-003.jsonl",
+              f"{package_name}/samples/dynamic-attributes-session.jsonl",
           }
 
           with ZipFile(archive_path) as archive:
