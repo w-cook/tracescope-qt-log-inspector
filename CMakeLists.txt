@@ -22,8 +22,8 @@ qt_add_executable(TraceScope
     src/analysis/TelemetryIssueGroup.h
     src/analysis/TelemetryIssueAnalyzer.h
     src/analysis/TelemetryIssueAnalyzer.cpp
-    src/exporting/TelemetryCsvExporter.h
-    src/exporting/TelemetryCsvExporter.cpp
+    src/exporting/InvestigationCsvExporter.h
+    src/exporting/InvestigationCsvExporter.cpp
     src/analysis/EventCountBucket.h
     src/analysis/EventTimelineAnalyzer.h
     src/analysis/EventTimelineAnalyzer.cpp
@@ -53,6 +53,8 @@ qt_add_executable(TraceScope
     src/compatibility/TelemetryEventAdapter.cpp
     src/controllers/InvestigationController.h
     src/controllers/InvestigationController.cpp
+    src/exporting/InvestigationCsvExporter.h
+    src/exporting/InvestigationCsvExporter.h
 )
 
 target_link_libraries(TraceScope

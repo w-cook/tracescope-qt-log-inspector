@@ -8,7 +8,7 @@
 #include "parsing/JsonLineLogParser.h"
 #include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
-#include "exporting/TelemetryCsvExporter.h"
+#include "exporting/InvestigationCsvExporter.h"
 #include "analysis/EventTimelineAnalyzer.h"
 
 class QLabel;
@@ -39,7 +39,7 @@ private:
     JsonLineLogParser parser;
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
-    TelemetryCsvExporter csvExporter;
+    InvestigationCsvExporter csvExporter;
 
     QComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;

@@ -556,14 +556,11 @@ void MainWindow::exportFilteredResults()
     const QVector<InvestigationRecord> records =
         investigationController->visibleRecords();
 
-    const QVector<TelemetryEvent> events =
-        toTelemetryEvents(records);
-
-    if (events.isEmpty()) {
+    if (records.isEmpty()) {
         QMessageBox::information(
             this,
-            "No Events to Export",
-            "There are no currently visible telemetry events to export."
+            "No Records to Export",
+            "There are no currently visible records to export."
             );
 
         return;
@@ -572,8 +569,8 @@ void MainWindow::exportFilteredResults()
     const QString filePath =
         QFileDialog::getSaveFileName(
             this,
-            "Export Filtered Telemetry Events",
-            "filtered-telemetry-events.csv",
+            "Export Filtered Records",
+            "filtered-investigation-records.csv",
             "CSV Files (*.csv);;All Files (*)"
             );
 
@@ -583,7 +580,7 @@ void MainWindow::exportFilteredResults()
 
     const bool exported =
         csvExporter.exportToFile(
-            events,
+            records,
             filePath
             );
 
@@ -591,7 +588,7 @@ void MainWindow::exportFilteredResults()
         QMessageBox::warning(
             this,
             "Export Failed",
-            "TraceScope could not export the filtered telemetry events."
+            "TraceScope could not export the filtered records."
             );
 
         return;
@@ -601,8 +598,8 @@ void MainWindow::exportFilteredResults()
         this,
         "Export Complete",
         QString(
-            "Exported %1 telemetry events."
-            ).arg(events.size())
+            "Exported %1 records."
+            ).arg(records.size())
         );
 }
 

@@ -123,9 +123,12 @@ add_test(NAME IssueAnalyzerTests COMMAND IssueAnalyzerTests)
 
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
-    ../src/exporting/TelemetryCsvExporter.h
-    ../src/exporting/TelemetryCsvExporter.cpp
-    ../src/domain/TelemetryEvent.h
+    ../src/exporting/InvestigationCsvExporter.h
+    ../src/exporting/InvestigationCsvExporter.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
 )
 
 target_link_libraries(CsvExporterTests
