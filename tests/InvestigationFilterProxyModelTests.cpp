@@ -1,0 +1,282 @@
+#include <QtTest>
+
+#include "../src/models/InvestigationFilterProxyModel.h"
+#include "../src/models/InvestigationTableModel.h"
+
+class InvestigationFilterProxyModelTests : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void emptyFiltersExposeAllRecords();
+    void filtersBySeverity();
+    void filtersBySubsystem();
+    void searchesCanonicalFieldsCaseInsensitively();
+    void searchesCustomAttributes();
+    void sortsUsingTypedTimestampValues();
+    void mapsProxyRowsBackToSourceRecords();
+};
+
+static QVector<InvestigationRecord> sampleRecords()
+{
+    InvestigationRecord startup;
+    startup.recordId = QStringLiteral("record-startup");
+    startup.timestamp = QDateTime::fromString(
+        QStringLiteral("2026-08-08T10:00:00.000Z"),
+        Qt::ISODateWithMs
+        );
+    startup.severity = RecordSeverity::Info;
+    startup.subsystem = QStringLiteral("Startup");
+    startup.eventCode = QStringLiteral("SESSION_START");
+    startup.entityId = QStringLiteral("SYS-001");
+    startup.message =
+        QStringLiteral("Telemetry session initialized");
+    startup.customAttributes.insert(
+        QStringLiteral("host"),
+        QStringLiteral("server-01")
+        );
+
+    InvestigationRecord tracking;
+    tracking.recordId = QStringLiteral("record-tracking");
+    tracking.timestamp = QDateTime::fromString(
+        QStringLiteral("2026-08-08T10:02:00.000Z"),
+        Qt::ISODateWithMs
+        );
+    tracking.severity = RecordSeverity::Warning;
+    tracking.subsystem = QStringLiteral("Tracking");
+    tracking.eventCode = QStringLiteral("TRACK_LOST");
+    tracking.entityId = QStringLiteral("TRK-402");
+    tracking.message =
+        QStringLiteral("Track 402 lost");
+    tracking.customAttributes.insert(
+        QStringLiteral("host"),
+        QStringLiteral("server-02")
+        );
+
+    InvestigationRecord comms;
+    comms.recordId = QStringLiteral("record-comms");
+    comms.timestamp = QDateTime::fromString(
+        QStringLiteral("2026-08-08T10:01:00.000Z"),
+        Qt::ISODateWithMs
+        );
+    comms.severity = RecordSeverity::Error;
+    comms.subsystem = QStringLiteral("Comms");
+    comms.eventCode = QStringLiteral("PACKET_DROP");
+    comms.entityId = QStringLiteral("LINK-A");
+    comms.message =
+        QStringLiteral("Packet loss exceeded threshold");
+    comms.customAttributes.insert(
+        QStringLiteral("region"),
+        QStringLiteral("west")
+        );
+
+    return {
+        startup,
+        tracking,
+        comms
+    };
+}
+
+void InvestigationFilterProxyModelTests::
+    emptyFiltersExposeAllRecords()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    QCOMPARE(proxyModel.rowCount(), 3);
+}
+
+void InvestigationFilterProxyModelTests::
+    filtersBySeverity()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSeverityFilter(
+        QStringLiteral("WARN")
+        );
+
+    QCOMPARE(proxyModel.rowCount(), 1);
+
+    QCOMPARE(
+        proxyModel.data(
+                      proxyModel.index(0, 3)
+                      ).toString(),
+        QStringLiteral("TRACK_LOST")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    filtersBySubsystem()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSubsystemFilter(
+        QStringLiteral("Comms")
+        );
+
+    QCOMPARE(proxyModel.rowCount(), 1);
+
+    QCOMPARE(
+        proxyModel.data(
+                      proxyModel.index(0, 1)
+                      ).toString(),
+        QStringLiteral("ERROR")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    searchesCanonicalFieldsCaseInsensitively()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSearchText(
+        QStringLiteral("  trk-402  ")
+        );
+
+    QCOMPARE(proxyModel.rowCount(), 1);
+
+    QCOMPARE(
+        proxyModel.data(
+                      proxyModel.index(0, 3)
+                      ).toString(),
+        QStringLiteral("TRACK_LOST")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    searchesCustomAttributes()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSearchText(
+        QStringLiteral("WEST")
+        );
+
+    QCOMPARE(proxyModel.rowCount(), 1);
+
+    const QModelIndex proxyIndex =
+        proxyModel.index(0, 0);
+
+    const QModelIndex sourceIndex =
+        proxyModel.mapToSource(proxyIndex);
+
+    const InvestigationRecord *record =
+        sourceModel.recordAt(sourceIndex.row());
+
+    QVERIFY(record != nullptr);
+
+    QCOMPARE(
+        record->recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    sortsUsingTypedTimestampValues()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.sort(
+        0,
+        Qt::AscendingOrder
+        );
+
+    const QModelIndex firstSourceIndex =
+        proxyModel.mapToSource(
+            proxyModel.index(0, 0)
+            );
+
+    const QModelIndex secondSourceIndex =
+        proxyModel.mapToSource(
+            proxyModel.index(1, 0)
+            );
+
+    const QModelIndex thirdSourceIndex =
+        proxyModel.mapToSource(
+            proxyModel.index(2, 0)
+            );
+
+    QCOMPARE(
+        sourceModel.recordAt(
+                       firstSourceIndex.row()
+                       )->recordId,
+        QStringLiteral("record-startup")
+        );
+
+    QCOMPARE(
+        sourceModel.recordAt(
+                       secondSourceIndex.row()
+                       )->recordId,
+        QStringLiteral("record-comms")
+        );
+
+    QCOMPARE(
+        sourceModel.recordAt(
+                       thirdSourceIndex.row()
+                       )->recordId,
+        QStringLiteral("record-tracking")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    mapsProxyRowsBackToSourceRecords()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSeverityFilter(
+        QStringLiteral("ERROR")
+        );
+
+    QVERIFY(proxyModel.rowCount() == 1);
+
+    const QModelIndex proxyIndex =
+        proxyModel.index(0, 0);
+
+    const QModelIndex sourceIndex =
+        proxyModel.mapToSource(proxyIndex);
+
+    QVERIFY(sourceIndex.isValid());
+
+    const InvestigationRecord *record =
+        sourceModel.recordAt(
+            sourceIndex.row()
+            );
+
+    QVERIFY(record != nullptr);
+
+    QCOMPARE(
+        record->recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+QTEST_MAIN(InvestigationFilterProxyModelTests)
+
+#include "InvestigationFilterProxyModelTests.moc"

@@ -45,6 +45,10 @@ qt_add_executable(TraceScope
     src/importing/JsonLinesImporter.h
     src/importing/JsonLinesImporter.cpp
     src/importing/JsonLinesImportConfig.h
+    src/models/InvestigationTableModel.h
+    src/models/InvestigationTableModel.cpp
+    src/models/InvestigationFilterProxyModel.h
+    src/models/InvestigationFilterProxyModel.cpp
 )
 
 target_link_libraries(TraceScope

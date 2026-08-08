@@ -205,3 +205,48 @@ add_test(
     NAME JsonLinesImporterTests
     COMMAND JsonLinesImporterTests
 )
+
+qt_add_executable(InvestigationTableModelTests
+    InvestigationTableModelTests.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationTableModelTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationTableModelTests
+    COMMAND InvestigationTableModelTests
+)
+
+qt_add_executable(InvestigationFilterProxyModelTests
+    InvestigationFilterProxyModelTests.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationFilterProxyModelTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationFilterProxyModelTests
+    COMMAND InvestigationFilterProxyModelTests
+)
