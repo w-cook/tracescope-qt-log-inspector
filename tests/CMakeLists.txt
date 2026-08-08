@@ -2,6 +2,8 @@ qt_add_executable(ParserTests
     ParserTests.cpp
     ../src/parsing/JsonLineLogParser.h
     ../src/parsing/JsonLineLogParser.cpp
+    ../src/compatibility/TelemetryEventAdapter.h
+    ../src/compatibility/TelemetryEventAdapter.cpp
     ../src/domain/TelemetryEvent.h
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordSeverity.h
@@ -204,4 +206,75 @@ target_link_libraries(JsonLinesImporterTests
 add_test(
     NAME JsonLinesImporterTests
     COMMAND JsonLinesImporterTests
+)
+
+qt_add_executable(InvestigationTableModelTests
+    InvestigationTableModelTests.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationTableModelTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationTableModelTests
+    COMMAND InvestigationTableModelTests
+)
+
+qt_add_executable(InvestigationFilterProxyModelTests
+    InvestigationFilterProxyModelTests.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationFilterProxyModelTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationFilterProxyModelTests
+    COMMAND InvestigationFilterProxyModelTests
+)
+
+qt_add_executable(InvestigationControllerTests
+    InvestigationControllerTests.cpp
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationControllerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationControllerTests
+    COMMAND InvestigationControllerTests
 )

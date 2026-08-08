@@ -56,9 +56,9 @@ Original-prototype capabilities include:
 * included sample log files
 * automated tests for parsing, filtering, grouped analysis, timeline analysis, and CSV export
 
-The original prototype UI remains based on a fixed telemetry-event presentation, a `QTableWidget` event display, and a `MainWindow` that owns substantial application state and UI orchestration.
+The original prototype began with a fixed telemetry-event presentation, a `QTableWidget` event display, and a `MainWindow` that owned substantial application state and UI orchestration.
 
-Beginning with `v0.2.0`, the ingestion layer also includes a flexible investigation-record and import domain. The existing parser retains compatibility adapters so the original UI remains operational while the new architecture is introduced incrementally.
+Beginning with `v0.2.0`, the ingestion layer introduced a flexible investigation-record and import domain. `v0.3.0` moved JSON Lines behavior behind the common importer architecture, and `v0.4.0` migrated the primary event display to Qt model/view architecture so flexible investigation records and dynamic custom attributes now reach the desktop UI directly.
 
 These original constraints form the starting point for the expansion rather than defects in the completed prototype.
 
@@ -107,6 +107,14 @@ Completed release milestones:
 * Linux asset: `TraceScope-v0.3.0-linux-x86_64.AppImage`
 * Sample asset: `TraceScope-v0.3.0-samples.zip`
 
+### `v0.4.0` — Qt Model/View Architecture
+
+* Release title: `TraceScope 0.4.0 — Qt Model/View Architecture`
+* Status: prerelease
+* Windows asset: `TraceScope-v0.4.0-windows-x64.zip`
+* Linux asset: `TraceScope-v0.4.0-linux-x86_64.AppImage`
+* Sample asset: `TraceScope-v0.4.0-samples.zip`
+
 ## Canonical Investigation Record
 
 `v0.2.0` introduced a common flexible investigation record with optional standard fields:
@@ -153,7 +161,9 @@ Implemented foundations:
 * compatibility adapter for the original telemetry-event workflow
 * importer-focused automated tests
 
-The current active phase builds the Qt model/view layer that will allow the flexible investigation-record domain to reach the table UI without returning to fixed-schema widget logic.
+The `v0.4.0` model/view architecture now brings the flexible investigation-record domain directly into the desktop table UI through a `QAbstractTableModel`, `QSortFilterProxyModel`, dynamic custom-attribute columns, and a focused investigation controller.
+
+The current active phase defines reusable import profiles and preview logic on top of the completed flexible-record, importer, and model/view foundations.
 
 Later phases will add:
 
@@ -247,20 +257,35 @@ Completed deliverables:
 
 ### Phase 3 — Qt Model/View Architecture
 
-**Status: Current active phase.**
+**Status: Completed in `v0.4.0`.**
 
 Replace the fixed table implementation and reduce UI orchestration responsibilities in `MainWindow`.
 
-Planned deliverables:
+Completed deliverables:
 
-* `QAbstractTableModel` event model
-* proxy sorting and filtering
-* dynamic columns
-* correct source/proxy selection mapping
-* decomposed UI responsibilities
-* preserved existing investigation behavior
+* `InvestigationTableModel` built on `QAbstractTableModel`
+* `InvestigationFilterProxyModel` built on `QSortFilterProxyModel`
+* sortable canonical and custom-attribute columns
+* dynamically generated columns for preserved custom source attributes
+* typed timestamp and severity sort values
+* severity and subsystem filtering through the proxy model
+* case-insensitive text search across canonical fields and custom attributes
+* correct proxy-to-source record mapping after filtering and sorting
+* selected-record details backed directly by `InvestigationRecord`
+* selected-record display of dynamic custom attributes
+* `InvestigationController` decomposition for record, filter, subsystem, visibility, and source/proxy coordination
+* migration of the primary event display from `QTableWidget` to `QTableView`
+* preservation of session summaries, grouped warning/error analysis, timeline visualization, selected-event inspection, and filtered CSV export
+* compatibility adapter for remaining telemetry-oriented analysis and export components
+* `dynamic-attributes-session.jsonl` demonstration sample with heterogeneous custom fields and multi-minute timeline activity
+* automated coverage for the table model, filter proxy, and investigation controller
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+* `v0.4.0` prerelease and downloadable package verification
 
 ### Phase 4 — Import Profiles and Preview Logic
+
+**Status: Current active phase.**
 
 Define the reusable configuration format used to map source logs into the canonical investigation model.
 

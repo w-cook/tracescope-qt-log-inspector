@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.3.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,6 +45,14 @@ qt_add_executable(TraceScope
     src/importing/JsonLinesImporter.h
     src/importing/JsonLinesImporter.cpp
     src/importing/JsonLinesImportConfig.h
+    src/models/InvestigationTableModel.h
+    src/models/InvestigationTableModel.cpp
+    src/models/InvestigationFilterProxyModel.h
+    src/models/InvestigationFilterProxyModel.cpp
+    src/compatibility/TelemetryEventAdapter.h
+    src/compatibility/TelemetryEventAdapter.cpp
+    src/controllers/InvestigationController.h
+    src/controllers/InvestigationController.cpp
 )
 
 target_link_libraries(TraceScope
