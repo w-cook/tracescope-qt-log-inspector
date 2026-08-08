@@ -51,6 +51,8 @@ qt_add_executable(TraceScope
     src/models/InvestigationFilterProxyModel.cpp
     src/compatibility/TelemetryEventAdapter.h
     src/compatibility/TelemetryEventAdapter.cpp
+    src/controllers/InvestigationController.h
+    src/controllers/InvestigationController.cpp
 )
 
 target_link_libraries(TraceScope

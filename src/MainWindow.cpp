@@ -15,7 +15,6 @@
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLineEdit>
-#include <QSet>
 #include <QGroupBox>
 #include <QPlainTextEdit>
 #include <QStringList>
@@ -28,7 +27,6 @@
 #include <QtCharts/QChartView>
 #include <QtCharts/QValueAxis>
 #include <QtCharts/QLegend>
-#include <utility>
 #include <algorithm>
 
 #include "compatibility/TelemetryEventAdapter.h"
@@ -39,15 +37,12 @@ MainWindow::MainWindow(QWidget *parent)
     eventTable(new QTableView(this)),
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
-    eventModel(new InvestigationTableModel(this)),
-    eventProxyModel(new InvestigationFilterProxyModel(this)),
+    investigationController(new InvestigationController(this)),
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new QComboBox(this)),
     subsystemFilterCombo(new QComboBox(this)),
     searchInput(new QLineEdit(this))
 {
-    eventProxyModel->setSourceModel(eventModel);
-
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
     resize(1100, 760);
 
@@ -106,7 +101,7 @@ void MainWindow::buildLayout()
     auto *eventsGroup = new QGroupBox("Telemetry Events", this);
     auto *eventsLayout = new QVBoxLayout(eventsGroup);
 
-    eventTable->setModel(eventProxyModel);
+    eventTable->setModel(investigationController->proxyModel());
 
     eventTable->setSizePolicy(
         QSizePolicy::Expanding,
@@ -196,7 +191,7 @@ void MainWindow::loadLogFile(const QString &filePath)
 
     currentFilePath = filePath;
 
-    eventModel->setRecords(result.records);
+    investigationController->setRecords(result.records);
 
     if (result.records.isEmpty()) {
         QMessageBox::warning(
@@ -238,7 +233,7 @@ void MainWindow::updateSummary(
             "INFO: %4 | WARN: %5 | ERROR: %6"
             )
             .arg(events.size())
-            .arg(eventModel->rowCount())
+            .arg(investigationController->totalRecordCount())
             .arg(filePath)
             .arg(infoCount)
             .arg(warningCount)
@@ -282,15 +277,9 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
 void MainWindow::applyFilters()
 {
-    eventProxyModel->setSeverityFilter(
-        levelFilterCombo->currentData().toString()
-        );
-
-    eventProxyModel->setSubsystemFilter(
-        subsystemFilterCombo->currentData().toString()
-        );
-
-    eventProxyModel->setSearchText(
+    investigationController->setFilters(
+        levelFilterCombo->currentData().toString(),
+        subsystemFilterCombo->currentData().toString(),
         searchInput->text()
         );
 
@@ -298,7 +287,7 @@ void MainWindow::applyFilters()
     clearEventDetail();
 
     const QVector<InvestigationRecord> records =
-        visibleRecords();
+        investigationController->visibleRecords();
 
     const QVector<TelemetryEvent> events =
         toTelemetryEvents(records);
@@ -325,38 +314,10 @@ void MainWindow::refreshSubsystemFilterOptions()
         ""
         );
 
-    QSet<QString> subsystems;
+    const QStringList subsystems =
+        investigationController->availableSubsystems();
 
-    const QVector<InvestigationRecord> &records =
-        eventModel->records();
-
-    for (const InvestigationRecord &record : records) {
-        if (record.subsystem.has_value()
-            && !record.subsystem->isEmpty()) {
-            subsystems.insert(
-                record.subsystem.value()
-                );
-        }
-    }
-
-    QList<QString> sortedSubsystems =
-        subsystems.values();
-
-    std::sort(
-        sortedSubsystems.begin(),
-        sortedSubsystems.end(),
-        [](const QString &left, const QString &right) {
-            return left.compare(
-                       right,
-                       Qt::CaseInsensitive
-                       ) < 0;
-        }
-        );
-
-    for (
-        const QString &subsystem :
-        std::as_const(sortedSubsystems)
-        ) {
+    for (const QString &subsystem : subsystems) {
         subsystemFilterCombo->addItem(
             subsystem,
             subsystem
@@ -375,47 +336,6 @@ void MainWindow::refreshSubsystemFilterOptions()
     }
 
     subsystemFilterCombo->blockSignals(false);
-}
-
-QVector<InvestigationRecord> MainWindow::visibleRecords() const
-{
-    QVector<InvestigationRecord> records;
-
-    records.reserve(
-        eventProxyModel->rowCount()
-        );
-
-    for (
-        int proxyRow = 0;
-        proxyRow < eventProxyModel->rowCount();
-        ++proxyRow
-        ) {
-        const QModelIndex proxyIndex =
-            eventProxyModel->index(
-                proxyRow,
-                0
-                );
-
-        const QModelIndex sourceIndex =
-            eventProxyModel->mapToSource(
-                proxyIndex
-                );
-
-        if (!sourceIndex.isValid()) {
-            continue;
-        }
-
-        const InvestigationRecord *record =
-            eventModel->recordAt(
-                sourceIndex.row()
-                );
-
-        if (record != nullptr) {
-            records.append(*record);
-        }
-    }
-
-    return records;
 }
 
 QGroupBox *MainWindow::buildDetailPanel()
@@ -451,24 +371,9 @@ void MainWindow::updateEventDetailFromSelection()
     const QModelIndex proxyIndex =
         eventTable->currentIndex();
 
-    if (!proxyIndex.isValid()) {
-        clearEventDetail();
-        return;
-    }
-
-    const QModelIndex sourceIndex =
-        eventProxyModel->mapToSource(
-            proxyIndex
-            );
-
-    if (!sourceIndex.isValid()) {
-        clearEventDetail();
-        return;
-    }
-
     const InvestigationRecord *record =
-        eventModel->recordAt(
-            sourceIndex.row()
+        investigationController->recordForProxyIndex(
+            proxyIndex
             );
 
     if (record == nullptr) {
@@ -617,7 +522,7 @@ void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
 void MainWindow::exportFilteredResults()
 {
     const QVector<InvestigationRecord> records =
-        visibleRecords();
+        investigationController->visibleRecords();
 
     const QVector<TelemetryEvent> events =
         toTelemetryEvents(records);

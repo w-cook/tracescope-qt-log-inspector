@@ -6,8 +6,7 @@
 #include "domain/InvestigationRecord.h"
 #include "domain/TelemetryEvent.h"
 #include "parsing/JsonLineLogParser.h"
-#include "models/InvestigationTableModel.h"
-#include "models/InvestigationFilterProxyModel.h"
+#include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/TelemetryCsvExporter.h"
 #include "analysis/EventTimelineAnalyzer.h"
@@ -35,8 +34,7 @@ private:
     QPlainTextEdit *eventDetailText;
     QTableWidget *issueSummaryTable;
 
-    InvestigationTableModel *eventModel;
-    InvestigationFilterProxyModel *eventProxyModel;
+    InvestigationController *investigationController;
 
     JsonLineLogParser parser;
     TelemetryIssueAnalyzer issueAnalyzer;
@@ -64,8 +62,6 @@ private:
     void buildFilterControls(QVBoxLayout *layout);
     void applyFilters();
     void refreshSubsystemFilterOptions();
-
-    QVector<InvestigationRecord> visibleRecords() const;
 
     QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();

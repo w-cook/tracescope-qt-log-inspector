@@ -252,3 +252,29 @@ add_test(
     NAME InvestigationFilterProxyModelTests
     COMMAND InvestigationFilterProxyModelTests
 )
+
+qt_add_executable(InvestigationControllerTests
+    InvestigationControllerTests.cpp
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationControllerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationControllerTests
+    COMMAND InvestigationControllerTests
+)
