@@ -323,3 +323,30 @@ add_test(
     NAME ImportProfileValidatorTests
     COMMAND ImportProfileValidatorTests
 )
+
+qt_add_executable(
+    ImportProfileSerializationTests
+
+    ImportProfileSerializationTests.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+)
+
+target_link_libraries(
+    ImportProfileSerializationTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportProfileSerializationTests
+    COMMAND ImportProfileSerializationTests
+)
