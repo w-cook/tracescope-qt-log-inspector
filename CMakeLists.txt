@@ -55,6 +55,8 @@ qt_add_executable(TraceScope
     src/controllers/InvestigationController.cpp
     src/exporting/InvestigationCsvExporter.h
     src/exporting/InvestigationCsvExporter.h
+    src/importing/CanonicalFieldMappings.h
+    src/importing/ImportProfile.h
 )
 
 target_link_libraries(TraceScope

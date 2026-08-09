@@ -281,3 +281,22 @@ add_test(
     NAME InvestigationControllerTests
     COMMAND InvestigationControllerTests
 )
+
+qt_add_executable(ImportProfileTests
+    ImportProfileTests.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/domain/RecordSeverity.h
+)
+
+target_link_libraries(
+    ImportProfileTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportProfileTests
+    COMMAND ImportProfileTests
+)
