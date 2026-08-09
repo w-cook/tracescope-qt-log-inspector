@@ -14,6 +14,7 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QUrl>
+#include <QSignalBlocker>
 
 ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
     : QDialog(parent),
@@ -25,6 +26,30 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
             )
         ),
     formatSuggestionLabel(
+        new QLabel(this)
+        ),
+    profileNameEdit(
+        new QLineEdit(this)
+        ),
+    timestampPathEdit(
+        new QLineEdit(this)
+        ),
+    severityPathEdit(
+        new QLineEdit(this)
+        ),
+    subsystemPathEdit(
+        new QLineEdit(this)
+        ),
+    eventCodePathEdit(
+        new QLineEdit(this)
+        ),
+    entityIdPathEdit(
+        new QLineEdit(this)
+        ),
+    messagePathEdit(
+        new QLineEdit(this)
+        ),
+    validationLabel(
         new QLabel(this)
         ),
     buttonBox(
@@ -46,15 +71,26 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
 
     setAcceptDrops(true);
 
-    resize(720, 420);
+    resize(760, 620);
+
+    workingProfile.name =
+        QStringLiteral("Default JSON Lines");
 
     buildLayout();
+    populateProfileControls();
+
     updateSourceState();
+    updateValidationState();
 }
 
 QString ImportConfigurationDialog::selectedFilePath() const
 {
     return filePathEdit->text().trimmed();
+}
+
+ImportProfile ImportConfigurationDialog::configuredProfile() const
+{
+    return workingProfile;
 }
 
 void ImportConfigurationDialog::setSelectedFilePath(
@@ -123,37 +159,110 @@ void ImportConfigurationDialog::buildLayout()
 
     mainLayout->addWidget(sourceGroup);
 
-    auto *configurationPlaceholder =
+    auto *profileGroup =
         new QGroupBox(
             tr("Import Profile"),
             this
             );
 
-    auto *placeholderLayout =
-        new QVBoxLayout(
-            configurationPlaceholder
-            );
+    auto *profileLayout =
+        new QFormLayout(profileGroup);
 
-    auto *placeholderLabel =
-        new QLabel(
-            tr(
-                "Field mappings, validation, "
-                "profile controls, and import preview "
-                "will appear here."
-                ),
-            configurationPlaceholder
-            );
-
-    placeholderLabel->setWordWrap(true);
-
-    placeholderLayout->addWidget(
-        placeholderLabel
+    profileNameEdit->setPlaceholderText(
+        tr("Profile name")
         );
 
-    mainLayout->addWidget(
-        configurationPlaceholder,
-        1
+    profileLayout->addRow(
+        tr("Name:"),
+        profileNameEdit
         );
+
+    mainLayout->addWidget(profileGroup);
+
+    auto *mappingGroup =
+        new QGroupBox(
+            tr("Canonical Field Mapping"),
+            this
+            );
+
+    auto *mappingLayout =
+        new QFormLayout(mappingGroup);
+
+    timestampPathEdit->setPlaceholderText(
+        tr("Source path or blank")
+        );
+
+    severityPathEdit->setPlaceholderText(
+        tr("Source path or blank")
+        );
+
+    subsystemPathEdit->setPlaceholderText(
+        tr("Source path or blank")
+        );
+
+    eventCodePathEdit->setPlaceholderText(
+        tr("Source path or blank")
+        );
+
+    entityIdPathEdit->setPlaceholderText(
+        tr("Source path or blank")
+        );
+
+    messagePathEdit->setPlaceholderText(
+        tr("Source path or blank")
+        );
+
+    mappingLayout->addRow(
+        tr("Timestamp:"),
+        timestampPathEdit
+        );
+
+    mappingLayout->addRow(
+        tr("Severity:"),
+        severityPathEdit
+        );
+
+    mappingLayout->addRow(
+        tr("Subsystem:"),
+        subsystemPathEdit
+        );
+
+    mappingLayout->addRow(
+        tr("Event code:"),
+        eventCodePathEdit
+        );
+
+    mappingLayout->addRow(
+        tr("Entity ID:"),
+        entityIdPathEdit
+        );
+
+    mappingLayout->addRow(
+        tr("Message:"),
+        messagePathEdit
+        );
+
+    mainLayout->addWidget(mappingGroup);
+
+    auto *validationGroup =
+        new QGroupBox(
+            tr("Validation"),
+            this
+            );
+
+    auto *validationLayout =
+        new QVBoxLayout(validationGroup);
+
+    validationLabel->setWordWrap(true);
+    validationLabel->setTextInteractionFlags(
+        Qt::TextSelectableByMouse
+        );
+
+    validationLayout->addWidget(
+        validationLabel
+        );
+
+    mainLayout->addWidget(validationGroup);
 
     buttonBox->addButton(
         importButton,
@@ -179,6 +288,27 @@ void ImportConfigurationDialog::buildLayout()
             updateSourceState();
         }
         );
+
+    const QList<QLineEdit *> profileEdits {
+        profileNameEdit,
+        timestampPathEdit,
+        severityPathEdit,
+        subsystemPathEdit,
+        eventCodePathEdit,
+        entityIdPathEdit,
+        messagePathEdit
+    };
+
+    for (QLineEdit *edit : profileEdits) {
+        connect(
+            edit,
+            &QLineEdit::textChanged,
+            this,
+            [this]() {
+                updateWorkingProfile();
+            }
+            );
+    }
 
     connect(
         importButton,
@@ -217,16 +347,29 @@ void ImportConfigurationDialog::browseForFile()
 
 void ImportConfigurationDialog::updateSourceState()
 {
+    updateFormatSuggestion();
+    updateImportAvailability();
+}
+
+void ImportConfigurationDialog::updateImportAvailability()
+{
     const QFileInfo fileInfo(
         selectedFilePath()
         );
 
-    importButton->setEnabled(
+    const bool sourceIsValid =
         fileInfo.exists()
-        && fileInfo.isFile()
-        );
+        && fileInfo.isFile();
 
-    updateFormatSuggestion();
+    const bool profileIsValid =
+        profileValidator
+            .validate(workingProfile)
+            .isValid();
+
+    importButton->setEnabled(
+        sourceIsValid
+        && profileIsValid
+        );
 }
 
 void ImportConfigurationDialog::updateFormatSuggestion()
@@ -305,4 +448,157 @@ void ImportConfigurationDialog::dropEvent(
         );
 
     event->acceptProposedAction();
+}
+
+void ImportConfigurationDialog::populateProfileControls()
+{
+    const QSignalBlocker profileNameBlocker(
+        profileNameEdit
+        );
+
+    const QSignalBlocker timestampBlocker(
+        timestampPathEdit
+        );
+
+    const QSignalBlocker severityBlocker(
+        severityPathEdit
+        );
+
+    const QSignalBlocker subsystemBlocker(
+        subsystemPathEdit
+        );
+
+    const QSignalBlocker eventCodeBlocker(
+        eventCodePathEdit
+        );
+
+    const QSignalBlocker entityIdBlocker(
+        entityIdPathEdit
+        );
+
+    const QSignalBlocker messageBlocker(
+        messagePathEdit
+        );
+
+    profileNameEdit->setText(
+        workingProfile.name
+        );
+
+    timestampPathEdit->setText(
+        workingProfile
+            .canonicalFields
+            .timestampPath
+        );
+
+    severityPathEdit->setText(
+        workingProfile
+            .canonicalFields
+            .severityPath
+        );
+
+    subsystemPathEdit->setText(
+        workingProfile
+            .canonicalFields
+            .subsystemPath
+        );
+
+    eventCodePathEdit->setText(
+        workingProfile
+            .canonicalFields
+            .eventCodePath
+        );
+
+    entityIdPathEdit->setText(
+        workingProfile
+            .canonicalFields
+            .entityIdPath
+        );
+
+    messagePathEdit->setText(
+        workingProfile
+            .canonicalFields
+            .messagePath
+        );
+}
+
+void ImportConfigurationDialog::updateWorkingProfile()
+{
+    workingProfile.name =
+        profileNameEdit->text();
+
+    workingProfile
+        .canonicalFields
+        .timestampPath =
+        timestampPathEdit->text();
+
+    workingProfile
+        .canonicalFields
+        .severityPath =
+        severityPathEdit->text();
+
+    workingProfile
+        .canonicalFields
+        .subsystemPath =
+        subsystemPathEdit->text();
+
+    workingProfile
+        .canonicalFields
+        .eventCodePath =
+        eventCodePathEdit->text();
+
+    workingProfile
+        .canonicalFields
+        .entityIdPath =
+        entityIdPathEdit->text();
+
+    workingProfile
+        .canonicalFields
+        .messagePath =
+        messagePathEdit->text();
+
+    updateValidationState();
+}
+
+void ImportConfigurationDialog::updateValidationState()
+{
+    const ProfileValidationResult result =
+        profileValidator.validate(
+            workingProfile
+            );
+
+    if (result.issues.isEmpty()) {
+        validationLabel->setText(
+            tr("Profile configuration is valid.")
+            );
+
+        updateImportAvailability();
+        return;
+    }
+
+    QStringList lines;
+
+    for (const ProfileValidationIssue &issue
+         : result.issues) {
+        const QString prefix =
+            issue.severity
+                    == ProfileValidationSeverity::Error
+                ? tr("Error")
+                : tr("Warning");
+
+        lines.append(
+            QStringLiteral("%1: %2")
+                .arg(
+                    prefix,
+                    issue.message
+                    )
+            );
+    }
+
+    validationLabel->setText(
+        lines.join(
+            QLatin1Char('\n')
+            )
+        );
+
+    updateImportAvailability();
 }

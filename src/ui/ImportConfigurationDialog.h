@@ -4,13 +4,15 @@
 #include <QString>
 
 #include "../importing/ImportFormatSuggestionService.h"
+#include "../importing/ImportProfile.h"
+#include "../importing/ImportProfileValidator.h"
 
 class QDialogButtonBox;
-class QLineEdit;
-class QPushButton;
-class QLabel;
 class QDragEnterEvent;
 class QDropEvent;
+class QLabel;
+class QLineEdit;
+class QPushButton;
 
 class ImportConfigurationDialog final
     : public QDialog
@@ -28,6 +30,8 @@ public:
         const QString &filePath
         );
 
+    ImportProfile configuredProfile() const;
+
 protected:
     void dragEnterEvent(
         QDragEnterEvent *event
@@ -40,15 +44,38 @@ protected:
 private:
     QLineEdit *filePathEdit;
     QPushButton *browseButton;
+    QLabel *formatSuggestionLabel;
+
+    QLineEdit *profileNameEdit;
+
+    QLineEdit *timestampPathEdit;
+    QLineEdit *severityPathEdit;
+    QLineEdit *subsystemPathEdit;
+    QLineEdit *eventCodePathEdit;
+    QLineEdit *entityIdPathEdit;
+    QLineEdit *messagePathEdit;
+
+    QLabel *validationLabel;
+
     QDialogButtonBox *buttonBox;
     QPushButton *importButton;
-    QLabel *formatSuggestionLabel;
 
     ImportFormatSuggestionService
         formatSuggestionService;
 
+    ImportProfileValidator
+        profileValidator;
+
+    ImportProfile workingProfile;
+
     void buildLayout();
     void browseForFile();
+
+    void populateProfileControls();
+
+    void updateWorkingProfile();
     void updateSourceState();
     void updateFormatSuggestion();
+    void updateValidationState();
+    void updateImportAvailability();
 };
