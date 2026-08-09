@@ -300,3 +300,26 @@ add_test(
     NAME ImportProfileTests
     COMMAND ImportProfileTests
 )
+
+qt_add_executable(ImportProfileValidatorTests
+    ImportProfileValidatorTests.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportProfileValidation.h
+    ../src/importing/ImportProfileValidation.cpp
+    ../src/importing/ImportProfileValidator.h
+    ../src/importing/ImportProfileValidator.cpp
+    ../src/domain/RecordSeverity.h
+)
+
+target_link_libraries(
+    ImportProfileValidatorTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportProfileValidatorTests
+    COMMAND ImportProfileValidatorTests
+)
