@@ -35,6 +35,7 @@
 #include <utility>
 
 #include "compatibility/TelemetryEventAdapter.h"
+#include "importing/JsonLinesImporter.h"
 #include "ui/ImportConfigurationDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -191,24 +192,53 @@ void MainWindow::openLogFile(const QString &initialFilePath)
     }
 
     loadLogFile(
-        dialog.selectedFilePath()
+        dialog.selectedFilePath(),
+        dialog.configuredProfile()
         );
 }
 
-void MainWindow::loadLogFile(const QString &filePath)
+void MainWindow::loadLogFile(
+    const QString &filePath,
+    const ImportProfile &profile
+    )
 {
+    if (profile.importerId
+        != QStringLiteral("json-lines")) {
+        QMessageBox::warning(
+            this,
+            tr("Unsupported Import Format"),
+            tr(
+                "The selected import profile uses "
+                "an importer that this version of "
+                "TraceScope does not support."
+                )
+            );
+
+        return;
+    }
+
+    const JsonLinesImporter importer(
+        profile
+        );
+
     const ImportResult result =
-        parser.importFile(filePath);
+        importer.importFile(
+            filePath
+            );
 
     currentFilePath = filePath;
 
-    investigationController->setRecords(result.records);
+    investigationController->setRecords(
+        result.records
+        );
 
     if (result.records.isEmpty()) {
         QMessageBox::warning(
             this,
             "No Events Loaded",
-            "No telemetry events were loaded. The file may be empty, malformed, or unsupported."
+            "No telemetry events were loaded. "
+            "The file may be empty, malformed, "
+            "or unsupported."
             );
     }
 
@@ -216,7 +246,9 @@ void MainWindow::loadLogFile(const QString &filePath)
     applyFilters();
 
     eventTable->resizeColumnsToContents();
-    eventTable->horizontalHeader()->setStretchLastSection(true);
+    eventTable
+        ->horizontalHeader()
+        ->setStretchLastSection(true);
 }
 
 void MainWindow::updateSummary(

@@ -13,6 +13,9 @@ class QDropEvent;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QCheckBox;
+class QTableWidget;
+class QComboBox;
 
 class ImportConfigurationDialog final
     : public QDialog
@@ -47,6 +50,7 @@ private:
     QLabel *formatSuggestionLabel;
 
     QLineEdit *profileNameEdit;
+    QCheckBox *preserveUnmappedCheckBox;
 
     QLineEdit *timestampPathEdit;
     QLineEdit *severityPathEdit;
@@ -54,6 +58,18 @@ private:
     QLineEdit *eventCodePathEdit;
     QLineEdit *entityIdPathEdit;
     QLineEdit *messagePathEdit;
+
+    QTableWidget *customFieldTable;
+    QPushButton *addCustomFieldButton;
+    QPushButton *removeCustomFieldButton;
+
+    QTableWidget *severityAliasTable;
+    QPushButton *addSeverityAliasButton;
+    QPushButton *removeSeverityAliasButton;
+
+    QTableWidget *timestampRuleTable;
+    QPushButton *addTimestampRuleButton;
+    QPushButton *removeTimestampRuleButton;
 
     QLabel *validationLabel;
 
@@ -72,6 +88,30 @@ private:
     void browseForFile();
 
     void populateProfileControls();
+
+    void populateCustomFieldMappings();
+
+    void addCustomFieldMapping();
+    void removeSelectedCustomFieldMapping();
+    void updateCustomFieldMappings();
+
+    void populateSeverityAliases();
+    void addSeverityAlias();
+    void removeSelectedSeverityAlias();
+    void updateSeverityAliases();
+
+    void populateTimestampRules();
+    void addTimestampRule();
+    void removeSelectedTimestampRule();
+    void updateTimestampRules();
+
+    QComboBox *createSeverityCombo(
+        RecordSeverity severity
+        );
+
+    QComboBox *createTimestampRuleTypeCombo(
+        TimestampRuleType type
+        );
 
     void updateWorkingProfile();
     void updateSourceState();

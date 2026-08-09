@@ -5,7 +5,7 @@
 
 #include "domain/InvestigationRecord.h"
 #include "domain/TelemetryEvent.h"
-#include "parsing/JsonLineLogParser.h"
+#include "importing/ImportProfile.h"
 #include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -47,7 +47,6 @@ private:
 
     InvestigationController *investigationController;
 
-    JsonLineLogParser parser;
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationCsvExporter csvExporter;
@@ -66,7 +65,10 @@ private:
         const QString &initialFilePath =
         QString()
         );
-    void loadLogFile(const QString &filePath);
+    void loadLogFile(
+        const QString &filePath,
+        const ImportProfile &profile
+        );
 
     void updateSummary(
         const QVector<TelemetryEvent> &events,
