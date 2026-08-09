@@ -182,12 +182,14 @@ add_test(
 
 qt_add_executable(JsonLinesImporterTests
     JsonLinesImporterTests.cpp
+    ../src/importing/CanonicalFieldMappings.h
     ../src/importing/ILogImporter.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
     ../src/domain/InvestigationRecord.h
