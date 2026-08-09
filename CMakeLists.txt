@@ -63,6 +63,9 @@ qt_add_executable(TraceScope
     src/importing/ImportProfileValidator.cpp
     src/importing/ImportProfileSerialization.h
     src/importing/ImportProfileSerialization.cpp
+    src/importing/ImportPreviewResult.h
+    src/importing/ImportPreviewService.h
+    src/importing/ImportPreviewService.cpp
 )
 
 target_link_libraries(TraceScope
