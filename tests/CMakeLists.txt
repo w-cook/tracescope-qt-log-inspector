@@ -182,12 +182,14 @@ add_test(
 
 qt_add_executable(JsonLinesImporterTests
     JsonLinesImporterTests.cpp
+    ../src/importing/CanonicalFieldMappings.h
     ../src/importing/ILogImporter.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
     ../src/domain/InvestigationRecord.h
@@ -280,4 +282,119 @@ target_link_libraries(
 add_test(
     NAME InvestigationControllerTests
     COMMAND InvestigationControllerTests
+)
+
+qt_add_executable(ImportProfileTests
+    ImportProfileTests.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/domain/RecordSeverity.h
+)
+
+target_link_libraries(
+    ImportProfileTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportProfileTests
+    COMMAND ImportProfileTests
+)
+
+qt_add_executable(ImportProfileValidatorTests
+    ImportProfileValidatorTests.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportProfileValidation.h
+    ../src/importing/ImportProfileValidation.cpp
+    ../src/importing/ImportProfileValidator.h
+    ../src/importing/ImportProfileValidator.cpp
+    ../src/domain/RecordSeverity.h
+)
+
+target_link_libraries(
+    ImportProfileValidatorTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportProfileValidatorTests
+    COMMAND ImportProfileValidatorTests
+)
+
+qt_add_executable(
+    ImportProfileSerializationTests
+
+    ImportProfileSerializationTests.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+)
+
+target_link_libraries(
+    ImportProfileSerializationTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportProfileSerializationTests
+    COMMAND ImportProfileSerializationTests
+)
+
+qt_add_executable(ImportPreviewServiceTests
+    ImportPreviewServiceTests.cpp
+
+    ../src/importing/ImportPreviewResult.h
+    ../src/importing/ImportPreviewService.h
+    ../src/importing/ImportPreviewService.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportProfileValidation.h
+    ../src/importing/ImportProfileValidation.cpp
+    ../src/importing/ImportProfileValidator.h
+    ../src/importing/ImportProfileValidator.cpp
+
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonLinesImportConfig.h
+
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    ImportPreviewServiceTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportPreviewServiceTests
+    COMMAND ImportPreviewServiceTests
 )

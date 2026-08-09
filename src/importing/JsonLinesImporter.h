@@ -3,6 +3,7 @@
 #include <QStringList>
 
 #include "ILogImporter.h"
+#include "ImportProfile.h"
 #include "JsonLinesImportConfig.h"
 
 class JsonLinesImporter final : public ILogImporter
@@ -10,6 +11,10 @@ class JsonLinesImporter final : public ILogImporter
 public:
     explicit JsonLinesImporter(
         JsonLinesImportConfig config = {}
+        );
+
+    explicit JsonLinesImporter(
+        ImportProfile profile
         );
 
     QString id() const override;
@@ -25,5 +30,5 @@ public:
         ) const;
 
 private:
-    JsonLinesImportConfig config;
+    ImportProfile profile;
 };

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.4.1 LANGUAGES CXX)
+project(TraceScope VERSION 0.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,6 +55,17 @@ qt_add_executable(TraceScope
     src/controllers/InvestigationController.cpp
     src/exporting/InvestigationCsvExporter.h
     src/exporting/InvestigationCsvExporter.h
+    src/importing/CanonicalFieldMappings.h
+    src/importing/ImportProfile.h
+    src/importing/ImportProfileValidation.h
+    src/importing/ImportProfileValidation.cpp
+    src/importing/ImportProfileValidator.h
+    src/importing/ImportProfileValidator.cpp
+    src/importing/ImportProfileSerialization.h
+    src/importing/ImportProfileSerialization.cpp
+    src/importing/ImportPreviewResult.h
+    src/importing/ImportPreviewService.h
+    src/importing/ImportPreviewService.cpp
 )
 
 target_link_libraries(TraceScope

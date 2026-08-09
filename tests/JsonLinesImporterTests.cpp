@@ -34,6 +34,13 @@ private slots:
     void emptyPathLeavesCanonicalFieldUnset();
     void configuredInvalidTimestampReportsWarning();
     void configuredUnmappedSeverityReportsWarning();
+
+    void profileMapsExplicitCustomFields();
+    void profileCanDisableUnmappedFieldPreservation();
+    void profileSeverityAliasMapsCustomValue();
+    void profileSeverityAliasIsCaseInsensitive();
+    void profileQtTimestampRuleParsesCustomFormat();
+    void profileTimestampRulesUseFirstSuccessfulRule();
 };
 
 void JsonLinesImporterTests::importerHasStableId()
@@ -1090,6 +1097,263 @@ void JsonLinesImporterTests::configuredUnmappedSeverityReportsWarning()
         diagnostic.source->recordNumber,
         qint64(1)
         );
+}
+
+void JsonLinesImporterTests::
+    profileMapsExplicitCustomFields()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Custom mapping");
+
+    profile.customFields.append({
+        QStringLiteral("Request ID"),
+        QStringLiteral(
+            "context.requestId"
+            )
+    });
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({"timestamp":"2026-08-09T10:00:00Z","level":"INFO","message":"Completed","context":{"requestId":"REQ-42"},"durationMs":184})"
+        });
+
+    QCOMPARE(result.records.size(), 1);
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QCOMPARE(
+        record.customAttributes.value(
+                                   QStringLiteral("Request ID")
+                                   ).toString(),
+        QStringLiteral("REQ-42")
+        );
+
+    QVERIFY(
+        record.customAttributes.contains(
+            QStringLiteral("context")
+            )
+        );
+
+    QVERIFY(
+        record.customAttributes.contains(
+            QStringLiteral("durationMs")
+            )
+        );
+}
+
+void JsonLinesImporterTests::
+    profileCanDisableUnmappedFieldPreservation()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Mapped only");
+
+    profile.preserveUnmappedFields = false;
+
+    profile.customFields.append({
+        QStringLiteral("Request ID"),
+        QStringLiteral(
+            "context.requestId"
+            )
+    });
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({"message":"Completed","context":{"requestId":"REQ-42"},"durationMs":184,"host":"api-02"})"
+        });
+
+    QCOMPARE(result.records.size(), 1);
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QCOMPARE(
+        record.customAttributes.size(),
+        1
+        );
+
+    QCOMPARE(
+        record.customAttributes.value(
+                                   QStringLiteral("Request ID")
+                                   ).toString(),
+        QStringLiteral("REQ-42")
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("durationMs")
+            )
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("host")
+            )
+        );
+}
+
+void JsonLinesImporterTests::
+    profileSeverityAliasMapsCustomValue()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Severity aliases");
+
+    profile.severityAliases.insert(
+        QStringLiteral("NOTICE"),
+        RecordSeverity::Info
+        );
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({"level":"NOTICE","message":"Request accepted"})"
+        });
+
+    QCOMPARE(result.records.size(), 1);
+
+    QVERIFY(
+        result.records.first()
+            .severity
+            .has_value()
+        );
+
+    QCOMPARE(
+        *result.records.first().severity,
+        RecordSeverity::Info
+        );
+
+    QVERIFY(result.diagnostics.isEmpty());
+}
+
+void JsonLinesImporterTests::
+    profileSeverityAliasIsCaseInsensitive()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Severity aliases");
+
+    profile.severityAliases.insert(
+        QStringLiteral("NOTICE"),
+        RecordSeverity::Warning
+        );
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({"level":"notice"})"
+        });
+
+    QVERIFY(
+        result.records.first()
+            .severity
+            .has_value()
+        );
+
+    QCOMPARE(
+        *result.records.first().severity,
+        RecordSeverity::Warning
+        );
+}
+
+void JsonLinesImporterTests::
+    profileQtTimestampRuleParsesCustomFormat()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Custom timestamp");
+
+    profile.timestampRules.clear();
+
+    profile.timestampRules.append({
+        TimestampRuleType::QtFormat,
+        QStringLiteral(
+            "yyyy/MM/dd HH:mm:ss.zzz"
+            )
+    });
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({"timestamp":"2026/08/09 07:42:31.125","message":"Started"})"
+        });
+
+    QCOMPARE(result.records.size(), 1);
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QVERIFY(record.timestamp.has_value());
+
+    QCOMPARE(
+        record.timestamp->date(),
+        QDate(2026, 8, 9)
+        );
+
+    QCOMPARE(
+        record.timestamp->time(),
+        QTime(7, 42, 31, 125)
+        );
+
+    QVERIFY(result.diagnostics.isEmpty());
+}
+
+void JsonLinesImporterTests::
+    profileTimestampRulesUseFirstSuccessfulRule()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Timestamp fallback");
+
+    profile.timestampRules.clear();
+
+    profile.timestampRules.append({
+        TimestampRuleType::QtFormat,
+        QStringLiteral(
+            "MM-dd-yyyy HH:mm:ss"
+            )
+    });
+
+    profile.timestampRules.append({
+        TimestampRuleType::Iso8601,
+        QString()
+    });
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({"timestamp":"2026-08-09T07:45:00Z"})"
+        });
+
+    QVERIFY(
+        result.records.first()
+            .timestamp
+            .has_value()
+        );
+
+    QCOMPARE(
+        result.records.first()
+            .timestamp->date(),
+        QDate(2026, 8, 9)
+        );
+
+    QVERIFY(result.diagnostics.isEmpty());
 }
 
 QTEST_MAIN(JsonLinesImporterTests)

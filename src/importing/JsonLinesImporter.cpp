@@ -3,6 +3,7 @@
 #include <optional>
 #include <utility>
 
+#include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
@@ -115,57 +116,165 @@ void appendDiagnostic(
 }
 
 QSet<QString> mappedTopLevelFields(
-    const JsonLinesImportConfig &config
+    const ImportProfile &profile
     )
 {
     QSet<QString> fields;
 
-    const QStringList paths {
-        config.timestampPath,
-        config.severityPath,
-        config.subsystemPath,
-        config.eventCodePath,
-        config.entityIdPath,
-        config.messagePath
+    const QStringList canonicalPaths {
+        profile.canonicalFields.timestampPath,
+        profile.canonicalFields.severityPath,
+        profile.canonicalFields.subsystemPath,
+        profile.canonicalFields.eventCodePath,
+        profile.canonicalFields.entityIdPath,
+        profile.canonicalFields.messagePath
     };
 
-    for (const QString &path : paths) {
-        const QString trimmedPath = path.trimmed();
+    auto addTopLevelPath =
+        [&fields](const QString &path) {
+            const QString trimmedPath =
+                path.trimmed();
 
-        if (trimmedPath.isEmpty()) {
-            continue;
-        }
+            if (trimmedPath.isEmpty()) {
+                return;
+            }
 
-        if (!trimmedPath.contains(
-                QLatin1Char('.')
-                )) {
-            fields.insert(trimmedPath);
-        }
+            if (!trimmedPath.contains(
+                    QLatin1Char('.')
+                    )) {
+                fields.insert(trimmedPath);
+            }
+        };
+
+    for (const QString &path
+         : canonicalPaths) {
+        addTopLevelPath(path);
+    }
+
+    for (const CustomFieldMapping &mapping
+         : profile.customFields) {
+        addTopLevelPath(
+            mapping.sourcePath
+            );
     }
 
     return fields;
 }
 
+std::optional<RecordSeverity> parseProfileSeverity(
+    const QString &value,
+    const ImportProfile &profile
+    )
+{
+    const QString normalized =
+        value.trimmed().toCaseFolded();
+
+    for (auto iterator =
+         profile.severityAliases.constBegin();
+         iterator !=
+         profile.severityAliases.constEnd();
+         ++iterator) {
+        if (iterator.key()
+                .trimmed()
+                .toCaseFolded()
+            == normalized) {
+            return iterator.value();
+        }
+    }
+
+    return parseRecordSeverity(value);
+}
+
+std::optional<QDateTime> parseProfileTimestamp(
+    const QString &value,
+    const ImportProfile &profile
+    )
+{
+    const QString normalized =
+        value.trimmed();
+
+    if (normalized.isEmpty()) {
+        return std::nullopt;
+    }
+
+    for (const TimestampRule &rule
+         : profile.timestampRules) {
+        switch (rule.type) {
+        case TimestampRuleType::Iso8601: {
+            const auto timestamp =
+                parseRecordTimestamp(
+                    normalized
+                    );
+
+            if (timestamp.has_value()) {
+                return timestamp;
+            }
+
+            break;
+        }
+
+        case TimestampRuleType::QtFormat: {
+            const QDateTime timestamp =
+                QDateTime::fromString(
+                    normalized,
+                    rule.format
+                    );
+
+            if (timestamp.isValid()) {
+                return timestamp;
+            }
+
+            break;
+        }
+        }
+    }
+
+    return std::nullopt;
+}
+
 QHash<QString, QVariant> readCustomAttributes(
     const QJsonObject &object,
-    const JsonLinesImportConfig &config
+    const ImportProfile &profile
     )
 {
     QHash<QString, QVariant> attributes;
 
-    const QSet<QString> mappedFields =
-        mappedTopLevelFields(config);
+    if (profile.preserveUnmappedFields) {
+        const QSet<QString> mappedFields =
+            mappedTopLevelFields(profile);
 
-    for (auto iterator = object.constBegin();
-         iterator != object.constEnd();
-         ++iterator) {
-        if (mappedFields.contains(iterator.key())) {
+        for (auto iterator =
+             object.constBegin();
+             iterator != object.constEnd();
+             ++iterator) {
+            if (mappedFields.contains(
+                    iterator.key()
+                    )) {
+                continue;
+            }
+
+            attributes.insert(
+                iterator.key(),
+                iterator.value().toVariant()
+                );
+        }
+    }
+
+    for (const CustomFieldMapping &mapping
+         : profile.customFields) {
+        const QJsonValue value =
+            readJsonPath(
+                object,
+                mapping.sourcePath
+                );
+
+        if (value.isUndefined()) {
             continue;
         }
 
         attributes.insert(
-            iterator.key(),
-            iterator.value().toVariant()
+            mapping.name,
+            value.toVariant()
             );
     }
 
@@ -176,7 +285,7 @@ InvestigationRecord createInvestigationRecord(
     const QJsonObject &object,
     const QString &rawSource,
     const RecordSourceMetadata &source,
-    const JsonLinesImportConfig &config,
+    const ImportProfile &profile,
     ImportResult &result
     )
 {
@@ -194,13 +303,14 @@ InvestigationRecord createInvestigationRecord(
     const auto timestampText =
         readOptionalString(
             object,
-            config.timestampPath
+            profile.canonicalFields.timestampPath
             );
 
     if (timestampText.has_value()) {
         record.timestamp =
-            parseRecordTimestamp(
-                *timestampText
+            parseProfileTimestamp(
+                *timestampText,
+                profile
                 );
 
         if (!record.timestamp.has_value()) {
@@ -221,13 +331,14 @@ InvestigationRecord createInvestigationRecord(
     const auto severityText =
         readOptionalString(
             object,
-            config.severityPath
+            profile.canonicalFields.severityPath
             );
 
     if (severityText.has_value()) {
         record.severity =
-            parseRecordSeverity(
-                *severityText
+            parseProfileSeverity(
+                *severityText,
+                profile
                 );
 
         if (!record.severity.has_value()) {
@@ -248,31 +359,31 @@ InvestigationRecord createInvestigationRecord(
     record.subsystem =
         readOptionalString(
             object,
-            config.subsystemPath
+            profile.canonicalFields.subsystemPath
             );
 
     record.eventCode =
         readOptionalString(
             object,
-            config.eventCodePath
+            profile.canonicalFields.eventCodePath
             );
 
     record.entityId =
         readOptionalString(
             object,
-            config.entityIdPath
+            profile.canonicalFields.entityIdPath
             );
 
     record.message =
         readOptionalString(
             object,
-            config.messagePath
+            profile.canonicalFields.messagePath
             );
 
     record.customAttributes =
         readCustomAttributes(
             object,
-            config
+            profile
             );
 
     return record;
@@ -282,7 +393,15 @@ InvestigationRecord createInvestigationRecord(
 JsonLinesImporter::JsonLinesImporter(
     JsonLinesImportConfig config
     )
-    : config(std::move(config))
+{
+    profile.canonicalFields =
+        std::move(config);
+}
+
+JsonLinesImporter::JsonLinesImporter(
+    ImportProfile profile
+    )
+    : profile(std::move(profile))
 {
 }
 
@@ -372,7 +491,7 @@ ImportResult JsonLinesImporter::importLines(
                 document.object(),
                 rawSource,
                 source,
-                config,
+                profile,
                 result
                 )
             );

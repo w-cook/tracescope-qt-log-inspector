@@ -354,11 +354,11 @@ QGroupBox *MainWindow::buildDetailPanel()
 
     connect(
         eventTable->selectionModel(),
-        &QItemSelectionModel::currentRowChanged,
+        &QItemSelectionModel::selectionChanged,
         this,
         [this](
-            const QModelIndex &,
-            const QModelIndex &
+            const QItemSelection &,
+            const QItemSelection &
             ) {
             updateEventDetailFromSelection();
         }
@@ -369,13 +369,20 @@ QGroupBox *MainWindow::buildDetailPanel()
 
 void MainWindow::updateEventDetailFromSelection()
 {
-    const QModelIndex proxyIndex =
-        eventTable->currentIndex();
+    const QModelIndexList selectedRows =
+        eventTable->selectionModel()
+            ->selectedRows();
+
+    if (selectedRows.isEmpty()) {
+        clearEventDetail();
+        return;
+    }
 
     const InvestigationRecord *record =
-        investigationController->recordForProxyIndex(
-            proxyIndex
-            );
+        investigationController
+            ->recordForProxyIndex(
+                selectedRows.first()
+                );
 
     if (record == nullptr) {
         clearEventDetail();
