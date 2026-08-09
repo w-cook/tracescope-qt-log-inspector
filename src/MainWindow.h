@@ -20,6 +20,8 @@ class QVBoxLayout;
 class QPlainTextEdit;
 class QGroupBox;
 class QChartView;
+class QDragEnterEvent;
+class QDropEvent;
 
 class MainWindow : public QMainWindow
 {
@@ -27,6 +29,15 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+
+protected:
+    void dragEnterEvent(
+        QDragEnterEvent *event
+        ) override;
+
+    void dropEvent(
+        QDropEvent *event
+        ) override;
 
 private:
     QLabel *summaryLabel;
@@ -51,7 +62,10 @@ private:
 
     void buildLayout();
     void createMenus();
-    void openLogFile();
+    void openLogFile(
+        const QString &initialFilePath =
+        QString()
+        );
     void loadLogFile(const QString &filePath);
 
     void updateSummary(

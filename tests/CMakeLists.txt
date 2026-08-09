@@ -398,3 +398,25 @@ add_test(
     NAME ImportPreviewServiceTests
     COMMAND ImportPreviewServiceTests
 )
+
+qt_add_executable(
+    ImportFormatSuggestionServiceTests
+
+    ImportFormatSuggestionServiceTests.cpp
+
+    ../src/importing/ImportFormatSuggestion.h
+    ../src/importing/ImportFormatSuggestionService.h
+    ../src/importing/ImportFormatSuggestionService.cpp
+)
+
+target_link_libraries(
+    ImportFormatSuggestionServiceTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME ImportFormatSuggestionServiceTests
+    COMMAND ImportFormatSuggestionServiceTests
+)

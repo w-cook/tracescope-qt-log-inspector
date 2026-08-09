@@ -383,8 +383,10 @@ Add deterministic, explainable investigation summaries.
 
 Planned deliverables:
 
-* adaptive timeline buckets
-* full date/time-aware grouping
+* user-selectable timeline bucket intervals
+* automatic/adaptive timeline bucket sizing
+* second-, minute-, and hour-scale timeline grouping as appropriate
+* full date/time-aware bucket identities and labels
 * event-code frequencies
 * top entities
 * subsystem trends

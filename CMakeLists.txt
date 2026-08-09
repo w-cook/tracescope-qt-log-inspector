@@ -54,7 +54,6 @@ qt_add_executable(TraceScope
     src/controllers/InvestigationController.h
     src/controllers/InvestigationController.cpp
     src/exporting/InvestigationCsvExporter.h
-    src/exporting/InvestigationCsvExporter.h
     src/importing/CanonicalFieldMappings.h
     src/importing/ImportProfile.h
     src/importing/ImportProfileValidation.h
@@ -66,6 +65,11 @@ qt_add_executable(TraceScope
     src/importing/ImportPreviewResult.h
     src/importing/ImportPreviewService.h
     src/importing/ImportPreviewService.cpp
+    src/ui/ImportConfigurationDialog.h
+    src/ui/ImportConfigurationDialog.cpp
+    src/importing/ImportFormatSuggestion.h
+    src/importing/ImportFormatSuggestionService.h
+    src/importing/ImportFormatSuggestionService.cpp
 )
 
 target_link_libraries(TraceScope
