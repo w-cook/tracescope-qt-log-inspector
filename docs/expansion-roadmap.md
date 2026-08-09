@@ -83,45 +83,22 @@ GitHub Actions artifacts are used for build verification. Approved packages are 
 
 Completed release milestones:
 
-### `v0.1.0` — Original Prototype
+| Version | Milestone | Status |
+| --- | --- | --- |
+| `v0.1.0` | Original Prototype | prerelease |
+| `v0.2.0` | Flexible Record and Import Domain | prerelease |
+| `v0.3.0` | Importer Abstraction and Configurable JSON Lines | prerelease |
+| `v0.4.0` | Qt Model/View Architecture | prerelease |
+| `v0.4.1` | Dynamic Attribute CSV Export | prerelease |
+| `v0.5.0` | Import Profiles and Preview Logic | prerelease |
 
-* Release title: `TraceScope 0.1.0 — Original Prototype`
-* Status: prerelease
-* Windows asset: `TraceScope-v0.1.0-windows-x64.zip`
-* Linux asset: `TraceScope-v0.1.0-linux-x86_64.AppImage`
-* Sample asset: `TraceScope-v0.1.0-samples.zip`
+Release assets follow a consistent naming convention:
 
-### `v0.2.0` — Flexible Record and Import Domain
-
-* Release title: `TraceScope 0.2.0 — Flexible Record and Import Domain`
-* Status: prerelease
-* Windows asset: `TraceScope-v0.2.0-windows-x64.zip`
-* Linux asset: `TraceScope-v0.2.0-linux-x86_64.AppImage`
-* Sample asset: `TraceScope-v0.2.0-samples.zip`
-
-### `v0.3.0` — Importer Abstraction and Configurable JSON Lines
-
-* Release title: `TraceScope 0.3.0 — Importer Abstraction and Configurable JSON Lines`
-* Status: prerelease
-* Windows asset: `TraceScope-v0.3.0-windows-x64.zip`
-* Linux asset: `TraceScope-v0.3.0-linux-x86_64.AppImage`
-* Sample asset: `TraceScope-v0.3.0-samples.zip`
-
-### `v0.4.0` — Qt Model/View Architecture
-
-* Release title: `TraceScope 0.4.0 — Qt Model/View Architecture`
-* Status: prerelease
-* Windows asset: `TraceScope-v0.4.0-windows-x64.zip`
-* Linux asset: `TraceScope-v0.4.0-linux-x86_64.AppImage`
-* Sample asset: `TraceScope-v0.4.0-samples.zip`
-
-### `v0.4.1` — Dynamic Attribute CSV Export
-
-* Release title: `TraceScope 0.4.1 — Dynamic Attribute CSV Export`
-* Status: prerelease
-* Windows asset: `TraceScope-v0.4.1-windows-x64.zip`
-* Linux asset: `TraceScope-v0.4.1-linux-x86_64.AppImage`
-* Sample asset: `TraceScope-v0.4.1-samples.zip`
+```text
+TraceScope-v<version>-windows-x64.zip
+TraceScope-v<version>-linux-x86_64.AppImage
+TraceScope-v<version>-samples.zip
+```
 
 ## Canonical Investigation Record
 
@@ -150,42 +127,32 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations:
+Implemented foundations through `v0.5.0`:
 
-* flexible investigation record
-* import result
-* import diagnostic
-* typed severity parsing
-* timestamp parsing
-* source metadata
-* stable record identity
-* `ILogImporter` abstraction
-* internal importer registry
-* dedicated JSON Lines importer
-* configurable dot-delimited JSON field paths
-* nested JSON object-path mapping
-* default mappings compatible with the original JSON Lines samples
-* preservation of source attributes when nested mappings are used
-* compatibility adapter for the original telemetry-event workflow
-* importer-focused automated tests
+* flexible investigation records with optional canonical fields and preserved source data
+* structured import results and diagnostics
+* typed severity and timestamp parsing
+* stable record identity and source metadata
+* `ILogImporter` abstraction and internal importer registry
+* dedicated JSON Lines importer with configurable dot-delimited paths
+* nested canonical mappings and preservation of source attributes
+* Qt model/view presentation of flexible records and dynamic custom attributes
+* investigation-record CSV export with dynamic custom columns
+* versioned import-profile schema
+* canonical and explicit custom-field mappings
+* source-specific severity aliases
+* ordered ISO 8601 and Qt-format timestamp rules
+* configurable preservation of unmapped fields
+* deterministic profile validation
+* human-readable JSON profile serialization/deserialization with round-trip tests
+* profile-aware JSON Lines importing
+* bounded import-preview services returning records, counts, diagnostics, source metadata, and truncation state
 
-The `v0.4.0` model/view architecture now brings the flexible investigation-record domain directly into the desktop table UI through a `QAbstractTableModel`, `QSortFilterProxyModel`, dynamic custom-attribute columns, and a focused investigation controller.
+Reusable import profiles are represented as versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The profile and preview services are implemented independently of the desktop configuration workflow; Phase 5 will expose those capabilities through the UI.
 
-The current active phase defines reusable import profiles and preview logic on top of the completed flexible-record, importer, and model/view foundations.
+Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Later phases will add:
-
-* import profiles
-* field mapping configuration
-* severity mapping configuration
-* timestamp configuration
-* import preview
-* profile validation and persistence
-* additional built-in formats
-
-Importers will be registered internally. An external binary plugin ecosystem is not part of the initial expansion.
-
-Reusable import profiles will use versioned, human-readable JSON so developers can save, reuse, share, and commit mappings alongside the applications that produce their logs.
+Later phases will add the desktop import-configuration workflow, additional built-in formats, responsive large-file processing, multi-session investigations, persistence, live following, and broader investigation/reporting capabilities.
 
 ## Development Phases
 
@@ -194,12 +161,6 @@ Reusable import profiles will use versioned, human-readable JSON so developers c
 **Status: Completed in `v0.1.0`.**
 
 Established repeatable cross-platform verification and a downloadable baseline for the completed original prototype.
-
-The `TraceScope 0.1.0 — Original Prototype` prerelease was published with:
-
-* `TraceScope-v0.1.0-windows-x64.zip`
-* `TraceScope-v0.1.0-linux-x86_64.AppImage`
-* `TraceScope-v0.1.0-samples.zip`
 
 Completed deliverables:
 
@@ -303,24 +264,36 @@ Post-release patch completed in `v0.4.1`:
 
 ### Phase 4 — Import Profiles and Preview Logic
 
-**Status: Current active phase.**
+**Status: Completed in `v0.5.0`.**
 
-Define the reusable configuration format used to map source logs into the canonical investigation model.
+Defined the reusable configuration and preview layer used to map source logs into the canonical investigation model.
 
-Planned deliverables:
+Completed deliverables:
 
 * versioned import-profile schema
 * canonical field mappings
-* custom-field mappings
-* severity aliases
-* timestamp rules
-* profile validation
-* import preview services
-* profile serialization and round-trip tests
+* explicit custom-field mappings
+* source-specific severity aliases
+* ordered ISO 8601 and Qt-format timestamp rules
+* configurable preservation of unmapped source fields
+* deterministic profile validation
+* human-readable JSON profile serialization and deserialization
+* profile serialization round-trip tests
+* profile-aware JSON Lines importing
+* bounded import-preview services with records, counts, diagnostics, source metadata, and truncation state
+* automated coverage for the profile domain, validator, serializer, importer integration, and preview service
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+
+Additional maintenance completed during the phase:
+
+* fixed selected-event detail refresh after filtering by responding to actual row selection changes rather than only current-row changes
 
 ### Phase 5 — Import Configuration Interface
 
-Add the desktop workflow for configuring and reusing imports.
+**Status: Next active phase.**
+
+Expose the completed profile and preview services through the desktop workflow.
 
 Planned deliverables:
 
