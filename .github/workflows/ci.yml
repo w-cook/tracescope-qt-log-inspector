@@ -11,9 +11,9 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
-  WINDOWS_PACKAGE_NAME: TraceScope-v0.5.0-windows-x64
-  LINUX_PACKAGE_NAME: TraceScope-v0.5.0-linux-x86_64
-  SAMPLES_PACKAGE_NAME: TraceScope-v0.5.0-samples
+  WINDOWS_PACKAGE_NAME: TraceScope-v0.6.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v0.6.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v0.6.0-samples
 
 jobs:
   windows-build-and-test:
@@ -112,7 +112,12 @@ jobs:
             "README.md",
             "LICENSE",
             "samples\telemetry-session-003.jsonl",
-            "samples\dynamic-attributes-session.jsonl"
+            "samples\dynamic-attributes-session.jsonl",
+            "samples\sample-telemetry-session.ndjson",
+            "samples\sample-structured-service.log",
+            "samples\profiles\dynamic-attributes-session.json",
+            "samples\profiles\telemetry-session.json",
+            "samples\profiles\structured-service.json"
           )
 
           foreach ($relativePath in $requiredFiles) {
@@ -283,7 +288,7 @@ jobs:
 
           export PATH="$PWD/packaging-tools:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export VERSION="0.5.0"
+          export VERSION="0.6.0"
           export ARCH="x86_64"
           export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
           export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
@@ -312,6 +317,11 @@ jobs:
           test -f AppDir/usr/share/doc/tracescope/LICENSE
           test -f AppDir/usr/share/tracescope/samples/telemetry-session-003.jsonl
           test -f AppDir/usr/share/tracescope/samples/dynamic-attributes-session.jsonl
+          test -f AppDir/usr/share/tracescope/samples/sample-telemetry-session.ndjson
+          test -f AppDir/usr/share/tracescope/samples/sample-structured-service.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/dynamic-attributes-session.json
+          test -f AppDir/usr/share/tracescope/samples/profiles/telemetry-session.json
+          test -f AppDir/usr/share/tracescope/samples/profiles/structured-service.json
 
           test -x "dist/$LINUX_PACKAGE_NAME.AppImage"
 
@@ -361,7 +371,7 @@ jobs:
           retention-days: 14
 
   package-samples:
-    name: Sample Logs — Package and Verify
+    name: Samples — Package and Verify
     runs-on: ubuntu-22.04
 
     steps:
@@ -375,13 +385,18 @@ jobs:
           test -d samples
           test -f samples/telemetry-session-003.jsonl
           test -f samples/dynamic-attributes-session.jsonl
+          test -f samples/sample-telemetry-session.ndjson
+          test -f samples/sample-structured-service.log
+          test -f samples/profiles/dynamic-attributes-session.json
+          test -f samples/profiles/telemetry-session.json
+          test -f samples/profiles/structured-service.json
 
           sample_count="$(find samples -type f | wc -l)"
           test "$sample_count" -gt 0
 
           echo "Found $sample_count sample files."
 
-      - name: Assemble sample logs archive
+      - name: Assemble samples archive
         run: |
           set -euxo pipefail
 
@@ -413,7 +428,7 @@ jobs:
           print(f"Created {archive_path}")
           PY
 
-      - name: Verify sample logs archive
+      - name: Verify samples archive
         run: |
           set -euxo pipefail
 
@@ -424,6 +439,11 @@ jobs:
           test -f "$package_dir/LICENSE"
           test -f "$package_dir/samples/telemetry-session-003.jsonl"
           test -f "$package_dir/samples/dynamic-attributes-session.jsonl"
+          test -f "$package_dir/samples/sample-telemetry-session.ndjson"
+          test -f "$package_dir/samples/sample-structured-service.log"
+          test -f "$package_dir/samples/profiles/dynamic-attributes-session.json"
+          test -f "$package_dir/samples/profiles/telemetry-session.json"
+          test -f "$package_dir/samples/profiles/structured-service.json"
           test -f "$archive_path"
 
           source_count="$(find samples -type f | wc -l)"
@@ -444,6 +464,11 @@ jobs:
               f"{package_name}/LICENSE",
               f"{package_name}/samples/telemetry-session-003.jsonl",
               f"{package_name}/samples/dynamic-attributes-session.jsonl",
+              f"{package_name}/samples/sample-telemetry-session.ndjson",
+              f"{package_name}/samples/sample-structured-service.log",
+              f"{package_name}/samples/profiles/dynamic-attributes-session.json",
+              f"{package_name}/samples/profiles/telemetry-session.json",
+              f"{package_name}/samples/profiles/structured-service.json",
           }
 
           with ZipFile(archive_path) as archive:
@@ -464,7 +489,7 @@ jobs:
 
           du -h "$archive_path"
 
-      - name: Upload sample logs ZIP
+      - name: Upload samples ZIP
         uses: actions/upload-artifact@v7
         with:
           path: dist/${{ env.SAMPLES_PACKAGE_NAME }}.zip

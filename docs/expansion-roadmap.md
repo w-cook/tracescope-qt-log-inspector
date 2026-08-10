@@ -71,12 +71,12 @@ Each completed development phase should produce:
 * Release-mode native executables
 * a portable Windows x64 ZIP produced with `windeployqt`
 * a Linux x86_64 AppImage produced with `linuxdeploy`
-* a platform-neutral sample-log ZIP
+* a platform-neutral samples ZIP containing demonstration logs and reusable profiles
 * startup smoke tests for both packaged applications
 * a version tag
 * a GitHub prerelease or release
 * attached release notes
-* attached Windows, Linux, and sample assets
+* attached Windows, Linux, and samples assets
 * clean smoke tests of the downloaded release packages
 
 GitHub Actions artifacts are used for build verification. Approved packages are then attached to GitHub Releases as permanent employer-facing downloads.
@@ -91,6 +91,7 @@ Completed release milestones:
 | `v0.4.0` | Qt Model/View Architecture | prerelease |
 | `v0.4.1` | Dynamic Attribute CSV Export | prerelease |
 | `v0.5.0` | Import Profiles and Preview Logic | prerelease |
+| `v0.6.0` | Import Configuration Interface | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -127,7 +128,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.5.0`:
+Implemented foundations through `v0.6.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -136,23 +137,18 @@ Implemented foundations through `v0.5.0`:
 * `ILogImporter` abstraction and internal importer registry
 * dedicated JSON Lines importer with configurable dot-delimited paths
 * nested canonical mappings and preservation of source attributes
+* versioned import profiles with canonical/custom mappings, severity aliases, timestamp rules, validation, and JSON serialization
+* profile-aware JSON Lines importing and bounded preview services
+* desktop source selection, drag-and-drop, format suggestion, profile editing, mapping-aware preview, validation, and profile save/load
 * Qt model/view presentation of flexible records and dynamic custom attributes
-* investigation-record CSV export with dynamic custom columns
-* versioned import-profile schema
-* canonical and explicit custom-field mappings
-* source-specific severity aliases
-* ordered ISO 8601 and Qt-format timestamp rules
-* configurable preservation of unmapped fields
-* deterministic profile validation
-* human-readable JSON profile serialization/deserialization with round-trip tests
-* profile-aware JSON Lines importing
-* bounded import-preview services returning records, counts, diagnostics, source metadata, and truncation state
+* investigation-record CSV export with user-facing canonical headers and configured custom-field names
+* reusable sample import profiles paired with representative source logs, including the multi-minute dynamic-attributes demonstration session
 
-Reusable import profiles are represented as versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The profile and preview services are implemented independently of the desktop configuration workflow; Phase 5 will expose those capabilities through the UI.
+Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Later phases will add the desktop import-configuration workflow, additional built-in formats, responsive large-file processing, multi-session investigations, persistence, live following, and broader investigation/reporting capabilities.
+Later phases add additional built-in formats, responsive large-file processing, multi-session investigations, persistence, live following, and broader investigation/reporting capabilities.
 
 ## Development Phases
 
@@ -291,22 +287,39 @@ Additional maintenance completed during the phase:
 
 ### Phase 5 — Import Configuration Interface
 
-**Status: Next active phase.**
+**Status: Completed in `v0.6.0`.**
 
-Expose the completed profile and preview services through the desktop workflow.
+Exposed the profile and preview foundations through the desktop workflow.
 
-Planned deliverables:
+Completed deliverables:
 
-* file selection
-* drag-and-drop
+* source-file selection and drag-and-drop
 * likely-format suggestions
-* source-record preview
-* field mapping controls
-* validation feedback
-* profile saving
-* profile loading
+* bounded source-record preview before import
+* mapping-aware canonical and custom-field preview columns
+* selected-record raw-source inspection
+* automatic custom-field detection for new source-derived profiles
+* canonical and custom-field mapping controls
+* severity-alias and timestamp-rule configuration
+* unmapped-field preservation control
+* immediate validation feedback with debounced preview refresh
+* preservation of the last valid preview during temporarily invalid edits
+* explicit new-profile-from-source workflow
+* profile saving and nondestructive validated profile loading
+* intentional profile retention when switching sources for compatibility checks
+* resizable preview columns
+* reusable sample import profiles, including a curated profile for `dynamic-attributes-session.jsonl`
+* coordinated release screenshots demonstrating that same mapped session across configuration, investigation, filtering, and CSV export
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+
+Additional maintenance completed during the phase:
+
+* normalized CSV canonical headers to user-facing display names while retaining configured custom-field names
 
 ### Phase 6 — Additional Built-In Formats
+
+**Status: Next active phase.**
 
 Expand supported source formats while keeping behavior explicit and profile-driven.
 
@@ -383,8 +396,10 @@ Add deterministic, explainable investigation summaries.
 
 Planned deliverables:
 
-* adaptive timeline buckets
-* full date/time-aware grouping
+* user-selectable timeline bucket intervals
+* automatic/adaptive timeline bucket sizing
+* second-, minute-, and hour-scale timeline grouping as appropriate
+* full date/time-aware bucket identities and labels
 * event-code frequencies
 * top entities
 * subsystem trends

@@ -49,12 +49,12 @@ bool InvestigationCsvExporter::exportToFile(
         customAttributeKeys(records);
 
     QStringList headers {
-        QStringLiteral("timestamp"),
-        QStringLiteral("level"),
-        QStringLiteral("subsystem"),
-        QStringLiteral("eventCode"),
-        QStringLiteral("entityId"),
-        QStringLiteral("message")
+        QStringLiteral("Timestamp"),
+        QStringLiteral("Severity"),
+        QStringLiteral("Subsystem"),
+        QStringLiteral("Event Code"),
+        QStringLiteral("Entity ID"),
+        QStringLiteral("Message")
     };
 
     headers.append(customKeys);

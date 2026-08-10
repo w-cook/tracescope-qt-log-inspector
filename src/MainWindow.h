@@ -5,7 +5,7 @@
 
 #include "domain/InvestigationRecord.h"
 #include "domain/TelemetryEvent.h"
-#include "parsing/JsonLineLogParser.h"
+#include "importing/ImportProfile.h"
 #include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -20,6 +20,8 @@ class QVBoxLayout;
 class QPlainTextEdit;
 class QGroupBox;
 class QChartView;
+class QDragEnterEvent;
+class QDropEvent;
 
 class MainWindow : public QMainWindow
 {
@@ -27,6 +29,15 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+
+protected:
+    void dragEnterEvent(
+        QDragEnterEvent *event
+        ) override;
+
+    void dropEvent(
+        QDropEvent *event
+        ) override;
 
 private:
     QLabel *summaryLabel;
@@ -36,7 +47,6 @@ private:
 
     InvestigationController *investigationController;
 
-    JsonLineLogParser parser;
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationCsvExporter csvExporter;
@@ -51,8 +61,14 @@ private:
 
     void buildLayout();
     void createMenus();
-    void openLogFile();
-    void loadLogFile(const QString &filePath);
+    void openLogFile(
+        const QString &initialFilePath =
+        QString()
+        );
+    void loadLogFile(
+        const QString &filePath,
+        const ImportProfile &profile
+        );
 
     void updateSummary(
         const QVector<TelemetryEvent> &events,

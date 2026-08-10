@@ -1,0 +1,62 @@
+{
+    "schemaVersion": 1,
+    "name": "Structured Service Operations",
+    "importerId": "json-lines",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Available Units",
+            "sourcePath": "availableUnits"
+        },
+        {
+            "name": "Carrier",
+            "sourcePath": "carrier"
+        },
+        {
+            "name": "Customer Tier",
+            "sourcePath": "customerTier"
+        },
+        {
+            "name": "Host",
+            "sourcePath": "host"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "latencyMs"
+        },
+        {
+            "name": "Provider",
+            "sourcePath": "provider"
+        },
+        {
+            "name": "Region",
+            "sourcePath": "region"
+        },
+        {
+            "name": "Requested Units",
+            "sourcePath": "requestedUnits"
+        },
+        {
+            "name": "Retry Attempt",
+            "sourcePath": "retryAttempt"
+        },
+        {
+            "name": "Timeout (ms)",
+            "sourcePath": "timeoutMs"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

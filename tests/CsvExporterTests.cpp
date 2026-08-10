@@ -67,8 +67,8 @@ void CsvExporterTests::exportToFileWritesCanonicalFields()
 
     QVERIFY(
         content.contains(
-            "timestamp,level,subsystem,"
-            "eventCode,entityId,message"
+            "Timestamp,Severity,Subsystem,"
+            "Event Code,Entity ID,Message"
             )
         );
 
@@ -188,8 +188,8 @@ void CsvExporterTests::
     QCOMPARE(
         lines[0],
         QString(
-            "timestamp,level,subsystem,"
-            "eventCode,entityId,message,"
+            "Timestamp,Severity,Subsystem,"
+            "Event Code,Entity ID,Message,"
             "environment,host,latencyMs,provider"
             )
         );
@@ -276,8 +276,8 @@ void CsvExporterTests::
     QCOMPARE(
         header,
         QString(
-            "timestamp,level,subsystem,"
-            "eventCode,entityId,message,"
+            "Timestamp,Severity,Subsystem,"
+            "Event Code,Entity ID,Message,"
             "Alpha,middle,zeta"
             )
         );

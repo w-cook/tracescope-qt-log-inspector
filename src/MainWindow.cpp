@@ -20,6 +20,10 @@
 #include <QStringList>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
 #include <QtCharts/QBarSet>
@@ -31,6 +35,8 @@
 #include <utility>
 
 #include "compatibility/TelemetryEventAdapter.h"
+#include "importing/JsonLinesImporter.h"
+#include "ui/ImportConfigurationDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -46,6 +52,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
     resize(1100, 760);
+
+    setAcceptDrops(true);
 
     createMenus();
     buildLayout();
@@ -169,36 +177,68 @@ void MainWindow::buildLayout()
     setCentralWidget(centralWidget);
 }
 
-void MainWindow::openLogFile()
+void MainWindow::openLogFile(const QString &initialFilePath)
 {
-    const QString filePath = QFileDialog::getOpenFileName(
-        this,
-        "Open Telemetry Log",
-        QString(),
-        "Log Files (*.jsonl *.log *.txt);;All Files (*)"
-        );
+    ImportConfigurationDialog dialog(this);
 
-    if (filePath.isEmpty()) {
+    if (!initialFilePath.isEmpty()) {
+        dialog.setSelectedFilePath(
+            initialFilePath
+            );
+    }
+
+    if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    loadLogFile(filePath);
+    loadLogFile(
+        dialog.selectedFilePath(),
+        dialog.configuredProfile()
+        );
 }
 
-void MainWindow::loadLogFile(const QString &filePath)
+void MainWindow::loadLogFile(
+    const QString &filePath,
+    const ImportProfile &profile
+    )
 {
+    if (profile.importerId
+        != QStringLiteral("json-lines")) {
+        QMessageBox::warning(
+            this,
+            tr("Unsupported Import Format"),
+            tr(
+                "The selected import profile uses "
+                "an importer that this version of "
+                "TraceScope does not support."
+                )
+            );
+
+        return;
+    }
+
+    const JsonLinesImporter importer(
+        profile
+        );
+
     const ImportResult result =
-        parser.importFile(filePath);
+        importer.importFile(
+            filePath
+            );
 
     currentFilePath = filePath;
 
-    investigationController->setRecords(result.records);
+    investigationController->setRecords(
+        result.records
+        );
 
     if (result.records.isEmpty()) {
         QMessageBox::warning(
             this,
             "No Events Loaded",
-            "No telemetry events were loaded. The file may be empty, malformed, or unsupported."
+            "No telemetry events were loaded. "
+            "The file may be empty, malformed, "
+            "or unsupported."
             );
     }
 
@@ -206,7 +246,9 @@ void MainWindow::loadLogFile(const QString &filePath)
     applyFilters();
 
     eventTable->resizeColumnsToContents();
-    eventTable->horizontalHeader()->setStretchLastSection(true);
+    eventTable
+        ->horizontalHeader()
+        ->setStretchLastSection(true);
 }
 
 void MainWindow::updateSummary(
@@ -623,6 +665,9 @@ QGroupBox *MainWindow::buildTimelinePanel()
     timelineChartView->setMinimumHeight(190);
     timelineChartView->setRenderHint(QPainter::Antialiasing);
 
+    timelineChartView->setAcceptDrops(false);
+    timelineChartView->viewport()->setAcceptDrops(false);
+
     auto *timelineLayout = new QVBoxLayout(timelineGroup);
     timelineLayout->addWidget(timelineChartView);
 
@@ -690,4 +735,42 @@ void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
     series->attachAxis(axisY);
 
     timelineChartView->setChart(chart);
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (!event->mimeData()->hasUrls()) {
+        return;
+    }
+
+    const QList<QUrl> urls =
+        event->mimeData()->urls();
+
+    if (urls.size() != 1
+        || !urls.first().isLocalFile()) {
+        return;
+    }
+
+    event->acceptProposedAction();
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls()) {
+        return;
+    }
+
+    const QList<QUrl> urls =
+        event->mimeData()->urls();
+
+    if (urls.size() != 1
+        || !urls.first().isLocalFile()) {
+        return;
+    }
+
+    openLogFile(
+        urls.first().toLocalFile()
+        );
+
+    event->acceptProposedAction();
 }
