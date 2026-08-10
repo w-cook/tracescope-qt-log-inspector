@@ -23,23 +23,27 @@ void InvestigationTableModelTests::emptyModelHasCanonicalColumns()
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.columnCount(), 6);
 
-    QCOMPARE(
-        model.headerData(
-                 0,
-                 Qt::Horizontal,
-                 Qt::DisplayRole
-                 ).toString(),
-        QStringLiteral("Timestamp")
-        );
-
-    QCOMPARE(
-        model.headerData(
-                 5,
-                 Qt::Horizontal,
-                 Qt::DisplayRole
-                 ).toString(),
+    const QStringList expectedHeaders {
+        QStringLiteral("Timestamp"),
+        QStringLiteral("Severity"),
+        QStringLiteral("Subsystem"),
+        QStringLiteral("Event Code"),
+        QStringLiteral("Entity ID"),
         QStringLiteral("Message")
-        );
+    };
+
+    for (int column = 0;
+         column < expectedHeaders.size();
+         ++column) {
+        QCOMPARE(
+            model.headerData(
+                     column,
+                     Qt::Horizontal,
+                     Qt::DisplayRole
+                     ).toString(),
+            expectedHeaders[column]
+            );
+    }
 }
 
 void InvestigationTableModelTests::displaysCanonicalRecordValues()

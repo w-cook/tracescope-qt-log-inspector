@@ -144,7 +144,7 @@ void InvestigationTableModel::rebuildColumns()
         },
         {
             SeverityKey,
-            QStringLiteral("Level"),
+            QStringLiteral("Severity"),
             false
         },
         {
