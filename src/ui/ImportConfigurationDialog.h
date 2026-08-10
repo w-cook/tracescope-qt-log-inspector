@@ -4,7 +4,9 @@
 #include <QString>
 
 #include "../importing/ImportFormatSuggestionService.h"
+#include "../importing/ImportPreviewService.h"
 #include "../importing/ImportProfile.h"
+#include "../importing/ImportProfileSerialization.h"
 #include "../importing/ImportProfileValidator.h"
 
 class QDialogButtonBox;
@@ -16,6 +18,8 @@ class QPushButton;
 class QCheckBox;
 class QTableWidget;
 class QComboBox;
+class QPlainTextEdit;
+class QTimer;
 
 class ImportConfigurationDialog final
     : public QDialog
@@ -49,8 +53,18 @@ private:
     QPushButton *browseButton;
     QLabel *formatSuggestionLabel;
 
+    QLabel *previewSummaryLabel;
+    QTableWidget *previewTable;
+    QPlainTextEdit *rawSourcePreview;
+
+    QTimer *previewRefreshTimer;
+
     QLineEdit *profileNameEdit;
     QCheckBox *preserveUnmappedCheckBox;
+
+    QPushButton *newProfileFromSourceButton;
+    QPushButton *loadProfileButton;
+    QPushButton *saveProfileButton;
 
     QLineEdit *timestampPathEdit;
     QLineEdit *severityPathEdit;
@@ -79,13 +93,24 @@ private:
     ImportFormatSuggestionService
         formatSuggestionService;
 
+    ImportPreviewService
+        previewService;
+
+    ImportProfileSerializer
+        profileSerializer;
+
     ImportProfileValidator
         profileValidator;
 
     ImportProfile workingProfile;
+    bool profileIsUserConfigured = false;
+    QString previewSourcePath;
+    QString customFieldDetectionSourcePath;
 
     void buildLayout();
     void browseForFile();
+
+    void detectCustomFieldMappings();
 
     void populateProfileControls();
 
@@ -116,6 +141,26 @@ private:
     void updateWorkingProfile();
     void updateSourceState();
     void updateFormatSuggestion();
-    void updateValidationState();
+    void updateValidationState(
+        bool refreshPreview = true
+        );
     void updateImportAvailability();
+    void updatePreview();
+
+    void clearPreview(
+        const QString &message
+        );
+
+    void updateRawSourcePreview(
+        int row
+        );
+
+    void saveProfile();
+    void loadProfile();
+
+    void schedulePreviewRefresh();
+
+    void createProfileFromSource(
+        bool userInitiated
+        );
 };
