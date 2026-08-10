@@ -652,18 +652,22 @@ void ImportConfigurationDialog::buildLayout()
 
     previewTable->setWordWrap(false);
 
-    previewTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            QHeaderView::ResizeToContents
-            );
+    QHeaderView *previewHeader =
+        previewTable->horizontalHeader();
 
-    previewTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            5,
-            QHeaderView::Stretch
-            );
+    previewHeader->setSectionResizeMode(
+        QHeaderView::Interactive
+        );
+
+    previewHeader->setMinimumSectionSize(70);
+
+    previewTable->setColumnWidth(0, 180); // Timestamp
+    previewTable->setColumnWidth(1, 80);  // Severity
+    previewTable->setColumnWidth(2, 120); // Subsystem
+    previewTable->setColumnWidth(3, 140); // Event Code
+    previewTable->setColumnWidth(4, 120); // Entity ID
+    previewTable->setColumnWidth(5, 300); // Message
+    previewTable->setColumnWidth(6, 220); // Unmapped Custom Fields
 
     previewLayout->addWidget(
         previewTable,
@@ -1352,6 +1356,9 @@ void ImportConfigurationDialog::updatePreview()
         tr("Unmapped Custom Fields")
         );
 
+    const int previousColumnCount =
+        previewTable->columnCount();
+
     previewTable->clearContents();
 
     previewTable->setColumnCount(
@@ -1362,29 +1369,42 @@ void ImportConfigurationDialog::updatePreview()
         headers
         );
 
-    previewTable->setRowCount(
-        records.size()
-        );
+    QHeaderView *previewHeader =
+        previewTable->horizontalHeader();
 
-    previewTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            QHeaderView::ResizeToContents
-            );
+    previewHeader->setStretchLastSection(false);
 
-    previewTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            5,
-            QHeaderView::Stretch
+    for (
+        int column = 0;
+        column < headers.size();
+        ++column
+        ) {
+        previewHeader->setSectionResizeMode(
+            column,
+            QHeaderView::Interactive
             );
+    }
 
-    previewTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            headers.size() - 1,
-            QHeaderView::Stretch
-            );
+    if (previousColumnCount
+        != headers.size()) {
+        for (
+            int column = 6;
+            column < headers.size() - 1;
+            ++column
+            ) {
+            previewTable->setColumnWidth(
+                column,
+                140
+                );
+        }
+
+        if (headers.size() > 6) {
+            previewTable->setColumnWidth(
+                headers.size() - 1,
+                220
+                );
+        }
+    }
 
     previewTable->setRowCount(
         records.size()
