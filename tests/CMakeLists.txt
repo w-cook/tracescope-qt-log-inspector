@@ -360,6 +360,11 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/ImportPreviewService.h
     ../src/importing/ImportPreviewService.cpp
 
+    ../src/importing/BuiltInImporterRegistry.h
+    ../src/importing/BuiltInImporterRegistry.cpp
+    ../src/importing/ImporterRegistry.h
+    ../src/importing/ImporterRegistry.cpp
+
     ../src/importing/ImportProfile.h
     ../src/importing/CanonicalFieldMappings.h
     ../src/importing/ImportProfileValidation.h

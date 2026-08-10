@@ -29,6 +29,8 @@
 #include <QFile>
 #include <utility>
 
+#include "../importing/BuiltInImporterRegistry.h"
+
 ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
     : QDialog(parent),
     filePathEdit(new QLineEdit(this)),
@@ -2600,9 +2602,15 @@ void ImportConfigurationDialog::loadProfile()
 
         return;
     }
+    
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            loadedProfile
+            );
 
-    if (loadedProfile.importerId
-        != QStringLiteral("json-lines")) {
+    if (!registry.importerById(
+            loadedProfile.importerId
+            )) {
         QMessageBox::critical(
             this,
             tr("Unsupported Import Profile"),

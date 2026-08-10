@@ -35,7 +35,8 @@
 #include <utility>
 
 #include "compatibility/TelemetryEventAdapter.h"
-#include "importing/JsonLinesImporter.h"
+#include "importing/BuiltInImporterRegistry.h"
+#include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -202,8 +203,17 @@ void MainWindow::loadLogFile(
     const ImportProfile &profile
     )
 {
-    if (profile.importerId
-        != QStringLiteral("json-lines")) {
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            profile
+            );
+
+    const std::shared_ptr<ILogImporter> importer =
+        registry.importerById(
+            profile.importerId
+            );
+
+    if (!importer) {
         QMessageBox::warning(
             this,
             tr("Unsupported Import Format"),
@@ -217,12 +227,8 @@ void MainWindow::loadLogFile(
         return;
     }
 
-    const JsonLinesImporter importer(
-        profile
-        );
-
     const ImportResult result =
-        importer.importFile(
+        importer->importFile(
             filePath
             );
 

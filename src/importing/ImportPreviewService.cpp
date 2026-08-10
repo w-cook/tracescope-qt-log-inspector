@@ -1,11 +1,8 @@
 #include "ImportPreviewService.h"
 
-#include <QFile>
-#include <QStringList>
-#include <QTextStream>
-
+#include "BuiltInImporterRegistry.h"
+#include "ILogImporter.h"
 #include "ImportProfileValidator.h"
-#include "JsonLinesImporter.h"
 
 namespace
 {
@@ -54,8 +51,17 @@ ImportPreviewResult ImportPreviewService::previewFile(
             );
     }
 
-    if (profile.importerId !=
-        QStringLiteral("json-lines")) {
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            profile
+            );
+
+    const std::shared_ptr<ILogImporter> importer =
+        registry.importerById(
+            profile.importerId
+            );
+
+    if (!importer) {
         return serviceFailure(
             result.profileValidation,
             QStringLiteral(
@@ -67,46 +73,14 @@ ImportPreviewResult ImportPreviewService::previewFile(
             );
     }
 
-    JsonLinesImporter importer(profile);
-
-    QFile file(filePath);
-
-    if (!file.open(
-            QIODevice::ReadOnly |
-            QIODevice::Text
-            )) {
-        result.importResult =
-            importer.importFile(filePath);
-
-        return result;
-    }
-
-    QTextStream stream(&file);
-
-    QStringList lines;
-    qint64 processedRecords = 0;
-
-    while (!stream.atEnd()
-           && processedRecords <
-                  maxProcessedRecords) {
-        const QString line =
-            stream.readLine();
-
-        lines.append(line);
-
-        if (!line.trimmed().isEmpty()) {
-            ++processedRecords;
-        }
-    }
+    result.importResult =
+        importer->importFile(
+            filePath,
+            maxProcessedRecords
+            );
 
     result.sourceTruncated =
-        !stream.atEnd();
-
-    result.importResult =
-        importer.importLines(
-            lines,
-            filePath
-            );
+        result.importResult.sourceTruncated;
 
     return result;
 }

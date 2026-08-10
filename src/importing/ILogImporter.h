@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QtTypes>
 #include <QString>
 
 #include "ImportResult.h"
@@ -7,12 +8,17 @@
 class ILogImporter
 {
 public:
+    inline static constexpr qint64
+        UnlimitedRecordLimit = 0;
+
     virtual ~ILogImporter() = default;
 
     virtual QString id() const = 0;
     virtual QString displayName() const = 0;
 
     virtual ImportResult importFile(
-        const QString &filePath
+        const QString &filePath,
+        qint64 maxProcessedRecords =
+        UnlimitedRecordLimit
         ) const = 0;
 };

@@ -27,6 +27,7 @@ private slots:
 
     void importFilePreservesSourceMetadata();
     void importFileReportsOpenFailure();
+    void importFileHonorsRecordLimit();
 
     void customConfigMapsAlternativeTopLevelFields();
     void customConfigMapsNestedFields();
@@ -648,6 +649,60 @@ void JsonLinesImporterTests::importFileReportsOpenFailure()
         diagnostic.source->recordNumber,
         qint64(0)
         );
+}
+
+void JsonLinesImporterTests::importFileHonorsRecordLimit()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "{\"message\":\"One\"}\n"
+        << "\n"
+        << "{\"message\":\"Two\"}\n"
+        << "{\"message\":\"Three\"}\n";
+
+    stream.flush();
+
+    const QString path =
+        file.fileName();
+
+    file.close();
+
+    JsonLinesImporter importer;
+
+    const ImportResult result =
+        importer.importFile(
+            path,
+            2
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.records.at(0)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.at(1)
+            .source.recordNumber,
+        qint64(3)
+        );
+
+    QVERIFY(result.sourceTruncated);
 }
 
 void JsonLinesImporterTests::customConfigMapsAlternativeTopLevelFields()

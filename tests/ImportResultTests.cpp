@@ -28,6 +28,7 @@ void ImportResultTests::defaultResultIsEmpty()
     QVERIFY(result.diagnostics.isEmpty());
     QVERIFY(!result.hasWarnings());
     QVERIFY(!result.hasErrors());
+    QVERIFY(!result.sourceTruncated);
 }
 
 void ImportResultTests::resultCalculatesImportedAndSkippedCounts()

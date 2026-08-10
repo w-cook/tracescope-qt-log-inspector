@@ -26,7 +26,8 @@ public:
     }
 
     ImportResult importFile(
-        const QString &
+        const QString &,
+        qint64
         ) const override
     {
         return {};

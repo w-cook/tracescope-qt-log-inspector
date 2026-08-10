@@ -501,7 +501,8 @@ ImportResult JsonLinesImporter::importLines(
 }
 
 ImportResult JsonLinesImporter::importFile(
-    const QString &filePath
+    const QString &filePath,
+    qint64 maxProcessedRecords
     ) const
 {
     QFile file(filePath);
@@ -534,14 +535,41 @@ ImportResult JsonLinesImporter::importFile(
     }
 
     QTextStream stream(&file);
+
     QStringList lines;
+    qint64 processedRecords = 0;
+    bool sourceTruncated = false;
 
     while (!stream.atEnd()) {
-        lines.append(stream.readLine());
+        const QString line =
+            stream.readLine();
+
+        if (maxProcessedRecords > 0
+            && processedRecords >=
+                   maxProcessedRecords) {
+            if (!line.trimmed().isEmpty()) {
+                sourceTruncated = true;
+                break;
+            }
+
+            continue;
+        }
+
+        lines.append(line);
+
+        if (!line.trimmed().isEmpty()) {
+            ++processedRecords;
+        }
     }
 
-    return importLines(
-        lines,
-        filePath
-        );
+    ImportResult result =
+        importLines(
+            lines,
+            filePath
+            );
+
+    result.sourceTruncated =
+        sourceTruncated;
+
+    return result;
 }

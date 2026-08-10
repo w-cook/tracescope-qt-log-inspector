@@ -70,6 +70,8 @@ qt_add_executable(TraceScope
     src/importing/ImportFormatSuggestion.h
     src/importing/ImportFormatSuggestionService.h
     src/importing/ImportFormatSuggestionService.cpp
+    src/importing/BuiltInImporterRegistry.h
+    src/importing/BuiltInImporterRegistry.cpp
 )
 
 target_link_libraries(TraceScope
