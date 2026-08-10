@@ -4,7 +4,7 @@
 
 TraceScope is a native C++/Qt desktop application for importing, normalizing, filtering, inspecting, visualizing, and exporting structured telemetry and diagnostic logs.
 
-The project began as a focused JSON Lines telemetry inspector and is being expanded into a configurable offline log-analysis workbench. The current `v0.5.0` milestone adds reusable, versioned import profiles and profile-aware preview logic on top of the flexible investigation-record, importer, and Qt model/view foundations delivered in earlier releases.
+The project began as a focused JSON Lines telemetry inspector and is being expanded into a configurable offline log-analysis workbench. The current `v0.6.0` milestone exposes reusable import profiles and profile-aware preview logic through a complete desktop import-configuration workflow with source selection, drag-and-drop, format suggestions, mapping controls, validation, and profile save/load support.
 
 TraceScope is designed for file-based logs produced by applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. Import behavior is explicit and reproducible rather than presented as automatic understanding of arbitrary log formats.
 
@@ -12,43 +12,55 @@ TraceScope is designed for file-based logs produced by applications, services, s
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The `v0.5.0` package set uses:
+The `v0.6.0` package set uses:
 
 ```text
-TraceScope-v0.5.0-windows-x64.zip
-TraceScope-v0.5.0-linux-x86_64.AppImage
-TraceScope-v0.5.0-samples.zip
+TraceScope-v0.6.0-windows-x64.zip
+TraceScope-v0.6.0-linux-x86_64.AppImage
+TraceScope-v0.6.0-samples.zip
 ```
 
-Historical `v0.1.0` through `v0.4.1` prereleases remain available as earlier development milestones.
+Historical `v0.1.0` through `v0.5.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.5.0-windows-x64.zip`.
+1. Download `TraceScope-v0.6.0-windows-x64.zip`.
 2. Extract the complete ZIP.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory.
 
-The package includes the required Qt libraries, plugins, and MinGW runtime dependencies.
+The package includes the required Qt libraries, plugins, MinGW runtime dependencies, demonstration logs, and reusable sample import profiles.
 
 ### Linux
 
-1. Download `TraceScope-v0.5.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.6.0-linux-x86_64.AppImage`.
 2. Make it executable:
 
 ```bash
-chmod +x TraceScope-v0.5.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.6.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.5.0-linux-x86_64.AppImage
+./TraceScope-v0.6.0-linux-x86_64.AppImage
 ```
 
-### Sample Logs
+### Sample Logs and Profiles
 
-`TraceScope-v0.5.0-samples.zip` provides a platform-neutral copy of the demonstration logs. The primary flexible-record demonstration, `dynamic-attributes-session.jsonl`, mixes canonical fields with heterogeneous custom attributes across multiple timeline minutes so dynamic columns, search, sorting, filtering, timeline updates, selected-record details, and CSV export can be exercised together.
+`TraceScope-v0.6.0-samples.zip` provides a platform-neutral copy of the repository samples. The primary `v0.6.0` demonstration pair is:
+
+- `samples/dynamic-attributes-session.jsonl`
+- `samples/profiles/dynamic-attributes-session.json`
+
+That multi-minute session combines canonical fields with heterogeneous custom attributes and is used across the import-configuration, dashboard, filtered-warning, and CSV-export screenshots so the documented workflow can be reproduced end to end.
+
+Two additional reusable profile/source pairs provide alternate JSON Lines examples:
+
+- `samples/profiles/telemetry-session.json` with `samples/sample-telemetry-session.ndjson`
+- `samples/profiles/structured-service.json` with `samples/sample-structured-service.log`
+
+The sample profiles demonstrate canonical mappings, friendly custom-field display names, timestamp configuration, and preserved unmapped fields. They can be loaded directly through the Import Configuration interface.
 
 Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the packaged applications.
 
@@ -66,21 +78,21 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - Preserve the original JSON Lines layout as the default mapping for backward compatibility
 - Register file importers through a common `ILogImporter` abstraction and internal importer registry
 
-### Import Profiles and Preview Logic
+### Import Profiles and Configuration
 
-- Define reusable import profiles with a versioned schema
-- Configure canonical field mappings and explicit custom-field mappings
-- Configure source-specific severity aliases
-- Configure ordered ISO 8601 and Qt-format timestamp parsing rules
-- Control whether unmapped JSON fields are preserved as custom attributes
+- Define reusable import profiles with a versioned, human-readable JSON schema
+- Configure canonical field paths, explicit custom-field mappings, severity aliases, ordered timestamp rules, and unmapped-field preservation
 - Validate profile structure and mapping configuration before import
-- Serialize and deserialize profiles as human-readable JSON
-- Round-trip complete profile configuration through automated tests
-- Apply profiles directly to JSON Lines imports
-- Preview a bounded set of source records without changing the active investigation session
-- Return preview records, source metadata, counts, truncation state, and import diagnostics through the existing import-result model
-
-These profile capabilities are currently implemented and tested at the service/importer layer. The desktop workflow for configuring, validating, saving, loading, and previewing profiles is the next development phase.
+- Apply profiles directly to JSON Lines imports and round-trip complete profile configuration through automated tests
+- Select or drag-and-drop a source file before import and display a likely-format suggestion
+- Create a fresh source-derived profile with automatic custom-field detection
+- Preview a bounded set of mapped records without changing the active investigation session
+- Display mapped custom fields under user-defined names while retaining residual attributes separately
+- Inspect the complete raw source for the selected preview record
+- Keep the last valid preview visible while temporarily invalid edits are corrected
+- Resize preview columns to keep long values such as messages readable
+- Save reusable profiles and load them only after structural and semantic validation
+- Retain an intentional profile when switching source files so compatibility can be checked without silently resetting configuration
 
 ### Investigation Workflow
 
@@ -99,33 +111,41 @@ These profile capabilities are currently implemented and tested at the service/i
 ### Export, Samples, and Verification
 
 - Export the currently visible investigation records to CSV
-- Preserve canonical and dynamic custom-attribute columns in CSV output
-- Use deterministic custom-column ordering and blank cells for attributes absent from individual records
+- Use user-facing canonical column names and configured custom-field names in CSV output
+- Preserve deterministic custom-column ordering and blank cells for attributes absent from individual records
 - Retain CSV escaping and compact JSON serialization for structured custom values
-- Include demonstration files for testing and portfolio review
+- Include demonstration logs and reusable import profiles for testing and portfolio review
 - Build and test on Windows and Linux through GitHub Actions
-- Produce portable Windows x64, Linux AppImage, and sample-log packages
+- Produce portable Windows x64, Linux AppImage, and platform-neutral sample packages
 - Smoke-test packaged Windows and Linux applications in CI
 
 The desktop UI consumes `InvestigationRecord` data directly for the primary table, filtering, searching, selected-record inspection, and CSV export. Existing telemetry-oriented summary and timeline components remain connected through a compatibility adapter while later phases continue replacing legacy assumptions where useful.
 
 ## Screenshots
 
+The `v0.6.0` screenshots use `dynamic-attributes-session.jsonl` with the matching `dynamic-attributes-session.json` profile, showing the same mapped custom fields through configuration, investigation, filtering, and export.
+
+### Import Configuration
+
+The import workflow combines reusable profile controls with mapping-aware source preview, custom-field naming, raw-source inspection, and validation before records are loaded into the investigation workspace.
+
+![TraceScope Import Configuration](docs/screenshots/tracescope-import-configuration.png)
+
 ### TraceScope Dashboard
 
-The main dashboard combines session summary information, filtering controls, an event-count timeline, the investigation table, grouped issue counts, and selected-record details.
+The main dashboard combines session summary information, filtering controls, a multi-minute event timeline, dynamic custom-field columns, grouped issue counts, and selected-record details.
 
 ![TraceScope Dashboard](docs/screenshots/tracescope-dashboard.png)
 
 ### Filtered Warnings
 
-Severity, subsystem, and text filters update the event table, summary information, grouped issue panel, and timeline chart together.
+Severity, subsystem, and text filters update the investigation table, summary information, grouped issue panel, timeline chart, and visible custom-field data together.
 
 ![TraceScope Filtered Warnings](docs/screenshots/tracescope-filtered-warnings.png)
 
 ### Exported CSV
 
-The export workflow writes the currently filtered investigation-record set to CSV, preserving canonical fields and the custom attributes present in the visible records.
+The export workflow writes the currently filtered investigation-record set to CSV using user-facing canonical headers and the configured names of custom fields.
 
 ![TraceScope Exported CSV](docs/screenshots/tracescope-exported-csv.png)
 
@@ -183,8 +203,9 @@ Completed expansion milestones:
 | `v0.4.0` | Qt model/view architecture and dynamic custom-attribute UI |
 | `v0.4.1` | Investigation-record CSV export with dynamic attributes |
 | `v0.5.0` | Versioned import profiles, validation, serialization, profile-aware importing, and preview logic |
+| `v0.6.0` | Desktop import configuration, mapping-aware preview, reusable profile save/load, and sample profiles |
 
-The next phase is **Import Configuration Interface**, which will expose the implemented profile and preview services through the desktop workflow. Planned later phases add additional built-in formats, responsive large-file processing, multi-session investigations, advanced filtering/navigation, findings, deterministic analytics, session comparison, persistence, live file following, and broader reporting.
+The next phase is **Additional Built-In Formats**, beginning with CSV and TSV support. Planned later phases add structured JSON and plain-text formats, responsive large-file processing, multi-session investigations, advanced filtering/navigation, findings, deterministic analytics, session comparison, persistence, live file following, and broader reporting.
 
 See the [TraceScope Expansion Roadmap](docs/expansion-roadmap.md) for the detailed architecture, phase deliverables, release discipline, and scope boundaries.
 
@@ -225,7 +246,8 @@ packaging/
     ├── tracescope.desktop         # Linux desktop metadata
     └── tracescope.svg             # Application icon
 
-samples/                           # Demonstration JSON Lines sessions
+samples/                           # Demonstration logs and reusable profiles
+└── profiles/                      # Versioned sample import profiles
 
 src/
 ├── analysis/                      # Grouped issue and timeline analysis
@@ -279,7 +301,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-The current CTest suite contains 17 executables:
+The current CTest suite contains 18 executables:
 
 - `ParserTests`
 - `RecordSeverityTests`
@@ -298,8 +320,9 @@ The current CTest suite contains 17 executables:
 - `ImportProfileValidatorTests`
 - `ImportProfileSerializationTests`
 - `ImportPreviewServiceTests`
+- `ImportFormatSuggestionServiceTests`
 
-Coverage includes flexible-record parsing and identity, import results and diagnostics, configurable JSON mappings, import-profile behavior and validation, JSON profile serialization/round trips, bounded profile-aware previews, legacy compatibility, filtering and analysis, dynamic CSV export, Qt model/view behavior, proxy/source mapping, and controller coordination.
+Coverage includes flexible-record parsing and identity, import results and diagnostics, configurable JSON mappings, import-profile behavior and validation, JSON profile serialization/round trips, bounded profile-aware previews, format suggestion, legacy compatibility, filtering and analysis, dynamic CSV export, Qt model/view behavior, proxy/source mapping, and controller coordination.
 
 The same CTest suite runs in GitHub Actions on Windows and Linux.
 
@@ -307,9 +330,9 @@ The same CTest suite runs in GitHub Actions on Windows and Linux.
 
 The GitHub Actions workflow runs three parallel jobs with read-only repository permissions:
 
-- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.5.0-windows-x64.zip`
-- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.5.0-linux-x86_64.AppImage`
-- **Sample Logs:** verifies and packages the repository samples as `TraceScope-v0.5.0-samples.zip`
+- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.6.0-windows-x64.zip`
+- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.6.0-linux-x86_64.AppImage`
+- **Samples:** verifies and packages the repository demonstration logs and import profiles as `TraceScope-v0.6.0-samples.zip`
 
 Workflow artifacts validate candidate packages. Approved packages are attached permanently to GitHub Releases.
 

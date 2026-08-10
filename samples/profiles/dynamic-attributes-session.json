@@ -1,0 +1,78 @@
+{
+    "schemaVersion": 1,
+    "name": "Dynamic Attributes Session",
+    "importerId": "json-lines",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Database",
+            "sourcePath": "database"
+        },
+        {
+            "name": "Dependency",
+            "sourcePath": "dependency"
+        },
+        {
+            "name": "Environment",
+            "sourcePath": "environment"
+        },
+        {
+            "name": "Fallback Mode",
+            "sourcePath": "fallbackMode"
+        },
+        {
+            "name": "Host",
+            "sourcePath": "host"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "latencyMs"
+        },
+        {
+            "name": "Pool Utilization (%)",
+            "sourcePath": "poolUtilizationPercent"
+        },
+        {
+            "name": "Process ID",
+            "sourcePath": "processId"
+        },
+        {
+            "name": "Provider",
+            "sourcePath": "provider"
+        },
+        {
+            "name": "Queue Depth",
+            "sourcePath": "queueDepth"
+        },
+        {
+            "name": "Region",
+            "sourcePath": "region"
+        },
+        {
+            "name": "Retry Attempt",
+            "sourcePath": "retryAttempt"
+        },
+        {
+            "name": "Status Code",
+            "sourcePath": "statusCode"
+        },
+        {
+            "name": "Validation Rule",
+            "sourcePath": "validationRule"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}
