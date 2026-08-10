@@ -1,0 +1,66 @@
+{
+    "schemaVersion": 1,
+    "name": "Telemetry Session",
+    "importerId": "json-lines",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Database",
+            "sourcePath": "database"
+        },
+        {
+            "name": "Duration (ms)",
+            "sourcePath": "durationMs"
+        },
+        {
+            "name": "Environment",
+            "sourcePath": "environment"
+        },
+        {
+            "name": "Field",
+            "sourcePath": "field"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "latencyMs"
+        },
+        {
+            "name": "Processed Count",
+            "sourcePath": "processedCount"
+        },
+        {
+            "name": "Record Count",
+            "sourcePath": "recordCount"
+        },
+        {
+            "name": "Rejected Count",
+            "sourcePath": "rejectedCount"
+        },
+        {
+            "name": "Retry Attempt",
+            "sourcePath": "retryAttempt"
+        },
+        {
+            "name": "Source",
+            "sourcePath": "source"
+        },
+        {
+            "name": "Validation Profile",
+            "sourcePath": "validationProfile"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}
