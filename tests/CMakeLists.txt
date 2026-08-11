@@ -21,6 +21,8 @@ qt_add_executable(ParserTests
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
 )
 
 target_link_libraries(ParserTests
@@ -187,6 +189,8 @@ qt_add_executable(JsonLinesImporterTests
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
     ../src/importing/ImportProfile.h
@@ -407,6 +411,8 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
 
     ../src/importing/DelimitedTextImporter.h
     ../src/importing/DelimitedTextImporter.cpp

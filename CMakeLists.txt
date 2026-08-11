@@ -74,6 +74,8 @@ qt_add_executable(TraceScope
     src/importing/BuiltInImporterRegistry.cpp
     src/importing/DelimitedTextImporter.h
     src/importing/DelimitedTextImporter.cpp
+    src/importing/JsonObjectRecordMapper.h
+    src/importing/JsonObjectRecordMapper.cpp
 
 )
 
