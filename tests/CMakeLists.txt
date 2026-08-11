@@ -466,3 +466,45 @@ add_test(
     NAME ImportFormatSuggestionServiceTests
     COMMAND ImportFormatSuggestionServiceTests
 )
+
+qt_add_executable(
+    StructuredJsonImporterTests
+
+    StructuredJsonImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/StructuredJsonImportConfig.h
+    ../src/importing/StructuredJsonImporter.h
+    ../src/importing/StructuredJsonImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    StructuredJsonImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME StructuredJsonImporterTests
+    COMMAND StructuredJsonImporterTests
+)
