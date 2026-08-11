@@ -9,6 +9,9 @@ class EventTimelineAnalyzerTests : public QObject
 private slots:
     void groupEventsByMinuteCountsEventsBySeverity();
     void groupEventsByMinuteSkipsInvalidTimestamps();
+    void groupEventsByMinuteFillsMissingMinutes();
+    void filteredEventsPreserveFullTimelineRange();
+    void groupEventsByMinuteHandlesMidnightBoundary();
 };
 
 void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
@@ -95,6 +98,187 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteSkipsInvalidTimestamps()
     QCOMPARE(buckets.size(), 1);
     QCOMPARE(buckets[0].label, QString("11:04"));
     QCOMPARE(buckets[0].errorCount, 1);
+}
+
+void EventTimelineAnalyzerTests::groupEventsByMinuteFillsMissingMinutes()
+{
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-07-07T11:02:15.000Z",
+            "INFO",
+            "Startup",
+            "START",
+            "Started",
+            "SYS-1"
+        },
+        {
+            "2026-07-07T11:05:20.000Z",
+            "WARN",
+            "Tracking",
+            "LATE_EVENT",
+            "Late event",
+            "TRK-1"
+        }
+    };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
+
+    QCOMPARE(buckets.size(), 4);
+
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral("11:02")
+        );
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral("11:03")
+        );
+    QCOMPARE(
+        buckets.at(2).label,
+        QStringLiteral("11:04")
+        );
+    QCOMPARE(
+        buckets.at(3).label,
+        QStringLiteral("11:05")
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(2).totalCount(),
+        0
+        );
+}
+
+void EventTimelineAnalyzerTests::filteredEventsPreserveFullTimelineRange()
+{
+    const QVector<TelemetryEvent>
+        allEvents = {
+            {
+                "2026-07-07T11:02:15.000Z",
+                "INFO",
+                "Startup",
+                "START",
+                "Started",
+                "SYS-1"
+            },
+            {
+                "2026-07-07T11:03:25.000Z",
+                "WARN",
+                "Tracking",
+                "WARNING",
+                "Warning",
+                "TRK-1"
+            },
+            {
+                "2026-07-07T11:05:20.000Z",
+                "INFO",
+                "Shutdown",
+                "STOP",
+                "Stopped",
+                "SYS-1"
+            }
+        };
+
+    const QVector<TelemetryEvent>
+        filteredEvents = {
+            allEvents.at(1)
+};
+
+EventTimelineAnalyzer analyzer;
+
+const auto buckets =
+    analyzer.groupEventsByMinute(
+        filteredEvents,
+        allEvents
+        );
+
+QCOMPARE(buckets.size(), 4);
+
+QCOMPARE(
+    buckets.at(0).totalCount(),
+    0
+    );
+
+QCOMPARE(
+    buckets.at(1).warningCount,
+    1
+    );
+
+QCOMPARE(
+    buckets.at(2).totalCount(),
+    0
+    );
+
+QCOMPARE(
+    buckets.at(3).totalCount(),
+    0
+    );
+}
+
+void EventTimelineAnalyzerTests::groupEventsByMinuteHandlesMidnightBoundary()
+{
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-07-07T23:59:30.000Z",
+            "INFO",
+            "System",
+            "BEFORE_MIDNIGHT",
+            "Before midnight",
+            "SYS-1"
+        },
+        {
+            "2026-07-08T00:01:10.000Z",
+            "ERROR",
+            "System",
+            "AFTER_MIDNIGHT",
+            "After midnight",
+            "SYS-1"
+        }
+    };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
+
+    QCOMPARE(buckets.size(), 3);
+
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral(
+            "2026-07-07 23:59"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral(
+            "2026-07-08 00:00"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(2).label,
+        QStringLiteral(
+            "2026-07-08 00:01"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        0
+        );
 }
 
 QTEST_MAIN(EventTimelineAnalyzerTests)

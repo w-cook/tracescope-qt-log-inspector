@@ -335,19 +335,36 @@ void MainWindow::applyFilters()
     eventTable->clearSelection();
     clearEventDetail();
 
-    const QVector<InvestigationRecord> records =
+    const QVector<InvestigationRecord>
+        visibleRecords =
         investigationController->visibleRecords();
 
-    const QVector<TelemetryEvent> events =
-        toTelemetryEvents(records);
+    const QVector<TelemetryEvent>
+        visibleEvents =
+        toTelemetryEvents(
+            visibleRecords
+            );
+
+    const QVector<TelemetryEvent>
+        allEvents =
+        toTelemetryEvents(
+            investigationController
+                ->allRecords()
+            );
 
     updateSummary(
-        events,
+        visibleEvents,
         currentFilePath
         );
 
-    updateIssueSummary(events);
-    updateTimelineChart(events);
+    updateIssueSummary(
+        visibleEvents
+        );
+
+    updateTimelineChart(
+        visibleEvents,
+        allEvents
+        );
 }
 
 void MainWindow::refreshSubsystemFilterOptions()
@@ -680,9 +697,16 @@ QGroupBox *MainWindow::buildTimelinePanel()
     return timelineGroup;
 }
 
-void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
+void MainWindow::updateTimelineChart(
+    const QVector<TelemetryEvent> &events,
+    const QVector<TelemetryEvent> &rangeEvents
+    )
 {
-    const auto buckets = timelineAnalyzer.groupEventsByMinute(events);
+    const auto buckets =
+        timelineAnalyzer.groupEventsByMinute(
+            events,
+            rangeEvents
+            );
 
     if (buckets.isEmpty()) {
         auto *chart = new QChart();

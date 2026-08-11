@@ -38,6 +38,9 @@ public:
 
     QVector<InvestigationRecord> visibleRecords() const;
 
+    const QVector<InvestigationRecord> &
+    allRecords() const;
+
     const InvestigationRecord *recordForProxyIndex(
         const QModelIndex &proxyIndex
         ) const;

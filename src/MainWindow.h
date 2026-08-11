@@ -95,6 +95,7 @@ private:
 
     QGroupBox *buildTimelinePanel();
     void updateTimelineChart(
-        const QVector<TelemetryEvent> &events
+        const QVector<TelemetryEvent> &events,
+        const QVector<TelemetryEvent> &rangeEvents
         );
 };
