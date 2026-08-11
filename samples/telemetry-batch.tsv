@@ -1,0 +1,15 @@
+event_time	priority	component	event_id	device_id	details	node	availability_zone	batch_id	elapsed_ms	health_state
+2026-08-11 10:15:03.115	NOTICE	Ingest	BATCH_OPENED	ING-01	Telemetry batch opened	collector-a	zone-1	BATCH-4401	24	steady
+2026-08-11 10:15:42.908	NOTICE	Ingest	EVENT_ACCEPTED	ING-01	First event accepted	collector-a	zone-1	BATCH-4401	11	steady
+2026-08-11 10:16:17.450	CAUTION	Parser	SCHEMA_FALLBACK	PRS-03	Fallback schema selected for legacy payload	parser-03	zone-1	BATCH-4401	86	steady
+2026-08-11 10:16:58.022	NOTICE	Parser	PARSE_COMPLETE	PRS-03	Legacy payload parsed successfully	parser-03	zone-1	BATCH-4401	132	steady
+2026-08-11 10:17:26.774	FAIL	Storage	WRITE_RETRY	STO-02	Initial storage write failed	storage-02	zone-2	BATCH-4401	615	degraded
+2026-08-11 10:17:59.311	CAUTION	Storage	WRITE_RETRYING	STO-02	Retrying storage write	storage-02	zone-2	BATCH-4401	27	degraded
+2026-08-11 10:18:34.667	NOTICE	Storage	WRITE_RECOVERED	STO-02	Storage write succeeded on retry	storage-02	zone-2	BATCH-4401	242	steady
+2026-08-11 10:19:08.053	NOTICE	Analyzer	WINDOW_OPENED	ANL-04	Analysis window started	analyzer-04	zone-2	BATCH-4401	8	steady
+2026-08-11 10:19:51.496	CAUTION	Analyzer	ANOMALY_FOUND	ANL-04	Latency anomaly detected	analyzer-04	zone-2	BATCH-4401	391	elevated
+2026-08-11 10:20:29.820	FAIL	Notifier	DELIVERY_FAILED	NTF-02	Primary notification channel failed	notify-02	zone-3	BATCH-4401	994	degraded
+2026-08-11 10:21:04.275	NOTICE	Notifier	FAILOVER_SENT	NTF-02	Notification sent through fallback channel	notify-02	zone-3	BATCH-4401	184	steady
+2026-08-11 10:21:47.630	FATAL	Health	NODE_UNRESPONSIVE	NODE-09	Worker node stopped responding	health-01	zone-3	BATCH-4402	3000	critical
+2026-08-11 10:22:33.140	NOTICE	Health	NODE_RECOVERED	NODE-09	Worker node heartbeat restored	health-01	zone-3	BATCH-4402	96	steady
+2026-08-11 10:23:11.505	NOTICE	Ingest	BATCH_CLOSED	ING-01	Telemetry batch closed	collector-a	zone-1	BATCH-4401	15	steady

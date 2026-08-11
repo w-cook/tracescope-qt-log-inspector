@@ -14,6 +14,8 @@ private slots:
     void jsonlExtensionSuggestsJsonLines();
     void ndjsonExtensionSuggestsJsonLines();
     void jsonObjectLinesSuggestJsonLines();
+    void csvExtensionSuggestsCsv();
+    void tsvExtensionSuggestsTsv();
     void malformedContentHasNoSuggestion();
     void jsonArrayHasNoSuggestion();
     void missingFileHasNoSuggestion();
@@ -139,6 +141,84 @@ void
     QCOMPARE(
         suggestion.importerId,
         QStringLiteral("json-lines")
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    csvExtensionSuggestsCsv()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral("sample.csv")
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "timestamp,level,message\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(filePath);
+
+    QVERIFY(suggestion.hasSuggestion());
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("csv")
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral("CSV")
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    tsvExtensionSuggestsTsv()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral("sample.tsv")
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "timestamp\tlevel\tmessage\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(filePath);
+
+    QVERIFY(suggestion.hasSuggestion());
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("tsv")
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral("TSV")
         );
 }
 

@@ -408,6 +408,9 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
 
+    ../src/importing/DelimitedTextImporter.h
+    ../src/importing/DelimitedTextImporter.cpp
+
     ../src/importing/ILogImporter.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp

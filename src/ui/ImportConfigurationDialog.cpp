@@ -1001,7 +1001,11 @@ void ImportConfigurationDialog::browseForFile()
             tr("Select Log File"),
             QString(),
             tr(
-                "Log Files (*.jsonl *.ndjson *.log *.txt);;"
+                "Supported Log Files "
+                "(*.jsonl *.ndjson *.csv *.tsv *.log *.txt);;"
+                "JSON Lines (*.jsonl *.ndjson);;"
+                "Delimited Text (*.csv *.tsv);;"
+                "Log and Text Files (*.log *.txt);;"
                 "All Files (*)"
                 )
             );
@@ -2698,10 +2702,26 @@ void ImportConfigurationDialog::createProfileFromSource(
     workingProfile =
         ImportProfile();
 
-    workingProfile.name =
-        QStringLiteral(
-            "Default JSON Lines"
+    const ImportFormatSuggestion suggestion =
+        formatSuggestionService.suggestForFile(
+            filePath
             );
+
+    if (suggestion.hasSuggestion()) {
+        workingProfile.importerId =
+            suggestion.importerId;
+
+        workingProfile.name =
+            QStringLiteral("Default %1")
+                .arg(
+                    suggestion.displayName
+                    );
+    } else {
+        workingProfile.name =
+            QStringLiteral(
+                "Default JSON Lines"
+                );
+    }
 
     profileIsUserConfigured = false;
 

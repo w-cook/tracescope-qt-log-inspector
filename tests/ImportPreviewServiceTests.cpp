@@ -11,6 +11,8 @@ class ImportPreviewServiceTests : public QObject
 
 private slots:
     void validProfilePreviewsRecords();
+    void csvProfilePreviewsRecords();
+    void tsvProfilePreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -88,6 +90,131 @@ void ImportPreviewServiceTests::validProfilePreviewsRecords()
         );
 
     QVERIFY(!result.sourceTruncated);
+}
+
+void ImportPreviewServiceTests::csvProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "timestamp,level,message,requestId\n"
+                "2026-08-11T08:00:00Z,INFO,"
+                "First,REQ-1\n"
+                "2026-08-11T08:01:00Z,WARN,"
+                "Second,REQ-2\n"
+                )
+            );
+
+    QVERIFY(!path.isEmpty());
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Preview CSV");
+
+    profile.importerId =
+        QStringLiteral("csv");
+
+    const ImportPreviewResult result =
+        ImportPreviewService().previewFile(
+            path,
+            profile
+            );
+
+    QVERIFY(result.canDisplayPreview());
+
+    QCOMPARE(
+        result.importResult
+            .processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .message.value(),
+        QStringLiteral("First")
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(1)
+            .severity.value(),
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .customAttributes
+            .value(
+                QStringLiteral("requestId")
+                )
+            .toString(),
+        QStringLiteral("REQ-1")
+        );
+}
+
+void ImportPreviewServiceTests::tsvProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "timestamp\tlevel\tmessage\n"
+                "2026-08-11T08:00:00Z\tERROR\t"
+                "Database unavailable\n"
+                )
+            );
+
+    QVERIFY(!path.isEmpty());
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Preview TSV");
+
+    profile.importerId =
+        QStringLiteral("tsv");
+
+    const ImportPreviewResult result =
+        ImportPreviewService().previewFile(
+            path,
+            profile
+            );
+
+    QVERIFY(result.canDisplayPreview());
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.first()
+            .message.value(),
+        QStringLiteral(
+            "Database unavailable"
+            )
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.first()
+            .severity.value(),
+        RecordSeverity::Error
+        );
 }
 
 void ImportPreviewServiceTests::previewHonorsRecordLimit()
@@ -200,11 +327,13 @@ void ImportPreviewServiceTests::unsupportedImporterPreventsPreview()
         validPreviewProfile();
 
     profile.importerId =
-        QStringLiteral("csv");
+        QStringLiteral(
+            "unsupported-importer"
+            );
 
     const ImportPreviewResult result =
         ImportPreviewService().previewFile(
-            QStringLiteral("anything.csv"),
+            QStringLiteral("anything.log"),
             profile
             );
 

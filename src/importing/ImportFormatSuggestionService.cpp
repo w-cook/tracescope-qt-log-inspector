@@ -17,6 +17,19 @@ ImportFormatSuggestion jsonLinesSuggestion(
         reason
     };
 }
+
+ImportFormatSuggestion delimitedTextSuggestion(
+    const QString &importerId,
+    const QString &displayName,
+    const QString &reason
+    )
+{
+    return {
+        importerId,
+        displayName,
+        reason
+    };
+}
 }
 
 ImportFormatSuggestion
@@ -40,6 +53,28 @@ ImportFormatSuggestionService::suggestForFile(
             QStringLiteral(
                 "The file extension indicates "
                 "newline-delimited JSON."
+                )
+            );
+    }
+
+    if (suffix == QStringLiteral("csv")) {
+        return delimitedTextSuggestion(
+            QStringLiteral("csv"),
+            QStringLiteral("CSV"),
+            QStringLiteral(
+                "The file extension indicates "
+                "comma-separated values."
+                )
+            );
+    }
+
+    if (suffix == QStringLiteral("tsv")) {
+        return delimitedTextSuggestion(
+            QStringLiteral("tsv"),
+            QStringLiteral("TSV"),
+            QStringLiteral(
+                "The file extension indicates "
+                "tab-separated values."
                 )
             );
     }

@@ -1,0 +1,15 @@
+timestamp,level,subsystem,eventCode,entityId,message,host,region,duration_ms,correlation_id,deployment_ring
+2026-08-11T09:00:05.120Z,INFO,Gateway,REQ_RECEIVED,GW-01,Request accepted,edge-01,us-east,42,CORR-1001,blue
+2026-08-11T09:00:48.430Z,WARN,Gateway,RATE_LIMIT,GW-01,Client approaching rate limit,edge-01,us-east,18,CORR-1002,blue
+2026-08-11T09:01:12.015Z,INFO,Auth,TOKEN_VALIDATED,AUTH-02,Access token validated,auth-02,us-east,31,CORR-1003,blue
+2026-08-11T09:01:57.880Z,ERROR,Database,QUERY_TIMEOUT,DB-PRIMARY,Inventory lookup timed out,db-01,us-east,1250,CORR-1004,blue
+2026-08-11T09:02:23.640Z,WARN,Database,RETRY_SCHEDULED,DB-PRIMARY,Retry scheduled after transient timeout,db-01,us-east,12,CORR-1004,blue
+2026-08-11T09:02:54.210Z,INFO,Database,QUERY_RECOVERED,DB-PRIMARY,Retry completed successfully,db-01,us-east,287,CORR-1004,blue
+2026-08-11T09:03:19.905Z,DEBUG,Worker,JOB_START,WRK-07,Background reconciliation started,worker-07,us-east,4,CORR-1005,green
+2026-08-11T09:04:02.770Z,INFO,Worker,JOB_PROGRESS,WRK-07,"Processed 250 records, 18 remaining",worker-07,us-east,638,CORR-1005,green
+2026-08-11T09:04:49.330Z,ERROR,Cache,CACHE_MISS_SPIKE,CACHE-01,Cache miss rate exceeded threshold,cache-01,us-east,73,CORR-1006,green
+2026-08-11T09:05:31.500Z,INFO,Cache,CACHE_WARMED,CACHE-01,Frequently requested keys repopulated,cache-01,us-east,416,CORR-1006,green
+2026-08-11T09:06:14.040Z,WARN,Gateway,UPSTREAM_SLOW,GW-02,Upstream response exceeded 800 ms,edge-02,us-west,842,CORR-1007,green
+2026-08-11T09:07:03.615Z,CRITICAL,Gateway,UPSTREAM_UNAVAILABLE,GW-02,Primary upstream endpoint unavailable,edge-02,us-west,3000,CORR-1008,green
+2026-08-11T09:07:46.090Z,INFO,Gateway,FAILOVER_COMPLETE,GW-02,Traffic moved to secondary upstream,edge-02,us-west,214,CORR-1008,green
+2026-08-11T09:08:28.725Z,INFO,Worker,JOB_COMPLETE,WRK-07,Background reconciliation completed,worker-07,us-east,19,CORR-1005,green
