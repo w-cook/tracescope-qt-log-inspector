@@ -191,6 +191,13 @@ QByteArray ImportProfileSerializer::serialize(
         profile.importerId
         );
 
+    if (!profile.recordPath.isEmpty()) {
+        root.insert(
+            QStringLiteral("recordPath"),
+            profile.recordPath
+            );
+    }
+
     root.insert(
         QStringLiteral("canonicalFields"),
         serializeCanonicalFields(
@@ -393,6 +400,29 @@ ImportProfileSerializer::deserialize(
                 "The import profile importerId must be a string."
                 )
             );
+    }
+
+    if (root.contains(
+            QStringLiteral("recordPath")
+            )) {
+        const QJsonValue recordPathValue =
+            root.value(
+                QStringLiteral("recordPath")
+                );
+
+        if (!recordPathValue.isString()) {
+            return failure(
+                QStringLiteral(
+                    "INVALID_RECORD_PATH"
+                    ),
+                QStringLiteral(
+                    "The import profile recordPath must be a string."
+                    )
+                );
+        }
+
+        profile.recordPath =
+            recordPathValue.toString();
     }
 
     if (!readCanonicalFields(

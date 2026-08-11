@@ -40,6 +40,8 @@ struct ImportProfile
     QString importerId =
         QStringLiteral("json-lines");
 
+    QString recordPath;
+
     CanonicalFieldMappings canonicalFields;
 
     QList<CustomFieldMapping>

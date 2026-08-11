@@ -142,6 +142,20 @@ ImportProfileValidator::validate(
             );
     }
 
+    if (!isValidSourcePath(
+            profile.recordPath
+            )) {
+        appendIssue(
+            result,
+            QStringLiteral(
+                "INVALID_RECORD_PATH"
+                ),
+            QStringLiteral(
+                "The import profile record path is invalid."
+                )
+            );
+    }
+
     validateCanonicalPath(
         result,
         profile.canonicalFields.timestampPath,
