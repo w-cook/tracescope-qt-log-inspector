@@ -42,6 +42,8 @@ struct ImportProfile
 
     QString recordPath;
 
+    QString regexPattern;
+
     CanonicalFieldMappings canonicalFields;
 
     QList<CustomFieldMapping>

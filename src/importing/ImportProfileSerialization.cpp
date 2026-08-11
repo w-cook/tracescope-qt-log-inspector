@@ -198,6 +198,13 @@ QByteArray ImportProfileSerializer::serialize(
             );
     }
 
+    if (!profile.regexPattern.isEmpty()) {
+        root.insert(
+            QStringLiteral("regexPattern"),
+            profile.regexPattern
+            );
+    }
+
     root.insert(
         QStringLiteral("canonicalFields"),
         serializeCanonicalFields(
@@ -423,6 +430,29 @@ ImportProfileSerializer::deserialize(
 
         profile.recordPath =
             recordPathValue.toString();
+    }
+
+    if (root.contains(
+            QStringLiteral("regexPattern")
+            )) {
+        const QJsonValue regexPatternValue =
+            root.value(
+                QStringLiteral("regexPattern")
+                );
+
+        if (!regexPatternValue.isString()) {
+            return failure(
+                QStringLiteral(
+                    "INVALID_REGEX_PATTERN_TYPE"
+                    ),
+                QStringLiteral(
+                    "The import profile regexPattern must be a string."
+                    )
+                );
+        }
+
+        profile.regexPattern =
+            regexPatternValue.toString();
     }
 
     if (!readCanonicalFields(

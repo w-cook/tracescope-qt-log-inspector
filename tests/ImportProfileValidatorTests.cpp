@@ -23,6 +23,10 @@ private slots:
     void emptyRecordPathIsAllowed();
     void validRecordPathPassesValidation();
     void malformedRecordPathFailsValidation();
+    void regexPatternIsNotRequiredForOtherImporters();
+    void regexImporterRequiresPattern();
+    void validRegexPatternPassesValidation();
+    void invalidRegexPatternFailsValidation();
 };
 
 ImportProfile validProfile()
@@ -308,6 +312,111 @@ void ImportProfileValidatorTests::
         if (issue.code ==
             QStringLiteral(
                 "INVALID_RECORD_PATH"
+                )) {
+            foundIssue = true;
+            break;
+        }
+    }
+
+    QVERIFY(foundIssue);
+}
+
+void ImportProfileValidatorTests::
+    regexPatternIsNotRequiredForOtherImporters()
+{
+    ImportProfile profile =
+        validProfile();
+
+    profile.regexPattern.clear();
+
+    const ProfileValidationResult result =
+        ImportProfileValidator()
+            .validate(profile);
+
+    QVERIFY(result.isValid());
+}
+
+void ImportProfileValidatorTests::
+    regexImporterRequiresPattern()
+{
+    ImportProfile profile =
+        validProfile();
+
+    profile.importerId =
+        QStringLiteral("regex-text");
+
+    profile.regexPattern.clear();
+
+    const ProfileValidationResult result =
+        ImportProfileValidator()
+            .validate(profile);
+
+    QVERIFY(!result.isValid());
+
+    bool foundIssue = false;
+
+    for (const ProfileValidationIssue &issue
+         : result.issues) {
+        if (issue.code ==
+            QStringLiteral(
+                "REGEX_PATTERN_REQUIRED"
+                )) {
+            foundIssue = true;
+            break;
+        }
+    }
+
+    QVERIFY(foundIssue);
+}
+
+void ImportProfileValidatorTests::
+    validRegexPatternPassesValidation()
+{
+    ImportProfile profile =
+        validProfile();
+
+    profile.importerId =
+        QStringLiteral("regex-text");
+
+    profile.regexPattern =
+        QStringLiteral(
+            R"(^(?<timestamp>\S+)\s+\[(?<severity>\w+)\]\s+(?<message>.*)$)"
+            );
+
+    const ProfileValidationResult result =
+        ImportProfileValidator()
+            .validate(profile);
+
+    QVERIFY(result.isValid());
+}
+
+void ImportProfileValidatorTests::
+    invalidRegexPatternFailsValidation()
+{
+    ImportProfile profile =
+        validProfile();
+
+    profile.importerId =
+        QStringLiteral("regex-text");
+
+    profile.regexPattern =
+        QStringLiteral(
+            R"((?<timestamp>\S+)"
+            );
+
+    const ProfileValidationResult result =
+        ImportProfileValidator()
+            .validate(profile);
+
+    QVERIFY(!result.isValid());
+
+    bool foundIssue = false;
+
+    for (const ProfileValidationIssue &issue
+         : result.issues) {
+        if (issue.code ==
+            QStringLiteral(
+                "INVALID_REGEX_PATTERN"
                 )) {
             foundIssue = true;
             break;
