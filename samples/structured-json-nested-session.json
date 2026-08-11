@@ -1,0 +1,324 @@
+{
+    "exportMetadata": {
+        "sourceSystem": "operations-api",
+        "environment": "staging",
+        "sessionId": "SESSION-STRUCTURED-01",
+        "generatedAt": "2026-08-11T11:15:00Z"
+    },
+    "data": {
+        "records": [
+            {
+                "observedAt": "2026-08-11T11:00:04.120Z",
+                "priority": "NOTICE",
+                "service": {
+                    "name": "Orders"
+                },
+                "event": {
+                    "code": "ORDER_RECEIVED"
+                },
+                "resource": {
+                    "id": "ORDER-4812"
+                },
+                "details": {
+                    "message": "Order accepted for processing"
+                },
+                "host": {
+                    "name": "orders-01"
+                },
+                "context": {
+                    "requestId": "REQ-3001",
+                    "traceId": "TRACE-A01"
+                },
+                "metrics": {
+                    "durationMs": 22
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:00:47.530Z",
+                "priority": "CAUTION",
+                "service": {
+                    "name": "Orders"
+                },
+                "event": {
+                    "code": "PAYMENT_SLOW"
+                },
+                "resource": {
+                    "id": "ORDER-4813"
+                },
+                "details": {
+                    "message": "Payment authorization latency elevated"
+                },
+                "host": {
+                    "name": "orders-01"
+                },
+                "context": {
+                    "requestId": "REQ-3002",
+                    "traceId": "TRACE-A02"
+                },
+                "metrics": {
+                    "durationMs": 812
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:01:19.875Z",
+                "priority": "NOTICE",
+                "service": {
+                    "name": "Inventory"
+                },
+                "event": {
+                    "code": "RESERVATION_CREATED"
+                },
+                "resource": {
+                    "id": "SKU-8841"
+                },
+                "details": {
+                    "message": "Inventory reservation created"
+                },
+                "host": {
+                    "name": "inventory-02"
+                },
+                "context": {
+                    "requestId": "REQ-3003",
+                    "traceId": "TRACE-A03"
+                },
+                "metrics": {
+                    "durationMs": 41
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:02:08.410Z",
+                "priority": "FAIL",
+                "service": {
+                    "name": "Inventory"
+                },
+                "event": {
+                    "code": "RESERVATION_TIMEOUT"
+                },
+                "resource": {
+                    "id": "SKU-8842"
+                },
+                "details": {
+                    "message": "Inventory reservation timed out"
+                },
+                "host": {
+                    "name": "inventory-02"
+                },
+                "context": {
+                    "requestId": "REQ-3004",
+                    "traceId": "TRACE-A04"
+                },
+                "metrics": {
+                    "durationMs": 2000
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:02:52.065Z",
+                "priority": "CAUTION",
+                "service": {
+                    "name": "Inventory"
+                },
+                "event": {
+                    "code": "RETRY_PENDING"
+                },
+                "resource": {
+                    "id": "SKU-8842"
+                },
+                "details": {
+                    "message": "Reservation retry queued"
+                },
+                "host": {
+                    "name": "inventory-02"
+                },
+                "context": {
+                    "requestId": "REQ-3004",
+                    "traceId": "TRACE-A04"
+                },
+                "metrics": {
+                    "durationMs": 9
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:03:36.700Z",
+                "priority": "NOTICE",
+                "service": {
+                    "name": "Inventory"
+                },
+                "event": {
+                    "code": "RESERVATION_RECOVERED"
+                },
+                "resource": {
+                    "id": "SKU-8842"
+                },
+                "details": {
+                    "message": "Reservation retry succeeded"
+                },
+                "host": {
+                    "name": "inventory-02"
+                },
+                "context": {
+                    "requestId": "REQ-3004",
+                    "traceId": "TRACE-A04"
+                },
+                "metrics": {
+                    "durationMs": 174
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:04:14.930Z",
+                "priority": "NOTICE",
+                "service": {
+                    "name": "Shipping"
+                },
+                "event": {
+                    "code": "LABEL_CREATED"
+                },
+                "resource": {
+                    "id": "SHIP-771"
+                },
+                "details": {
+                    "message": "Shipping label generated"
+                },
+                "host": {
+                    "name": "shipping-01"
+                },
+                "context": {
+                    "requestId": "REQ-3005",
+                    "traceId": "TRACE-A05"
+                },
+                "metrics": {
+                    "durationMs": 63
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:05:28.315Z",
+                "priority": "FAIL",
+                "service": {
+                    "name": "Shipping"
+                },
+                "event": {
+                    "code": "CARRIER_REJECTED"
+                },
+                "resource": {
+                    "id": "SHIP-772"
+                },
+                "details": {
+                    "message": "Carrier rejected shipment request"
+                },
+                "host": {
+                    "name": "shipping-01"
+                },
+                "context": {
+                    "requestId": "REQ-3006",
+                    "traceId": "TRACE-A06"
+                },
+                "metrics": {
+                    "durationMs": 447
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:06:03.650Z",
+                "priority": "CAUTION",
+                "service": {
+                    "name": "Shipping"
+                },
+                "event": {
+                    "code": "SECONDARY_CARRIER"
+                },
+                "resource": {
+                    "id": "SHIP-772"
+                },
+                "details": {
+                    "message": "Secondary carrier submission started"
+                },
+                "host": {
+                    "name": "shipping-01"
+                },
+                "context": {
+                    "requestId": "REQ-3006",
+                    "traceId": "TRACE-A06"
+                },
+                "metrics": {
+                    "durationMs": 17
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:07:16.080Z",
+                "priority": "FATAL",
+                "service": {
+                    "name": "Payments"
+                },
+                "event": {
+                    "code": "PROVIDER_UNAVAILABLE"
+                },
+                "resource": {
+                    "id": "PAYMENT-PROVIDER-A"
+                },
+                "details": {
+                    "message": "Primary payment provider unavailable"
+                },
+                "host": {
+                    "name": "payments-03"
+                },
+                "context": {
+                    "requestId": "REQ-3007",
+                    "traceId": "TRACE-A07"
+                },
+                "metrics": {
+                    "durationMs": 3000
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:08:25.440Z",
+                "priority": "NOTICE",
+                "service": {
+                    "name": "Payments"
+                },
+                "event": {
+                    "code": "FAILOVER_ACTIVE"
+                },
+                "resource": {
+                    "id": "PAYMENT-PROVIDER-B"
+                },
+                "details": {
+                    "message": "Payment traffic routed to backup provider"
+                },
+                "host": {
+                    "name": "payments-03"
+                },
+                "context": {
+                    "requestId": "REQ-3007",
+                    "traceId": "TRACE-A07"
+                },
+                "metrics": {
+                    "durationMs": 196
+                }
+            },
+            {
+                "observedAt": "2026-08-11T11:09:09.905Z",
+                "priority": "NOTICE",
+                "service": {
+                    "name": "Orders"
+                },
+                "event": {
+                    "code": "SESSION_STABLE"
+                },
+                "resource": {
+                    "id": "SESSION-STRUCTURED-01"
+                },
+                "details": {
+                    "message": "Service session returned to normal operation"
+                },
+                "host": {
+                    "name": "orders-01"
+                },
+                "context": {
+                    "requestId": "REQ-3008",
+                    "traceId": "TRACE-A08"
+                },
+                "metrics": {
+                    "durationMs": 31
+                }
+            }
+        ]
+    }
+}

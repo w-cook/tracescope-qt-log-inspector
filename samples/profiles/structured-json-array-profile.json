@@ -1,0 +1,38 @@
+{
+    "schemaVersion": 1,
+    "name": "Structured JSON Root Array",
+    "importerId": "structured-json",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Host",
+            "sourcePath": "host"
+        },
+        {
+            "name": "Region",
+            "sourcePath": "region"
+        },
+        {
+            "name": "Duration (ms)",
+            "sourcePath": "durationMs"
+        },
+        {
+            "name": "Correlation ID",
+            "sourcePath": "correlationId"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

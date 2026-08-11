@@ -104,11 +104,11 @@ void appendDiagnostic(
         );
 }
 
-QSet<QString> mappedTopLevelFields(
+QSet<QString> mappedSourcePaths(
     const ImportProfile &profile
     )
 {
-    QSet<QString> fields;
+    QSet<QString> paths;
 
     const QStringList canonicalPaths {
         profile.canonicalFields.timestampPath,
@@ -119,37 +119,72 @@ QSet<QString> mappedTopLevelFields(
         profile.canonicalFields.messagePath
     };
 
-    auto addTopLevelPath =
-        [&fields](const QString &path) {
-            const QString trimmedPath =
-                path.trimmed();
-
-            if (trimmedPath.isEmpty()) {
-                return;
-            }
-
-            if (!trimmedPath.contains(
-                    QLatin1Char('.')
-                    )) {
-                fields.insert(
-                    trimmedPath
-                    );
-            }
-        };
-
     for (const QString &path
          : canonicalPaths) {
-        addTopLevelPath(path);
+        const QString trimmed =
+            path.trimmed();
+
+        if (!trimmed.isEmpty()) {
+            paths.insert(trimmed);
+        }
     }
 
     for (const CustomFieldMapping &mapping
          : profile.customFields) {
-        addTopLevelPath(
-            mapping.sourcePath
-            );
+        const QString trimmed =
+            mapping.sourcePath.trimmed();
+
+        if (!trimmed.isEmpty()) {
+            paths.insert(trimmed);
+        }
     }
 
-    return fields;
+    return paths;
+}
+
+void collectUnmappedAttributes(
+    const QJsonObject &object,
+    const QString &prefix,
+    const QSet<QString> &mappedPaths,
+    QHash<QString, QVariant> &attributes
+    )
+{
+    for (auto iterator =
+         object.constBegin();
+         iterator != object.constEnd();
+         ++iterator) {
+        const QString path =
+            prefix.isEmpty()
+                ? iterator.key()
+                : QStringLiteral("%1.%2")
+                      .arg(
+                          prefix,
+                          iterator.key()
+                          );
+
+        if (mappedPaths.contains(path)) {
+            continue;
+        }
+
+        const QJsonValue value =
+            iterator.value();
+
+        if (value.isObject()) {
+            collectUnmappedAttributes(
+                value.toObject(),
+                path,
+                mappedPaths,
+                attributes
+                );
+
+            continue;
+        }
+
+        attributes.insert(
+            path,
+            value.toVariant()
+            );
+    }
 }
 
 std::optional<RecordSeverity> parseProfileSeverity(
@@ -233,26 +268,15 @@ QHash<QString, QVariant> readCustomAttributes(
     QHash<QString, QVariant> attributes;
 
     if (profile.preserveUnmappedFields) {
-        const QSet<QString> mappedFields =
-            mappedTopLevelFields(
-                profile
-                );
+        const QSet<QString> mappedPaths =
+            mappedSourcePaths(profile);
 
-        for (auto iterator =
-             object.constBegin();
-             iterator != object.constEnd();
-             ++iterator) {
-            if (mappedFields.contains(
-                    iterator.key()
-                    )) {
-                continue;
-            }
-
-            attributes.insert(
-                iterator.key(),
-                iterator.value().toVariant()
-                );
-        }
+        collectUnmappedAttributes(
+            object,
+            QString(),
+            mappedPaths,
+            attributes
+            );
     }
 
     for (const CustomFieldMapping &mapping

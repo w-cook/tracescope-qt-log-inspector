@@ -32,6 +32,7 @@ private slots:
     void customConfigMapsAlternativeTopLevelFields();
     void customConfigMapsNestedFields();
     void nestedMappingsPreserveSourceAttributes();
+    void nestedMappedFieldsDoNotCreateContainerAttributes();
     void emptyPathLeavesCanonicalFieldUnset();
     void configuredInvalidTimestampReportsWarning();
     void configuredUnmappedSeverityReportsWarning();
@@ -179,29 +180,29 @@ void JsonLinesImporterTests::importLinesPreservesCustomAttributes()
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("durationMs")
-                                   ).toInt(),
+            QStringLiteral("durationMs")
+            ).toInt(),
         184
         );
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("success")
-                                   ).toBool(),
+            QStringLiteral("success")
+            ).toBool(),
         true
         );
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("temperature")
-                                   ).toDouble(),
+            QStringLiteral("temperature")
+            ).toDouble(),
         42.5
         );
 
     const QVariantList tags =
         record.customAttributes.value(
-                                   QStringLiteral("tags")
-                                   ).toList();
+            QStringLiteral("tags")
+            ).toList();
 
     QCOMPARE(tags.size(), 2);
 
@@ -215,16 +216,19 @@ void JsonLinesImporterTests::importLinesPreservesCustomAttributes()
         QStringLiteral("completed")
         );
 
-    const QVariantMap context =
-        record.customAttributes.value(
-                                   QStringLiteral("context")
-                                   ).toMap();
-
     QCOMPARE(
-        context.value(
-                   QStringLiteral("region")
-                   ).toString(),
+        record.customAttributes.value(
+            QStringLiteral(
+                "context.region"
+                )
+            ).toString(),
         QStringLiteral("east")
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("context")
+            )
         );
 
     QVERIFY(
@@ -279,22 +283,22 @@ void JsonLinesImporterTests::importLinesAcceptsMissingCanonicalFields()
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("requestId")
-                                   ).toString(),
+            QStringLiteral("requestId")
+            ).toString(),
         QStringLiteral("REQ-204")
         );
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("durationMs")
-                                   ).toInt(),
+            QStringLiteral("durationMs")
+            ).toInt(),
         318
         );
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("completed")
-                                   ).toBool(),
+            QStringLiteral("completed")
+            ).toBool(),
         true
         );
 }
@@ -801,8 +805,8 @@ void JsonLinesImporterTests::customConfigMapsAlternativeTopLevelFields()
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("retryCount")
-                                   ).toInt(),
+            QStringLiteral("retryCount")
+            ).toInt(),
         3
         );
 }
@@ -936,62 +940,120 @@ void JsonLinesImporterTests::nestedMappingsPreserveSourceAttributes()
     const InvestigationRecord &record =
         result.records.first();
 
-    // Nested mappings should not cause the
-    // entire source object to be discarded.
+    // Nested canonical mappings should exclude only
+    // the mapped leaves while preserving unrelated
+    // source values under their full paths.
     QVERIFY(
-        record.customAttributes.contains(
+        !record.customAttributes.contains(
             QStringLiteral("metadata")
             )
         );
 
     QVERIFY(
-        record.customAttributes.contains(
+        !record.customAttributes.contains(
             QStringLiteral("event")
             )
         );
 
-    QVERIFY(
-        record.customAttributes.contains(
-            QStringLiteral("durationMs")
-            )
-        );
-
-    const QVariantMap metadata =
-        record.customAttributes.value(
-                                   QStringLiteral("metadata")
-                                   ).toMap();
-
     QCOMPARE(
-        metadata.value(
-                    QStringLiteral("region")
-                    ).toString(),
+        record.customAttributes.value(
+            QStringLiteral("metadata.region")
+            ).toString(),
         QStringLiteral("east")
         );
 
     QCOMPARE(
-        metadata.value(
-                    QStringLiteral("service")
-                    ).toString(),
-        QStringLiteral("Orders")
-        );
-
-    const QVariantMap event =
         record.customAttributes.value(
-                                   QStringLiteral("event")
-                                   ).toMap();
-
-    QCOMPARE(
-        event.value(
-                 QStringLiteral("attempt")
-                 ).toInt(),
+            QStringLiteral("event.attempt")
+            ).toInt(),
         2
         );
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("durationMs")
-                                   ).toInt(),
+            QStringLiteral("durationMs")
+            ).toInt(),
         1420
+        );
+
+    // Canonical source leaves should not also
+    // appear as custom attributes.
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("metadata.service")
+            )
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("event.code")
+            )
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("event.text")
+            )
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("event.entity")
+            )
+        );
+}
+
+void JsonLinesImporterTests::nestedMappedFieldsDoNotCreateContainerAttributes()
+{
+    ImportProfile profile;
+
+    profile.customFields.append({
+        QStringLiteral("Request ID"),
+        QStringLiteral("context.requestId")
+    });
+
+    JsonLinesImporter importer(profile);
+
+    const ImportResult result =
+        importer.importLines({
+            R"({
+            "message":"Completed",
+            "context":{
+                "requestId":"REQ-42",
+                "region":"us-east"
+            }
+        })"
+        });
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QCOMPARE(
+        record.customAttributes.value(
+            QStringLiteral("Request ID")
+            ).toString(),
+        QStringLiteral("REQ-42")
+        );
+
+    QCOMPARE(
+        record.customAttributes.value(
+            QStringLiteral("context.region")
+            ).toString(),
+        QStringLiteral("us-east")
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("context")
+            )
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral(
+                "context.requestId"
+                )
+            )
         );
 }
 
@@ -1183,14 +1245,27 @@ void JsonLinesImporterTests::
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("Request ID")
-                                   ).toString(),
+            QStringLiteral("Request ID")
+            ).toString(),
+        QStringLiteral("REQ-42")
+        );
+
+    QCOMPARE(
+        record.customAttributes.value(
+            QStringLiteral("Request ID")
+            ).toString(),
         QStringLiteral("REQ-42")
         );
 
     QVERIFY(
-        record.customAttributes.contains(
+        !record.customAttributes.contains(
             QStringLiteral("context")
+            )
+        );
+
+    QVERIFY(
+        !record.customAttributes.contains(
+            QStringLiteral("context.requestId")
             )
         );
 
@@ -1198,6 +1273,13 @@ void JsonLinesImporterTests::
         record.customAttributes.contains(
             QStringLiteral("durationMs")
             )
+        );
+
+    QCOMPARE(
+        record.customAttributes.value(
+            QStringLiteral("durationMs")
+            ).toInt(),
+        184
         );
 }
 
@@ -1237,8 +1319,8 @@ void JsonLinesImporterTests::
 
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("Request ID")
-                                   ).toString(),
+            QStringLiteral("Request ID")
+            ).toString(),
         QStringLiteral("REQ-42")
         );
 
