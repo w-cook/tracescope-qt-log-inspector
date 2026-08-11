@@ -512,3 +512,35 @@ add_test(
     NAME StructuredJsonImporterTests
     COMMAND StructuredJsonImporterTests
 )
+
+qt_add_executable(RegexTextImporterTests
+    RegexTextImporterTests.cpp
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/RegexTextImporter.h
+    ../src/importing/RegexTextImporter.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(RegexTextImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME RegexTextImporterTests
+    COMMAND RegexTextImporterTests
+)

@@ -79,6 +79,8 @@ qt_add_executable(TraceScope
     src/importing/StructuredJsonImportConfig.h
     src/importing/StructuredJsonImporter.h
     src/importing/StructuredJsonImporter.cpp
+    src/importing/RegexTextImporter.h
+    src/importing/RegexTextImporter.cpp
 
 )
 
