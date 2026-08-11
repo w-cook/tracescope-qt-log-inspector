@@ -30,6 +30,7 @@
 #include <utility>
 
 #include "../importing/BuiltInImporterRegistry.h"
+#include "../importing/ILogImporter.h"
 
 namespace
 {
@@ -78,8 +79,14 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
     profileNameEdit(
         new QLineEdit(this)
         ),
+    importerComboBox(
+        new QComboBox(this)
+        ),
     recordPathEdit(
         new QLineEdit(this)
+        ),
+    regexPatternEdit(
+        new QPlainTextEdit(this)
         ),
     preserveUnmappedCheckBox(
         new QCheckBox(
@@ -215,11 +222,21 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
         &QTimer::timeout,
         this,
         [this]() {
+            if (workingProfile.importerId
+                    == QStringLiteral(
+                        "regex-text"
+                        )
+                && customFieldDetectionSourcePath
+                       .isEmpty()) {
+                detectCustomFieldMappings();
+            }
+
             updatePreview();
         }
         );
 
     buildLayout();
+    populateImporterOptions();
     populateProfileControls();
 
     updateSourceState();
@@ -332,6 +349,11 @@ void ImportConfigurationDialog::buildLayout()
         profileNameEdit
         );
 
+    profileLayout->addRow(
+        tr("Format:"),
+        importerComboBox
+        );
+
     recordPathEdit->setPlaceholderText(
         tr(
             "Blank for document root, "
@@ -352,6 +374,33 @@ void ImportConfigurationDialog::buildLayout()
     profileLayout->addRow(
         tr("JSON record path:"),
         recordPathEdit
+        );
+
+    regexPatternEdit->setPlaceholderText(
+        tr(
+            "Named-capture regular expression, "
+            "for example: "
+            "^(?<timestamp>...) (?<level>...) (?<message>.*)$"
+            )
+        );
+
+    regexPatternEdit->setToolTip(
+        tr(
+            "For Regex Plain Text imports, named capture groups "
+            "become source fields that can be mapped to canonical "
+            "or custom fields."
+            )
+        );
+
+    regexPatternEdit->setLineWrapMode(
+        QPlainTextEdit::NoWrap
+        );
+
+    regexPatternEdit->setFixedHeight(70);
+
+    profileLayout->addRow(
+        tr("Regex pattern:"),
+        regexPatternEdit
         );
 
     preserveUnmappedCheckBox->setToolTip(
@@ -817,6 +866,80 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             updateSourceState();
+        }
+        );
+
+    connect(
+        importerComboBox,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            profileIsUserConfigured = true;
+
+            workingProfile.importerId =
+                importerComboBox
+                    ->currentData()
+                    .toString();
+
+            /*
+         * Automatically detected mappings belong
+         * to the previous interpretation of the
+         * source, so discard only those mappings.
+         */
+            QList<CustomFieldMapping>
+                retainedMappings;
+
+            for (const CustomFieldMapping &mapping
+                 : std::as_const(
+                     workingProfile.customFields
+                     )) {
+                if (autoDetectedCustomFieldKeys
+                        .contains(
+                            customFieldMappingKey(
+                                mapping
+                                )
+                            )) {
+                    continue;
+                }
+
+                retainedMappings.append(
+                    mapping
+                    );
+            }
+
+            workingProfile.customFields =
+                std::move(
+                    retainedMappings
+                    );
+
+            autoDetectedCustomFieldKeys.clear();
+            customFieldDetectionSourcePath.clear();
+
+            populateCustomFieldMappings();
+            updateFormatSpecificControls();
+
+            updateValidationState();
+        }
+        );
+
+    connect(
+        regexPatternEdit,
+        &QPlainTextEdit::textChanged,
+        this,
+        [this]() {
+            profileIsUserConfigured = true;
+
+            workingProfile.regexPattern =
+                regexPatternEdit
+                    ->toPlainText();
+
+            /*
+         * A changed pattern defines a different
+         * source-field set.
+         */
+            customFieldDetectionSourcePath.clear();
+
+            updateValidationState();
         }
         );
 
@@ -1828,6 +1951,14 @@ void ImportConfigurationDialog::populateProfileControls()
         recordPathEdit
         );
 
+    const QSignalBlocker importerBlocker(
+        importerComboBox
+        );
+
+    const QSignalBlocker regexPatternBlocker(
+        regexPatternEdit
+        );
+
     const QSignalBlocker timestampBlocker(
         timestampPathEdit
         );
@@ -1860,16 +1991,26 @@ void ImportConfigurationDialog::populateProfileControls()
         workingProfile.name
         );
 
+    const int importerIndex =
+        importerComboBox->findData(
+            workingProfile.importerId
+            );
+
+    importerComboBox->setCurrentIndex(
+        importerIndex >= 0
+            ? importerIndex
+            : 0
+        );
+
+    regexPatternEdit->setPlainText(
+        workingProfile.regexPattern
+        );
+
     recordPathEdit->setText(
         workingProfile.recordPath
         );
 
-    recordPathEdit->setEnabled(
-        workingProfile.importerId
-        == QStringLiteral(
-            "structured-json"
-            )
-        );
+    updateFormatSpecificControls();
 
     preserveUnmappedCheckBox->setChecked(
         workingProfile.preserveUnmappedFields
@@ -2055,6 +2196,15 @@ void ImportConfigurationDialog::updateWorkingProfile()
 {
     workingProfile.name =
         profileNameEdit->text();
+
+    workingProfile.importerId =
+        importerComboBox
+            ->currentData()
+            .toString();
+
+    workingProfile.regexPattern =
+        regexPatternEdit
+            ->toPlainText();
 
     workingProfile.recordPath =
         recordPathEdit->text();
@@ -2876,9 +3026,11 @@ void ImportConfigurationDialog::createProfileFromSource(
                     suggestion.displayName
                     );
     } else {
+        workingProfile.importerId.clear();
+
         workingProfile.name =
             QStringLiteral(
-                "Default JSON Lines"
+                "New Import Profile"
                 );
     }
 
@@ -2888,10 +3040,15 @@ void ImportConfigurationDialog::createProfileFromSource(
 
     populateProfileControls();
 
-    if (workingProfile.importerId
-        != QStringLiteral(
-            "structured-json"
-            )) {
+    if (!workingProfile.importerId.isEmpty()
+        && workingProfile.importerId
+               != QStringLiteral(
+                   "structured-json"
+                   )
+        && workingProfile.importerId
+               != QStringLiteral(
+                   "regex-text"
+                   )) {
         detectCustomFieldMappings();
     }
 
@@ -2903,4 +3060,53 @@ void ImportConfigurationDialog::createProfileFromSource(
     if (userInitiated) {
         profileIsUserConfigured = true;
     }
+}
+
+void ImportConfigurationDialog::populateImporterOptions()
+{
+    const QSignalBlocker blocker(
+        importerComboBox
+        );
+
+    importerComboBox->clear();
+
+    importerComboBox->addItem(
+        tr("Select format..."),
+        QString()
+        );
+
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            workingProfile
+            );
+
+    for (const auto &importer
+         : registry.importers()) {
+        importerComboBox->addItem(
+            importer->displayName(),
+            importer->id()
+            );
+    }
+}
+
+void ImportConfigurationDialog::updateFormatSpecificControls()
+{
+    const QString importerId =
+        importerComboBox
+            ->currentData()
+            .toString();
+
+    recordPathEdit->setEnabled(
+        importerId
+        == QStringLiteral(
+            "structured-json"
+            )
+        );
+
+    regexPatternEdit->setEnabled(
+        importerId
+        == QStringLiteral(
+            "regex-text"
+            )
+        );
 }

@@ -61,7 +61,9 @@ private:
     QTimer *previewRefreshTimer;
 
     QLineEdit *profileNameEdit;
+    QComboBox *importerComboBox;
     QLineEdit *recordPathEdit;
+    QPlainTextEdit *regexPatternEdit;
     QCheckBox *preserveUnmappedCheckBox;
 
     QPushButton *newProfileFromSourceButton;
@@ -116,6 +118,9 @@ private:
     void detectCustomFieldMappings();
 
     void populateProfileControls();
+
+    void populateImporterOptions();
+    void updateFormatSpecificControls();
 
     void populateCustomFieldMappings();
 
