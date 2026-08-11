@@ -417,6 +417,9 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/DelimitedTextImporter.h
     ../src/importing/DelimitedTextImporter.cpp
 
+    ../src/importing/RegexTextImporter.h
+    ../src/importing/RegexTextImporter.cpp
+
     ../src/importing/ILogImporter.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp

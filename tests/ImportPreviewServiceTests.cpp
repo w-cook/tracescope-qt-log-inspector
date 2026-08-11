@@ -14,6 +14,7 @@ private slots:
     void csvProfilePreviewsRecords();
     void tsvProfilePreviewsRecords();
     void structuredJsonProfilePreviewsRecords();
+    void regexTextProfilePreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -318,6 +319,130 @@ void ImportPreviewServiceTests::structuredJsonProfilePreviewsRecords()
                 )
             .toString(),
         QStringLiteral("REQ-1")
+        );
+}
+
+void ImportPreviewServiceTests::regexTextProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "2026-08-11T12:00:00Z "
+                "[NOTICE] [Orders] [worker-1] "
+                "Order accepted\n"
+                "2026-08-11T12:01:00Z "
+                "[FAIL] [Payments] [worker-4] "
+                "Payment rejected\n"
+                )
+            );
+
+    QVERIFY(!path.isEmpty());
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Preview Regex Text"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "regex-text"
+            );
+
+    profile.regexPattern =
+        QStringLiteral(
+            R"(^(?<timestamp>\S+)\s+\[(?<severity>\w+)\]\s+\[(?<subsystem>[^\]]+)\]\s+\[(?<thread>[^\]]+)\]\s+(?<message>.*)$)"
+            );
+
+    profile.canonicalFields.severityPath =
+        QStringLiteral("severity");
+
+    profile.severityAliases.insert(
+        QStringLiteral("NOTICE"),
+        RecordSeverity::Info
+        );
+
+    profile.severityAliases.insert(
+        QStringLiteral("FAIL"),
+        RecordSeverity::Error
+        );
+
+    profile.customFields.append({
+        QStringLiteral("Thread"),
+        QStringLiteral("thread")
+    });
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult
+            .processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .message.value(),
+        QStringLiteral(
+            "Order accepted"
+            )
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .severity.value(),
+        RecordSeverity::Info
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(1)
+            .severity.value(),
+        RecordSeverity::Error
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(1)
+            .subsystem.value(),
+        QStringLiteral(
+            "Payments"
+            )
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .customAttributes
+            .value(
+                QStringLiteral(
+                    "Thread"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "worker-1"
+            )
         );
 }
 
