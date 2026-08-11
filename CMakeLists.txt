@@ -72,6 +72,9 @@ qt_add_executable(TraceScope
     src/importing/ImportFormatSuggestionService.cpp
     src/importing/BuiltInImporterRegistry.h
     src/importing/BuiltInImporterRegistry.cpp
+    src/importing/DelimitedTextImporter.h
+    src/importing/DelimitedTextImporter.cpp
+
 )
 
 target_link_libraries(TraceScope

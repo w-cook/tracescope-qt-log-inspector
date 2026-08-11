@@ -213,6 +213,38 @@ add_test(
     COMMAND JsonLinesImporterTests
 )
 
+qt_add_executable(DelimitedTextImporterTests
+    DelimitedTextImporterTests.cpp
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/DelimitedTextImporter.h
+    ../src/importing/DelimitedTextImporter.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(DelimitedTextImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME DelimitedTextImporterTests
+    COMMAND DelimitedTextImporterTests
+)
+
 qt_add_executable(InvestigationTableModelTests
     InvestigationTableModelTests.cpp
     ../src/models/InvestigationTableModel.h
