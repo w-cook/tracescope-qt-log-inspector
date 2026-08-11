@@ -4,6 +4,7 @@
 
 #include "DelimitedTextImporter.h"
 #include "JsonLinesImporter.h"
+#include "StructuredJsonImporter.h"
 
 ImporterRegistry createBuiltInImporterRegistry(
     const ImportProfile &profile
@@ -13,6 +14,18 @@ ImporterRegistry createBuiltInImporterRegistry(
 
     registry.registerImporter(
         std::make_shared<JsonLinesImporter>(
+            profile
+            )
+        );
+
+    StructuredJsonImportConfig structuredJsonConfig;
+
+    structuredJsonConfig.recordPath =
+        profile.recordPath;
+
+    registry.registerImporter(
+        std::make_shared<StructuredJsonImporter>(
+            structuredJsonConfig,
             profile
             )
         );

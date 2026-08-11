@@ -30,6 +30,17 @@ ImportFormatSuggestion delimitedTextSuggestion(
         reason
     };
 }
+
+ImportFormatSuggestion structuredJsonSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("structured-json"),
+        QStringLiteral("Structured JSON"),
+        reason
+    };
+}
 }
 
 ImportFormatSuggestion
@@ -53,6 +64,15 @@ ImportFormatSuggestionService::suggestForFile(
             QStringLiteral(
                 "The file extension indicates "
                 "newline-delimited JSON."
+                )
+            );
+    }
+
+    if (suffix == QStringLiteral("json")) {
+        return structuredJsonSuggestion(
+            QStringLiteral(
+                "The file extension indicates "
+                "a structured JSON document."
                 )
             );
     }

@@ -423,6 +423,10 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
 
+    ../src/importing/StructuredJsonImportConfig.h
+    ../src/importing/StructuredJsonImporter.h
+    ../src/importing/StructuredJsonImporter.cpp
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp

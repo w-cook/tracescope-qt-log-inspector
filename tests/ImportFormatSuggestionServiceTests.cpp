@@ -17,7 +17,7 @@ private slots:
     void csvExtensionSuggestsCsv();
     void tsvExtensionSuggestsTsv();
     void malformedContentHasNoSuggestion();
-    void jsonArrayHasNoSuggestion();
+    void jsonExtensionSuggestsStructuredJson();
     void missingFileHasNoSuggestion();
 
 private:
@@ -254,7 +254,7 @@ void
 
 void
     ImportFormatSuggestionServiceTests::
-    jsonArrayHasNoSuggestion()
+    jsonExtensionSuggestsStructuredJson()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -275,9 +275,25 @@ void
 
     ImportFormatSuggestionService service;
 
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(filePath);
+
     QVERIFY(
-        !service.suggestForFile(filePath)
-             .hasSuggestion()
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral(
+            "structured-json"
+            )
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Structured JSON"
+            )
         );
 }
 

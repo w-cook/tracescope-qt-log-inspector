@@ -13,6 +13,7 @@ private slots:
     void validProfilePreviewsRecords();
     void csvProfilePreviewsRecords();
     void tsvProfilePreviewsRecords();
+    void structuredJsonProfilePreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -214,6 +215,109 @@ void ImportPreviewServiceTests::tsvProfilePreviewsRecords()
             .records.first()
             .severity.value(),
         RecordSeverity::Error
+        );
+}
+
+void ImportPreviewServiceTests::structuredJsonProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "{"
+                "\"metadata\":{"
+                "\"session\":\"S-42\""
+                "},"
+                "\"payload\":{"
+                "\"events\":["
+                "{"
+                "\"timestamp\":"
+                "\"2026-08-11T08:00:00Z\","
+                "\"level\":\"INFO\","
+                "\"message\":\"First\","
+                "\"requestId\":\"REQ-1\""
+                "},"
+                "{"
+                "\"timestamp\":"
+                "\"2026-08-11T08:01:00Z\","
+                "\"level\":\"WARN\","
+                "\"message\":\"Second\","
+                "\"requestId\":\"REQ-2\""
+                "}"
+                "]"
+                "}"
+                "}"
+                )
+            );
+
+    QVERIFY(!path.isEmpty());
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Preview Structured JSON"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "structured-json"
+            );
+
+    profile.recordPath =
+        QStringLiteral(
+            "payload.events"
+            );
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult
+            .processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .message.value(),
+        QStringLiteral("First")
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(1)
+            .severity.value(),
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .customAttributes
+            .value(
+                QStringLiteral(
+                    "requestId"
+                    )
+                )
+            .toString(),
+        QStringLiteral("REQ-1")
         );
 }
 
