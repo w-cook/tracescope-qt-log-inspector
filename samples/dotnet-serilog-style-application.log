@@ -1,0 +1,12 @@
+2026-08-11 13:30:02.114 [INF] [Orders.Api.Program] [REQ-5001] Application startup completed
+2026-08-11 13:30:39.328 [DBG] [Orders.Api.Routing.RouteLoader] [REQ-5002] Loaded 21 endpoint definitions
+2026-08-11 13:31:15.902 [INF] [Orders.Api.Controllers.OrderController] [REQ-5003] Accepted order ORD-3188
+2026-08-11 13:32:03.447 [WRN] [Orders.Infrastructure.SupplierClient] [REQ-5004] Supplier response exceeded configured threshold
+2026-08-11 13:32:49.781 [INF] [Orders.Application.InventoryService] [REQ-5005] Inventory reservation completed for SKU-512
+2026-08-11 13:33:21.056 [ERR] [Orders.Application.PaymentService] [REQ-5006] Payment authorization failed for PAY-992
+2026-08-11 13:34:04.619 [INF] [Orders.Application.PaymentService] [REQ-5007] Payment retry accepted for PAY-992
+2026-08-11 13:35:11.273 [WRN] [Orders.Application.InventoryService] [REQ-5008] Low stock threshold reached for SKU-512
+2026-08-11 13:36:08.844 [INF] [Orders.Application.OrderService] [REQ-5009] Completed order workflow for ORD-3188
+2026-08-11 13:37:26.415 [DBG] [Orders.Infrastructure.HealthChecks] [REQ-5010] Supplier dependency responded successfully
+2026-08-11 13:38:17.090 [ERR] [Orders.Infrastructure.NotificationClient] [REQ-5011] Notification delivery failed for MSG-226
+2026-08-11 13:39:02.552 [VRB] [Orders.Api.Diagnostics.RequestLogging] [REQ-5012] Request diagnostics captured successfully

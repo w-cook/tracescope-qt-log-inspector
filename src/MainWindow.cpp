@@ -24,6 +24,8 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QUrl>
+#include <QAbstractItemView>
+#include <QFontMetrics>
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
 #include <QtCharts/QBarSet>
@@ -299,6 +301,14 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     subsystemFilterCombo->addItem("All subsystems", "");
 
+    subsystemFilterCombo->setMinimumWidth(240);
+
+    subsystemFilterCombo->setSizeAdjustPolicy(
+        QComboBox::AdjustToMinimumContentsLengthWithIcon
+        );
+
+    subsystemFilterCombo->setMinimumContentsLength(24);
+
     searchInput->setPlaceholderText(
         "Search canonical fields and custom attributes..."
         );
@@ -315,9 +325,20 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
         applyFilters();
     });
 
-    connect(subsystemFilterCombo, &QComboBox::currentIndexChanged, this, [this]() {
-        applyFilters();
-    });
+    connect(
+        subsystemFilterCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            subsystemFilterCombo->setToolTip(
+                subsystemFilterCombo
+                    ->currentData()
+                    .toString()
+                );
+
+            applyFilters();
+        }
+        );
 
     connect(searchInput, &QLineEdit::textChanged, this, [this]() {
         applyFilters();
@@ -370,7 +391,9 @@ void MainWindow::applyFilters()
 void MainWindow::refreshSubsystemFilterOptions()
 {
     const QString selectedSubsystem =
-        subsystemFilterCombo->currentData().toString();
+        subsystemFilterCombo
+            ->currentData()
+            .toString();
 
     subsystemFilterCombo->blockSignals(true);
     subsystemFilterCombo->clear();
@@ -380,15 +403,69 @@ void MainWindow::refreshSubsystemFilterOptions()
         ""
         );
 
-    const QStringList subsystems =
-        investigationController->availableSubsystems();
+    subsystemFilterCombo->setItemData(
+        0,
+        QStringLiteral("All subsystems"),
+        Qt::ToolTipRole
+        );
 
-    for (const QString &subsystem : subsystems) {
+    const QStringList subsystems =
+        investigationController
+            ->availableSubsystems();
+
+    int widestTextWidth =
+        subsystemFilterCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                QStringLiteral(
+                    "All subsystems"
+                    )
+                );
+
+    for (const QString &subsystem
+         : subsystems) {
         subsystemFilterCombo->addItem(
             subsystem,
             subsystem
             );
+
+        const int itemIndex =
+            subsystemFilterCombo->count() - 1;
+
+        subsystemFilterCombo->setItemData(
+            itemIndex,
+            subsystem,
+            Qt::ToolTipRole
+            );
+
+        widestTextWidth =
+            std::max(
+                widestTextWidth,
+                subsystemFilterCombo
+                    ->fontMetrics()
+                    .horizontalAdvance(
+                        subsystem
+                        )
+                );
     }
+
+    /*
+     * Keep the filter control itself compact,
+     * but let its popup expand enough to show
+     * long subsystem/logger names clearly.
+     */
+    const int popupWidth =
+        std::clamp(
+            widestTextWidth + 40,
+            240,
+            650
+            );
+
+    subsystemFilterCombo
+        ->view()
+        ->setMinimumWidth(
+            popupWidth
+            );
 
     const int previousIndex =
         subsystemFilterCombo->findData(
@@ -400,6 +477,12 @@ void MainWindow::refreshSubsystemFilterOptions()
             previousIndex
             );
     }
+
+    subsystemFilterCombo->setToolTip(
+        subsystemFilterCombo
+            ->currentData()
+            .toString()
+        );
 
     subsystemFilterCombo->blockSignals(false);
 }

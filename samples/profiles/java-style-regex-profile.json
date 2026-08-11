@@ -1,0 +1,28 @@
+{
+    "schemaVersion": 1,
+    "name": "Java-Style Application Regex",
+    "importerId": "regex-text",
+    "regexPattern": "^(?<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\s+(?<level>[A-Z]+)\\s+\\[(?<thread>[^\\]]+)\\]\\s+(?<logger>\\S+)\\s+-\\s+(?<message>.*)$",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "logger",
+        "eventCode": "",
+        "entityId": "",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Thread",
+            "sourcePath": "thread"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "qt-format",
+            "format": "yyyy-MM-dd HH:mm:ss.zzz"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

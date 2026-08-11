@@ -1,0 +1,12 @@
+2026-08-11 13:15:02.114 INFO  [main] com.example.orders.OrderApplication - Application startup completed
+2026-08-11 13:15:41.328 DEBUG [main] com.example.config.RouteConfiguration - Loaded 18 route definitions
+2026-08-11 13:16:09.902 INFO  [http-nio-8080-exec-1] com.example.orders.OrderController - Accepted order ORD-2104
+2026-08-11 13:17:03.447 WARN  [http-nio-8080-exec-1] com.example.suppliers.SupplierClient - Supplier response exceeded configured threshold
+2026-08-11 13:17:48.781 INFO  [worker-2] com.example.inventory.InventoryService - Inventory reservation completed for SKU-440
+2026-08-11 13:18:21.056 ERROR [http-nio-8080-exec-3] com.example.payments.PaymentService - Payment authorization failed for PAY-881
+2026-08-11 13:19:04.619 INFO  [retry-1] com.example.payments.PaymentService - Payment retry accepted for PAY-881
+2026-08-11 13:20:11.273 WARN  [worker-4] com.example.inventory.InventoryService - Low stock threshold reached for SKU-440
+2026-08-11 13:21:08.844 INFO  [worker-2] com.example.orders.OrderService - Completed order workflow for ORD-2104
+2026-08-11 13:22:26.415 DEBUG [scheduler-1] com.example.health.DependencyHealthCheck - Supplier dependency responded successfully
+2026-08-11 13:23:17.090 ERROR [notification-2] com.example.notifications.NotificationService - Notification delivery failed for MSG-104
+2026-08-11 13:24:02.552 INFO  [main] com.example.orders.OrderApplication - Application remains healthy
