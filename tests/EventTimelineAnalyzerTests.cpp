@@ -12,6 +12,7 @@ private slots:
     void groupEventsByMinuteFillsMissingMinutes();
     void filteredEventsPreserveFullTimelineRange();
     void groupEventsByMinuteHandlesMidnightBoundary();
+    void groupEventsByMinuteCountsUnspecifiedSeverity();
 };
 
 void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
@@ -376,6 +377,63 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteHandlesMidnightBoundary()
     QCOMPARE(
         buckets.at(1).totalCount(),
         0
+        );
+}
+
+void EventTimelineAnalyzerTests::groupEventsByMinuteCountsUnspecifiedSeverity()
+{
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-08-12T08:20:00.000Z",
+            "",
+            "",
+            "",
+            "GET /api/orders HTTP/1.1",
+            ""
+        },
+        {
+            "2026-08-12T08:20:15.000Z",
+            "INFO",
+            "Orders",
+            "",
+            "Application event",
+            ""
+        },
+        {
+            "2026-08-12T08:20:30.000Z",
+            "",
+            "",
+            "",
+            "POST /api/orders HTTP/1.1",
+            ""
+        }
+    };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
+
+    QCOMPARE(
+        buckets.size(),
+        1
+        );
+
+    QCOMPARE(
+        buckets.first().infoCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.first().unspecifiedCount,
+        2
+        );
+
+    QCOMPARE(
+        buckets.first().totalCount(),
+        3
         );
 }
 

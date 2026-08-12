@@ -12,6 +12,7 @@ struct EventCountBucket
     int warningCount = 0;
     int errorCount = 0;
     int criticalCount = 0;
+    int unspecifiedCount = 0;
 
     int totalCount() const
     {
@@ -20,6 +21,7 @@ struct EventCountBucket
                + infoCount
                + warningCount
                + errorCount
-               + criticalCount;
+               + criticalCount
+               + unspecifiedCount;
     }
 };

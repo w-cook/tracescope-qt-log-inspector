@@ -832,6 +832,24 @@ void MainWindow::updateTimelineChart(
     auto *criticalSet =
         new QBarSet("CRITICAL");
 
+    bool hasUnspecifiedEvents = false;
+
+    for (const EventCountBucket &bucket : buckets) {
+        if (bucket.unspecifiedCount > 0) {
+            hasUnspecifiedEvents = true;
+            break;
+        }
+    }
+
+    QBarSet *unspecifiedSet = nullptr;
+
+    if (hasUnspecifiedEvents) {
+        unspecifiedSet =
+            new QBarSet(
+                "UNSPECIFIED"
+                );
+    }
+
     QStringList categories;
 
     for (const EventCountBucket &bucket : buckets) {
@@ -853,6 +871,11 @@ void MainWindow::updateTimelineChart(
 
         *criticalSet
             << bucket.criticalCount;
+
+        if (unspecifiedSet != nullptr) {
+            *unspecifiedSet
+                << bucket.unspecifiedCount;
+        }
     }
 
     auto *series = new QBarSeries();
@@ -862,6 +885,12 @@ void MainWindow::updateTimelineChart(
     series->append(warnSet);
     series->append(errorSet);
     series->append(criticalSet);
+
+    if (unspecifiedSet != nullptr) {
+        series->append(
+            unspecifiedSet
+            );
+    }
 
     auto *chart = new QChart();
     chart->addSeries(series);
@@ -915,6 +944,12 @@ void MainWindow::updateTimelineChart(
             std::max(
                 maxCount,
                 bucket.criticalCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.unspecifiedCount
                 );
     }
 

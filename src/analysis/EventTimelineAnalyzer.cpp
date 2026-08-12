@@ -196,6 +196,8 @@ QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
             == QStringLiteral("CRITICAL")
             ) {
             ++bucket.criticalCount;
+        } else {
+            ++bucket.unspecifiedCount;
         }
     }
 
