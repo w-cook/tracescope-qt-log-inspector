@@ -3,6 +3,7 @@
 #include <QTemporaryFile>
 #include <QTextStream>
 
+#include "../src/importing/BuiltInImportProfilePresets.h"
 #include "../src/importing/ImportPreviewService.h"
 
 class ImportPreviewServiceTests : public QObject
@@ -23,6 +24,7 @@ private slots:
     void unsupportedImporterPreventsPreview();
     void previewUsesProfileMappings();
     void previewReturnsImportDiagnostics();
+    void combinedWebAccessPresetPreviewsRecords();
 };
 
 QString writeTemporaryContent(
@@ -1024,6 +1026,101 @@ void ImportPreviewServiceTests::previewReturnsImportDiagnostics()
         result.importResult
             .diagnostics.first().code,
         QStringLiteral("MALFORMED_JSON")
+        );
+}
+
+void ImportPreviewServiceTests::
+    combinedWebAccessPresetPreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "198.51.100.10 - - "
+                "[12/Aug/2026:10:10:02 -0400] "
+                "\"GET / HTTP/1.1\" "
+                "200 1834 "
+                "\"-\" "
+                "\"Mozilla/5.0\"\n"
+                )
+            );
+
+    QVERIFY(
+        !path.isEmpty()
+        );
+
+    const std::optional<ImportProfile> profile =
+        builtInImportProfilePreset(
+            BuiltInImportProfilePresetIds::
+            ApacheNginxCombined
+            );
+
+    QVERIFY(
+        profile.has_value()
+        );
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile.value()
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        result.importResult.records.first();
+
+    QCOMPARE(
+        record.message.value(),
+        QStringLiteral(
+            "GET / HTTP/1.1"
+            )
+        );
+
+    QVERIFY(
+        !record.severity.has_value()
+        );
+
+    QVERIFY(
+        !record.subsystem.has_value()
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "HTTP Status"
+                    )
+                )
+            .toString(),
+        QStringLiteral("200")
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "User Agent"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "Mozilla/5.0"
+            )
+        );
+
+    QVERIFY(
+        record.timestamp.has_value()
         );
 }
 

@@ -27,9 +27,12 @@
 #include <QSaveFile>
 #include <QTimer>
 #include <QFile>
+
+#include <memory>
 #include <utility>
 
 #include "../importing/BuiltInImporterRegistry.h"
+#include "../importing/BuiltInImportProfilePresets.h"
 #include "../importing/ILogImporter.h"
 
 namespace
@@ -1594,14 +1597,88 @@ void ImportConfigurationDialog::updatePreview()
     previewSourcePath =
         filePath;
 
-    QStringList headers {
-        tr("Timestamp"),
-        tr("Severity"),
-        tr("Subsystem"),
-        tr("Event Code"),
-        tr("Entity ID"),
-        tr("Message")
-    };
+    const bool showTimestamp =
+        !workingProfile
+             .canonicalFields
+             .timestampPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showSeverity =
+        !workingProfile
+             .canonicalFields
+             .severityPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showSubsystem =
+        !workingProfile
+             .canonicalFields
+             .subsystemPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showEventCode =
+        !workingProfile
+             .canonicalFields
+             .eventCodePath
+             .trimmed()
+             .isEmpty();
+
+    const bool showEntityId =
+        !workingProfile
+             .canonicalFields
+             .entityIdPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showMessage =
+        !workingProfile
+             .canonicalFields
+             .messagePath
+             .trimmed()
+             .isEmpty();
+
+    QStringList headers;
+
+    if (showTimestamp) {
+        headers.append(
+            tr("Timestamp")
+            );
+    }
+
+    if (showSeverity) {
+        headers.append(
+            tr("Severity")
+            );
+    }
+
+    if (showSubsystem) {
+        headers.append(
+            tr("Subsystem")
+            );
+    }
+
+    if (showEventCode) {
+        headers.append(
+            tr("Event Code")
+            );
+    }
+
+    if (showEntityId) {
+        headers.append(
+            tr("Entity ID")
+            );
+    }
+
+    if (showMessage) {
+        headers.append(
+            tr("Message")
+            );
+    }
+
+    const int canonicalColumnCount =
+        headers.size();
 
     QSet<QString> mappedCustomFieldNames;
 
@@ -1654,7 +1731,8 @@ void ImportConfigurationDialog::updatePreview()
     if (previousColumnCount
         != headers.size()) {
         for (
-            int column = 6;
+            int column =
+            canonicalColumnCount;
             column < headers.size() - 1;
             ++column
             ) {
@@ -1664,7 +1742,7 @@ void ImportConfigurationDialog::updatePreview()
                 );
         }
 
-        if (headers.size() > 6) {
+        if (!headers.isEmpty()) {
             previewTable->setColumnWidth(
                 headers.size() - 1,
                 220
@@ -1778,14 +1856,43 @@ void ImportConfigurationDialog::updatePreview()
                 QStringLiteral("; ")
                 );
 
-        QStringList values {
-            timestamp,
-            severity,
-            subsystem,
-            eventCode,
-            entityId,
-            message
-        };
+        QStringList values;
+
+        if (showTimestamp) {
+            values.append(
+                timestamp
+                );
+        }
+
+        if (showSeverity) {
+            values.append(
+                severity
+                );
+        }
+
+        if (showSubsystem) {
+            values.append(
+                subsystem
+                );
+        }
+
+        if (showEventCode) {
+            values.append(
+                eventCode
+                );
+        }
+
+        if (showEntityId) {
+            values.append(
+                entityId
+                );
+        }
+
+        if (showMessage) {
+            values.append(
+                message
+                );
+        }
 
         values.append(
             mappedCustomValues
@@ -3017,14 +3124,25 @@ void ImportConfigurationDialog::createProfileFromSource(
             );
 
     if (suggestion.hasSuggestion()) {
-        workingProfile.importerId =
-            suggestion.importerId;
+        const std::optional<ImportProfile>
+            preset =
+            builtInImportProfilePreset(
+                suggestion.profilePresetId
+                );
 
-        workingProfile.name =
-            QStringLiteral("Default %1")
-                .arg(
-                    suggestion.displayName
-                    );
+        if (preset.has_value()) {
+            workingProfile =
+                preset.value();
+        } else {
+            workingProfile.importerId =
+                suggestion.importerId;
+
+            workingProfile.name =
+                QStringLiteral("Default %1")
+                    .arg(
+                        suggestion.displayName
+                        );
+        }
     } else {
         workingProfile.importerId.clear();
 
@@ -3080,8 +3198,11 @@ void ImportConfigurationDialog::populateImporterOptions()
             workingProfile
             );
 
-    for (const auto &importer
-         : registry.importers()) {
+    const QVector<std::shared_ptr<ILogImporter>> importers =
+        registry.importers();
+
+    for (const std::shared_ptr<ILogImporter> &importer
+         : importers) {
         importerComboBox->addItem(
             importer->displayName(),
             importer->id()

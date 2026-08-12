@@ -1,0 +1,44 @@
+{
+    "schemaVersion": 1,
+    "name": "Apache Common Access Log",
+    "importerId": "regex-text",
+    "regexPattern": "^(?<remoteAddress>\\S+)\\s+(?<remoteLogname>\\S+)\\s+(?<remoteUser>\\S+)\\s+\\[(?<timestamp>[^\\]]+)\\]\\s+\"(?<request>[^\"]*)\"\\s+(?<status>\\d{3})\\s+(?<bytesSent>\\d+|-)$",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "",
+        "subsystem": "",
+        "eventCode": "",
+        "entityId": "",
+        "message": "request"
+    },
+    "customFields": [
+        {
+            "name": "Client Address",
+            "sourcePath": "remoteAddress"
+        },
+        {
+            "name": "Remote Logname",
+            "sourcePath": "remoteLogname"
+        },
+        {
+            "name": "Remote User",
+            "sourcePath": "remoteUser"
+        },
+        {
+            "name": "HTTP Status",
+            "sourcePath": "status"
+        },
+        {
+            "name": "Response Bytes",
+            "sourcePath": "bytesSent"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "qt-format",
+            "format": "dd/MMM/yyyy:HH:mm:ss tt"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

@@ -85,6 +85,8 @@ qt_add_executable(TraceScope
     src/importing/KeyValueTextImporter.cpp
     src/importing/SyslogImporter.h
     src/importing/SyslogImporter.cpp
+    src/importing/BuiltInImportProfilePresets.h
+    src/importing/BuiltInImportProfilePresets.cpp
 
 )
 

@@ -6,6 +6,8 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 
+#include "BuiltInImportProfilePresets.h"
+
 namespace
 {
 ImportFormatSuggestion jsonLinesSuggestion(
@@ -65,6 +67,63 @@ ImportFormatSuggestion syslogSuggestion(
             ),
         reason
     };
+}
+
+ImportFormatSuggestion apacheCommonSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("regex-text"),
+        QStringLiteral(
+            "Apache Common Access Log"
+            ),
+        reason,
+        BuiltInImportProfilePresetIds::
+        ApacheCommon
+    };
+}
+
+ImportFormatSuggestion
+apacheNginxCombinedSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("regex-text"),
+        QStringLiteral(
+            "Apache/Nginx Combined Access Log"
+            ),
+        reason,
+        BuiltInImportProfilePresetIds::
+        ApacheNginxCombined
+    };
+}
+
+bool looksLikeApacheCommonRecord(
+    const QString &line
+    )
+{
+    static const QRegularExpression pattern(
+        QStringLiteral(
+            R"(^\S+\s+\S+\s+\S+\s+\[\d{1,2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s+[+-]\d{4}\]\s+"[^"]*"\s+\d{3}\s+(?:\d+|-)$)"
+            )
+        );
+
+    return pattern.match(line).hasMatch();
+}
+
+bool looksLikeApacheNginxCombinedRecord(
+    const QString &line
+    )
+{
+    static const QRegularExpression pattern(
+        QStringLiteral(
+            R"(^\S+\s+\S+\s+\S+\s+\[\d{1,2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s+[+-]\d{4}\]\s+"[^"]*"\s+\d{3}\s+(?:\d+|-)\s+"[^"]*"\s+"[^"]*"$)"
+            )
+        );
+
+    return pattern.match(line).hasMatch();
 }
 
 bool looksLikeKeyValueRecord(
@@ -275,6 +334,8 @@ ImportFormatSuggestionService::suggestForFile(
     bool allSamplesAreJsonObjects = true;
     bool allSamplesLookLikeKeyValue = true;
     bool allSamplesLookLikeSyslog = true;
+    bool allSamplesLookLikeApacheCommon = true;
+    bool allSamplesLookLikeApacheNginxCombined = true;
 
     while (!file.atEnd()
            && sampledRecords < maximumSamples) {
@@ -323,6 +384,20 @@ ImportFormatSuggestionService::suggestForFile(
             allSamplesLookLikeSyslog =
                 false;
         }
+
+        if (!looksLikeApacheCommonRecord(
+                line
+                )) {
+            allSamplesLookLikeApacheCommon =
+                false;
+        }
+
+        if (!looksLikeApacheNginxCombinedRecord(
+                line
+                )) {
+            allSamplesLookLikeApacheNginxCombined =
+                false;
+        }
     }
 
     if (sampledRecords == 0) {
@@ -338,21 +413,40 @@ ImportFormatSuggestionService::suggestForFile(
             );
     }
 
-    if (allSamplesLookLikeKeyValue) {
-        return keyValueSuggestion(
-            QStringLiteral(
-                "Sampled non-empty source records "
-                "contain logfmt-style key-value assignments."
-                )
-            );
-    }
-
     if (allSamplesLookLikeSyslog) {
         return syslogSuggestion(
             QStringLiteral(
                 "Sampled non-empty source records "
                 "match RFC 5424 or RFC 3164 "
                 "Syslog structure."
+                )
+            );
+    }
+
+    if (allSamplesLookLikeApacheNginxCombined) {
+        return apacheNginxCombinedSuggestion(
+            QStringLiteral(
+                "Sampled non-empty source records "
+                "match the standard combined "
+                "web access-log structure."
+                )
+            );
+    }
+
+    if (allSamplesLookLikeApacheCommon) {
+        return apacheCommonSuggestion(
+            QStringLiteral(
+                "Sampled non-empty source records "
+                "match Apache Common Log Format."
+                )
+            );
+    }
+
+    if (allSamplesLookLikeKeyValue) {
+        return keyValueSuggestion(
+            QStringLiteral(
+                "Sampled non-empty source records "
+                "contain logfmt-style key-value assignments."
                 )
             );
     }

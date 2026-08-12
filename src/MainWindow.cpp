@@ -47,6 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     eventTable(new QTableView(this)),
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
+    issueSummaryGroup(nullptr),
     investigationController(new InvestigationController(this)),
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new QComboBox(this)),
@@ -141,7 +142,8 @@ void MainWindow::buildLayout()
 
     eventsLayout->addWidget(eventTable);
 
-    auto *issueSummaryGroup = buildIssueSummaryPanel();
+    issueSummaryGroup =
+        buildIssueSummaryPanel();
     auto *detailGroup = buildDetailPanel();
 
     auto *bottomSplitter = new QSplitter(Qt::Horizontal, this);
@@ -251,6 +253,7 @@ void MainWindow::loadLogFile(
     }
 
     refreshSubsystemFilterOptions();
+    updateDataCapabilities();
     applyFilters();
 
     eventTable->resizeColumnsToContents();
@@ -270,6 +273,22 @@ void MainWindow::updateSummary(
     int warningCount = 0;
     int errorCount = 0;
     int criticalCount = 0;
+
+    if (!hasSeverityData) {
+        summaryLabel->setText(
+            QString(
+                "TOTAL: %1 visible of %2 events from %3"
+                )
+                .arg(events.size())
+                .arg(
+                    investigationController
+                        ->totalRecordCount()
+                    )
+                .arg(filePath)
+            );
+
+        return;
+    }
 
     for (const TelemetryEvent &event : events) {
         if (event.level == "TRACE") {
@@ -683,6 +702,12 @@ QGroupBox *MainWindow::buildIssueSummaryPanel()
 
 void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
 {
+    if (!hasSeverityData
+        || !hasSubsystemData) {
+        issueSummaryTable->setRowCount(0);
+        return;
+    }
+
     const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(events);
 
     issueSummaryTable->setRowCount(groups.size());
@@ -811,6 +836,126 @@ void MainWindow::updateTimelineChart(
         auto *chart = new QChart();
         chart->setTitle("No events to display");
         timelineChartView->setChart(chart);
+        return;
+    }
+
+    const bool showSeveritySeries =
+        std::any_of(
+            rangeEvents.constBegin(),
+            rangeEvents.constEnd(),
+            [](const TelemetryEvent &event) {
+                return !event.level
+                            .trimmed()
+                            .isEmpty();
+            }
+            );
+
+    if (!showSeveritySeries) {
+        auto *totalSet =
+            new QBarSet(
+                "TOTAL"
+                );
+
+        QStringList categories;
+
+        int maxCount = 1;
+
+        for (const EventCountBucket &bucket
+             : buckets) {
+            categories << bucket.label;
+
+            *totalSet
+                << bucket.totalCount();
+
+            maxCount =
+                std::max(
+                    maxCount,
+                    bucket.totalCount()
+                    );
+        }
+
+        auto *series =
+            new QBarSeries();
+
+        series->append(
+            totalSet
+            );
+
+        auto *chart =
+            new QChart();
+
+        chart->addSeries(
+            series
+            );
+
+        chart->setTitle(
+            "Filtered Event Counts by Minute"
+            );
+
+        chart->setAnimationOptions(
+            QChart::NoAnimation
+            );
+
+        /*
+     * A single TOTAL series does not need a
+     * legend explaining what the only bar means.
+     */
+        chart->legend()->setVisible(
+            false
+            );
+
+        auto *axisX =
+            new QBarCategoryAxis();
+
+        axisX->append(
+            categories
+            );
+
+        chart->addAxis(
+            axisX,
+            Qt::AlignBottom
+            );
+
+        series->attachAxis(
+            axisX
+            );
+
+        auto *axisY =
+            new QValueAxis();
+
+        axisY->setTitleText(
+            "Events"
+            );
+
+        axisY->setLabelFormat(
+            "%d"
+            );
+
+        axisY->setRange(
+            0,
+            maxCount
+            );
+
+        axisY->setTickType(
+            QValueAxis::TicksDynamic
+            );
+
+        axisY->setTickAnchor(0);
+        axisY->setTickInterval(1);
+
+        chart->addAxis(
+            axisY,
+            Qt::AlignLeft
+            );
+
+        series->attachAxis(
+            axisY
+            );
+
+        timelineChartView->setChart(
+            chart
+            );
+
         return;
     }
 
@@ -1000,4 +1145,64 @@ void MainWindow::dropEvent(QDropEvent *event)
         );
 
     event->acceptProposedAction();
+}
+
+void MainWindow::updateDataCapabilities()
+{
+    hasSeverityData = false;
+    hasSubsystemData = false;
+
+    const QVector<InvestigationRecord> &records =
+        investigationController->allRecords();
+
+    for (const InvestigationRecord &record
+         : records) {
+        hasSeverityData =
+            hasSeverityData
+            || record.severity.has_value();
+
+        hasSubsystemData =
+            hasSubsystemData
+            || record.subsystem.has_value();
+
+        if (hasSeverityData
+            && hasSubsystemData) {
+            break;
+        }
+    }
+
+    /*
+     * Clear filters that no longer apply before
+     * hiding their controls.
+     */
+    if (!hasSeverityData) {
+        levelFilterCombo->blockSignals(true);
+        levelFilterCombo->setCurrentIndex(0);
+        levelFilterCombo->blockSignals(false);
+    }
+
+    if (!hasSubsystemData) {
+        subsystemFilterCombo->blockSignals(true);
+        subsystemFilterCombo->setCurrentIndex(0);
+        subsystemFilterCombo->blockSignals(false);
+    }
+
+    levelFilterCombo->setVisible(
+        hasSeverityData
+        );
+
+    subsystemFilterCombo->setVisible(
+        hasSubsystemData
+        );
+
+    /*
+     * Warning/error grouping only has useful
+     * meaning when both concepts are available.
+     */
+    if (issueSummaryGroup != nullptr) {
+        issueSummaryGroup->setVisible(
+            hasSeverityData
+            && hasSubsystemData
+            );
+    }
 }

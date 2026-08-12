@@ -9,7 +9,8 @@ class InvestigationTableModelTests : public QObject
 private slots:
     void emptyModelHasCanonicalColumns();
     void displaysCanonicalRecordValues();
-    void displaysMissingCanonicalValuesAsEmpty();
+    void omitsUnusedCanonicalColumns();
+    void showsOnlyUsedCanonicalColumns();
     void addsDynamicCustomColumns();
     void customColumnsAreDeterministicallySorted();
     void recordAtReturnsSourceRecord();
@@ -99,23 +100,117 @@ void InvestigationTableModelTests::displaysCanonicalRecordValues()
         );
 }
 
-void InvestigationTableModelTests::
-    displaysMissingCanonicalValuesAsEmpty()
+void InvestigationTableModelTests::omitsUnusedCanonicalColumns()
 {
     InvestigationRecord record;
-    record.recordId = QStringLiteral("record-1");
+
+    record.recordId =
+        QStringLiteral(
+            "record-1"
+            );
 
     InvestigationTableModel model;
-    model.setRecords({record});
 
-    for (int column = 0; column < 6; ++column) {
-        QVERIFY(
-            !model.data(
-                      model.index(0, column),
-                      Qt::DisplayRole
-                      ).isValid()
+    model.setRecords({
+        record
+    });
+
+    QCOMPARE(
+        model.rowCount(),
+        1
+        );
+
+    QCOMPARE(
+        model.columnCount(),
+        0
+        );
+}
+
+void InvestigationTableModelTests::showsOnlyUsedCanonicalColumns()
+{
+    InvestigationRecord first;
+
+    first.recordId =
+        QStringLiteral(
+            "record-1"
             );
-    }
+
+    first.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-12T10:00:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    first.message =
+        QStringLiteral(
+            "GET /api/orders HTTP/1.1"
+            );
+
+    InvestigationRecord second;
+
+    second.recordId =
+        QStringLiteral(
+            "record-2"
+            );
+
+    second.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-12T10:01:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    second.message =
+        QStringLiteral(
+            "POST /api/orders HTTP/1.1"
+            );
+
+    InvestigationTableModel model;
+
+    model.setRecords({
+        first,
+        second
+    });
+
+    QCOMPARE(
+        model.columnCount(),
+        2
+        );
+
+    QCOMPARE(
+        model.headerData(
+                 0,
+                 Qt::Horizontal
+                 ).toString(),
+        QStringLiteral(
+            "Timestamp"
+            )
+        );
+
+    QCOMPARE(
+        model.headerData(
+                 1,
+                 Qt::Horizontal
+                 ).toString(),
+        QStringLiteral(
+            "Message"
+            )
+        );
+
+    QCOMPARE(
+        model.data(
+                 model.index(
+                     0,
+                     1
+                     )
+                 ).toString(),
+        QStringLiteral(
+            "GET /api/orders HTTP/1.1"
+            )
+        );
 }
 
 void InvestigationTableModelTests::addsDynamicCustomColumns()
@@ -137,11 +232,11 @@ void InvestigationTableModelTests::addsDynamicCustomColumns()
     InvestigationTableModel model;
     model.setRecords({first, second});
 
-    QCOMPARE(model.columnCount(), 8);
+    QCOMPARE(model.columnCount(), 2);
 
     QCOMPARE(
         model.headerData(
-                 6,
+                 0,
                  Qt::Horizontal
                  ).toString(),
         QStringLiteral("host")
@@ -149,7 +244,7 @@ void InvestigationTableModelTests::addsDynamicCustomColumns()
 
     QCOMPARE(
         model.headerData(
-                 7,
+                 1,
                  Qt::Horizontal
                  ).toString(),
         QStringLiteral("threadId")
@@ -157,14 +252,14 @@ void InvestigationTableModelTests::addsDynamicCustomColumns()
 
     QCOMPARE(
         model.data(
-                 model.index(0, 6)
+                 model.index(0, 0)
                  ).toString(),
         QStringLiteral("server-01")
         );
 
     QCOMPARE(
         model.data(
-                 model.index(1, 7)
+                 model.index(1, 1)
                  ).toInt(),
         42
         );
@@ -195,17 +290,26 @@ void InvestigationTableModelTests::
     model.setRecords({record});
 
     QCOMPARE(
-        model.headerData(6, Qt::Horizontal).toString(),
+        model.headerData(
+                 0,
+                 Qt::Horizontal
+                 ).toString(),
         QStringLiteral("host")
         );
 
     QCOMPARE(
-        model.headerData(7, Qt::Horizontal).toString(),
+        model.headerData(
+                 1,
+                 Qt::Horizontal
+                 ).toString(),
         QStringLiteral("processId")
         );
 
     QCOMPARE(
-        model.headerData(8, Qt::Horizontal).toString(),
+        model.headerData(
+                 2,
+                 Qt::Horizontal
+                 ).toString(),
         QStringLiteral("zone")
         );
 }

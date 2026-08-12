@@ -396,6 +396,9 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/ImportPreviewService.h
     ../src/importing/ImportPreviewService.cpp
 
+    ../src/importing/BuiltInImportProfilePresets.h
+    ../src/importing/BuiltInImportProfilePresets.cpp
+
     ../src/importing/BuiltInImporterRegistry.h
     ../src/importing/BuiltInImporterRegistry.cpp
     ../src/importing/ImporterRegistry.h
@@ -466,6 +469,8 @@ qt_add_executable(
     ../src/importing/ImportFormatSuggestion.h
     ../src/importing/ImportFormatSuggestionService.h
     ../src/importing/ImportFormatSuggestionService.cpp
+
+    ../src/importing/BuiltInImportProfilePresets.h
 )
 
 target_link_libraries(

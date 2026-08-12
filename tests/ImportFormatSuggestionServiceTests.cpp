@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 
+#include "../src/importing/BuiltInImportProfilePresets.h"
 #include "../src/importing/ImportFormatSuggestionService.h"
 
 class ImportFormatSuggestionServiceTests
@@ -25,6 +26,8 @@ private slots:
     void rfc5424ContentSuggestsSyslog();
     void rfc3164ContentSuggestsSyslog();
     void invalidSyslogPriorityHasNoSuggestion();
+    void apacheCommonContentSuggestsPreset();
+    void combinedAccessContentSuggestsPreset();
 
 private:
     static bool writeFile(
@@ -594,6 +597,127 @@ void
                     filePath
                     )
              .hasSuggestion()
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    apacheCommonContentSuggestsPreset()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "access.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "192.0.2.10 - - "
+                "[12/Aug/2026:08:20:02 -0400] "
+                "\"GET / HTTP/1.1\" 200 1256\n"
+
+                "192.0.2.44 - - "
+                "[12/Aug/2026:08:21:06 -0400] "
+                "\"GET /missing HTTP/1.1\" "
+                "404 212\n"
+                )
+            )
+        );
+
+    const ImportFormatSuggestion suggestion =
+        ImportFormatSuggestionService()
+            .suggestForFile(
+                filePath
+                );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("regex-text")
+        );
+
+    QCOMPARE(
+        suggestion.profilePresetId,
+        BuiltInImportProfilePresetIds::
+        ApacheCommon
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Apache Common Access Log"
+            )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    combinedAccessContentSuggestsPreset()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "access.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "198.51.100.10 - - "
+                "[12/Aug/2026:10:10:02 -0400] "
+                "\"GET / HTTP/1.1\" 200 1834 "
+                "\"-\" \"Mozilla/5.0\"\n"
+
+                "203.0.113.55 - - "
+                "[12/Aug/2026:10:15:02 -0400] "
+                "\"DELETE /api/orders/5812 HTTP/1.1\" "
+                "403 176 "
+                "\"https://app.example.test/orders/5812\" "
+                "\"Mozilla/5.0\"\n"
+                )
+            )
+        );
+
+    const ImportFormatSuggestion suggestion =
+        ImportFormatSuggestionService()
+            .suggestForFile(
+                filePath
+                );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("regex-text")
+        );
+
+    QCOMPARE(
+        suggestion.profilePresetId,
+        BuiltInImportProfilePresetIds::
+        ApacheNginxCombined
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Apache/Nginx Combined Access Log"
+            )
         );
 }
 
