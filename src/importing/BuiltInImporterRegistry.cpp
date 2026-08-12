@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "DelimitedTextImporter.h"
+#include "IisW3cImporter.h"
 #include "JsonLinesImporter.h"
 #include "KeyValueTextImporter.h"
 #include "RegexTextImporter.h"
@@ -47,6 +48,12 @@ ImporterRegistry createBuiltInImporterRegistry(
 
     registry.registerImporter(
         std::make_shared<SyslogImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<IisW3cImporter>(
             profile
             )
         );

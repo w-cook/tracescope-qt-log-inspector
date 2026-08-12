@@ -281,6 +281,20 @@ void IisW3cImporterTests::
     QVERIFY(
         !record.recordId.isEmpty()
         );
+
+    QVERIFY(
+        !record.customAttributes
+             .contains(
+                 QStringLiteral("date")
+                 )
+        );
+
+    QVERIFY(
+        !record.customAttributes
+             .contains(
+                 QStringLiteral("time")
+                 )
+        );
 }
 
 void IisW3cImporterTests::

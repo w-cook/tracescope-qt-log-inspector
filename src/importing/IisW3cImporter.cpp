@@ -459,6 +459,21 @@ ImportResult IisW3cImporter::importLines(
             sourceValues
             );
 
+        /*
+         * date and time have been consumed into the
+         * generated canonical timestamp. The raw source
+         * still preserves the original values, so keeping
+         * them as custom attributes only creates duplicate
+         * investigation columns.
+         */
+        sourceValues.remove(
+            QStringLiteral("date")
+            );
+
+        sourceValues.remove(
+            QStringLiteral("time")
+            );
+
         result.records.append(
             JsonObjectRecordMapper::mapRecord(
                 sourceValues,

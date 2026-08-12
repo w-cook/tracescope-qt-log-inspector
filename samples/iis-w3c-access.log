@@ -1,0 +1,11 @@
+#Software: Microsoft Internet Information Services 10.0
+#Version: 1.0
+#Date: 2026-08-12 15:04:03
+#Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Referer) sc-status sc-substatus sc-win32-status time-taken
+2026-08-12 15:04:03 192.0.2.10 GET / - 443 - 198.51.100.24 Mozilla/5.0 - 200 0 0 42
+2026-08-12 15:05:17 192.0.2.10 GET /api/orders/5812 - 443 analyst 198.51.100.31 Mozilla/5.0 https://portal.example.test/orders 200 0 0 57
+2026-08-12 15:06:42 192.0.2.10 POST /api/orders - 443 analyst 203.0.113.7 Mozilla/5.0 https://portal.example.test/orders/new 201 0 0 91
+2026-08-12 15:07:26 192.0.2.10 GET /missing - 443 - 192.0.2.44 curl/8.14.1 - 404 0 2 11
+2026-08-12 15:08:08 192.0.2.10 GET /search q=widget&page=2 443 - 198.51.100.91 Mozilla/5.0 - 200 0 0 33
+2026-08-12 15:09:39 192.0.2.10 PUT /api/inventory/SKU-441 - 443 operator 203.0.113.18 Mozilla/5.0 https://portal.example.test/inventory 204 0 0 74
+2026-08-12 15:10:14 192.0.2.10 GET /health - 443 - 203.0.113.77 kube-probe/1.33 - 200 0 0 4

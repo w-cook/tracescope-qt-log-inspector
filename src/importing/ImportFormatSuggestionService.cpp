@@ -249,6 +249,89 @@ bool looksLikeSyslogRecord(
     return looksLikeRfc5424Record(line)
     || looksLikeRfc3164Record(line);
 }
+
+ImportFormatSuggestion iisW3cSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("iis-w3c"),
+        QStringLiteral(
+            "IIS W3C Extended Log"
+            ),
+        reason,
+        BuiltInImportProfilePresetIds::
+        IisW3c
+    };
+}
+
+bool looksLikeIisW3cFieldsDirective(
+    const QString &line
+    )
+{
+    if (!line.startsWith(
+            QStringLiteral("#Fields:"),
+            Qt::CaseInsensitive
+            )) {
+        return false;
+    }
+
+    const QString fields =
+        line.mid(
+                QStringLiteral("#Fields:")
+                    .size()
+                )
+            .trimmed();
+
+    if (fields.isEmpty()) {
+        return false;
+    }
+
+    const QStringList tokens =
+        fields.split(
+            QRegularExpression(
+                QStringLiteral(R"(\s+)")
+                ),
+            Qt::SkipEmptyParts
+            );
+
+    const bool hasDate =
+        tokens.contains(
+            QStringLiteral("date"),
+            Qt::CaseInsensitive
+            );
+
+    const bool hasTime =
+        tokens.contains(
+            QStringLiteral("time"),
+            Qt::CaseInsensitive
+            );
+
+    const bool hasIisRequestField =
+        tokens.contains(
+            QStringLiteral("cs-method"),
+            Qt::CaseInsensitive
+            )
+        || tokens.contains(
+            QStringLiteral("cs-uri-stem"),
+            Qt::CaseInsensitive
+            );
+
+    const bool hasIisResponseField =
+        tokens.contains(
+            QStringLiteral("sc-status"),
+            Qt::CaseInsensitive
+            )
+        || tokens.contains(
+            QStringLiteral("time-taken"),
+            Qt::CaseInsensitive
+            );
+
+    return hasDate
+           && hasTime
+           && hasIisRequestField
+           && hasIisResponseField;
+}
 }
 
 ImportFormatSuggestion
@@ -326,6 +409,50 @@ ImportFormatSuggestionService::suggestForFile(
             )) {
         return {};
     }
+
+    constexpr int maximumIisHeaderLines = 32;
+
+    int inspectedHeaderLines = 0;
+
+    while (!file.atEnd()
+           && inspectedHeaderLines
+                  < maximumIisHeaderLines) {
+        const QString line =
+            QString::fromUtf8(
+                file.readLine()
+                    .trimmed()
+                );
+
+        if (line.isEmpty()) {
+            continue;
+        }
+
+        ++inspectedHeaderLines;
+
+        if (looksLikeIisW3cFieldsDirective(
+                line
+                )) {
+            return iisW3cSuggestion(
+                QStringLiteral(
+                    "The source contains an IIS-style "
+                    "W3C #Fields directive."
+                    )
+                );
+        }
+
+        /*
+     * Once actual record data begins, there is
+     * no reason to continue searching for a
+     * normal W3C header.
+     */
+        if (!line.startsWith(
+                QLatin1Char('#')
+                )) {
+            break;
+        }
+    }
+
+    file.seek(0);
 
     constexpr int maximumSamples = 5;
 

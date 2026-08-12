@@ -429,6 +429,9 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/SyslogImporter.h
     ../src/importing/SyslogImporter.cpp
 
+    ../src/importing/IisW3cImporter.h
+    ../src/importing/IisW3cImporter.cpp
+
     ../src/importing/ILogImporter.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp

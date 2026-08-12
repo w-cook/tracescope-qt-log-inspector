@@ -28,6 +28,7 @@ private slots:
     void invalidSyslogPriorityHasNoSuggestion();
     void apacheCommonContentSuggestsPreset();
     void combinedAccessContentSuggestsPreset();
+    void iisW3cContentSuggestsPreset();
 
 private:
     static bool writeFile(
@@ -718,6 +719,70 @@ void
         QStringLiteral(
             "Apache/Nginx Combined Access Log"
             )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    iisW3cContentSuggestsPreset()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "u_ex260812.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "#Software: Microsoft Internet "
+                "Information Services 10.0\n"
+                "#Version: 1.0\n"
+                "#Date: 2026-08-12 15:04:03\n"
+                "#Fields: date time s-ip "
+                "cs-method cs-uri-stem "
+                "cs-uri-query c-ip "
+                "sc-status time-taken\n"
+                "2026-08-12 15:04:03 "
+                "192.0.2.10 GET /health - "
+                "198.51.100.24 200 42\n"
+                )
+            )
+        );
+
+    const ImportFormatSuggestion suggestion =
+        ImportFormatSuggestionService()
+            .suggestForFile(
+                filePath
+                );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral(
+            "iis-w3c"
+            )
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "IIS W3C Extended Log"
+            )
+        );
+
+    QCOMPARE(
+        suggestion.profilePresetId,
+        BuiltInImportProfilePresetIds::
+        IisW3c
         );
 }
 

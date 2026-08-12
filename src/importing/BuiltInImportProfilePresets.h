@@ -13,6 +13,9 @@ inline const QString ApacheCommon =
 
 inline const QString ApacheNginxCombined =
     QStringLiteral("apache-nginx-combined");
+
+inline const QString IisW3c =
+    QStringLiteral("iis-w3c");
 }
 
 std::optional<ImportProfile>
