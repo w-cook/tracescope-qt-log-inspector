@@ -15,6 +15,7 @@ private slots:
     void tsvProfilePreviewsRecords();
     void structuredJsonProfilePreviewsRecords();
     void regexTextProfilePreviewsRecords();
+    void keyValueProfilePreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -442,6 +443,171 @@ void ImportPreviewServiceTests::regexTextProfilePreviewsRecords()
             .toString(),
         QStringLiteral(
             "worker-1"
+            )
+        );
+}
+
+void ImportPreviewServiceTests::keyValueProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "timestamp=2026-08-12T08:10:00Z "
+                "level=INFO "
+                "subsystem=Orders "
+                "eventCode=ORDER_ACCEPTED "
+                "entityId=ORD-4101 "
+                "requestId=REQ-7101 "
+                "message=\"Order accepted for processing\"\n"
+
+                "timestamp=2026-08-12T08:11:00Z "
+                "level=WARN "
+                "subsystem=Inventory "
+                "eventCode=LOW_STOCK "
+                "entityId=SKU-440 "
+                "requestId=REQ-7102 "
+                "message=\"Available quantity below threshold\"\n"
+                )
+            );
+
+    QVERIFY(
+        !path.isEmpty()
+        );
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Preview Key-Value"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "key-value"
+            );
+
+    profile.customFields.append({
+        QStringLiteral(
+            "Request ID"
+            ),
+        QStringLiteral(
+            "requestId"
+            )
+    });
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult
+            .processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        2
+        );
+
+    const InvestigationRecord &first =
+        result.importResult.records.at(0);
+
+    const InvestigationRecord &second =
+        result.importResult.records.at(1);
+
+    QCOMPARE(
+        first.message.value(),
+        QStringLiteral(
+            "Order accepted for processing"
+            )
+        );
+
+    QCOMPARE(
+        first.severity.value(),
+        RecordSeverity::Info
+        );
+
+    QCOMPARE(
+        first.subsystem.value(),
+        QStringLiteral(
+            "Orders"
+            )
+        );
+
+    QCOMPARE(
+        first.eventCode.value(),
+        QStringLiteral(
+            "ORDER_ACCEPTED"
+            )
+        );
+
+    QCOMPARE(
+        first.entityId.value(),
+        QStringLiteral(
+            "ORD-4101"
+            )
+        );
+
+    QCOMPARE(
+        first.customAttributes
+            .value(
+                QStringLiteral(
+                    "Request ID"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "REQ-7101"
+            )
+        );
+
+    QCOMPARE(
+        second.severity.value(),
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        second.subsystem.value(),
+        QStringLiteral(
+            "Inventory"
+            )
+        );
+
+    QCOMPARE(
+        second.eventCode.value(),
+        QStringLiteral(
+            "LOW_STOCK"
+            )
+        );
+
+    QCOMPARE(
+        second.entityId.value(),
+        QStringLiteral(
+            "SKU-440"
+            )
+        );
+
+    QCOMPARE(
+        second.customAttributes
+            .value(
+                QStringLiteral(
+                    "Request ID"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "REQ-7102"
             )
         );
 }

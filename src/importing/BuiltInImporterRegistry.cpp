@@ -4,6 +4,7 @@
 
 #include "DelimitedTextImporter.h"
 #include "JsonLinesImporter.h"
+#include "KeyValueTextImporter.h"
 #include "RegexTextImporter.h"
 #include "StructuredJsonImporter.h"
 
@@ -33,6 +34,12 @@ ImporterRegistry createBuiltInImporterRegistry(
 
     registry.registerImporter(
         std::make_shared<RegexTextImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<KeyValueTextImporter>(
             profile
             )
         );
