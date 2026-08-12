@@ -87,6 +87,8 @@ qt_add_executable(TraceScope
     src/importing/SyslogImporter.cpp
     src/importing/BuiltInImportProfilePresets.h
     src/importing/BuiltInImportProfilePresets.cpp
+    src/importing/IisW3cImporter.h
+    src/importing/IisW3cImporter.cpp
 
 )
 
