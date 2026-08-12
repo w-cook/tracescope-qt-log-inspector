@@ -423,6 +423,9 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/KeyValueTextImporter.h
     ../src/importing/KeyValueTextImporter.cpp
 
+    ../src/importing/SyslogImporter.h
+    ../src/importing/SyslogImporter.cpp
+
     ../src/importing/ILogImporter.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp

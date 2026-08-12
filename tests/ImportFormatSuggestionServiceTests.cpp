@@ -21,6 +21,10 @@ private slots:
     void logfmtContentSuggestsKeyValue();
     void isolatedAssignmentDoesNotSuggestKeyValue();
     void missingFileHasNoSuggestion();
+    void syslogExtensionSuggestsSyslog();
+    void rfc5424ContentSuggestsSyslog();
+    void rfc3164ContentSuggestsSyslog();
+    void invalidSyslogPriorityHasNoSuggestion();
 
 private:
     static bool writeFile(
@@ -401,6 +405,193 @@ void
                     QStringLiteral(
                         "file-that-does-not-exist.jsonl"
                         )
+                    )
+             .hasSuggestion()
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    syslogExtensionSuggestsSyslog()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "service.syslog"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "content need not be inspected\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(
+            filePath
+            );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral(
+            "syslog"
+            )
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Syslog (RFC 5424 / RFC 3164)"
+            )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    rfc5424ContentSuggestsSyslog()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "service.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<165>1 "
+                "2026-08-12T08:20:18.427Z "
+                "api-01 orders-service 4242 "
+                "ORDER_RECEIVED - "
+                "Order received\n"
+
+                "<132>1 "
+                "2026-08-12T08:21:04.812Z "
+                "worker-02 supplier-gateway 8301 "
+                "SUPPLIER_DELAY - "
+                "Supplier delayed\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(
+            filePath
+            );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral(
+            "syslog"
+            )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    rfc3164ContentSuggestsSyslog()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "legacy.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<34>Aug 12 08:24:16 "
+                "worker-04 telemetry: "
+                "Queue unavailable\n"
+
+                "<11>Aug 12 08:25:01 "
+                "db-01 postgres[7214]: "
+                "Connection timed out\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(
+            filePath
+            );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral(
+            "syslog"
+            )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    invalidSyslogPriorityHasNoSuggestion()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "invalid.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<999>1 "
+                "2026-08-12T08:20:18Z "
+                "host app - - - Invalid\n"
+
+                "<999>Aug 12 08:21:00 "
+                "host app: Invalid\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    QVERIFY(
+        !service.suggestForFile(
+                    filePath
                     )
              .hasSuggestion()
         );

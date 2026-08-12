@@ -7,6 +7,7 @@
 #include "KeyValueTextImporter.h"
 #include "RegexTextImporter.h"
 #include "StructuredJsonImporter.h"
+#include "SyslogImporter.h"
 
 ImporterRegistry createBuiltInImporterRegistry(
     const ImportProfile &profile
@@ -40,6 +41,12 @@ ImporterRegistry createBuiltInImporterRegistry(
 
     registry.registerImporter(
         std::make_shared<KeyValueTextImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<SyslogImporter>(
             profile
             )
         );

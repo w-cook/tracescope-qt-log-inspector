@@ -54,6 +54,19 @@ ImportFormatSuggestion keyValueSuggestion(
     };
 }
 
+ImportFormatSuggestion syslogSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("syslog"),
+        QStringLiteral(
+            "Syslog (RFC 5424 / RFC 3164)"
+            ),
+        reason
+    };
+}
+
 bool looksLikeKeyValueRecord(
     const QString &line
     )
@@ -94,6 +107,88 @@ bool looksLikeKeyValueRecord(
      */
     return firstMatchStart == 0
            && assignmentCount >= 2;
+}
+
+bool looksLikeRfc5424Record(
+    const QString &line
+    )
+{
+    static const QRegularExpression pattern(
+        QStringLiteral(
+            R"(^<(?<priority>\d{1,3})>(?<version>\d{1,3})\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(?:-|(?:\[.*\]))(?:\s.*)?$)"
+            )
+        );
+
+    const QRegularExpressionMatch match =
+        pattern.match(line);
+
+    if (!match.hasMatch()) {
+        return false;
+    }
+
+    bool priorityValid = false;
+    const int priority =
+        match.captured(
+                 QStringLiteral("priority")
+                 )
+            .toInt(
+                &priorityValid
+                );
+
+    bool versionValid = false;
+    const int version =
+        match.captured(
+                 QStringLiteral("version")
+                 )
+            .toInt(
+                &versionValid
+                );
+
+    return priorityValid
+           && priority >= 0
+           && priority <= 191
+           && versionValid
+           && version > 0;
+}
+
+bool looksLikeRfc3164Record(
+    const QString &line
+    )
+{
+    static const QRegularExpression pattern(
+        QStringLiteral(
+            R"(^<(?<priority>\d{1,3})>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\S+(?:\s+.*)?$)"
+            )
+        );
+
+    const QRegularExpressionMatch match =
+        pattern.match(line);
+
+    if (!match.hasMatch()) {
+        return false;
+    }
+
+    bool priorityValid = false;
+
+    const int priority =
+        match.captured(
+                 QStringLiteral("priority")
+                 )
+            .toInt(
+                &priorityValid
+                );
+
+    return priorityValid
+           && priority >= 0
+           && priority <= 191;
+}
+
+bool looksLikeSyslogRecord(
+    const QString &line
+    )
+{
+    return looksLikeRfc5424Record(line)
+    || looksLikeRfc3164Record(line);
 }
 }
 
@@ -153,6 +248,17 @@ ImportFormatSuggestionService::suggestForFile(
             );
     }
 
+    if (suffix == QStringLiteral(
+            "syslog"
+            )) {
+        return syslogSuggestion(
+            QStringLiteral(
+                "The file extension indicates "
+                "Syslog content."
+                )
+            );
+    }
+
     QFile file(filePath);
 
     if (!file.open(
@@ -168,6 +274,7 @@ ImportFormatSuggestionService::suggestForFile(
 
     bool allSamplesAreJsonObjects = true;
     bool allSamplesLookLikeKeyValue = true;
+    bool allSamplesLookLikeSyslog = true;
 
     while (!file.atEnd()
            && sampledRecords < maximumSamples) {
@@ -177,6 +284,11 @@ ImportFormatSuggestionService::suggestForFile(
         if (rawLine.isEmpty()) {
             continue;
         }
+
+        const QString line =
+            QString::fromUtf8(
+                rawLine
+                );
 
         ++sampledRecords;
 
@@ -199,9 +311,16 @@ ImportFormatSuggestionService::suggestForFile(
         }
 
         if (!looksLikeKeyValueRecord(
-                QString::fromUtf8(rawLine)
+                line
                 )) {
             allSamplesLookLikeKeyValue =
+                false;
+        }
+
+        if (!looksLikeSyslogRecord(
+                line
+                )) {
+            allSamplesLookLikeSyslog =
                 false;
         }
     }
@@ -224,6 +343,16 @@ ImportFormatSuggestionService::suggestForFile(
             QStringLiteral(
                 "Sampled non-empty source records "
                 "contain logfmt-style key-value assignments."
+                )
+            );
+    }
+
+    if (allSamplesLookLikeSyslog) {
+        return syslogSuggestion(
+            QStringLiteral(
+                "Sampled non-empty source records "
+                "match RFC 5424 or RFC 3164 "
+                "Syslog structure."
                 )
             );
     }

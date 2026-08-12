@@ -16,6 +16,7 @@ private slots:
     void structuredJsonProfilePreviewsRecords();
     void regexTextProfilePreviewsRecords();
     void keyValueProfilePreviewsRecords();
+    void syslogProfilePreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -608,6 +609,171 @@ void ImportPreviewServiceTests::keyValueProfilePreviewsRecords()
             .toString(),
         QStringLiteral(
             "REQ-7102"
+            )
+        );
+}
+
+void ImportPreviewServiceTests::syslogProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "<165>1 "
+                "2026-08-12T08:20:18.427Z "
+                "api-01 "
+                "orders-service "
+                "4242 "
+                "ORDER_RECEIVED "
+                "- "
+                "Order received for processing\n"
+
+                "<132>1 "
+                "2026-08-12T08:21:04.812Z "
+                "worker-02 "
+                "supplier-gateway "
+                "8301 "
+                "SUPPLIER_DELAY "
+                "- "
+                "Supplier response exceeded expected latency\n"
+                )
+            );
+
+    QVERIFY(
+        !path.isEmpty()
+        );
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Preview Syslog"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "syslog"
+            );
+
+    profile.customFields.append({
+        QStringLiteral(
+            "Hostname"
+            ),
+        QStringLiteral(
+            "hostname"
+            )
+    });
+
+    profile.customFields.append({
+        QStringLiteral(
+            "Process ID"
+            ),
+        QStringLiteral(
+            "processId"
+            )
+    });
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult
+            .processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.size(),
+        2
+        );
+
+    const InvestigationRecord &first =
+        result.importResult
+            .records.at(0);
+
+    QCOMPARE(
+        first.severity.value(),
+        RecordSeverity::Info
+        );
+
+    QCOMPARE(
+        first.subsystem.value(),
+        QStringLiteral(
+            "orders-service"
+            )
+        );
+
+    QCOMPARE(
+        first.eventCode.value(),
+        QStringLiteral(
+            "ORDER_RECEIVED"
+            )
+        );
+
+    QCOMPARE(
+        first.message.value(),
+        QStringLiteral(
+            "Order received for processing"
+            )
+        );
+
+    QCOMPARE(
+        first.customAttributes
+            .value(
+                QStringLiteral(
+                    "Hostname"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "api-01"
+            )
+        );
+
+    QCOMPARE(
+        first.customAttributes
+            .value(
+                QStringLiteral(
+                    "Process ID"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "4242"
+            )
+        );
+
+    const InvestigationRecord &second =
+        result.importResult
+            .records.at(1);
+
+    QCOMPARE(
+        second.severity.value(),
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        second.subsystem.value(),
+        QStringLiteral(
+            "supplier-gateway"
+            )
+        );
+
+    QCOMPARE(
+        second.eventCode.value(),
+        QStringLiteral(
+            "SUPPLIER_DELAY"
             )
         );
 }
