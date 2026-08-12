@@ -169,7 +169,17 @@ QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
             iterator.value();
 
         if (event.level
-            == QStringLiteral("INFO")) {
+            == QStringLiteral("TRACE")) {
+            ++bucket.traceCount;
+        } else if (
+            event.level
+            == QStringLiteral("DEBUG")
+            ) {
+            ++bucket.debugCount;
+        } else if (
+            event.level
+            == QStringLiteral("INFO")
+            ) {
             ++bucket.infoCount;
         } else if (
             event.level
@@ -181,6 +191,11 @@ QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
             == QStringLiteral("ERROR")
             ) {
             ++bucket.errorCount;
+        } else if (
+            event.level
+            == QStringLiteral("CRITICAL")
+            ) {
+            ++bucket.criticalCount;
         }
     }
 

@@ -10,7 +10,9 @@ QVector<TelemetryIssueGroup> TelemetryIssueAnalyzer::groupWarningsAndErrorsBySub
     QMap<QString, TelemetryIssueGroup> groupsBySubsystem;
 
     for (const TelemetryEvent &event : events) {
-        if (event.level != "WARN" && event.level != "ERROR") {
+        if (event.level != "WARN"
+            && event.level != "ERROR"
+            && event.level != "CRITICAL") {
             continue;
         }
 
@@ -28,7 +30,10 @@ QVector<TelemetryIssueGroup> TelemetryIssueAnalyzer::groupWarningsAndErrorsBySub
 
         if (event.level == "WARN") {
             ++group.warningCount;
-        } else if (event.level == "ERROR") {
+        } else if (
+            event.level == "ERROR"
+            || event.level == "CRITICAL"
+            ) {
             ++group.errorCount;
         }
 

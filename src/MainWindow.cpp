@@ -264,40 +264,56 @@ void MainWindow::updateSummary(
     const QString &filePath
     )
 {
+    int traceCount = 0;
+    int debugCount = 0;
     int infoCount = 0;
     int warningCount = 0;
     int errorCount = 0;
+    int criticalCount = 0;
 
     for (const TelemetryEvent &event : events) {
-        if (event.level == "INFO") {
+        if (event.level == "TRACE") {
+            ++traceCount;
+        } else if (event.level == "DEBUG") {
+            ++debugCount;
+        } else if (event.level == "INFO") {
             ++infoCount;
         } else if (event.level == "WARN") {
             ++warningCount;
         } else if (event.level == "ERROR") {
             ++errorCount;
+        } else if (event.level == "CRITICAL") {
+            ++criticalCount;
         }
     }
 
     summaryLabel->setText(
         QString(
             "Showing %1 of %2 events from %3 | "
-            "INFO: %4 | WARN: %5 | ERROR: %6"
+            "TRACE: %4 | DEBUG: %5 | INFO: %6 | "
+            "WARN: %7 | ERROR: %8 | CRITICAL: %9"
             )
             .arg(events.size())
             .arg(investigationController->totalRecordCount())
             .arg(filePath)
+            .arg(traceCount)
+            .arg(debugCount)
             .arg(infoCount)
             .arg(warningCount)
             .arg(errorCount)
+            .arg(criticalCount)
         );
 }
 
 void MainWindow::buildFilterControls(QVBoxLayout *layout)
 {
     levelFilterCombo->addItem("All levels", "");
+    levelFilterCombo->addItem("TRACE", "TRACE");
+    levelFilterCombo->addItem("DEBUG", "DEBUG");
     levelFilterCombo->addItem("INFO", "INFO");
     levelFilterCombo->addItem("WARN", "WARN");
     levelFilterCombo->addItem("ERROR", "ERROR");
+    levelFilterCombo->addItem("CRITICAL", "CRITICAL");
 
     subsystemFilterCombo->addItem("All subsystems", "");
 
@@ -798,29 +814,60 @@ void MainWindow::updateTimelineChart(
         return;
     }
 
-    auto *infoSet = new QBarSet("INFO");
-    auto *warnSet = new QBarSet("WARN");
-    auto *errorSet = new QBarSet("ERROR");
+    auto *traceSet =
+        new QBarSet("TRACE");
+
+    auto *debugSet =
+        new QBarSet("DEBUG");
+
+    auto *infoSet =
+        new QBarSet("INFO");
+
+    auto *warnSet =
+        new QBarSet("WARN");
+
+    auto *errorSet =
+        new QBarSet("ERROR");
+
+    auto *criticalSet =
+        new QBarSet("CRITICAL");
 
     QStringList categories;
 
     for (const EventCountBucket &bucket : buckets) {
         categories << bucket.label;
-        *infoSet << bucket.infoCount;
-        *warnSet << bucket.warningCount;
-        *errorSet << bucket.errorCount;
+        *traceSet
+            << bucket.traceCount;
+
+        *debugSet
+            << bucket.debugCount;
+
+        *infoSet
+            << bucket.infoCount;
+
+        *warnSet
+            << bucket.warningCount;
+
+        *errorSet
+            << bucket.errorCount;
+
+        *criticalSet
+            << bucket.criticalCount;
     }
 
     auto *series = new QBarSeries();
+    series->append(traceSet);
+    series->append(debugSet);
     series->append(infoSet);
     series->append(warnSet);
     series->append(errorSet);
+    series->append(criticalSet);
 
     auto *chart = new QChart();
     chart->addSeries(series);
     chart->setTitle("Filtered Event Counts by Minute");
     chart->setAnimationOptions(QChart::NoAnimation);
-    chart->legend()->setAlignment(Qt::AlignRight);
+    chart->legend()->setAlignment(Qt::AlignBottom);
 
     auto *axisX = new QBarCategoryAxis();
     axisX->append(categories);
@@ -834,9 +881,41 @@ void MainWindow::updateTimelineChart(
     int maxCount = 1;
 
     for (const EventCountBucket &bucket : buckets) {
-        maxCount = std::max(maxCount, bucket.infoCount);
-        maxCount = std::max(maxCount, bucket.warningCount);
-        maxCount = std::max(maxCount, bucket.errorCount);
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.traceCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.debugCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.infoCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.warningCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.errorCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.criticalCount
+                );
     }
 
     axisY->setRange(0, maxCount);

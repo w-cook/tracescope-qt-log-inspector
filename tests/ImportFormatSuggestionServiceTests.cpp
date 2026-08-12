@@ -18,6 +18,8 @@ private slots:
     void tsvExtensionSuggestsTsv();
     void malformedContentHasNoSuggestion();
     void jsonExtensionSuggestsStructuredJson();
+    void logfmtContentSuggestsKeyValue();
+    void isolatedAssignmentDoesNotSuggestKeyValue();
     void missingFileHasNoSuggestion();
 
 private:
@@ -294,6 +296,97 @@ void
         QStringLiteral(
             "Structured JSON"
             )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    logfmtContentSuggestsKeyValue()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "application.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "timestamp=2026-08-12T08:30:00Z "
+                "level=INFO "
+                "subsystem=Orders "
+                "message=\"Order accepted\"\n"
+
+                "timestamp=2026-08-12T08:31:00Z "
+                "level=WARN "
+                "subsystem=Inventory "
+                "message=\"Stock is low\"\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(
+            filePath
+            );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral(
+            "key-value"
+            )
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Key-Value / logfmt"
+            )
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    isolatedAssignmentDoesNotSuggestKeyValue()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "application.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "Request failed after retryCount=4\n"
+                "Connection closed by peer\n"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    QVERIFY(
+        !service.suggestForFile(
+                    filePath
+                    )
+             .hasSuggestion()
         );
 }
 

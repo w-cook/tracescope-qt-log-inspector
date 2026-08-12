@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QRegularExpression>
 
 namespace
 {
@@ -40,6 +41,59 @@ ImportFormatSuggestion structuredJsonSuggestion(
         QStringLiteral("Structured JSON"),
         reason
     };
+}
+
+ImportFormatSuggestion keyValueSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("key-value"),
+        QStringLiteral("Key-Value / logfmt"),
+        reason
+    };
+}
+
+bool looksLikeKeyValueRecord(
+    const QString &line
+    )
+{
+    static const QRegularExpression
+        assignmentPattern(
+            QStringLiteral(
+                R"((?:^|\s)[A-Za-z_][A-Za-z0-9_.:-]*=(?:"(?:\\.|[^"])*"|\S+))"
+                )
+            );
+
+    QRegularExpressionMatchIterator matches =
+        assignmentPattern.globalMatch(line);
+
+    int assignmentCount = 0;
+    qsizetype firstMatchStart = -1;
+
+    while (matches.hasNext()) {
+        const QRegularExpressionMatch match =
+            matches.next();
+
+        if (assignmentCount == 0) {
+            firstMatchStart =
+                match.capturedStart();
+        }
+
+        ++assignmentCount;
+    }
+
+    /*
+     * Keep format suggestion conservative:
+     * logfmt-style records normally begin with
+     * an assignment and contain multiple fields.
+     *
+     * A single key=value fragment embedded in an
+     * otherwise arbitrary text log should not cause
+     * TraceScope to assume key-value format.
+     */
+    return firstMatchStart == 0
+           && assignmentCount >= 2;
 }
 }
 
@@ -112,12 +166,15 @@ ImportFormatSuggestionService::suggestForFile(
 
     int sampledRecords = 0;
 
+    bool allSamplesAreJsonObjects = true;
+    bool allSamplesLookLikeKeyValue = true;
+
     while (!file.atEnd()
            && sampledRecords < maximumSamples) {
-        const QByteArray line =
+        const QByteArray rawLine =
             file.readLine().trimmed();
 
-        if (line.isEmpty()) {
+        if (rawLine.isEmpty()) {
             continue;
         }
 
@@ -127,14 +184,25 @@ ImportFormatSuggestionService::suggestForFile(
 
         const QJsonDocument document =
             QJsonDocument::fromJson(
-                line,
+                rawLine,
                 &parseError
                 );
 
-        if (parseError.error
-                != QJsonParseError::NoError
-            || !document.isObject()) {
-            return {};
+        const bool isJsonObject =
+            parseError.error
+                == QJsonParseError::NoError
+            && document.isObject();
+
+        if (!isJsonObject) {
+            allSamplesAreJsonObjects =
+                false;
+        }
+
+        if (!looksLikeKeyValueRecord(
+                QString::fromUtf8(rawLine)
+                )) {
+            allSamplesLookLikeKeyValue =
+                false;
         }
     }
 
@@ -142,10 +210,23 @@ ImportFormatSuggestionService::suggestForFile(
         return {};
     }
 
-    return jsonLinesSuggestion(
-        QStringLiteral(
-            "Sampled non-empty source records "
-            "are individual JSON objects."
-            )
-        );
+    if (allSamplesAreJsonObjects) {
+        return jsonLinesSuggestion(
+            QStringLiteral(
+                "Sampled non-empty source records "
+                "are individual JSON objects."
+                )
+            );
+    }
+
+    if (allSamplesLookLikeKeyValue) {
+        return keyValueSuggestion(
+            QStringLiteral(
+                "Sampled non-empty source records "
+                "contain logfmt-style key-value assignments."
+                )
+            );
+    }
+
+    return {};
 }

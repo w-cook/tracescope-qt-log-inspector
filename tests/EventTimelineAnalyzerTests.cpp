@@ -16,7 +16,23 @@ private slots:
 
 void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
 {
-    QVector<TelemetryEvent> events = {
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-07-07T11:02:00.100Z",
+            "TRACE",
+            "Diagnostics",
+            "TRACE_EVENT",
+            "Detailed trace",
+            "SYS-204"
+        },
+        {
+            "2026-07-07T11:02:00.500Z",
+            "DEBUG",
+            "Diagnostics",
+            "DEBUG_EVENT",
+            "Debug detail",
+            "SYS-204"
+        },
         {
             "2026-07-07T11:02:01.104Z",
             "INFO",
@@ -42,6 +58,14 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
             "LINK-A"
         },
         {
+            "2026-07-07T11:02:12.000Z",
+            "CRITICAL",
+            "Comms",
+            "LINK_FAILURE",
+            "Communications link unavailable",
+            "LINK-A"
+        },
+        {
             "2026-07-07T11:03:01.000Z",
             "WARN",
             "Tracking",
@@ -53,21 +77,95 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
 
     EventTimelineAnalyzer analyzer;
 
-    const auto buckets = analyzer.groupEventsByMinute(events);
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
 
-    QCOMPARE(buckets.size(), 2);
+    QCOMPARE(
+        buckets.size(),
+        2
+        );
 
-    QCOMPARE(buckets[0].label, QString("11:02"));
-    QCOMPARE(buckets[0].infoCount, 1);
-    QCOMPARE(buckets[0].warningCount, 1);
-    QCOMPARE(buckets[0].errorCount, 1);
-    QCOMPARE(buckets[0].totalCount(), 3);
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral("11:02")
+        );
 
-    QCOMPARE(buckets[1].label, QString("11:03"));
-    QCOMPARE(buckets[1].infoCount, 0);
-    QCOMPARE(buckets[1].warningCount, 1);
-    QCOMPARE(buckets[1].errorCount, 0);
-    QCOMPARE(buckets[1].totalCount(), 1);
+    QCOMPARE(
+        buckets.at(0).traceCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).debugCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).infoCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).warningCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).errorCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).criticalCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).totalCount(),
+        6
+        );
+
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral("11:03")
+        );
+
+    QCOMPARE(
+        buckets.at(1).traceCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).debugCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).infoCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).warningCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(1).errorCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).criticalCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        1
+        );
 }
 
 void EventTimelineAnalyzerTests::groupEventsByMinuteSkipsInvalidTimestamps()
