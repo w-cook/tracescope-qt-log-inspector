@@ -1,0 +1,11 @@
+<134>Aug 12 08:20:02 api-01 orders-service[4120]: Order service startup completed
+<134>Aug 12 08:20:18 api-01 orders-service[4120]: Order ORD-5812 received for processing
+<135>Aug 12 08:20:19 worker-02 inventory-worker[5302]: Inventory availability checked for SKU-441
+<132>Aug 12 08:21:04 worker-02 supplier-gateway[8301]: Supplier response exceeded expected latency
+<133>Aug 12 08:21:07 worker-02 supplier-gateway[8301]: Supplier accepted reorder request SUP-77412
+<134>Aug 12 08:22:11 api-02 payments-service[6204]: Payment authorization completed
+<131>Aug 12 08:22:45 api-02 orders-database[7128]: Database command timed out
+<134>Aug 12 08:23:02 worker-03 orders-worker[5411]: Order processing retry scheduled
+<130>Aug 12 08:24:16 worker-04 telemetry-pipeline[9102]: Telemetry queue is unavailable
+<134>Aug 12 08:24:43 worker-04 telemetry-pipeline[9102]: Telemetry queue connectivity restored
+<134>Aug 12 08:25:12 api-01 orders-service[4120]: Service investigation sample completed

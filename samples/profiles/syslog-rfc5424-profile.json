@@ -1,0 +1,58 @@
+{
+    "schemaVersion": 1,
+    "name": "RFC 5424 Syslog Session",
+    "importerId": "syslog",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Hostname",
+            "sourcePath": "hostname"
+        },
+        {
+            "name": "Process ID",
+            "sourcePath": "processId"
+        },
+        {
+            "name": "Priority",
+            "sourcePath": "priority"
+        },
+        {
+            "name": "Facility Code",
+            "sourcePath": "facilityCode"
+        },
+        {
+            "name": "Syslog Severity Code",
+            "sourcePath": "severityCode"
+        },
+        {
+            "name": "Syslog Severity",
+            "sourcePath": "syslogSeverity"
+        },
+        {
+            "name": "Syslog Format",
+            "sourcePath": "syslogFormat"
+        },
+        {
+            "name": "Syslog Version",
+            "sourcePath": "syslogVersion"
+        },
+        {
+            "name": "Structured Data",
+            "sourcePath": "structuredData"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}
