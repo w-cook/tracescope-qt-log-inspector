@@ -83,6 +83,8 @@ qt_add_executable(TraceScope
     src/importing/RegexTextImporter.cpp
     src/importing/KeyValueTextImporter.h
     src/importing/KeyValueTextImporter.cpp
+    src/importing/SyslogImporter.h
+    src/importing/SyslogImporter.cpp
 
 )
 

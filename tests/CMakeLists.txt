@@ -592,3 +592,45 @@ add_test(
     NAME KeyValueTextImporterTests
     COMMAND KeyValueTextImporterTests
 )
+
+qt_add_executable(
+    SyslogImporterTests
+
+    SyslogImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+
+    ../src/importing/SyslogImporter.h
+    ../src/importing/SyslogImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    SyslogImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME SyslogImporterTests
+    COMMAND SyslogImporterTests
+)
