@@ -19,6 +19,12 @@ private slots:
     void invalidSeverityTargetIsRejected();
     void unknownTimestampRuleTypeIsRejected();
     void unsupportedSchemaVersionCanBeDeserialized();
+    void recordPathRoundTripsThroughJson();
+    void missingRecordPathDefaultsToEmpty();
+    void nonStringRecordPathIsRejected();
+    void regexPatternRoundTripsThroughJson();
+    void missingRegexPatternDefaultsToEmpty();
+    void nonStringRegexPatternIsRejected();
 };
 
 ImportProfile populatedProfile()
@@ -298,6 +304,16 @@ void ImportProfileSerializationTests::
         restored.preserveUnmappedFields,
         original.preserveUnmappedFields
         );
+
+    QCOMPARE(
+        restored.recordPath,
+        original.recordPath
+        );
+
+    QCOMPARE(
+        restored.regexPattern,
+        original.regexPattern
+        );
 }
 
 void ImportProfileSerializationTests::
@@ -480,6 +496,217 @@ void ImportProfileSerializationTests::
     QCOMPARE(
         result.profile->schemaVersion,
         ImportProfile::CurrentSchemaVersion + 1
+        );
+}
+
+void ImportProfileSerializationTests::
+    recordPathRoundTripsThroughJson()
+{
+    ImportProfile profile =
+        populatedProfile();
+
+    profile.importerId =
+        QStringLiteral(
+            "structured-json"
+            );
+
+    profile.recordPath =
+        QStringLiteral(
+            "payload.events"
+            );
+
+    const ImportProfileSerializer serializer;
+
+    const QByteArray json =
+        serializer.serialize(profile);
+
+    const ProfileDeserializationResult result =
+        serializer.deserialize(json);
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.profile.has_value());
+
+    QCOMPARE(
+        result.profile->recordPath,
+        QStringLiteral(
+            "payload.events"
+            )
+        );
+}
+
+void ImportProfileSerializationTests::
+    missingRecordPathDefaultsToEmpty()
+{
+    ImportProfile profile =
+        populatedProfile();
+
+    const ImportProfileSerializer serializer;
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serializer.serialize(profile)
+            );
+
+    QJsonObject root =
+        document.object();
+
+    root.remove(
+        QStringLiteral(
+            "recordPath"
+            )
+        );
+
+    const ProfileDeserializationResult result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.profile.has_value());
+
+    QVERIFY(
+        result.profile
+            ->recordPath
+            .isEmpty()
+        );
+}
+
+void ImportProfileSerializationTests::
+    nonStringRecordPathIsRejected()
+{
+    ImportProfile profile =
+        populatedProfile();
+
+    const ImportProfileSerializer serializer;
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serializer.serialize(profile)
+            );
+
+    QJsonObject root =
+        document.object();
+
+    root.insert(
+        QStringLiteral(
+            "recordPath"
+            ),
+        42
+        );
+
+    const ProfileDeserializationResult result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson()
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_RECORD_PATH"
+            )
+        );
+}
+
+void ImportProfileSerializationTests::
+    regexPatternRoundTripsThroughJson()
+{
+    ImportProfile profile =
+        populatedProfile();
+
+    profile.importerId =
+        QStringLiteral("regex-text");
+
+    profile.regexPattern =
+        QStringLiteral(
+            R"(^(?<timestamp>\S+)\s+(?<message>.*)$)"
+            );
+
+    const ImportProfileSerializer serializer;
+
+    const auto result =
+        serializer.deserialize(
+            serializer.serialize(profile)
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.profile.has_value());
+
+    QCOMPARE(
+        result.profile->regexPattern,
+        profile.regexPattern
+        );
+}
+
+void ImportProfileSerializationTests::
+    missingRegexPatternDefaultsToEmpty()
+{
+    ImportProfile profile =
+        populatedProfile();
+
+    const ImportProfileSerializer serializer;
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serializer.serialize(profile)
+            );
+
+    QJsonObject root =
+        document.object();
+
+    root.remove(
+        QStringLiteral("regexPattern")
+        );
+
+    const auto result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.profile.has_value());
+
+    QVERIFY(
+        result.profile
+            ->regexPattern
+            .isEmpty()
+        );
+}
+
+void ImportProfileSerializationTests::
+    nonStringRegexPatternIsRejected()
+{
+    ImportProfile profile =
+        populatedProfile();
+
+    const ImportProfileSerializer serializer;
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serializer.serialize(profile)
+            );
+
+    QJsonObject root =
+        document.object();
+
+    root.insert(
+        QStringLiteral("regexPattern"),
+        42
+        );
+
+    const auto result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson()
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_REGEX_PATTERN_TYPE"
+            )
         );
 }
 

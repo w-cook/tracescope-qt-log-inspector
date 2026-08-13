@@ -7,6 +7,7 @@ struct ImportFormatSuggestion
     QString importerId;
     QString displayName;
     QString reason;
+    QString profilePresetId;
 
     bool hasSuggestion() const
     {

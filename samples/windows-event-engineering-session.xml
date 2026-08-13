@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Events>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-Engineering" Guid="{D1B6D57A-3E1C-4E0A-91D0-844EA2980E25}" />
+      <EventID>4100</EventID>
+      <Version>1</Version>
+      <Level>4</Level>
+      <Task>1</Task>
+      <Opcode>1</Opcode>
+      <Keywords>0x0000000000000001</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:00:00.000Z" />
+      <EventRecordID>12001</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8124" ThreadID="6408" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">RIG-ALPHA-07</Data>
+      <Data Name="Component">TestOrchestrator</Data>
+      <Data Name="Result">Started</Data>
+      <Data Name="DurationMs">0</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Engineering validation run started.</Message>
+      <Level>Information</Level>
+      <Task>Validation Run</Task>
+      <Opcode>Start</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-SensorGateway" Guid="{89F2243E-5AA1-4B1C-8E68-D0CBB1C53279}" />
+      <EventID>4201</EventID>
+      <Version>1</Version>
+      <Level>5</Level>
+      <Task>2</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0000000000000002</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:00:42.250Z" />
+      <EventRecordID>12002</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8340" ThreadID="7024" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">SENSOR-12</Data>
+      <Data Name="Component">SensorGateway</Data>
+      <Data Name="Result">Connected</Data>
+      <Data Name="DurationMs">24</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Primary telemetry sensor connected.</Message>
+      <Level>Verbose</Level>
+      <Task>Sensor Communication</Task>
+      <Opcode>Info</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-TrackingEngine" Guid="{A8069F41-2A73-46F4-BBC8-910FED4338A2}" />
+      <EventID Qualifiers="0">4300</EventID>
+      <Version>1</Version>
+      <Level>4</Level>
+      <Task>3</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0000000000000004</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:01:31.480Z" />
+      <EventRecordID>12003</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8452" ThreadID="7196" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">TRACKER-03</Data>
+      <Data Name="Component">TrackingEngine</Data>
+      <Data Name="Result">TrackAcquired</Data>
+      <Data Name="DurationMs">36</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Reference target acquired successfully.</Message>
+      <Level>Information</Level>
+      <Task>Tracking</Task>
+      <Opcode>Info</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-TelemetryBus" Guid="{5B98CB62-6E68-42E0-854F-1EE723BFBA16}" />
+      <EventID>4402</EventID>
+      <Version>1</Version>
+      <Level>3</Level>
+      <Task>4</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0000000000000008</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:02:14.105Z" />
+      <EventRecordID>12004</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8452" ThreadID="7196" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">BUS-A</Data>
+      <Data Name="Component">TelemetryBus</Data>
+      <Data Name="Result">QueueDepthElevated</Data>
+      <Data Name="DurationMs">71</Data>
+      <Data Name="QueueDepth">184</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Telemetry queue depth exceeded the nominal baseline.</Message>
+      <Level>Warning</Level>
+      <Task>Message Transport</Task>
+      <Opcode>Info</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-SensorGateway" Guid="{89F2243E-5AA1-4B1C-8E68-D0CBB1C53279}" />
+      <EventID>4207</EventID>
+      <Version>1</Version>
+      <Level>3</Level>
+      <Task>2</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0000000000000002</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:03:06.920Z" />
+      <EventRecordID>12005</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8340" ThreadID="7024" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">SENSOR-12</Data>
+      <Data Name="Component">SensorGateway</Data>
+      <Data Name="Result">LatencyHigh</Data>
+      <Data Name="DurationMs">286</Data>
+      <Data Name="TemperatureC">47.6</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Sensor update latency exceeded the warning threshold.</Message>
+      <Level>Warning</Level>
+      <Task>Sensor Communication</Task>
+      <Opcode>Info</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-TrackingEngine" Guid="{A8069F41-2A73-46F4-BBC8-910FED4338A2}" />
+      <EventID>4314</EventID>
+      <Version>1</Version>
+      <Level>2</Level>
+      <Task>3</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0000000000000004</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:04:18.330Z" />
+      <EventRecordID>12006</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8452" ThreadID="7196" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">TRACKER-03</Data>
+      <Data Name="Component">TrackingEngine</Data>
+      <Data Name="Result">UpdateMissed</Data>
+      <Data Name="DurationMs">812</Data>
+      <Data Name="MissedUpdates">1</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Expected tracking update was not received within the deadline.</Message>
+      <Level>Error</Level>
+      <Task>Tracking</Task>
+      <Opcode>Info</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-RecoveryManager" Guid="{2A6C7D6F-C5CE-40D8-A9EB-E5664DF337F9}" />
+      <EventID>4501</EventID>
+      <Version>1</Version>
+      <Level>4</Level>
+      <Task>5</Task>
+      <Opcode>1</Opcode>
+      <Keywords>0x0000000000000010</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:04:47.010Z" />
+      <EventRecordID>12007</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" RelatedActivityID="{F6C2B789-6D42-4EF4-A521-773EF0C87B61}" />
+      <Execution ProcessID="8520" ThreadID="7368" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">TRACKER-03</Data>
+      <Data Name="Component">RecoveryManager</Data>
+      <Data Name="Result">RecoveryStarted</Data>
+      <Data Name="DurationMs">0</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Automatic tracking recovery sequence started.</Message>
+      <Level>Information</Level>
+      <Task>Recovery</Task>
+      <Opcode>Start</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-RecoveryManager" Guid="{2A6C7D6F-C5CE-40D8-A9EB-E5664DF337F9}" />
+      <EventID>4502</EventID>
+      <Version>1</Version>
+      <Level>4</Level>
+      <Task>5</Task>
+      <Opcode>2</Opcode>
+      <Keywords>0x0000000000000010</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:05:29.775Z" />
+      <EventRecordID>12008</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" RelatedActivityID="{F6C2B789-6D42-4EF4-A521-773EF0C87B61}" />
+      <Execution ProcessID="8520" ThreadID="7368" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">TRACKER-03</Data>
+      <Data Name="Component">RecoveryManager</Data>
+      <Data Name="Result">RecoveryCompleted</Data>
+      <Data Name="DurationMs">42</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Tracking data flow returned to nominal operation.</Message>
+      <Level>Information</Level>
+      <Task>Recovery</Task>
+      <Opcode>Stop</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-Diagnostics" Guid="{C2D6B111-19F9-46CB-A24D-665A8B83BC08}" />
+      <EventID>4603</EventID>
+      <Version>1</Version>
+      <Level>5</Level>
+      <Task>6</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0000000000000020</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:06:36.540Z" />
+      <EventRecordID>12009</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8124" ThreadID="6408" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">RIG-ALPHA-07</Data>
+      <Data Name="Component">Diagnostics</Data>
+      <Data Name="Result">SnapshotCaptured</Data>
+      <Data Name="DurationMs">21</Data>
+      <Data Name="Artifact">recovery-snapshot-042.bin</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Post-recovery diagnostic snapshot captured.</Message>
+      <Level>Verbose</Level>
+      <Task>Diagnostics</Task>
+      <Opcode>Info</Opcode>
+    </RenderingInfo>
+  </Event>
+
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="TraceScope-Sample-Engineering" Guid="{D1B6D57A-3E1C-4E0A-91D0-844EA2980E25}" />
+      <EventID>4199</EventID>
+      <Version>1</Version>
+      <Level>4</Level>
+      <Task>1</Task>
+      <Opcode>2</Opcode>
+      <Keywords>0x0000000000000001</Keywords>
+      <TimeCreated SystemTime="2026-08-13T12:07:52.000Z" />
+      <EventRecordID>12010</EventRecordID>
+      <Correlation ActivityID="{5D4A4A53-8C40-4F9D-B9B1-2A5645F39E27}" />
+      <Execution ProcessID="8124" ThreadID="6408" />
+      <Channel>Application</Channel>
+      <Computer>ENG-WS-07.example.test</Computer>
+      <Security UserID="S-1-5-21-2867948361-1258342759-3155293185-1001" />
+    </System>
+    <EventData>
+      <Data Name="RunId">RUN-20260813-042</Data>
+      <Data Name="DeviceId">RIG-ALPHA-07</Data>
+      <Data Name="Component">TestOrchestrator</Data>
+      <Data Name="Result">CompletedWithRecoverableFindings</Data>
+      <Data Name="DurationMs">472000</Data>
+    </EventData>
+    <RenderingInfo Culture="en-US">
+      <Message>Engineering validation run completed with recoverable findings.</Message>
+      <Level>Information</Level>
+      <Task>Validation Run</Task>
+      <Opcode>Stop</Opcode>
+    </RenderingInfo>
+  </Event>
+</Events>

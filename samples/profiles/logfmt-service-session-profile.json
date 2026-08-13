@@ -1,0 +1,90 @@
+{
+    "schemaVersion": 1,
+    "name": "Logfmt Service Session",
+    "importerId": "key-value",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Host",
+            "sourcePath": "host"
+        },
+        {
+            "name": "Environment",
+            "sourcePath": "environment"
+        },
+        {
+            "name": "Request ID",
+            "sourcePath": "requestId"
+        },
+        {
+            "name": "Customer Region",
+            "sourcePath": "customerRegion"
+        },
+        {
+            "name": "Available Quantity",
+            "sourcePath": "availableQuantity"
+        },
+        {
+            "name": "Reorder Threshold",
+            "sourcePath": "reorderThreshold"
+        },
+        {
+            "name": "Supplier",
+            "sourcePath": "supplier"
+        },
+        {
+            "name": "Elapsed Time (ms)",
+            "sourcePath": "elapsedMs"
+        },
+        {
+            "name": "Confirmation ID",
+            "sourcePath": "confirmationId"
+        },
+        {
+            "name": "Payment Provider",
+            "sourcePath": "provider"
+        },
+        {
+            "name": "Database",
+            "sourcePath": "database"
+        },
+        {
+            "name": "Retry Attempt",
+            "sourcePath": "retryAttempt"
+        },
+        {
+            "name": "Retry Delay (ms)",
+            "sourcePath": "retryDelayMs"
+        },
+        {
+            "name": "Queue",
+            "sourcePath": "queue"
+        },
+        {
+            "name": "Processed Orders",
+            "sourcePath": "processedOrders"
+        },
+        {
+            "name": "Warning Count",
+            "sourcePath": "warningCount"
+        },
+        {
+            "name": "Error Count",
+            "sourcePath": "errorCount"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

@@ -1,0 +1,27 @@
+{
+    "schemaVersion": 1,
+    "name": "General Application Regex",
+    "importerId": "regex-text",
+    "regexPattern": "^(?<timestamp>\\S+)\\s+\\[(?<level>[^\\]]+)\\]\\s+\\[(?<subsystem>[^\\]]+)\\]\\s+\\[(?<eventCode>[^\\]]+)\\]\\s+\\[(?<entityId>[^\\]]+)\\]\\s+\\[(?<requestId>[^\\]]+)\\]\\s+(?<message>.*)$",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Request ID",
+            "sourcePath": "requestId"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

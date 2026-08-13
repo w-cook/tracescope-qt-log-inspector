@@ -2,6 +2,7 @@
 
 #include <QDialog>
 #include <QString>
+#include <QSet>
 
 #include "../importing/ImportFormatSuggestionService.h"
 #include "../importing/ImportPreviewService.h"
@@ -60,6 +61,9 @@ private:
     QTimer *previewRefreshTimer;
 
     QLineEdit *profileNameEdit;
+    QComboBox *importerComboBox;
+    QLineEdit *recordPathEdit;
+    QPlainTextEdit *regexPatternEdit;
     QCheckBox *preserveUnmappedCheckBox;
 
     QPushButton *newProfileFromSourceButton;
@@ -106,6 +110,7 @@ private:
     bool profileIsUserConfigured = false;
     QString previewSourcePath;
     QString customFieldDetectionSourcePath;
+    QSet<QString> autoDetectedCustomFieldKeys;
 
     void buildLayout();
     void browseForFile();
@@ -113,6 +118,9 @@ private:
     void detectCustomFieldMappings();
 
     void populateProfileControls();
+
+    void populateImporterOptions();
+    void updateFormatSpecificControls();
 
     void populateCustomFieldMappings();
 

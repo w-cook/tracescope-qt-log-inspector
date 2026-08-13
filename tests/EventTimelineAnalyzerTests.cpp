@@ -9,11 +9,31 @@ class EventTimelineAnalyzerTests : public QObject
 private slots:
     void groupEventsByMinuteCountsEventsBySeverity();
     void groupEventsByMinuteSkipsInvalidTimestamps();
+    void groupEventsByMinuteFillsMissingMinutes();
+    void filteredEventsPreserveFullTimelineRange();
+    void groupEventsByMinuteHandlesMidnightBoundary();
+    void groupEventsByMinuteCountsUnspecifiedSeverity();
 };
 
 void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
 {
-    QVector<TelemetryEvent> events = {
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-07-07T11:02:00.100Z",
+            "TRACE",
+            "Diagnostics",
+            "TRACE_EVENT",
+            "Detailed trace",
+            "SYS-204"
+        },
+        {
+            "2026-07-07T11:02:00.500Z",
+            "DEBUG",
+            "Diagnostics",
+            "DEBUG_EVENT",
+            "Debug detail",
+            "SYS-204"
+        },
         {
             "2026-07-07T11:02:01.104Z",
             "INFO",
@@ -39,6 +59,14 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
             "LINK-A"
         },
         {
+            "2026-07-07T11:02:12.000Z",
+            "CRITICAL",
+            "Comms",
+            "LINK_FAILURE",
+            "Communications link unavailable",
+            "LINK-A"
+        },
+        {
             "2026-07-07T11:03:01.000Z",
             "WARN",
             "Tracking",
@@ -50,21 +78,95 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteCountsEventsBySeverity()
 
     EventTimelineAnalyzer analyzer;
 
-    const auto buckets = analyzer.groupEventsByMinute(events);
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
 
-    QCOMPARE(buckets.size(), 2);
+    QCOMPARE(
+        buckets.size(),
+        2
+        );
 
-    QCOMPARE(buckets[0].label, QString("11:02"));
-    QCOMPARE(buckets[0].infoCount, 1);
-    QCOMPARE(buckets[0].warningCount, 1);
-    QCOMPARE(buckets[0].errorCount, 1);
-    QCOMPARE(buckets[0].totalCount(), 3);
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral("11:02")
+        );
 
-    QCOMPARE(buckets[1].label, QString("11:03"));
-    QCOMPARE(buckets[1].infoCount, 0);
-    QCOMPARE(buckets[1].warningCount, 1);
-    QCOMPARE(buckets[1].errorCount, 0);
-    QCOMPARE(buckets[1].totalCount(), 1);
+    QCOMPARE(
+        buckets.at(0).traceCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).debugCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).infoCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).warningCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).errorCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).criticalCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).totalCount(),
+        6
+        );
+
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral("11:03")
+        );
+
+    QCOMPARE(
+        buckets.at(1).traceCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).debugCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).infoCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).warningCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(1).errorCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).criticalCount,
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        1
+        );
 }
 
 void EventTimelineAnalyzerTests::groupEventsByMinuteSkipsInvalidTimestamps()
@@ -95,6 +197,244 @@ void EventTimelineAnalyzerTests::groupEventsByMinuteSkipsInvalidTimestamps()
     QCOMPARE(buckets.size(), 1);
     QCOMPARE(buckets[0].label, QString("11:04"));
     QCOMPARE(buckets[0].errorCount, 1);
+}
+
+void EventTimelineAnalyzerTests::groupEventsByMinuteFillsMissingMinutes()
+{
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-07-07T11:02:15.000Z",
+            "INFO",
+            "Startup",
+            "START",
+            "Started",
+            "SYS-1"
+        },
+        {
+            "2026-07-07T11:05:20.000Z",
+            "WARN",
+            "Tracking",
+            "LATE_EVENT",
+            "Late event",
+            "TRK-1"
+        }
+    };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
+
+    QCOMPARE(buckets.size(), 4);
+
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral("11:02")
+        );
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral("11:03")
+        );
+    QCOMPARE(
+        buckets.at(2).label,
+        QStringLiteral("11:04")
+        );
+    QCOMPARE(
+        buckets.at(3).label,
+        QStringLiteral("11:05")
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(2).totalCount(),
+        0
+        );
+}
+
+void EventTimelineAnalyzerTests::filteredEventsPreserveFullTimelineRange()
+{
+    const QVector<TelemetryEvent>
+        allEvents = {
+            {
+                "2026-07-07T11:02:15.000Z",
+                "INFO",
+                "Startup",
+                "START",
+                "Started",
+                "SYS-1"
+            },
+            {
+                "2026-07-07T11:03:25.000Z",
+                "WARN",
+                "Tracking",
+                "WARNING",
+                "Warning",
+                "TRK-1"
+            },
+            {
+                "2026-07-07T11:05:20.000Z",
+                "INFO",
+                "Shutdown",
+                "STOP",
+                "Stopped",
+                "SYS-1"
+            }
+        };
+
+    const QVector<TelemetryEvent>
+        filteredEvents = {
+            allEvents.at(1)
+};
+
+EventTimelineAnalyzer analyzer;
+
+const auto buckets =
+    analyzer.groupEventsByMinute(
+        filteredEvents,
+        allEvents
+        );
+
+QCOMPARE(buckets.size(), 4);
+
+QCOMPARE(
+    buckets.at(0).totalCount(),
+    0
+    );
+
+QCOMPARE(
+    buckets.at(1).warningCount,
+    1
+    );
+
+QCOMPARE(
+    buckets.at(2).totalCount(),
+    0
+    );
+
+QCOMPARE(
+    buckets.at(3).totalCount(),
+    0
+    );
+}
+
+void EventTimelineAnalyzerTests::groupEventsByMinuteHandlesMidnightBoundary()
+{
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-07-07T23:59:30.000Z",
+            "INFO",
+            "System",
+            "BEFORE_MIDNIGHT",
+            "Before midnight",
+            "SYS-1"
+        },
+        {
+            "2026-07-08T00:01:10.000Z",
+            "ERROR",
+            "System",
+            "AFTER_MIDNIGHT",
+            "After midnight",
+            "SYS-1"
+        }
+    };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
+
+    QCOMPARE(buckets.size(), 3);
+
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral(
+            "2026-07-07 23:59"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral(
+            "2026-07-08 00:00"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(2).label,
+        QStringLiteral(
+            "2026-07-08 00:01"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        0
+        );
+}
+
+void EventTimelineAnalyzerTests::groupEventsByMinuteCountsUnspecifiedSeverity()
+{
+    const QVector<TelemetryEvent> events = {
+        {
+            "2026-08-12T08:20:00.000Z",
+            "",
+            "",
+            "",
+            "GET /api/orders HTTP/1.1",
+            ""
+        },
+        {
+            "2026-08-12T08:20:15.000Z",
+            "INFO",
+            "Orders",
+            "",
+            "Application event",
+            ""
+        },
+        {
+            "2026-08-12T08:20:30.000Z",
+            "",
+            "",
+            "",
+            "POST /api/orders HTTP/1.1",
+            ""
+        }
+    };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupEventsByMinute(
+            events
+            );
+
+    QCOMPARE(
+        buckets.size(),
+        1
+        );
+
+    QCOMPARE(
+        buckets.first().infoCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.first().unspecifiedCount,
+        2
+        );
+
+    QCOMPARE(
+        buckets.first().totalCount(),
+        3
+        );
 }
 
 QTEST_MAIN(EventTimelineAnalyzerTests)

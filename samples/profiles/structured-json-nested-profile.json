@@ -1,0 +1,44 @@
+{
+    "schemaVersion": 1,
+    "name": "Structured JSON Nested Records",
+    "importerId": "structured-json",
+    "recordPath": "data.records",
+    "canonicalFields": {
+        "timestamp": "observedAt",
+        "severity": "priority",
+        "subsystem": "service.name",
+        "eventCode": "event.code",
+        "entityId": "resource.id",
+        "message": "details.message"
+    },
+    "customFields": [
+        {
+            "name": "Host",
+            "sourcePath": "host.name"
+        },
+        {
+            "name": "Request ID",
+            "sourcePath": "context.requestId"
+        },
+        {
+            "name": "Trace ID",
+            "sourcePath": "context.traceId"
+        },
+        {
+            "name": "Duration (ms)",
+            "sourcePath": "metrics.durationMs"
+        }
+    ],
+    "severityAliases": {
+        "NOTICE": "INFO",
+        "CAUTION": "WARNING",
+        "FAIL": "ERROR",
+        "FATAL": "CRITICAL"
+    },
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

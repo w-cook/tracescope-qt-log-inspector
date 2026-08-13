@@ -136,59 +136,159 @@ InvestigationTableModel::recordAt(int row) const
 
 void InvestigationTableModel::rebuildColumns()
 {
-    m_columns = {
-        {
-            TimestampKey,
-            QStringLiteral("Timestamp"),
-            false
-        },
-        {
-            SeverityKey,
-            QStringLiteral("Level"),
-            false
-        },
-        {
-            SubsystemKey,
-            QStringLiteral("Subsystem"),
-            false
-        },
-        {
-            EventCodeKey,
-            QStringLiteral("Event Code"),
-            false
-        },
-        {
-            EntityIdKey,
-            QStringLiteral("Entity ID"),
-            false
-        },
-        {
-            MessageKey,
-            QStringLiteral("Message"),
-            false
-        }
-    };
+    m_columns.clear();
+
+    /*
+     * Preserve the familiar canonical schema when
+     * no records are loaded. Once a dataset exists,
+     * omit canonical columns that have no values
+     * anywhere in that dataset.
+     */
+    if (m_records.isEmpty()) {
+        m_columns = {
+            {
+                TimestampKey,
+                QStringLiteral("Timestamp"),
+                false
+            },
+            {
+                SeverityKey,
+                QStringLiteral("Severity"),
+                false
+            },
+            {
+                SubsystemKey,
+                QStringLiteral("Subsystem"),
+                false
+            },
+            {
+                EventCodeKey,
+                QStringLiteral("Event Code"),
+                false
+            },
+            {
+                EntityIdKey,
+                QStringLiteral("Entity ID"),
+                false
+            },
+            {
+                MessageKey,
+                QStringLiteral("Message"),
+                false
+            }
+        };
+
+        return;
+    }
+
+    bool hasTimestamp = false;
+    bool hasSeverity = false;
+    bool hasSubsystem = false;
+    bool hasEventCode = false;
+    bool hasEntityId = false;
+    bool hasMessage = false;
 
     QSet<QString> customKeys;
 
-    for (const InvestigationRecord &record : std::as_const(m_records)) {
+    for (const InvestigationRecord &record
+         : std::as_const(m_records)) {
+        hasTimestamp =
+            hasTimestamp
+            || record.timestamp.has_value();
+
+        hasSeverity =
+            hasSeverity
+            || record.severity.has_value();
+
+        hasSubsystem =
+            hasSubsystem
+            || record.subsystem.has_value();
+
+        hasEventCode =
+            hasEventCode
+            || record.eventCode.has_value();
+
+        hasEntityId =
+            hasEntityId
+            || record.entityId.has_value();
+
+        hasMessage =
+            hasMessage
+            || record.message.has_value();
+
         for (
-            auto iterator = record.customAttributes.constBegin();
-            iterator != record.customAttributes.constEnd();
+            auto iterator =
+            record.customAttributes.constBegin();
+            iterator !=
+            record.customAttributes.constEnd();
             ++iterator
             ) {
-            if (!isCanonicalKey(iterator.key())) {
-                customKeys.insert(iterator.key());
+            if (!isCanonicalKey(
+                    iterator.key()
+                    )) {
+                customKeys.insert(
+                    iterator.key()
+                    );
             }
         }
     }
 
-    QList<QString> sortedKeys = customKeys.values();
+    if (hasTimestamp) {
+        m_columns.append({
+            TimestampKey,
+            QStringLiteral("Timestamp"),
+            false
+        });
+    }
+
+    if (hasSeverity) {
+        m_columns.append({
+            SeverityKey,
+            QStringLiteral("Severity"),
+            false
+        });
+    }
+
+    if (hasSubsystem) {
+        m_columns.append({
+            SubsystemKey,
+            QStringLiteral("Subsystem"),
+            false
+        });
+    }
+
+    if (hasEventCode) {
+        m_columns.append({
+            EventCodeKey,
+            QStringLiteral("Event Code"),
+            false
+        });
+    }
+
+    if (hasEntityId) {
+        m_columns.append({
+            EntityIdKey,
+            QStringLiteral("Entity ID"),
+            false
+        });
+    }
+
+    if (hasMessage) {
+        m_columns.append({
+            MessageKey,
+            QStringLiteral("Message"),
+            false
+        });
+    }
+
+    QList<QString> sortedKeys =
+        customKeys.values();
 
     std::sort(
         sortedKeys.begin(),
         sortedKeys.end(),
-        [](const QString &left, const QString &right) {
+        [](const QString &left,
+           const QString &right) {
             return left.compare(
                        right,
                        Qt::CaseInsensitive
@@ -196,14 +296,13 @@ void InvestigationTableModel::rebuildColumns()
         }
         );
 
-    for (const QString &key : std::as_const(sortedKeys)) {
-        m_columns.append(
-            {
-                key,
-                key,
-                true
-            }
-            );
+    for (const QString &key
+         : std::as_const(sortedKeys)) {
+        m_columns.append({
+            key,
+            key,
+            true
+        });
     }
 }
 

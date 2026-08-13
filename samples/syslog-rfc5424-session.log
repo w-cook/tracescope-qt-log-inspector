@@ -1,0 +1,11 @@
+<134>1 2026-08-12T08:20:02.114Z api-01 orders-service 4120 SERVICE_START [deployment@32473 environment="production" region="us-east"] Order service startup completed
+<134>1 2026-08-12T08:20:18.427Z api-01 orders-service 4120 ORDER_RECEIVED [request@32473 requestId="REQ-9201" customerRegion="us-east"] Order ORD-5812 received for processing
+<135>1 2026-08-12T08:20:19.063Z worker-02 inventory-worker 5302 STOCK_CHECK [inventory@32473 sku="SKU-441" availableQuantity="18" reorderThreshold="10"] Inventory availability checked
+<132>1 2026-08-12T08:21:04.812Z worker-02 supplier-gateway 8301 SUPPLIER_DELAY [request@32473 requestId="REQ-9201" supplier="Northwind" elapsedMs="1840"] Supplier response exceeded expected latency
+<133>1 2026-08-12T08:21:07.291Z worker-02 supplier-gateway 8301 SUPPLIER_ACCEPTED [request@32473 requestId="REQ-9201" confirmationId="SUP-77412"] Supplier accepted reorder request
+<134>1 2026-08-12T08:22:11.500Z api-02 payments-service 6204 PAYMENT_AUTH [payment@32473 requestId="REQ-9202" provider="ContosoPay"] Payment authorization completed
+<131>1 2026-08-12T08:22:45.044Z api-02 orders-database 7128 DB_TIMEOUT [database@32473 requestId="REQ-9203" database="OrdersDb" elapsedMs="5000"] Database command timed out
+<134>1 2026-08-12T08:23:02.380Z worker-03 orders-worker 5411 RETRY_SCHEDULED [retry@32473 requestId="REQ-9203" attempt="1" delayMs="2000"] Order processing retry scheduled
+<130>1 2026-08-12T08:24:16.771Z worker-04 telemetry-pipeline 9102 QUEUE_UNAVAILABLE [queue@32473 queue="telemetry-events" region="us-east"] Telemetry queue is unavailable
+<134>1 2026-08-12T08:24:43.320Z worker-04 telemetry-pipeline 9102 QUEUE_RECOVERED [queue@32473 queue="telemetry-events"] Telemetry queue connectivity restored
+<134>1 2026-08-12T08:25:12.994Z api-01 orders-service 4120 SESSION_COMPLETE [summary@32473 processedOrders="47" warningCount="1" errorCount="1" criticalCount="1"] Service investigation sample completed

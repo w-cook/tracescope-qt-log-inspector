@@ -1,0 +1,53 @@
+{
+    "canonicalFields": {
+        "entityId": "",
+        "eventCode": "",
+        "message": "request",
+        "severity": "",
+        "subsystem": "",
+        "timestamp": "timestamp"
+    },
+    "customFields": [
+        {
+            "name": "Client Address",
+            "sourcePath": "remoteAddress"
+        },
+        {
+            "name": "Remote Logname",
+            "sourcePath": "remoteLogname"
+        },
+        {
+            "name": "Remote User",
+            "sourcePath": "remoteUser"
+        },
+        {
+            "name": "HTTP Status",
+            "sourcePath": "status"
+        },
+        {
+            "name": "Response Bytes",
+            "sourcePath": "bytesSent"
+        },
+        {
+            "name": "Referrer",
+            "sourcePath": "referrer"
+        },
+        {
+            "name": "User Agent",
+            "sourcePath": "userAgent"
+        }
+    ],
+    "importerId": "regex-text",
+    "name": "Nginx Combined Access Log",
+    "preserveUnmappedFields": true,
+    "regexPattern": "^(?<remoteAddress>\\S+)\\s+(?<remoteLogname>\\S+)\\s+(?<remoteUser>\\S+)\\s+\\[(?<timestamp>[^\\]]+)\\]\\s+\"(?<request>[^\"]*)\"\\s+(?<status>\\d{3})\\s+(?<bytesSent>\\d+|-)\\s+\"(?<referrer>[^\"]*)\"\\s+\"(?<userAgent>[^\"]*)\"$",
+    "schemaVersion": 1,
+    "severityAliases": {
+    },
+    "timestampRules": [
+        {
+            "format": "dd/MMM/yyyy:HH:mm:ss tt",
+            "type": "qt-format"
+        }
+    ]
+}

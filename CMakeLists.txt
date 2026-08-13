@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.6.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,6 +70,28 @@ qt_add_executable(TraceScope
     src/importing/ImportFormatSuggestion.h
     src/importing/ImportFormatSuggestionService.h
     src/importing/ImportFormatSuggestionService.cpp
+    src/importing/BuiltInImporterRegistry.h
+    src/importing/BuiltInImporterRegistry.cpp
+    src/importing/DelimitedTextImporter.h
+    src/importing/DelimitedTextImporter.cpp
+    src/importing/JsonObjectRecordMapper.h
+    src/importing/JsonObjectRecordMapper.cpp
+    src/importing/StructuredJsonImportConfig.h
+    src/importing/StructuredJsonImporter.h
+    src/importing/StructuredJsonImporter.cpp
+    src/importing/RegexTextImporter.h
+    src/importing/RegexTextImporter.cpp
+    src/importing/KeyValueTextImporter.h
+    src/importing/KeyValueTextImporter.cpp
+    src/importing/SyslogImporter.h
+    src/importing/SyslogImporter.cpp
+    src/importing/BuiltInImportProfilePresets.h
+    src/importing/BuiltInImportProfilePresets.cpp
+    src/importing/IisW3cImporter.h
+    src/importing/IisW3cImporter.cpp
+    src/importing/XmlImporter.h
+    src/importing/XmlImporter.cpp
+
 )
 
 target_link_libraries(TraceScope

@@ -11,9 +11,9 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
-  WINDOWS_PACKAGE_NAME: TraceScope-v0.6.0-windows-x64
-  LINUX_PACKAGE_NAME: TraceScope-v0.6.0-linux-x86_64
-  SAMPLES_PACKAGE_NAME: TraceScope-v0.6.0-samples
+  WINDOWS_PACKAGE_NAME: TraceScope-v0.7.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v0.7.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v0.7.0-samples
 
 jobs:
   windows-build-and-test:
@@ -111,13 +111,33 @@ jobs:
             "libwinpthread-1.dll",
             "README.md",
             "LICENSE",
-            "samples\telemetry-session-003.jsonl",
             "samples\dynamic-attributes-session.jsonl",
-            "samples\sample-telemetry-session.ndjson",
-            "samples\sample-structured-service.log",
-            "samples\profiles\dynamic-attributes-session.json",
-            "samples\profiles\telemetry-session.json",
-            "samples\profiles\structured-service.json"
+            "samples\service-session.csv",
+            "samples\profiles\service-session-csv-profile.json",
+            "samples\telemetry-batch.tsv",
+            "samples\profiles\telemetry-batch-tsv-profile.json",
+            "samples\structured-json-array-session.json",
+            "samples\profiles\structured-json-array-profile.json",
+            "samples\structured-json-nested-session.json",
+            "samples\profiles\structured-json-nested-profile.json",
+            "samples\general-application.log",
+            "samples\profiles\general-application-regex-profile.json",
+            "samples\logfmt-service-session.log",
+            "samples\profiles\logfmt-service-session-profile.json",
+            "samples\syslog-rfc3164-session.log",
+            "samples\profiles\syslog-rfc3164-profile.json",
+            "samples\syslog-rfc5424-session.log",
+            "samples\profiles\syslog-rfc5424-profile.json",
+            "samples\apache-common-access.log",
+            "samples\profiles\apache-common-profile.json",
+            "samples\nginx-combined-access.log",
+            "samples\profiles\nginx-combined-profile.json",
+            "samples\iis-w3c-access.log",
+            "samples\profiles\iis-w3c-profile.json",
+            "samples\structured-engineering-session.xml",
+            "samples\profiles\structured-xml-engineering-session-profile.json",
+            "samples\windows-event-engineering-session.xml",
+            "samples\profiles\windows-event-engineering-session-profile.json"
           )
 
           foreach ($relativePath in $requiredFiles) {
@@ -240,7 +260,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel 2
 
       - name: Run tests
         env:
@@ -288,7 +308,7 @@ jobs:
 
           export PATH="$PWD/packaging-tools:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export VERSION="0.6.0"
+          export VERSION="0.7.0"
           export ARCH="x86_64"
           export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
           export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
@@ -315,13 +335,33 @@ jobs:
 
           test -f AppDir/usr/share/doc/tracescope/README.md
           test -f AppDir/usr/share/doc/tracescope/LICENSE
-          test -f AppDir/usr/share/tracescope/samples/telemetry-session-003.jsonl
           test -f AppDir/usr/share/tracescope/samples/dynamic-attributes-session.jsonl
-          test -f AppDir/usr/share/tracescope/samples/sample-telemetry-session.ndjson
-          test -f AppDir/usr/share/tracescope/samples/sample-structured-service.log
-          test -f AppDir/usr/share/tracescope/samples/profiles/dynamic-attributes-session.json
-          test -f AppDir/usr/share/tracescope/samples/profiles/telemetry-session.json
-          test -f AppDir/usr/share/tracescope/samples/profiles/structured-service.json
+          test -f AppDir/usr/share/tracescope/samples/service-session.csv
+          test -f AppDir/usr/share/tracescope/samples/profiles/service-session-csv-profile.json
+          test -f AppDir/usr/share/tracescope/samples/telemetry-batch.tsv
+          test -f AppDir/usr/share/tracescope/samples/profiles/telemetry-batch-tsv-profile.json
+          test -f AppDir/usr/share/tracescope/samples/structured-json-array-session.json
+          test -f AppDir/usr/share/tracescope/samples/profiles/structured-json-array-profile.json
+          test -f AppDir/usr/share/tracescope/samples/structured-json-nested-session.json
+          test -f AppDir/usr/share/tracescope/samples/profiles/structured-json-nested-profile.json
+          test -f AppDir/usr/share/tracescope/samples/general-application.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/general-application-regex-profile.json
+          test -f AppDir/usr/share/tracescope/samples/logfmt-service-session.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/logfmt-service-session-profile.json
+          test -f AppDir/usr/share/tracescope/samples/syslog-rfc3164-session.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/syslog-rfc3164-profile.json
+          test -f AppDir/usr/share/tracescope/samples/syslog-rfc5424-session.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/syslog-rfc5424-profile.json
+          test -f AppDir/usr/share/tracescope/samples/apache-common-access.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/apache-common-profile.json
+          test -f AppDir/usr/share/tracescope/samples/nginx-combined-access.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/nginx-combined-profile.json
+          test -f AppDir/usr/share/tracescope/samples/iis-w3c-access.log
+          test -f AppDir/usr/share/tracescope/samples/profiles/iis-w3c-profile.json
+          test -f AppDir/usr/share/tracescope/samples/structured-engineering-session.xml
+          test -f AppDir/usr/share/tracescope/samples/profiles/structured-xml-engineering-session-profile.json
+          test -f AppDir/usr/share/tracescope/samples/windows-event-engineering-session.xml
+          test -f AppDir/usr/share/tracescope/samples/profiles/windows-event-engineering-session-profile.json
 
           test -x "dist/$LINUX_PACKAGE_NAME.AppImage"
 
@@ -383,13 +423,33 @@ jobs:
           set -euxo pipefail
 
           test -d samples
-          test -f samples/telemetry-session-003.jsonl
           test -f samples/dynamic-attributes-session.jsonl
-          test -f samples/sample-telemetry-session.ndjson
-          test -f samples/sample-structured-service.log
-          test -f samples/profiles/dynamic-attributes-session.json
-          test -f samples/profiles/telemetry-session.json
-          test -f samples/profiles/structured-service.json
+          test -f samples/service-session.csv
+          test -f samples/profiles/service-session-csv-profile.json
+          test -f samples/telemetry-batch.tsv
+          test -f samples/profiles/telemetry-batch-tsv-profile.json
+          test -f samples/structured-json-array-session.json
+          test -f samples/profiles/structured-json-array-profile.json
+          test -f samples/structured-json-nested-session.json
+          test -f samples/profiles/structured-json-nested-profile.json
+          test -f samples/general-application.log
+          test -f samples/profiles/general-application-regex-profile.json
+          test -f samples/logfmt-service-session.log
+          test -f samples/profiles/logfmt-service-session-profile.json
+          test -f samples/syslog-rfc3164-session.log
+          test -f samples/profiles/syslog-rfc3164-profile.json
+          test -f samples/syslog-rfc5424-session.log
+          test -f samples/profiles/syslog-rfc5424-profile.json
+          test -f samples/apache-common-access.log
+          test -f samples/profiles/apache-common-profile.json
+          test -f samples/nginx-combined-access.log
+          test -f samples/profiles/nginx-combined-profile.json
+          test -f samples/iis-w3c-access.log
+          test -f samples/profiles/iis-w3c-profile.json
+          test -f samples/structured-engineering-session.xml
+          test -f samples/profiles/structured-xml-engineering-session-profile.json
+          test -f samples/windows-event-engineering-session.xml
+          test -f samples/profiles/windows-event-engineering-session-profile.json
 
           sample_count="$(find samples -type f | wc -l)"
           test "$sample_count" -gt 0
@@ -437,13 +497,33 @@ jobs:
 
           test -f "$package_dir/README.md"
           test -f "$package_dir/LICENSE"
-          test -f "$package_dir/samples/telemetry-session-003.jsonl"
           test -f "$package_dir/samples/dynamic-attributes-session.jsonl"
-          test -f "$package_dir/samples/sample-telemetry-session.ndjson"
-          test -f "$package_dir/samples/sample-structured-service.log"
-          test -f "$package_dir/samples/profiles/dynamic-attributes-session.json"
-          test -f "$package_dir/samples/profiles/telemetry-session.json"
-          test -f "$package_dir/samples/profiles/structured-service.json"
+          test -f "$package_dir/samples/service-session.csv"
+          test -f "$package_dir/samples/profiles/service-session-csv-profile.json"
+          test -f "$package_dir/samples/telemetry-batch.tsv"
+          test -f "$package_dir/samples/profiles/telemetry-batch-tsv-profile.json"
+          test -f "$package_dir/samples/structured-json-array-session.json"
+          test -f "$package_dir/samples/profiles/structured-json-array-profile.json"
+          test -f "$package_dir/samples/structured-json-nested-session.json"
+          test -f "$package_dir/samples/profiles/structured-json-nested-profile.json"
+          test -f "$package_dir/samples/general-application.log"
+          test -f "$package_dir/samples/profiles/general-application-regex-profile.json"
+          test -f "$package_dir/samples/logfmt-service-session.log"
+          test -f "$package_dir/samples/profiles/logfmt-service-session-profile.json"
+          test -f "$package_dir/samples/syslog-rfc3164-session.log"
+          test -f "$package_dir/samples/profiles/syslog-rfc3164-profile.json"
+          test -f "$package_dir/samples/syslog-rfc5424-session.log"
+          test -f "$package_dir/samples/profiles/syslog-rfc5424-profile.json"
+          test -f "$package_dir/samples/apache-common-access.log"
+          test -f "$package_dir/samples/profiles/apache-common-profile.json"
+          test -f "$package_dir/samples/nginx-combined-access.log"
+          test -f "$package_dir/samples/profiles/nginx-combined-profile.json"
+          test -f "$package_dir/samples/iis-w3c-access.log"
+          test -f "$package_dir/samples/profiles/iis-w3c-profile.json"
+          test -f "$package_dir/samples/structured-engineering-session.xml"
+          test -f "$package_dir/samples/profiles/structured-xml-engineering-session-profile.json"
+          test -f "$package_dir/samples/windows-event-engineering-session.xml"
+          test -f "$package_dir/samples/profiles/windows-event-engineering-session-profile.json"
           test -f "$archive_path"
 
           source_count="$(find samples -type f | wc -l)"
@@ -462,13 +542,33 @@ jobs:
           required_entries = {
               f"{package_name}/README.md",
               f"{package_name}/LICENSE",
-              f"{package_name}/samples/telemetry-session-003.jsonl",
               f"{package_name}/samples/dynamic-attributes-session.jsonl",
-              f"{package_name}/samples/sample-telemetry-session.ndjson",
-              f"{package_name}/samples/sample-structured-service.log",
-              f"{package_name}/samples/profiles/dynamic-attributes-session.json",
-              f"{package_name}/samples/profiles/telemetry-session.json",
-              f"{package_name}/samples/profiles/structured-service.json",
+              f"{package_name}/samples/service-session.csv",
+              f"{package_name}/samples/profiles/service-session-csv-profile.json",
+              f"{package_name}/samples/telemetry-batch.tsv",
+              f"{package_name}/samples/profiles/telemetry-batch-tsv-profile.json",
+              f"{package_name}/samples/structured-json-array-session.json",
+              f"{package_name}/samples/profiles/structured-json-array-profile.json",
+              f"{package_name}/samples/structured-json-nested-session.json",
+              f"{package_name}/samples/profiles/structured-json-nested-profile.json",
+              f"{package_name}/samples/general-application.log",
+              f"{package_name}/samples/profiles/general-application-regex-profile.json",
+              f"{package_name}/samples/logfmt-service-session.log",
+              f"{package_name}/samples/profiles/logfmt-service-session-profile.json",
+              f"{package_name}/samples/syslog-rfc3164-session.log",
+              f"{package_name}/samples/profiles/syslog-rfc3164-profile.json",
+              f"{package_name}/samples/syslog-rfc5424-session.log",
+              f"{package_name}/samples/profiles/syslog-rfc5424-profile.json",
+              f"{package_name}/samples/apache-common-access.log",
+              f"{package_name}/samples/profiles/apache-common-profile.json",
+              f"{package_name}/samples/nginx-combined-access.log",
+              f"{package_name}/samples/profiles/nginx-combined-profile.json",
+              f"{package_name}/samples/iis-w3c-access.log",
+              f"{package_name}/samples/profiles/iis-w3c-profile.json",
+              f"{package_name}/samples/structured-engineering-session.xml",
+              f"{package_name}/samples/profiles/structured-xml-engineering-session-profile.json",
+              f"{package_name}/samples/windows-event-engineering-session.xml",
+              f"{package_name}/samples/profiles/windows-event-engineering-session-profile.json",
           }
 
           with ZipFile(archive_path) as archive:

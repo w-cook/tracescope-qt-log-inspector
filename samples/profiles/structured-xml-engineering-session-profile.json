@@ -1,0 +1,63 @@
+{
+    "canonicalFields": {
+        "entityId": "context.deviceId",
+        "eventCode": "metadata.code",
+        "message": "details.message",
+        "severity": "metadata.level",
+        "subsystem": "metadata.component",
+        "timestamp": "metadata.timestamp"
+    },
+    "customFields": [
+        {
+            "name": "Sequence",
+            "sourcePath": "@sequence"
+        },
+        {
+            "name": "Host",
+            "sourcePath": "context.host"
+        },
+        {
+            "name": "Run ID",
+            "sourcePath": "context.runId"
+        },
+        {
+            "name": "Test Step",
+            "sourcePath": "context.testStep"
+        },
+        {
+            "name": "Temperature (C)",
+            "sourcePath": "measurements.temperatureC"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "metrics.latencyMs"
+        },
+        {
+            "name": "Queue Depth",
+            "sourcePath": "metrics.queueDepth"
+        },
+        {
+            "name": "Missed Updates",
+            "sourcePath": "metrics.missedUpdates"
+        },
+        {
+            "name": "Artifact",
+            "sourcePath": "artifact.name"
+        }
+    ],
+    "importerId": "xml",
+    "name": "Structured XML Engineering Session",
+    "preserveUnmappedFields": true,
+    "recordPath": "session.events.event",
+    "schemaVersion": 1,
+    "severityAliases": {
+        "CAUTION": "WARN",
+        "FAIL": "ERROR",
+        "NOTICE": "INFO"
+    },
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ]
+}

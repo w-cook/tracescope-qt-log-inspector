@@ -13,6 +13,8 @@ struct ImportResult
 
     qint64 processedRecordCount = 0;
 
+    bool sourceTruncated = false;
+
     qint64 importedRecordCount() const;
     qint64 skippedRecordCount() const;
 

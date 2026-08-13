@@ -1,0 +1,441 @@
+#include "JsonObjectRecordMapper.h"
+
+#include <optional>
+
+#include <QDateTime>
+#include <QHash>
+#include <QJsonValue>
+#include <QSet>
+#include <QStringList>
+#include <QVariant>
+
+#include "../domain/RecordIdentity.h"
+#include "../domain/RecordSeverity.h"
+#include "../domain/RecordTimestamp.h"
+#include "ImportDiagnostic.h"
+
+namespace
+{
+QJsonValue readJsonPath(
+    const QJsonObject &object,
+    const QString &path
+    )
+{
+    const QString trimmedPath =
+        path.trimmed();
+
+    if (trimmedPath.isEmpty()) {
+        return QJsonValue(
+            QJsonValue::Undefined
+            );
+    }
+
+    const QStringList segments =
+        trimmedPath.split(
+            QLatin1Char('.')
+            );
+
+    QJsonValue currentValue(object);
+
+    for (const QString &segment : segments) {
+        if (segment.isEmpty()
+            || !currentValue.isObject()) {
+            return QJsonValue(
+                QJsonValue::Undefined
+                );
+        }
+
+        currentValue =
+            currentValue
+                .toObject()
+                .value(segment);
+
+        if (currentValue.isUndefined()) {
+            return currentValue;
+        }
+    }
+
+    return currentValue;
+}
+
+std::optional<QString> readOptionalString(
+    const QJsonObject &object,
+    const QString &path
+    )
+{
+    QJsonValue value =
+        readJsonPath(
+            object,
+            path
+            );
+
+    /*
+     * Structured XML elements that contain both
+     * text and attributes normalize to an object
+     * whose direct text is stored under #text.
+     *
+     * Allow canonical mappings to address the
+     * element itself without having to change
+     * profile paths depending on whether that
+     * particular element has attributes.
+     */
+    if (value.isObject()) {
+        value =
+            value.toObject()
+                .value(
+                    QStringLiteral("#text")
+                    );
+    }
+
+    if (!value.isString()) {
+        return std::nullopt;
+    }
+
+    const QString text =
+        value.toString().trimmed();
+
+    if (text.isEmpty()) {
+        return std::nullopt;
+    }
+
+    return text;
+}
+
+void appendDiagnostic(
+    ImportResult &result,
+    const QString &code,
+    const QString &message,
+    ImportDiagnosticSeverity severity,
+    const std::optional<RecordSourceMetadata> &source =
+    std::nullopt
+    )
+{
+    ImportDiagnostic diagnostic;
+
+    diagnostic.code = code;
+    diagnostic.message = message;
+    diagnostic.severity = severity;
+    diagnostic.source = source;
+
+    result.diagnostics.append(
+        diagnostic
+        );
+}
+
+QSet<QString> mappedSourcePaths(
+    const ImportProfile &profile
+    )
+{
+    QSet<QString> paths;
+
+    const QStringList canonicalPaths {
+        profile.canonicalFields.timestampPath,
+        profile.canonicalFields.severityPath,
+        profile.canonicalFields.subsystemPath,
+        profile.canonicalFields.eventCodePath,
+        profile.canonicalFields.entityIdPath,
+        profile.canonicalFields.messagePath
+    };
+
+    for (const QString &path
+         : canonicalPaths) {
+        const QString trimmed =
+            path.trimmed();
+
+        if (!trimmed.isEmpty()) {
+            paths.insert(trimmed);
+        }
+    }
+
+    for (const CustomFieldMapping &mapping
+         : profile.customFields) {
+        const QString trimmed =
+            mapping.sourcePath.trimmed();
+
+        if (!trimmed.isEmpty()) {
+            paths.insert(trimmed);
+        }
+    }
+
+    return paths;
+}
+
+void collectUnmappedAttributes(
+    const QJsonObject &object,
+    const QString &prefix,
+    const QSet<QString> &mappedPaths,
+    QHash<QString, QVariant> &attributes
+    )
+{
+    for (auto iterator =
+         object.constBegin();
+         iterator != object.constEnd();
+         ++iterator) {
+        const QString path =
+            prefix.isEmpty()
+                ? iterator.key()
+                : QStringLiteral("%1.%2")
+                      .arg(
+                          prefix,
+                          iterator.key()
+                          );
+
+        if (mappedPaths.contains(path)) {
+            continue;
+        }
+
+        const QJsonValue value =
+            iterator.value();
+
+        if (value.isObject()) {
+            collectUnmappedAttributes(
+                value.toObject(),
+                path,
+                mappedPaths,
+                attributes
+                );
+
+            continue;
+        }
+
+        attributes.insert(
+            path,
+            value.toVariant()
+            );
+    }
+}
+
+std::optional<RecordSeverity> parseProfileSeverity(
+    const QString &value,
+    const ImportProfile &profile
+    )
+{
+    const QString normalized =
+        value.trimmed().toCaseFolded();
+
+    for (auto iterator =
+         profile.severityAliases.constBegin();
+         iterator !=
+         profile.severityAliases.constEnd();
+         ++iterator) {
+        if (iterator.key()
+                .trimmed()
+                .toCaseFolded()
+            == normalized) {
+            return iterator.value();
+        }
+    }
+
+    return parseRecordSeverity(
+        value
+        );
+}
+
+std::optional<QDateTime> parseProfileTimestamp(
+    const QString &value,
+    const ImportProfile &profile
+    )
+{
+    const QString normalized =
+        value.trimmed();
+
+    if (normalized.isEmpty()) {
+        return std::nullopt;
+    }
+
+    for (const TimestampRule &rule
+         : profile.timestampRules) {
+        switch (rule.type) {
+        case TimestampRuleType::Iso8601: {
+            const auto timestamp =
+                parseRecordTimestamp(
+                    normalized
+                    );
+
+            if (timestamp.has_value()) {
+                return timestamp;
+            }
+
+            break;
+        }
+
+        case TimestampRuleType::QtFormat: {
+            const QDateTime timestamp =
+                QDateTime::fromString(
+                    normalized,
+                    rule.format
+                    );
+
+            if (timestamp.isValid()) {
+                return timestamp;
+            }
+
+            break;
+        }
+        }
+    }
+
+    return std::nullopt;
+}
+
+QHash<QString, QVariant> readCustomAttributes(
+    const QJsonObject &object,
+    const ImportProfile &profile
+    )
+{
+    QHash<QString, QVariant> attributes;
+
+    if (profile.preserveUnmappedFields) {
+        const QSet<QString> mappedPaths =
+            mappedSourcePaths(profile);
+
+        collectUnmappedAttributes(
+            object,
+            QString(),
+            mappedPaths,
+            attributes
+            );
+    }
+
+    for (const CustomFieldMapping &mapping
+         : profile.customFields) {
+        const QJsonValue value =
+            readJsonPath(
+                object,
+                mapping.sourcePath
+                );
+
+        if (value.isUndefined()) {
+            continue;
+        }
+
+        attributes.insert(
+            mapping.name,
+            value.toVariant()
+            );
+    }
+
+    return attributes;
+}
+}
+
+InvestigationRecord
+JsonObjectRecordMapper::mapRecord(
+    const QJsonObject &object,
+    const QString &rawSource,
+    const RecordSourceMetadata &source,
+    const ImportProfile &profile,
+    ImportResult &result
+    )
+{
+    InvestigationRecord record;
+
+    record.rawSource = rawSource;
+    record.source = source;
+
+    record.recordId =
+        createStableRecordIdentity(
+            source,
+            rawSource
+            );
+
+    const auto timestampText =
+        readOptionalString(
+            object,
+            profile
+                .canonicalFields
+                .timestampPath
+            );
+
+    if (timestampText.has_value()) {
+        record.timestamp =
+            parseProfileTimestamp(
+                *timestampText,
+                profile
+                );
+
+        if (!record.timestamp.has_value()) {
+            appendDiagnostic(
+                result,
+                QStringLiteral(
+                    "INVALID_TIMESTAMP"
+                    ),
+                QStringLiteral(
+                    "The timestamp value could not be parsed."
+                    ),
+                ImportDiagnosticSeverity::Warning,
+                source
+                );
+        }
+    }
+
+    const auto severityText =
+        readOptionalString(
+            object,
+            profile
+                .canonicalFields
+                .severityPath
+            );
+
+    if (severityText.has_value()) {
+        record.severity =
+            parseProfileSeverity(
+                *severityText,
+                profile
+                );
+
+        if (!record.severity.has_value()) {
+            appendDiagnostic(
+                result,
+                QStringLiteral(
+                    "UNMAPPED_SEVERITY"
+                    ),
+                QStringLiteral(
+                    "The severity value could not be mapped."
+                    ),
+                ImportDiagnosticSeverity::Warning,
+                source
+                );
+        }
+    }
+
+    record.subsystem =
+        readOptionalString(
+            object,
+            profile
+                .canonicalFields
+                .subsystemPath
+            );
+
+    record.eventCode =
+        readOptionalString(
+            object,
+            profile
+                .canonicalFields
+                .eventCodePath
+            );
+
+    record.entityId =
+        readOptionalString(
+            object,
+            profile
+                .canonicalFields
+                .entityIdPath
+            );
+
+    record.message =
+        readOptionalString(
+            object,
+            profile
+                .canonicalFields
+                .messagePath
+            );
+
+    record.customAttributes =
+        readCustomAttributes(
+            object,
+            profile
+            );
+
+    return record;
+}

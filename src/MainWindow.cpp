@@ -24,6 +24,8 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QUrl>
+#include <QAbstractItemView>
+#include <QFontMetrics>
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
 #include <QtCharts/QBarSet>
@@ -35,7 +37,8 @@
 #include <utility>
 
 #include "compatibility/TelemetryEventAdapter.h"
-#include "importing/JsonLinesImporter.h"
+#include "importing/BuiltInImporterRegistry.h"
+#include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -44,6 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     eventTable(new QTableView(this)),
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
+    issueSummaryGroup(nullptr),
     investigationController(new InvestigationController(this)),
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new QComboBox(this)),
@@ -138,7 +142,8 @@ void MainWindow::buildLayout()
 
     eventsLayout->addWidget(eventTable);
 
-    auto *issueSummaryGroup = buildIssueSummaryPanel();
+    issueSummaryGroup =
+        buildIssueSummaryPanel();
     auto *detailGroup = buildDetailPanel();
 
     auto *bottomSplitter = new QSplitter(Qt::Horizontal, this);
@@ -202,8 +207,17 @@ void MainWindow::loadLogFile(
     const ImportProfile &profile
     )
 {
-    if (profile.importerId
-        != QStringLiteral("json-lines")) {
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            profile
+            );
+
+    const std::shared_ptr<ILogImporter> importer =
+        registry.importerById(
+            profile.importerId
+            );
+
+    if (!importer) {
         QMessageBox::warning(
             this,
             tr("Unsupported Import Format"),
@@ -217,12 +231,8 @@ void MainWindow::loadLogFile(
         return;
     }
 
-    const JsonLinesImporter importer(
-        profile
-        );
-
     const ImportResult result =
-        importer.importFile(
+        importer->importFile(
             filePath
             );
 
@@ -243,6 +253,7 @@ void MainWindow::loadLogFile(
     }
 
     refreshSubsystemFilterOptions();
+    updateDataCapabilities();
     applyFilters();
 
     eventTable->resizeColumnsToContents();
@@ -256,42 +267,82 @@ void MainWindow::updateSummary(
     const QString &filePath
     )
 {
+    int traceCount = 0;
+    int debugCount = 0;
     int infoCount = 0;
     int warningCount = 0;
     int errorCount = 0;
+    int criticalCount = 0;
+
+    if (!hasSeverityData) {
+        summaryLabel->setText(
+            QString(
+                "TOTAL: %1 visible of %2 events from %3"
+                )
+                .arg(events.size())
+                .arg(
+                    investigationController
+                        ->totalRecordCount()
+                    )
+                .arg(filePath)
+            );
+
+        return;
+    }
 
     for (const TelemetryEvent &event : events) {
-        if (event.level == "INFO") {
+        if (event.level == "TRACE") {
+            ++traceCount;
+        } else if (event.level == "DEBUG") {
+            ++debugCount;
+        } else if (event.level == "INFO") {
             ++infoCount;
         } else if (event.level == "WARN") {
             ++warningCount;
         } else if (event.level == "ERROR") {
             ++errorCount;
+        } else if (event.level == "CRITICAL") {
+            ++criticalCount;
         }
     }
 
     summaryLabel->setText(
         QString(
             "Showing %1 of %2 events from %3 | "
-            "INFO: %4 | WARN: %5 | ERROR: %6"
+            "TRACE: %4 | DEBUG: %5 | INFO: %6 | "
+            "WARN: %7 | ERROR: %8 | CRITICAL: %9"
             )
             .arg(events.size())
             .arg(investigationController->totalRecordCount())
             .arg(filePath)
+            .arg(traceCount)
+            .arg(debugCount)
             .arg(infoCount)
             .arg(warningCount)
             .arg(errorCount)
+            .arg(criticalCount)
         );
 }
 
 void MainWindow::buildFilterControls(QVBoxLayout *layout)
 {
     levelFilterCombo->addItem("All levels", "");
+    levelFilterCombo->addItem("TRACE", "TRACE");
+    levelFilterCombo->addItem("DEBUG", "DEBUG");
     levelFilterCombo->addItem("INFO", "INFO");
     levelFilterCombo->addItem("WARN", "WARN");
     levelFilterCombo->addItem("ERROR", "ERROR");
+    levelFilterCombo->addItem("CRITICAL", "CRITICAL");
 
     subsystemFilterCombo->addItem("All subsystems", "");
+
+    subsystemFilterCombo->setMinimumWidth(240);
+
+    subsystemFilterCombo->setSizeAdjustPolicy(
+        QComboBox::AdjustToMinimumContentsLengthWithIcon
+        );
+
+    subsystemFilterCombo->setMinimumContentsLength(24);
 
     searchInput->setPlaceholderText(
         "Search canonical fields and custom attributes..."
@@ -309,9 +360,20 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
         applyFilters();
     });
 
-    connect(subsystemFilterCombo, &QComboBox::currentIndexChanged, this, [this]() {
-        applyFilters();
-    });
+    connect(
+        subsystemFilterCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            subsystemFilterCombo->setToolTip(
+                subsystemFilterCombo
+                    ->currentData()
+                    .toString()
+                );
+
+            applyFilters();
+        }
+        );
 
     connect(searchInput, &QLineEdit::textChanged, this, [this]() {
         applyFilters();
@@ -329,25 +391,44 @@ void MainWindow::applyFilters()
     eventTable->clearSelection();
     clearEventDetail();
 
-    const QVector<InvestigationRecord> records =
+    const QVector<InvestigationRecord>
+        visibleRecords =
         investigationController->visibleRecords();
 
-    const QVector<TelemetryEvent> events =
-        toTelemetryEvents(records);
+    const QVector<TelemetryEvent>
+        visibleEvents =
+        toTelemetryEvents(
+            visibleRecords
+            );
+
+    const QVector<TelemetryEvent>
+        allEvents =
+        toTelemetryEvents(
+            investigationController
+                ->allRecords()
+            );
 
     updateSummary(
-        events,
+        visibleEvents,
         currentFilePath
         );
 
-    updateIssueSummary(events);
-    updateTimelineChart(events);
+    updateIssueSummary(
+        visibleEvents
+        );
+
+    updateTimelineChart(
+        visibleEvents,
+        allEvents
+        );
 }
 
 void MainWindow::refreshSubsystemFilterOptions()
 {
     const QString selectedSubsystem =
-        subsystemFilterCombo->currentData().toString();
+        subsystemFilterCombo
+            ->currentData()
+            .toString();
 
     subsystemFilterCombo->blockSignals(true);
     subsystemFilterCombo->clear();
@@ -357,15 +438,69 @@ void MainWindow::refreshSubsystemFilterOptions()
         ""
         );
 
-    const QStringList subsystems =
-        investigationController->availableSubsystems();
+    subsystemFilterCombo->setItemData(
+        0,
+        QStringLiteral("All subsystems"),
+        Qt::ToolTipRole
+        );
 
-    for (const QString &subsystem : subsystems) {
+    const QStringList subsystems =
+        investigationController
+            ->availableSubsystems();
+
+    int widestTextWidth =
+        subsystemFilterCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                QStringLiteral(
+                    "All subsystems"
+                    )
+                );
+
+    for (const QString &subsystem
+         : subsystems) {
         subsystemFilterCombo->addItem(
             subsystem,
             subsystem
             );
+
+        const int itemIndex =
+            subsystemFilterCombo->count() - 1;
+
+        subsystemFilterCombo->setItemData(
+            itemIndex,
+            subsystem,
+            Qt::ToolTipRole
+            );
+
+        widestTextWidth =
+            std::max(
+                widestTextWidth,
+                subsystemFilterCombo
+                    ->fontMetrics()
+                    .horizontalAdvance(
+                        subsystem
+                        )
+                );
     }
+
+    /*
+     * Keep the filter control itself compact,
+     * but let its popup expand enough to show
+     * long subsystem/logger names clearly.
+     */
+    const int popupWidth =
+        std::clamp(
+            widestTextWidth + 40,
+            240,
+            650
+            );
+
+    subsystemFilterCombo
+        ->view()
+        ->setMinimumWidth(
+            popupWidth
+            );
 
     const int previousIndex =
         subsystemFilterCombo->findData(
@@ -377,6 +512,12 @@ void MainWindow::refreshSubsystemFilterOptions()
             previousIndex
             );
     }
+
+    subsystemFilterCombo->setToolTip(
+        subsystemFilterCombo
+            ->currentData()
+            .toString()
+        );
 
     subsystemFilterCombo->blockSignals(false);
 }
@@ -561,6 +702,12 @@ QGroupBox *MainWindow::buildIssueSummaryPanel()
 
 void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
 {
+    if (!hasSeverityData
+        || !hasSubsystemData) {
+        issueSummaryTable->setRowCount(0);
+        return;
+    }
+
     const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(events);
 
     issueSummaryTable->setRowCount(groups.size());
@@ -674,9 +821,16 @@ QGroupBox *MainWindow::buildTimelinePanel()
     return timelineGroup;
 }
 
-void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
+void MainWindow::updateTimelineChart(
+    const QVector<TelemetryEvent> &events,
+    const QVector<TelemetryEvent> &rangeEvents
+    )
 {
-    const auto buckets = timelineAnalyzer.groupEventsByMinute(events);
+    const auto buckets =
+        timelineAnalyzer.groupEventsByMinute(
+            events,
+            rangeEvents
+            );
 
     if (buckets.isEmpty()) {
         auto *chart = new QChart();
@@ -685,29 +839,209 @@ void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
         return;
     }
 
-    auto *infoSet = new QBarSet("INFO");
-    auto *warnSet = new QBarSet("WARN");
-    auto *errorSet = new QBarSet("ERROR");
+    const bool showSeveritySeries =
+        std::any_of(
+            rangeEvents.constBegin(),
+            rangeEvents.constEnd(),
+            [](const TelemetryEvent &event) {
+                return !event.level
+                            .trimmed()
+                            .isEmpty();
+            }
+            );
+
+    if (!showSeveritySeries) {
+        auto *totalSet =
+            new QBarSet(
+                "TOTAL"
+                );
+
+        QStringList categories;
+
+        int maxCount = 1;
+
+        for (const EventCountBucket &bucket
+             : buckets) {
+            categories << bucket.label;
+
+            *totalSet
+                << bucket.totalCount();
+
+            maxCount =
+                std::max(
+                    maxCount,
+                    bucket.totalCount()
+                    );
+        }
+
+        auto *series =
+            new QBarSeries();
+
+        series->append(
+            totalSet
+            );
+
+        auto *chart =
+            new QChart();
+
+        chart->addSeries(
+            series
+            );
+
+        chart->setTitle(
+            "Filtered Event Counts by Minute"
+            );
+
+        chart->setAnimationOptions(
+            QChart::NoAnimation
+            );
+
+        /*
+     * A single TOTAL series does not need a
+     * legend explaining what the only bar means.
+     */
+        chart->legend()->setVisible(
+            false
+            );
+
+        auto *axisX =
+            new QBarCategoryAxis();
+
+        axisX->append(
+            categories
+            );
+
+        chart->addAxis(
+            axisX,
+            Qt::AlignBottom
+            );
+
+        series->attachAxis(
+            axisX
+            );
+
+        auto *axisY =
+            new QValueAxis();
+
+        axisY->setTitleText(
+            "Events"
+            );
+
+        axisY->setLabelFormat(
+            "%d"
+            );
+
+        axisY->setRange(
+            0,
+            maxCount
+            );
+
+        axisY->setTickType(
+            QValueAxis::TicksDynamic
+            );
+
+        axisY->setTickAnchor(0);
+        axisY->setTickInterval(1);
+
+        chart->addAxis(
+            axisY,
+            Qt::AlignLeft
+            );
+
+        series->attachAxis(
+            axisY
+            );
+
+        timelineChartView->setChart(
+            chart
+            );
+
+        return;
+    }
+
+    auto *traceSet =
+        new QBarSet("TRACE");
+
+    auto *debugSet =
+        new QBarSet("DEBUG");
+
+    auto *infoSet =
+        new QBarSet("INFO");
+
+    auto *warnSet =
+        new QBarSet("WARN");
+
+    auto *errorSet =
+        new QBarSet("ERROR");
+
+    auto *criticalSet =
+        new QBarSet("CRITICAL");
+
+    bool hasUnspecifiedEvents = false;
+
+    for (const EventCountBucket &bucket : buckets) {
+        if (bucket.unspecifiedCount > 0) {
+            hasUnspecifiedEvents = true;
+            break;
+        }
+    }
+
+    QBarSet *unspecifiedSet = nullptr;
+
+    if (hasUnspecifiedEvents) {
+        unspecifiedSet =
+            new QBarSet(
+                "UNSPECIFIED"
+                );
+    }
 
     QStringList categories;
 
     for (const EventCountBucket &bucket : buckets) {
         categories << bucket.label;
-        *infoSet << bucket.infoCount;
-        *warnSet << bucket.warningCount;
-        *errorSet << bucket.errorCount;
+        *traceSet
+            << bucket.traceCount;
+
+        *debugSet
+            << bucket.debugCount;
+
+        *infoSet
+            << bucket.infoCount;
+
+        *warnSet
+            << bucket.warningCount;
+
+        *errorSet
+            << bucket.errorCount;
+
+        *criticalSet
+            << bucket.criticalCount;
+
+        if (unspecifiedSet != nullptr) {
+            *unspecifiedSet
+                << bucket.unspecifiedCount;
+        }
     }
 
     auto *series = new QBarSeries();
+    series->append(traceSet);
+    series->append(debugSet);
     series->append(infoSet);
     series->append(warnSet);
     series->append(errorSet);
+    series->append(criticalSet);
+
+    if (unspecifiedSet != nullptr) {
+        series->append(
+            unspecifiedSet
+            );
+    }
 
     auto *chart = new QChart();
     chart->addSeries(series);
     chart->setTitle("Filtered Event Counts by Minute");
     chart->setAnimationOptions(QChart::NoAnimation);
-    chart->legend()->setAlignment(Qt::AlignRight);
+    chart->legend()->setAlignment(Qt::AlignBottom);
 
     auto *axisX = new QBarCategoryAxis();
     axisX->append(categories);
@@ -721,9 +1055,47 @@ void MainWindow::updateTimelineChart(const QVector<TelemetryEvent> &events)
     int maxCount = 1;
 
     for (const EventCountBucket &bucket : buckets) {
-        maxCount = std::max(maxCount, bucket.infoCount);
-        maxCount = std::max(maxCount, bucket.warningCount);
-        maxCount = std::max(maxCount, bucket.errorCount);
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.traceCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.debugCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.infoCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.warningCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.errorCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.criticalCount
+                );
+
+        maxCount =
+            std::max(
+                maxCount,
+                bucket.unspecifiedCount
+                );
     }
 
     axisY->setRange(0, maxCount);
@@ -773,4 +1145,64 @@ void MainWindow::dropEvent(QDropEvent *event)
         );
 
     event->acceptProposedAction();
+}
+
+void MainWindow::updateDataCapabilities()
+{
+    hasSeverityData = false;
+    hasSubsystemData = false;
+
+    const QVector<InvestigationRecord> &records =
+        investigationController->allRecords();
+
+    for (const InvestigationRecord &record
+         : records) {
+        hasSeverityData =
+            hasSeverityData
+            || record.severity.has_value();
+
+        hasSubsystemData =
+            hasSubsystemData
+            || record.subsystem.has_value();
+
+        if (hasSeverityData
+            && hasSubsystemData) {
+            break;
+        }
+    }
+
+    /*
+     * Clear filters that no longer apply before
+     * hiding their controls.
+     */
+    if (!hasSeverityData) {
+        levelFilterCombo->blockSignals(true);
+        levelFilterCombo->setCurrentIndex(0);
+        levelFilterCombo->blockSignals(false);
+    }
+
+    if (!hasSubsystemData) {
+        subsystemFilterCombo->blockSignals(true);
+        subsystemFilterCombo->setCurrentIndex(0);
+        subsystemFilterCombo->blockSignals(false);
+    }
+
+    levelFilterCombo->setVisible(
+        hasSeverityData
+        );
+
+    subsystemFilterCombo->setVisible(
+        hasSubsystemData
+        );
+
+    /*
+     * Warning/error grouping only has useful
+     * meaning when both concepts are available.
+     */
+    if (issueSummaryGroup != nullptr) {
+        issueSummaryGroup->setVisible(
+            hasSeverityData
+            && hasSubsystemData
+            );
+    }
 }

@@ -1,0 +1,58 @@
+{
+    "schemaVersion": 1,
+    "name": "RFC 3164 Syslog Session",
+    "importerId": "syslog",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Hostname",
+            "sourcePath": "hostname"
+        },
+        {
+            "name": "Process ID",
+            "sourcePath": "processId"
+        },
+        {
+            "name": "Priority",
+            "sourcePath": "priority"
+        },
+        {
+            "name": "Facility Code",
+            "sourcePath": "facilityCode"
+        },
+        {
+            "name": "Syslog Severity Code",
+            "sourcePath": "severityCode"
+        },
+        {
+            "name": "Syslog Severity",
+            "sourcePath": "syslogSeverity"
+        },
+        {
+            "name": "Syslog Format",
+            "sourcePath": "syslogFormat"
+        },
+        {
+            "name": "Original Timestamp",
+            "sourcePath": "timestampOriginal"
+        },
+        {
+            "name": "Timestamp Year Inferred",
+            "sourcePath": "timestampYearInferred"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

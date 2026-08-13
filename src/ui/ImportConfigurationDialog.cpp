@@ -27,7 +27,29 @@
 #include <QSaveFile>
 #include <QTimer>
 #include <QFile>
+
+#include <memory>
 #include <utility>
+
+#include "../importing/BuiltInImporterRegistry.h"
+#include "../importing/BuiltInImportProfilePresets.h"
+#include "../importing/ILogImporter.h"
+
+namespace
+{
+QString customFieldMappingKey(
+    const CustomFieldMapping &mapping
+    )
+{
+    return mapping.name
+               .trimmed()
+               .toCaseFolded()
+           + QChar(0x1f)
+           + mapping.sourcePath
+                 .trimmed()
+                 .toCaseFolded();
+}
+}
 
 ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
     : QDialog(parent),
@@ -59,6 +81,15 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
         ),
     profileNameEdit(
         new QLineEdit(this)
+        ),
+    importerComboBox(
+        new QComboBox(this)
+        ),
+    recordPathEdit(
+        new QLineEdit(this)
+        ),
+    regexPatternEdit(
+        new QPlainTextEdit(this)
         ),
     preserveUnmappedCheckBox(
         new QCheckBox(
@@ -194,11 +225,21 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
         &QTimer::timeout,
         this,
         [this]() {
+            if (workingProfile.importerId
+                    == QStringLiteral(
+                        "regex-text"
+                        )
+                && customFieldDetectionSourcePath
+                       .isEmpty()) {
+                detectCustomFieldMappings();
+            }
+
             updatePreview();
         }
         );
 
     buildLayout();
+    populateImporterOptions();
     populateProfileControls();
 
     updateSourceState();
@@ -309,6 +350,61 @@ void ImportConfigurationDialog::buildLayout()
     profileLayout->addRow(
         tr("Name:"),
         profileNameEdit
+        );
+
+    profileLayout->addRow(
+        tr("Format:"),
+        importerComboBox
+        );
+
+    recordPathEdit->setPlaceholderText(
+        tr(
+            "Blank for document root, "
+            "or a path such as session.events.event"
+            )
+        );
+
+    recordPathEdit->setToolTip(
+        tr(
+            "For Structured JSON and Structured XML, "
+            "identifies the object or element path "
+            "containing the records to import. "
+            "Use dot-separated paths such as "
+            "'session.events.event'. Leave blank "
+            "to use the document root."
+            )
+        );
+
+    profileLayout->addRow(
+        tr("Record path:"),
+        recordPathEdit
+        );
+
+    regexPatternEdit->setPlaceholderText(
+        tr(
+            "Named-capture regular expression, "
+            "for example: "
+            "^(?<timestamp>...) (?<level>...) (?<message>.*)$"
+            )
+        );
+
+    regexPatternEdit->setToolTip(
+        tr(
+            "For Regex Plain Text imports, named capture groups "
+            "become source fields that can be mapped to canonical "
+            "or custom fields."
+            )
+        );
+
+    regexPatternEdit->setLineWrapMode(
+        QPlainTextEdit::NoWrap
+        );
+
+    regexPatternEdit->setFixedHeight(70);
+
+    profileLayout->addRow(
+        tr("Regex pattern:"),
+        regexPatternEdit
         );
 
     preserveUnmappedCheckBox->setToolTip(
@@ -778,6 +874,80 @@ void ImportConfigurationDialog::buildLayout()
         );
 
     connect(
+        importerComboBox,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            profileIsUserConfigured = true;
+
+            workingProfile.importerId =
+                importerComboBox
+                    ->currentData()
+                    .toString();
+
+            /*
+         * Automatically detected mappings belong
+         * to the previous interpretation of the
+         * source, so discard only those mappings.
+         */
+            QList<CustomFieldMapping>
+                retainedMappings;
+
+            for (const CustomFieldMapping &mapping
+                 : std::as_const(
+                     workingProfile.customFields
+                     )) {
+                if (autoDetectedCustomFieldKeys
+                        .contains(
+                            customFieldMappingKey(
+                                mapping
+                                )
+                            )) {
+                    continue;
+                }
+
+                retainedMappings.append(
+                    mapping
+                    );
+            }
+
+            workingProfile.customFields =
+                std::move(
+                    retainedMappings
+                    );
+
+            autoDetectedCustomFieldKeys.clear();
+            customFieldDetectionSourcePath.clear();
+
+            populateCustomFieldMappings();
+            updateFormatSpecificControls();
+
+            updateValidationState();
+        }
+        );
+
+    connect(
+        regexPatternEdit,
+        &QPlainTextEdit::textChanged,
+        this,
+        [this]() {
+            profileIsUserConfigured = true;
+
+            workingProfile.regexPattern =
+                regexPatternEdit
+                    ->toPlainText();
+
+            /*
+         * A changed pattern defines a different
+         * source-field set.
+         */
+            customFieldDetectionSourcePath.clear();
+
+            updateValidationState();
+        }
+        );
+
+    connect(
         preserveUnmappedCheckBox,
         &QCheckBox::toggled,
         this,
@@ -939,6 +1109,49 @@ void ImportConfigurationDialog::buildLayout()
         }
         );
 
+    connect(
+        recordPathEdit,
+        &QLineEdit::textChanged,
+        this,
+        [this]() {
+            profileIsUserConfigured = true;
+
+            workingProfile.recordPath =
+                recordPathEdit->text();
+
+            // A changed structured-document record path
+            // selects a different logical record set,
+            // so previously cached source detection
+            // is no longer sufficient.
+            customFieldDetectionSourcePath.clear();
+
+            updateValidationState();
+        }
+        );
+
+    connect(
+        recordPathEdit,
+        &QLineEdit::editingFinished,
+        this,
+        [this]() {
+            if (workingProfile.importerId
+                    != QStringLiteral(
+                        "structured-json"
+                        )
+                && workingProfile.importerId
+                       != QStringLiteral(
+                           "xml"
+                           )) {
+                return;
+            }
+
+            detectCustomFieldMappings();
+
+            previewRefreshTimer->stop();
+            updatePreview();
+        }
+        );
+
     const QList<QLineEdit *> previewRelevantProfileEdits {
         timestampPathEdit,
         severityPathEdit,
@@ -999,7 +1212,13 @@ void ImportConfigurationDialog::browseForFile()
             tr("Select Log File"),
             QString(),
             tr(
-                "Log Files (*.jsonl *.ndjson *.log *.txt);;"
+                "Supported Log Files "
+                "(*.json *.jsonl *.ndjson *.xml *.csv *.tsv *.log *.txt);;"
+                "Structured JSON (*.json);;"
+                "Structured XML (*.xml);;"
+                "JSON Lines (*.jsonl *.ndjson);;"
+                "Delimited Text (*.csv *.tsv);;"
+                "Log and Text Files (*.log *.txt);;"
                 "All Files (*)"
                 )
             );
@@ -1056,8 +1275,38 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
         return;
     }
 
+    /*
+     * Build the detection profile without mappings
+     * that TraceScope generated automatically during
+     * the previous detection pass.
+     *
+     * Explicit/user-edited mappings remain in place.
+     */
     ImportProfile detectionProfile =
         workingProfile;
+
+    QList<CustomFieldMapping>
+        retainedMappings;
+
+    for (const CustomFieldMapping &mapping
+         : std::as_const(
+             detectionProfile.customFields
+             )) {
+        if (autoDetectedCustomFieldKeys.contains(
+                customFieldMappingKey(
+                    mapping
+                    )
+                )) {
+            continue;
+        }
+
+        retainedMappings.append(
+            mapping
+            );
+    }
+
+    detectionProfile.customFields =
+        retainedMappings;
 
     detectionProfile.preserveUnmappedFields =
         true;
@@ -1068,6 +1317,11 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
             detectionProfile
             );
 
+    /*
+     * Do not modify the working profile unless the
+     * new logical record set could actually be
+     * previewed.
+     */
     if (!preview.canDisplayPreview()) {
         return;
     }
@@ -1076,7 +1330,7 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
 
     for (const CustomFieldMapping &mapping
          : std::as_const(
-             workingProfile.customFields
+             retainedMappings
              )) {
         explicitlyMappedNames.insert(
             mapping.name
@@ -1090,9 +1344,11 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
     for (const InvestigationRecord &record
          : preview.importResult.records) {
         for (auto iterator =
-             record.customAttributes.constBegin();
+             record.customAttributes
+                 .constBegin();
              iterator !=
-             record.customAttributes.constEnd();
+             record.customAttributes
+                 .constEnd();
              ++iterator) {
             const QString fieldName =
                 iterator.key().trimmed();
@@ -1120,15 +1376,22 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
         Qt::CaseInsensitive
         );
 
-    bool mappingsAdded = false;
+    QList<CustomFieldMapping>
+        updatedMappings =
+        retainedMappings;
+
+    QSet<QString>
+        updatedAutoDetectedKeys;
 
     for (const QString &fieldName
-         : std::as_const(sortedFields)) {
+         : std::as_const(
+             sortedFields
+             )) {
         bool alreadyMapped = false;
 
         for (const CustomFieldMapping &mapping
              : std::as_const(
-                 workingProfile.customFields
+                 updatedMappings
                  )) {
             if (mapping.sourcePath
                     .trimmed()
@@ -1146,22 +1409,34 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
             continue;
         }
 
-        workingProfile.customFields.append(
-            {
-                fieldName,
-                fieldName
-            }
+        const CustomFieldMapping mapping {
+            fieldName,
+            fieldName
+        };
+
+        updatedMappings.append(
+            mapping
             );
 
-        mappingsAdded = true;
+        updatedAutoDetectedKeys.insert(
+            customFieldMappingKey(
+                mapping
+                )
+            );
     }
+
+    workingProfile.customFields =
+        std::move(
+            updatedMappings
+            );
+
+    autoDetectedCustomFieldKeys =
+        std::move(
+            updatedAutoDetectedKeys
+            );
 
     customFieldDetectionSourcePath =
         filePath;
-
-    if (!mappingsAdded) {
-        return;
-    }
 
     populateCustomFieldMappings();
     updateValidationState(false);
@@ -1328,14 +1603,88 @@ void ImportConfigurationDialog::updatePreview()
     previewSourcePath =
         filePath;
 
-    QStringList headers {
-        tr("Timestamp"),
-        tr("Severity"),
-        tr("Subsystem"),
-        tr("Event Code"),
-        tr("Entity ID"),
-        tr("Message")
-    };
+    const bool showTimestamp =
+        !workingProfile
+             .canonicalFields
+             .timestampPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showSeverity =
+        !workingProfile
+             .canonicalFields
+             .severityPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showSubsystem =
+        !workingProfile
+             .canonicalFields
+             .subsystemPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showEventCode =
+        !workingProfile
+             .canonicalFields
+             .eventCodePath
+             .trimmed()
+             .isEmpty();
+
+    const bool showEntityId =
+        !workingProfile
+             .canonicalFields
+             .entityIdPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showMessage =
+        !workingProfile
+             .canonicalFields
+             .messagePath
+             .trimmed()
+             .isEmpty();
+
+    QStringList headers;
+
+    if (showTimestamp) {
+        headers.append(
+            tr("Timestamp")
+            );
+    }
+
+    if (showSeverity) {
+        headers.append(
+            tr("Severity")
+            );
+    }
+
+    if (showSubsystem) {
+        headers.append(
+            tr("Subsystem")
+            );
+    }
+
+    if (showEventCode) {
+        headers.append(
+            tr("Event Code")
+            );
+    }
+
+    if (showEntityId) {
+        headers.append(
+            tr("Entity ID")
+            );
+    }
+
+    if (showMessage) {
+        headers.append(
+            tr("Message")
+            );
+    }
+
+    const int canonicalColumnCount =
+        headers.size();
 
     QSet<QString> mappedCustomFieldNames;
 
@@ -1388,7 +1737,8 @@ void ImportConfigurationDialog::updatePreview()
     if (previousColumnCount
         != headers.size()) {
         for (
-            int column = 6;
+            int column =
+            canonicalColumnCount;
             column < headers.size() - 1;
             ++column
             ) {
@@ -1398,7 +1748,7 @@ void ImportConfigurationDialog::updatePreview()
                 );
         }
 
-        if (headers.size() > 6) {
+        if (!headers.isEmpty()) {
             previewTable->setColumnWidth(
                 headers.size() - 1,
                 220
@@ -1512,14 +1862,43 @@ void ImportConfigurationDialog::updatePreview()
                 QStringLiteral("; ")
                 );
 
-        QStringList values {
-            timestamp,
-            severity,
-            subsystem,
-            eventCode,
-            entityId,
-            message
-        };
+        QStringList values;
+
+        if (showTimestamp) {
+            values.append(
+                timestamp
+                );
+        }
+
+        if (showSeverity) {
+            values.append(
+                severity
+                );
+        }
+
+        if (showSubsystem) {
+            values.append(
+                subsystem
+                );
+        }
+
+        if (showEventCode) {
+            values.append(
+                eventCode
+                );
+        }
+
+        if (showEntityId) {
+            values.append(
+                entityId
+                );
+        }
+
+        if (showMessage) {
+            values.append(
+                message
+                );
+        }
 
         values.append(
             mappedCustomValues
@@ -1681,6 +2060,18 @@ void ImportConfigurationDialog::populateProfileControls()
         profileNameEdit
         );
 
+    const QSignalBlocker recordPathBlocker(
+        recordPathEdit
+        );
+
+    const QSignalBlocker importerBlocker(
+        importerComboBox
+        );
+
+    const QSignalBlocker regexPatternBlocker(
+        regexPatternEdit
+        );
+
     const QSignalBlocker timestampBlocker(
         timestampPathEdit
         );
@@ -1712,6 +2103,27 @@ void ImportConfigurationDialog::populateProfileControls()
     profileNameEdit->setText(
         workingProfile.name
         );
+
+    const int importerIndex =
+        importerComboBox->findData(
+            workingProfile.importerId
+            );
+
+    importerComboBox->setCurrentIndex(
+        importerIndex >= 0
+            ? importerIndex
+            : 0
+        );
+
+    regexPatternEdit->setPlainText(
+        workingProfile.regexPattern
+        );
+
+    recordPathEdit->setText(
+        workingProfile.recordPath
+        );
+
+    updateFormatSpecificControls();
 
     preserveUnmappedCheckBox->setChecked(
         workingProfile.preserveUnmappedFields
@@ -1897,6 +2309,18 @@ void ImportConfigurationDialog::updateWorkingProfile()
 {
     workingProfile.name =
         profileNameEdit->text();
+
+    workingProfile.importerId =
+        importerComboBox
+            ->currentData()
+            .toString();
+
+    workingProfile.regexPattern =
+        regexPatternEdit
+            ->toPlainText();
+
+    workingProfile.recordPath =
+        recordPathEdit->text();
 
     workingProfile.preserveUnmappedFields =
         preserveUnmappedCheckBox->isChecked();
@@ -2600,9 +3024,15 @@ void ImportConfigurationDialog::loadProfile()
 
         return;
     }
+    
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            loadedProfile
+            );
 
-    if (loadedProfile.importerId
-        != QStringLiteral("json-lines")) {
+    if (!registry.importerById(
+            loadedProfile.importerId
+            )) {
         QMessageBox::critical(
             this,
             tr("Unsupported Import Profile"),
@@ -2620,6 +3050,8 @@ void ImportConfigurationDialog::loadProfile()
 
     workingProfile =
         loadedProfile;
+
+    autoDetectedCustomFieldKeys.clear();
 
     profileIsUserConfigured = true;
 
@@ -2690,10 +3122,41 @@ void ImportConfigurationDialog::createProfileFromSource(
     workingProfile =
         ImportProfile();
 
-    workingProfile.name =
-        QStringLiteral(
-            "Default JSON Lines"
+    autoDetectedCustomFieldKeys.clear();
+
+    const ImportFormatSuggestion suggestion =
+        formatSuggestionService.suggestForFile(
+            filePath
             );
+
+    if (suggestion.hasSuggestion()) {
+        const std::optional<ImportProfile>
+            preset =
+            builtInImportProfilePreset(
+                suggestion.profilePresetId
+                );
+
+        if (preset.has_value()) {
+            workingProfile =
+                preset.value();
+        } else {
+            workingProfile.importerId =
+                suggestion.importerId;
+
+            workingProfile.name =
+                QStringLiteral("Default %1")
+                    .arg(
+                        suggestion.displayName
+                        );
+        }
+    } else {
+        workingProfile.importerId.clear();
+
+        workingProfile.name =
+            QStringLiteral(
+                "New Import Profile"
+                );
+    }
 
     profileIsUserConfigured = false;
 
@@ -2701,7 +3164,21 @@ void ImportConfigurationDialog::createProfileFromSource(
 
     populateProfileControls();
 
-    detectCustomFieldMappings();
+    if (!workingProfile.importerId.isEmpty()
+        && workingProfile.importerId
+               != QStringLiteral(
+                   "structured-json"
+                   )
+        && workingProfile.importerId
+               != QStringLiteral(
+                   "xml"
+                   )
+        && workingProfile.importerId
+               != QStringLiteral(
+                   "regex-text"
+                   )) {
+        detectCustomFieldMappings();
+    }
 
     previewRefreshTimer->stop();
 
@@ -2711,4 +3188,60 @@ void ImportConfigurationDialog::createProfileFromSource(
     if (userInitiated) {
         profileIsUserConfigured = true;
     }
+}
+
+void ImportConfigurationDialog::populateImporterOptions()
+{
+    const QSignalBlocker blocker(
+        importerComboBox
+        );
+
+    importerComboBox->clear();
+
+    importerComboBox->addItem(
+        tr("Select format..."),
+        QString()
+        );
+
+    const ImporterRegistry registry =
+        createBuiltInImporterRegistry(
+            workingProfile
+            );
+
+    const QVector<std::shared_ptr<ILogImporter>> importers =
+        registry.importers();
+
+    for (const std::shared_ptr<ILogImporter> &importer
+         : importers) {
+        importerComboBox->addItem(
+            importer->displayName(),
+            importer->id()
+            );
+    }
+}
+
+void ImportConfigurationDialog::updateFormatSpecificControls()
+{
+    const QString importerId =
+        importerComboBox
+            ->currentData()
+            .toString();
+
+    recordPathEdit->setEnabled(
+        importerId
+            == QStringLiteral(
+                "structured-json"
+                )
+        || importerId
+               == QStringLiteral(
+                   "xml"
+                   )
+        );
+
+    regexPatternEdit->setEnabled(
+        importerId
+        == QStringLiteral(
+            "regex-text"
+            )
+        );
 }

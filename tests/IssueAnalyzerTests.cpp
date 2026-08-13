@@ -10,6 +10,7 @@ private slots:
     void groupWarningsAndErrorsBySubsystemIgnoresInfoEvents();
     void groupWarningsAndErrorsBySubsystemCountsWarningsAndErrors();
     void groupWarningsAndErrorsBySubsystemSortsByTotalDescending();
+    void groupWarningsAndErrorsBySubsystemCountsCriticalAsError();
 };
 
 static QVector<TelemetryEvent> sampleEvents()
@@ -90,6 +91,49 @@ void IssueAnalyzerTests::groupWarningsAndErrorsBySubsystemSortsByTotalDescending
     QCOMPARE(groups[0].totalCount(), 2);
     QCOMPARE(groups[1].subsystem, QString("Tracking"));
     QCOMPARE(groups[1].totalCount(), 1);
+}
+
+void IssueAnalyzerTests::groupWarningsAndErrorsBySubsystemCountsCriticalAsError()
+{
+    const QVector<TelemetryEvent> events {
+        {
+            "2026-08-12T08:24:16.771Z",
+            "CRITICAL",
+            "TelemetryPipeline",
+            "QUEUE_UNAVAILABLE",
+            "Telemetry queue is unavailable",
+            "telemetry-worker"
+        }
+    };
+
+    TelemetryIssueAnalyzer analyzer;
+
+    const auto groups =
+        analyzer.groupWarningsAndErrorsBySubsystem(
+            events
+            );
+
+    QCOMPARE(groups.size(), 1);
+
+    QCOMPARE(
+        groups.first().subsystem,
+        QString("TelemetryPipeline")
+        );
+
+    QCOMPARE(
+        groups.first().warningCount,
+        0
+        );
+
+    QCOMPARE(
+        groups.first().errorCount,
+        1
+        );
+
+    QCOMPARE(
+        groups.first().totalCount(),
+        1
+        );
 }
 
 QTEST_MAIN(IssueAnalyzerTests)

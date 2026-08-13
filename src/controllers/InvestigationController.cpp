@@ -114,6 +114,12 @@ InvestigationController::visibleRecords() const
     return records;
 }
 
+const QVector<InvestigationRecord> &
+InvestigationController::allRecords() const
+{
+    return m_sourceModel.records();
+}
+
 const InvestigationRecord *
 InvestigationController::recordForProxyIndex(
     const QModelIndex &proxyIndex

@@ -21,7 +21,9 @@ public:
     QString displayName() const override;
 
     ImportResult importFile(
-        const QString &filePath
+        const QString &filePath,
+        qint64 maxProcessedRecords =
+        ILogImporter::UnlimitedRecordLimit
         ) const override;
 
     ImportResult importLines(

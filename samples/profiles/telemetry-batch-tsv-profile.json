@@ -1,0 +1,48 @@
+{
+    "canonicalFields": {
+        "entityId": "device_id",
+        "eventCode": "event_id",
+        "message": "details",
+        "severity": "priority",
+        "subsystem": "component",
+        "timestamp": "event_time"
+    },
+    "customFields": [
+        {
+            "name": "Node",
+            "sourcePath": "node"
+        },
+        {
+            "name": "Availability Zone",
+            "sourcePath": "availability_zone"
+        },
+        {
+            "name": "Batch ID",
+            "sourcePath": "batch_id"
+        },
+        {
+            "name": "Elapsed (ms)",
+            "sourcePath": "elapsed_ms"
+        },
+        {
+            "name": "Health State",
+            "sourcePath": "health_state"
+        }
+    ],
+    "importerId": "tsv",
+    "name": "Telemetry Batch TSV",
+    "preserveUnmappedFields": true,
+    "schemaVersion": 1,
+    "severityAliases": {
+        "CAUTION": "WARN",
+        "FAIL": "TRACE",
+        "FATAL": "CRITICAL",
+        "NOTICE": "INFO"
+    },
+    "timestampRules": [
+        {
+            "format": "yyyy-MM-dd HH:mm:ss.zzz",
+            "type": "qt-format"
+        }
+    ]
+}

@@ -21,6 +21,8 @@ qt_add_executable(ParserTests
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
 )
 
 target_link_libraries(ParserTests
@@ -187,6 +189,8 @@ qt_add_executable(JsonLinesImporterTests
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
     ../src/importing/ImportProfile.h
@@ -211,6 +215,38 @@ target_link_libraries(JsonLinesImporterTests
 add_test(
     NAME JsonLinesImporterTests
     COMMAND JsonLinesImporterTests
+)
+
+qt_add_executable(DelimitedTextImporterTests
+    DelimitedTextImporterTests.cpp
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/DelimitedTextImporter.h
+    ../src/importing/DelimitedTextImporter.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(DelimitedTextImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME DelimitedTextImporterTests
+    COMMAND DelimitedTextImporterTests
 )
 
 qt_add_executable(InvestigationTableModelTests
@@ -360,6 +396,14 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/ImportPreviewService.h
     ../src/importing/ImportPreviewService.cpp
 
+    ../src/importing/BuiltInImportProfilePresets.h
+    ../src/importing/BuiltInImportProfilePresets.cpp
+
+    ../src/importing/BuiltInImporterRegistry.h
+    ../src/importing/BuiltInImporterRegistry.cpp
+    ../src/importing/ImporterRegistry.h
+    ../src/importing/ImporterRegistry.cpp
+
     ../src/importing/ImportProfile.h
     ../src/importing/CanonicalFieldMappings.h
     ../src/importing/ImportProfileValidation.h
@@ -370,12 +414,36 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/DelimitedTextImporter.h
+    ../src/importing/DelimitedTextImporter.cpp
+
+    ../src/importing/RegexTextImporter.h
+    ../src/importing/RegexTextImporter.cpp
+
+    ../src/importing/KeyValueTextImporter.h
+    ../src/importing/KeyValueTextImporter.cpp
+
+    ../src/importing/SyslogImporter.h
+    ../src/importing/SyslogImporter.cpp
+
+    ../src/importing/IisW3cImporter.h
+    ../src/importing/IisW3cImporter.cpp
 
     ../src/importing/ILogImporter.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
+
+    ../src/importing/StructuredJsonImportConfig.h
+    ../src/importing/StructuredJsonImporter.h
+    ../src/importing/StructuredJsonImporter.cpp
+
+    ../src/importing/XmlImporter.h
+    ../src/importing/XmlImporter.cpp
 
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordSeverity.h
@@ -407,6 +475,8 @@ qt_add_executable(
     ../src/importing/ImportFormatSuggestion.h
     ../src/importing/ImportFormatSuggestionService.h
     ../src/importing/ImportFormatSuggestionService.cpp
+
+    ../src/importing/BuiltInImportProfilePresets.h
 )
 
 target_link_libraries(
@@ -419,4 +489,246 @@ target_link_libraries(
 add_test(
     NAME ImportFormatSuggestionServiceTests
     COMMAND ImportFormatSuggestionServiceTests
+)
+
+qt_add_executable(
+    StructuredJsonImporterTests
+
+    StructuredJsonImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/StructuredJsonImportConfig.h
+    ../src/importing/StructuredJsonImporter.h
+    ../src/importing/StructuredJsonImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    StructuredJsonImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME StructuredJsonImporterTests
+    COMMAND StructuredJsonImporterTests
+)
+
+qt_add_executable(RegexTextImporterTests
+    RegexTextImporterTests.cpp
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/RegexTextImporter.h
+    ../src/importing/RegexTextImporter.cpp
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(RegexTextImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME RegexTextImporterTests
+    COMMAND RegexTextImporterTests
+)
+
+qt_add_executable(
+    KeyValueTextImporterTests
+
+    KeyValueTextImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+
+    ../src/importing/KeyValueTextImporter.h
+    ../src/importing/KeyValueTextImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    KeyValueTextImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME KeyValueTextImporterTests
+    COMMAND KeyValueTextImporterTests
+)
+
+qt_add_executable(
+    SyslogImporterTests
+
+    SyslogImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+
+    ../src/importing/SyslogImporter.h
+    ../src/importing/SyslogImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    SyslogImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME SyslogImporterTests
+    COMMAND SyslogImporterTests
+)
+
+qt_add_executable(
+    IisW3cImporterTests
+
+    IisW3cImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+
+    ../src/importing/IisW3cImporter.h
+    ../src/importing/IisW3cImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    IisW3cImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME IisW3cImporterTests
+    COMMAND IisW3cImporterTests
+)
+
+qt_add_executable(
+    XmlImporterTests
+
+    XmlImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+
+    ../src/importing/XmlImporter.h
+    ../src/importing/XmlImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    XmlImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME XmlImporterTests
+    COMMAND XmlImporterTests
 )

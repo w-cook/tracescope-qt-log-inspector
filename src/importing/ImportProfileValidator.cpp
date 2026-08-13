@@ -2,6 +2,7 @@
 
 #include <QSet>
 #include <QStringList>
+#include <QRegularExpression>
 
 namespace
 {
@@ -138,6 +139,56 @@ ImportProfileValidator::validate(
                 ),
             QStringLiteral(
                 "The import profile must identify an importer."
+                )
+            );
+    }
+
+    if (profile.importerId.trimmed()
+        == QStringLiteral("regex-text")) {
+        if (profile.regexPattern
+                .trimmed()
+                .isEmpty()) {
+            appendIssue(
+                result,
+                QStringLiteral(
+                    "REGEX_PATTERN_REQUIRED"
+                    ),
+                QStringLiteral(
+                    "Regex plain-text profiles require a regular expression pattern."
+                    )
+                );
+        } else {
+            const QRegularExpression expression(
+                profile.regexPattern
+                );
+
+            if (!expression.isValid()) {
+                appendIssue(
+                    result,
+                    QStringLiteral(
+                        "INVALID_REGEX_PATTERN"
+                        ),
+                    QStringLiteral(
+                        "The regular expression pattern is invalid: %1"
+                        )
+                        .arg(
+                            expression.errorString()
+                            )
+                    );
+            }
+        }
+    }
+
+    if (!isValidSourcePath(
+            profile.recordPath
+            )) {
+        appendIssue(
+            result,
+            QStringLiteral(
+                "INVALID_RECORD_PATH"
+                ),
+            QStringLiteral(
+                "The import profile record path is invalid."
                 )
             );
     }

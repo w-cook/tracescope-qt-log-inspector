@@ -1,0 +1,7 @@
+192.0.2.10 - - [12/Aug/2026:09:00:02 -0400] "GET / HTTP/1.1" 200 1256 "-" "Mozilla/5.0"
+198.51.100.24 - analyst [12/Aug/2026:09:00:48 -0400] "GET /api/orders/5812 HTTP/1.1" 200 842 "https://portal.example.test/orders" "Mozilla/5.0"
+203.0.113.7 - - [12/Aug/2026:09:01:15 -0400] "POST /api/orders HTTP/1.1" 201 394 "https://portal.example.test/new-order" "Mozilla/5.0"
+192.0.2.44 - - [12/Aug/2026:09:02:06 -0400] "GET /missing HTTP/1.1" 404 212 "https://portal.example.test/" "Mozilla/5.0"
+198.51.100.91 - - [12/Aug/2026:09:03:42 -0400] "GET /api/inventory/SKU-441 HTTP/1.1" 200 611 "-" "curl/8.14.1"
+203.0.113.18 - operator [12/Aug/2026:09:04:10 -0400] "PUT /api/inventory/SKU-441 HTTP/1.1" 204 - "https://portal.example.test/inventory" "Mozilla/5.0"
+203.0.113.77 - - [12/Aug/2026:09:05:12 -0400] "GET /health HTTP/1.1" 200 27 "-" "kube-probe/1.33"

@@ -1,0 +1,87 @@
+#include "BuiltInImporterRegistry.h"
+
+#include <memory>
+
+#include "DelimitedTextImporter.h"
+#include "IisW3cImporter.h"
+#include "JsonLinesImporter.h"
+#include "KeyValueTextImporter.h"
+#include "RegexTextImporter.h"
+#include "StructuredJsonImporter.h"
+#include "SyslogImporter.h"
+#include "XmlImporter.h"
+
+ImporterRegistry createBuiltInImporterRegistry(
+    const ImportProfile &profile
+    )
+{
+    ImporterRegistry registry;
+
+    registry.registerImporter(
+        std::make_shared<JsonLinesImporter>(
+            profile
+            )
+        );
+
+    StructuredJsonImportConfig structuredJsonConfig;
+
+    structuredJsonConfig.recordPath =
+        profile.recordPath;
+
+    registry.registerImporter(
+        std::make_shared<StructuredJsonImporter>(
+            structuredJsonConfig,
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<XmlImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<RegexTextImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<KeyValueTextImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<SyslogImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<IisW3cImporter>(
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<DelimitedTextImporter>(
+            QStringLiteral("csv"),
+            QStringLiteral("CSV"),
+            QLatin1Char(','),
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<DelimitedTextImporter>(
+            QStringLiteral("tsv"),
+            QStringLiteral("TSV"),
+            QLatin1Char('\t'),
+            profile
+            )
+        );
+
+    return registry;
+}

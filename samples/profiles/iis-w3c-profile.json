@@ -1,0 +1,75 @@
+{
+    "canonicalFields": {
+        "entityId": "",
+        "eventCode": "",
+        "message": "message",
+        "severity": "",
+        "subsystem": "",
+        "timestamp": "timestamp"
+    },
+    "customFields": [
+        {
+            "name": "Server IP",
+            "sourcePath": "s-ip"
+        },
+        {
+            "name": "HTTP Method",
+            "sourcePath": "cs-method"
+        },
+        {
+            "name": "URI Stem",
+            "sourcePath": "cs-uri-stem"
+        },
+        {
+            "name": "URI Query",
+            "sourcePath": "cs-uri-query"
+        },
+        {
+            "name": "Server Port",
+            "sourcePath": "s-port"
+        },
+        {
+            "name": "Username",
+            "sourcePath": "cs-username"
+        },
+        {
+            "name": "Client IP",
+            "sourcePath": "c-ip"
+        },
+        {
+            "name": "User Agent",
+            "sourcePath": "cs(User-Agent)"
+        },
+        {
+            "name": "Referrer",
+            "sourcePath": "cs(Referer)"
+        },
+        {
+            "name": "HTTP Status",
+            "sourcePath": "sc-status"
+        },
+        {
+            "name": "HTTP Substatus",
+            "sourcePath": "sc-substatus"
+        },
+        {
+            "name": "Win32 Status",
+            "sourcePath": "sc-win32-status"
+        },
+        {
+            "name": "Time Taken (ms)",
+            "sourcePath": "time-taken"
+        }
+    ],
+    "importerId": "iis-w3c",
+    "name": "IIS W3C Extended Log",
+    "preserveUnmappedFields": true,
+    "schemaVersion": 1,
+    "severityAliases": {
+    },
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ]
+}

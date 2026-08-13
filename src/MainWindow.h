@@ -44,6 +44,7 @@ private:
     QTableView *eventTable;
     QPlainTextEdit *eventDetailText;
     QTableWidget *issueSummaryTable;
+    QGroupBox *issueSummaryGroup;
 
     InvestigationController *investigationController;
 
@@ -54,6 +55,9 @@ private:
     QComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
+
+    bool hasSeverityData = false;
+    bool hasSubsystemData = false;
 
     QString currentFilePath;
 
@@ -95,6 +99,9 @@ private:
 
     QGroupBox *buildTimelinePanel();
     void updateTimelineChart(
-        const QVector<TelemetryEvent> &events
+        const QVector<TelemetryEvent> &events,
+        const QVector<TelemetryEvent> &rangeEvents
         );
+
+    void updateDataCapabilities();
 };
