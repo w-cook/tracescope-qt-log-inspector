@@ -116,6 +116,7 @@ Completed release milestones:
 | `v0.4.1` | Dynamic Attribute CSV Export | prerelease |
 | `v0.5.0` | Import Profiles and Preview Logic | prerelease |
 | `v0.6.0` | Import Configuration Interface | prerelease |
+| `v0.7.0` | Additional Built-In Formats | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -152,7 +153,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.6.0`:
+Implemented foundations through `v0.7.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -164,15 +165,18 @@ Implemented foundations through `v0.6.0`:
 * versioned import profiles with canonical/custom mappings, severity aliases, timestamp rules, validation, and JSON serialization
 * profile-aware JSON Lines importing and bounded preview services
 * desktop source selection, drag-and-drop, format suggestion, profile editing, mapping-aware preview, validation, and profile save/load
+* built-in import support for CSV, TSV, structured JSON, key-value/logfmt records, Syslog RFC 3164 and RFC 5424, IIS W3C, and structured XML
+* reusable built-in profiles for Apache Common and Apache/Nginx Combined access logs
+* Windows Event XML detection and presets built on the structured XML importer
 * Qt model/view presentation of flexible records and dynamic custom attributes
 * investigation-record CSV export with user-facing canonical headers and configured custom-field names
-* reusable sample import profiles paired with representative source logs, including the multi-minute dynamic-attributes demonstration session
+* representative sample logs and reusable profiles across the supported source families
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 broadens representative built-in source coverage. After that ingestion baseline is established, later phases prioritize responsive large-file processing, multi-session investigation, advanced navigation and filtering, findings, comparison, persistence, live following, analytics, and reporting rather than continuing to accumulate built-in formats.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Later phases now prioritize responsive large-file processing, multi-session investigation, advanced navigation and filtering, findings, comparison, persistence, live following, analytics, and reporting rather than continuing to accumulate built-in formats.
 
 ## Development Phases
 
@@ -343,38 +347,46 @@ Additional maintenance completed during the phase:
 
 ### Phase 6 — Additional Built-In Formats
 
-**Status: Active phase, targeting `v0.7.0`.**
+**Status: Completed in `v0.7.0`.**
 
-Expand source coverage across representative structured and operational log families while keeping normalization explicit, profile-driven, testable, and reproducible.
+Established broad, representative source coverage while keeping import behavior explicit, profile-driven, testable, and reproducible.
 
-Phase 6 is intended to establish sufficient ingestion breadth for the later investigation phases. It is not intended to accumulate every known log format or compete on format count alone.
+Completed deliverables:
 
-Current Phase 6 scope includes:
-
-* CSV and TSV
-* JSON arrays and structured JSON documents
-* regex-configurable plain-text logs
-* key-value and logfmt-style records
-* Syslog RFC 3164 and RFC 5424
+* CSV and TSV import through a shared delimited-text importer
+* structured JSON arrays and nested JSON documents with configurable record paths
+* regex-configurable plain-text logs using named capture groups
+* key-value and logfmt-style record import
+* Syslog RFC 3164 and RFC 5424 parsing
 * Apache Common access logs through a reusable built-in regex profile
 * Apache/Nginx Combined access logs through a reusable built-in regex profile
-* IIS W3C Extended Logs
-* structured XML
-* Windows Event XML through the structured XML architecture where practical
+* IIS W3C Extended Log parsing with field-header handling and a reusable preset
+* structured XML import with nested elements, attributes, repeated elements, record paths, direct-text preservation, and raw-source preservation
+* named XML `<Data Name="...">` handling so Windows-style event data remains addressable by field name
+* Windows Event XML detection and reusable presets for single events and event collections
+* Windows Event severity aliases for the standard numeric event levels used by the sample/preset workflow
+* format suggestions and preview integration across the new source families
+* representative sample logs and reusable profiles for each major supported family
+* automated importer, preview, profile, and format-suggestion coverage
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+* refreshed release screenshots using the structured XML engineering-session workflow
+* `v0.7.0` prerelease packaging and documentation preparation
 
-Format implementations should reuse existing importer and profile infrastructure whenever the source structure permits it. Dedicated importers are justified when a format has structure or semantics that cannot be represented cleanly through a configurable generic importer.
+Additional maintenance completed during the phase:
 
-Each supported family should include appropriate format detection or suggestion behavior, representative sample files, reusable profiles or built-in presets where useful, preview integration, and automated tests.
+* preserved empty timeline intervals across filtered ranges so gaps remain visible
+* hid canonical table columns that are unused by the loaded dataset
+* improved subsystem-filter usability for long values
+* expanded CI package verification to cover representative `v0.7.0` source/profile pairs
 
-Native EVTX ingestion, CEF, LEEF, and other additional format families are not required for `v0.7.0`. They may be reconsidered later only if target-user demand or architectural leverage justifies replacing higher-cost or lower-value planned work; they should not silently increase the roadmap's total scope.
-
-After structured XML and Windows Event XML support are complete and the Phase 6 integration, samples, tests, documentation, and release verification are finished, built-in ingestion breadth is considered sufficient for the current expansion.
+Phase 6 establishes sufficient ingestion breadth for the current expansion. Native EVTX ingestion, CEF, LEEF, and additional format families are not part of `v0.7.0`. They may be reconsidered later only if target-user demand or architectural leverage justifies replacing higher-cost or lower-value planned work rather than silently increasing total scope.
 
 ### Phase 7 — Responsive Large-File Import
 
-With representative ingestion coverage established in Phase 6, subsequent development prioritizes the quality and depth of investigation over additional format count.
+With representative ingestion coverage established in `v0.7.0`, subsequent development prioritizes the quality and depth of investigation over additional format count.
 
-Improve responsiveness and memory behavior so the structured investigation workflow remains practical for realistically large engineering and diagnostic log files rather than forcing users back to raw-text tools when file size increases.
+Improve responsiveness and memory behavior so the structured investigation workflow remains practical for realistically large engineering and diagnostic log files rather than forcing users back to raw-text tools as file size increases.
 
 Planned deliverables:
 
