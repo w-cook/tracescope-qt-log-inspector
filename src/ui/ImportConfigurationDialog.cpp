@@ -360,22 +360,23 @@ void ImportConfigurationDialog::buildLayout()
     recordPathEdit->setPlaceholderText(
         tr(
             "Blank for document root, "
-            "or a path such as payload.events"
+            "or a path such as session.events.event"
             )
         );
 
     recordPathEdit->setToolTip(
         tr(
-            "For Structured JSON, identifies the object "
-            "or array containing the records to import. "
-            "Use dot-separated object paths such as "
-            "'payload.events'. Leave blank to use the "
-            "document root."
+            "For Structured JSON and Structured XML, "
+            "identifies the object or element path "
+            "containing the records to import. "
+            "Use dot-separated paths such as "
+            "'session.events.event'. Leave blank "
+            "to use the document root."
             )
         );
 
     profileLayout->addRow(
-        tr("JSON record path:"),
+        tr("Record path:"),
         recordPathEdit
         );
 
@@ -1118,7 +1119,7 @@ void ImportConfigurationDialog::buildLayout()
             workingProfile.recordPath =
                 recordPathEdit->text();
 
-            // A changed structured-JSON record path
+            // A changed structured-document record path
             // selects a different logical record set,
             // so previously cached source detection
             // is no longer sufficient.
@@ -1134,9 +1135,13 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             if (workingProfile.importerId
-                != QStringLiteral(
-                    "structured-json"
-                    )) {
+                    != QStringLiteral(
+                        "structured-json"
+                        )
+                && workingProfile.importerId
+                       != QStringLiteral(
+                           "xml"
+                           )) {
                 return;
             }
 
@@ -1208,8 +1213,9 @@ void ImportConfigurationDialog::browseForFile()
             QString(),
             tr(
                 "Supported Log Files "
-                "(*.json *.jsonl *.ndjson *.csv *.tsv *.log *.txt);;"
+                "(*.json *.jsonl *.ndjson *.xml *.csv *.tsv *.log *.txt);;"
                 "Structured JSON (*.json);;"
+                "Structured XML (*.xml);;"
                 "JSON Lines (*.jsonl *.ndjson);;"
                 "Delimited Text (*.csv *.tsv);;"
                 "Log and Text Files (*.log *.txt);;"
@@ -3165,6 +3171,10 @@ void ImportConfigurationDialog::createProfileFromSource(
                    )
         && workingProfile.importerId
                != QStringLiteral(
+                   "xml"
+                   )
+        && workingProfile.importerId
+               != QStringLiteral(
                    "regex-text"
                    )) {
         detectCustomFieldMappings();
@@ -3219,9 +3229,13 @@ void ImportConfigurationDialog::updateFormatSpecificControls()
 
     recordPathEdit->setEnabled(
         importerId
-        == QStringLiteral(
-            "structured-json"
-            )
+            == QStringLiteral(
+                "structured-json"
+                )
+        || importerId
+               == QStringLiteral(
+                   "xml"
+                   )
         );
 
     regexPatternEdit->setEnabled(

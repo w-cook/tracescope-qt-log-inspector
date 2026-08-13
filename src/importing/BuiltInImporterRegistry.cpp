@@ -9,6 +9,7 @@
 #include "RegexTextImporter.h"
 #include "StructuredJsonImporter.h"
 #include "SyslogImporter.h"
+#include "XmlImporter.h"
 
 ImporterRegistry createBuiltInImporterRegistry(
     const ImportProfile &profile
@@ -30,6 +31,12 @@ ImporterRegistry createBuiltInImporterRegistry(
     registry.registerImporter(
         std::make_shared<StructuredJsonImporter>(
             structuredJsonConfig,
+            profile
+            )
+        );
+
+    registry.registerImporter(
+        std::make_shared<XmlImporter>(
             profile
             )
         );

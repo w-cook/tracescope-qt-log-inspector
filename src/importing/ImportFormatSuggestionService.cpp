@@ -45,6 +45,17 @@ ImportFormatSuggestion structuredJsonSuggestion(
     };
 }
 
+ImportFormatSuggestion xmlSuggestion(
+    const QString &reason
+    )
+{
+    return {
+        QStringLiteral("xml"),
+        QStringLiteral("Structured XML"),
+        reason
+    };
+}
+
 ImportFormatSuggestion keyValueSuggestion(
     const QString &reason
     )
@@ -364,6 +375,15 @@ ImportFormatSuggestionService::suggestForFile(
             QStringLiteral(
                 "The file extension indicates "
                 "a structured JSON document."
+                )
+            );
+    }
+
+    if (suffix == QStringLiteral("xml")) {
+        return xmlSuggestion(
+            QStringLiteral(
+                "The file extension indicates "
+                "a structured XML document."
                 )
             );
     }

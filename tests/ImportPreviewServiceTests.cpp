@@ -18,6 +18,7 @@ private slots:
     void regexTextProfilePreviewsRecords();
     void keyValueProfilePreviewsRecords();
     void syslogProfilePreviewsRecords();
+    void xmlProfilePreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -777,6 +778,85 @@ void ImportPreviewServiceTests::syslogProfilePreviewsRecords()
         QStringLiteral(
             "SUPPLIER_DELAY"
             )
+        );
+}
+
+void ImportPreviewServiceTests::xmlProfilePreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "<session>"
+                "<events>"
+                "<event>"
+                "<timestamp>"
+                "2026-08-13T08:00:00Z"
+                "</timestamp>"
+                "<level>INFO</level>"
+                "<message>First</message>"
+                "</event>"
+                "<event>"
+                "<timestamp>"
+                "2026-08-13T08:01:00Z"
+                "</timestamp>"
+                "<level>WARN</level>"
+                "<message>Second</message>"
+                "</event>"
+                "</events>"
+                "</session>"
+                )
+            );
+
+    QVERIFY(
+        !path.isEmpty()
+        );
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Preview Structured XML"
+            );
+
+    profile.importerId =
+        QStringLiteral("xml");
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.events.event"
+            );
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(0)
+            .message.value(),
+        QStringLiteral("First")
+        );
+
+    QCOMPARE(
+        result.importResult
+            .records.at(1)
+            .severity.value(),
+        RecordSeverity::Warning
         );
 }
 

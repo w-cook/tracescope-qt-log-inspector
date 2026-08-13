@@ -442,6 +442,9 @@ qt_add_executable(ImportPreviewServiceTests
     ../src/importing/StructuredJsonImporter.h
     ../src/importing/StructuredJsonImporter.cpp
 
+    ../src/importing/XmlImporter.h
+    ../src/importing/XmlImporter.cpp
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp
@@ -686,4 +689,46 @@ target_link_libraries(
 add_test(
     NAME IisW3cImporterTests
     COMMAND IisW3cImporterTests
+)
+
+qt_add_executable(
+    XmlImporterTests
+
+    XmlImporterTests.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+
+    ../src/importing/XmlImporter.h
+    ../src/importing/XmlImporter.cpp
+
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+)
+
+target_link_libraries(
+    XmlImporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME XmlImporterTests
+    COMMAND XmlImporterTests
 )

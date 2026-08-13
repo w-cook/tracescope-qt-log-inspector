@@ -17,6 +17,7 @@ private slots:
     void jsonObjectLinesSuggestJsonLines();
     void csvExtensionSuggestsCsv();
     void tsvExtensionSuggestsTsv();
+    void xmlExtensionSuggestsStructuredXml();
     void malformedContentHasNoSuggestion();
     void jsonExtensionSuggestsStructuredJson();
     void logfmtContentSuggestsKeyValue();
@@ -229,6 +230,53 @@ void
     QCOMPARE(
         suggestion.displayName,
         QStringLiteral("TSV")
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    xmlExtensionSuggestsStructuredXml()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "session.xml"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<session />"
+                )
+            )
+        );
+
+    ImportFormatSuggestionService service;
+
+    const ImportFormatSuggestion suggestion =
+        service.suggestForFile(
+            filePath
+            );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("xml")
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Structured XML"
+            )
         );
 }
 

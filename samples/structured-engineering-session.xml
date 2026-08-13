@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session>
+    <events>
+        <event sequence="1">
+            <metadata>
+                <timestamp>2026-08-13T12:00:00.000Z</timestamp>
+                <level>INFO</level>
+                <component>TestOrchestrator</component>
+                <code>RUN_STARTED</code>
+            </metadata>
+            <context>
+                <deviceId>RIG-ALPHA-07</deviceId>
+                <host>test-console-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Initialization</testStep>
+            </context>
+            <details>
+                <message>Engineering validation run started</message>
+            </details>
+            <metrics>
+                <latencyMs>18</latencyMs>
+            </metrics>
+        </event>
+
+        <event sequence="2">
+            <metadata>
+                <timestamp>2026-08-13T12:00:42.250Z</timestamp>
+                <level>DEBUG</level>
+                <component>SensorGateway</component>
+                <code>SENSOR_CONNECTED</code>
+            </metadata>
+            <context>
+                <deviceId>SENSOR-12</deviceId>
+                <host>gateway-02</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Sensor bring-up</testStep>
+            </context>
+            <details>
+                <message>Primary telemetry sensor connected</message>
+            </details>
+            <measurements>
+                <temperatureC>41.8</temperatureC>
+            </measurements>
+            <metrics>
+                <latencyMs>24</latencyMs>
+            </metrics>
+        </event>
+
+        <event sequence="3">
+            <metadata>
+                <timestamp>2026-08-13T12:01:31.480Z</timestamp>
+                <level>INFO</level>
+                <component>TrackingEngine</component>
+                <code>TRACK_ACQUIRED</code>
+            </metadata>
+            <context>
+                <deviceId>TRACKER-03</deviceId>
+                <host>processor-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Acquisition</testStep>
+            </context>
+            <details>
+                <message>Reference target acquired successfully</message>
+            </details>
+            <metrics>
+                <latencyMs>36</latencyMs>
+            </metrics>
+        </event>
+
+        <event sequence="4">
+            <metadata>
+                <timestamp>2026-08-13T12:02:14.105Z</timestamp>
+                <level>NOTICE</level>
+                <component>TelemetryBus</component>
+                <code>QUEUE_DEPTH_ELEVATED</code>
+            </metadata>
+            <context>
+                <deviceId>BUS-A</deviceId>
+                <host>processor-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Steady-state load</testStep>
+            </context>
+            <details>
+                <message>Telemetry queue depth exceeded nominal baseline</message>
+            </details>
+            <metrics>
+                <latencyMs>71</latencyMs>
+                <queueDepth>184</queueDepth>
+            </metrics>
+        </event>
+
+        <event sequence="5">
+            <metadata>
+                <timestamp>2026-08-13T12:03:06.920Z</timestamp>
+                <level>CAUTION</level>
+                <component>SensorGateway</component>
+                <code>SENSOR_LATENCY_HIGH</code>
+            </metadata>
+            <context>
+                <deviceId>SENSOR-12</deviceId>
+                <host>gateway-02</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Steady-state load</testStep>
+            </context>
+            <details>
+                <message>Sensor update latency exceeded warning threshold</message>
+            </details>
+            <measurements>
+                <temperatureC>47.6</temperatureC>
+            </measurements>
+            <metrics>
+                <latencyMs>286</latencyMs>
+            </metrics>
+        </event>
+
+        <event sequence="6">
+            <metadata>
+                <timestamp>2026-08-13T12:04:18.330Z</timestamp>
+                <level>FAIL</level>
+                <component>TrackingEngine</component>
+                <code>TRACK_UPDATE_MISSED</code>
+            </metadata>
+            <context>
+                <deviceId>TRACKER-03</deviceId>
+                <host>processor-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Disturbance injection</testStep>
+            </context>
+            <details>
+                <message>Expected tracking update was not received within the deadline</message>
+            </details>
+            <metrics>
+                <latencyMs>812</latencyMs>
+                <missedUpdates>1</missedUpdates>
+            </metrics>
+        </event>
+
+        <event sequence="7">
+            <metadata>
+                <timestamp>2026-08-13T12:04:47.010Z</timestamp>
+                <level>WARNING</level>
+                <component>RecoveryManager</component>
+                <code>RECOVERY_STARTED</code>
+            </metadata>
+            <context>
+                <deviceId>TRACKER-03</deviceId>
+                <host>processor-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Disturbance injection</testStep>
+            </context>
+            <details>
+                <message>Automatic tracking recovery sequence started</message>
+            </details>
+            <metrics>
+                <latencyMs>44</latencyMs>
+            </metrics>
+        </event>
+
+        <event sequence="8">
+            <metadata>
+                <timestamp>2026-08-13T12:05:29.775Z</timestamp>
+                <level>INFO</level>
+                <component>RecoveryManager</component>
+                <code>RECOVERY_COMPLETED</code>
+            </metadata>
+            <context>
+                <deviceId>TRACKER-03</deviceId>
+                <host>processor-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Recovery validation</testStep>
+            </context>
+            <details>
+                <message>Tracking data flow returned to nominal operation</message>
+            </details>
+            <metrics>
+                <latencyMs>39</latencyMs>
+            </metrics>
+        </event>
+
+        <event sequence="9">
+            <metadata>
+                <timestamp>2026-08-13T12:06:36.540Z</timestamp>
+                <level>DEBUG</level>
+                <component>Diagnostics</component>
+                <code>SNAPSHOT_CAPTURED</code>
+            </metadata>
+            <context>
+                <deviceId>RIG-ALPHA-07</deviceId>
+                <host>test-console-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Post-run diagnostics</testStep>
+            </context>
+            <details>
+                <message>Post-recovery diagnostic snapshot captured</message>
+            </details>
+            <metrics>
+                <latencyMs>21</latencyMs>
+            </metrics>
+            <artifact>
+                <name>recovery-snapshot-042.bin</name>
+            </artifact>
+        </event>
+
+        <event sequence="10">
+            <metadata>
+                <timestamp>2026-08-13T12:07:52.000Z</timestamp>
+                <level>INFO</level>
+                <component>TestOrchestrator</component>
+                <code>RUN_COMPLETED</code>
+            </metadata>
+            <context>
+                <deviceId>RIG-ALPHA-07</deviceId>
+                <host>test-console-01</host>
+                <runId>RUN-20260813-042</runId>
+                <testStep>Completion</testStep>
+            </context>
+            <details>
+                <message>Engineering validation run completed with recoverable findings</message>
+            </details>
+            <metrics>
+                <latencyMs>17</latencyMs>
+            </metrics>
+        </event>
+    </events>
+</session>
