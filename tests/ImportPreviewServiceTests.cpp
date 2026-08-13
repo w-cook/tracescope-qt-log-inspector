@@ -19,6 +19,7 @@ private slots:
     void keyValueProfilePreviewsRecords();
     void syslogProfilePreviewsRecords();
     void xmlProfilePreviewsRecords();
+    void windowsEventXmlPresetPreviewsRecords();
     void previewHonorsRecordLimit();
     void previewPreservesPhysicalRecordNumbers();
     void invalidProfilePreventsPreview();
@@ -857,6 +858,144 @@ void ImportPreviewServiceTests::xmlProfilePreviewsRecords()
             .records.at(1)
             .severity.value(),
         RecordSeverity::Warning
+        );
+}
+
+void ImportPreviewServiceTests::windowsEventXmlPresetPreviewsRecords()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "<Events>"
+                "<Event "
+                "xmlns=\"http://schemas.microsoft.com/"
+                "win/2004/08/events/event\">"
+                "<System>"
+                "<Provider "
+                "Name=\"Sample-Provider\" "
+                "Guid=\"{11111111-1111-1111-1111-111111111111}\"/>"
+                "<EventID Qualifiers=\"0\">4102</EventID>"
+                "<Level>3</Level>"
+                "<TimeCreated "
+                "SystemTime=\"2026-08-13T12:04:00Z\"/>"
+                "<EventRecordID>12004</EventRecordID>"
+                "<Execution "
+                "ProcessID=\"8124\" "
+                "ThreadID=\"6408\"/>"
+                "<Channel>Application</Channel>"
+                "<Computer>ENG-WS-07</Computer>"
+                "</System>"
+                "<EventData>"
+                "<Data Name=\"DeviceId\">TRACKER-03</Data>"
+                "<Data Name=\"Result\">Timeout</Data>"
+                "</EventData>"
+                "<RenderingInfo>"
+                "<Message>"
+                "Tracking update timed out."
+                "</Message>"
+                "</RenderingInfo>"
+                "</Event>"
+                "</Events>"
+                )
+            );
+
+    QVERIFY(!path.isEmpty());
+
+    const std::optional<ImportProfile> preset =
+        builtInImportProfilePreset(
+            BuiltInImportProfilePresetIds::
+            WindowsEventXmlCollection
+            );
+
+    QVERIFY(preset.has_value());
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                preset.value()
+                );
+
+    QVERIFY(
+        result.canDisplayPreview()
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        result.importResult.records.first();
+
+    QVERIFY(
+        record.timestamp.has_value()
+        );
+
+    QCOMPARE(
+        record.severity.value(),
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        record.subsystem.value(),
+        QStringLiteral(
+            "Sample-Provider"
+            )
+        );
+
+    QCOMPARE(
+        record.eventCode.value(),
+        QStringLiteral("4102")
+        );
+
+    QCOMPARE(
+        record.message.value(),
+        QStringLiteral(
+            "Tracking update timed out."
+            )
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "Channel"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "Application"
+            )
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "EventData.NamedData.DeviceId"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "TRACKER-03"
+            )
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "EventData.NamedData.Result"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "Timeout"
+            )
         );
 }
 

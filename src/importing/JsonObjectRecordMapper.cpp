@@ -63,11 +63,29 @@ std::optional<QString> readOptionalString(
     const QString &path
     )
 {
-    const QJsonValue value =
+    QJsonValue value =
         readJsonPath(
             object,
             path
             );
+
+    /*
+     * Structured XML elements that contain both
+     * text and attributes normalize to an object
+     * whose direct text is stored under #text.
+     *
+     * Allow canonical mappings to address the
+     * element itself without having to change
+     * profile paths depending on whether that
+     * particular element has attributes.
+     */
+    if (value.isObject()) {
+        value =
+            value.toObject()
+                .value(
+                    QStringLiteral("#text")
+                    );
+    }
 
     if (!value.isString()) {
         return std::nullopt;

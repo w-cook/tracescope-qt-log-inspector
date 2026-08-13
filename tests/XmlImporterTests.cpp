@@ -72,6 +72,7 @@ private slots:
     void importsRecordsAtConfiguredPath();
     void mapsNestedCanonicalFields();
     void mapsAttributes();
+    void mapsCanonicalTextFromElementWithAttributes();
     void preservesUnmappedFields();
     void convertsRepeatedElementsToArray();
     void preservesMixedElementText();
@@ -382,6 +383,59 @@ void
                 )
             .toString(),
         QStringLiteral("api-02")
+        );
+}
+
+void
+    XmlImporterTests::
+    mapsCanonicalTextFromElementWithAttributes()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "Events.Event"
+            );
+
+    profile.canonicalFields.eventCodePath =
+        QStringLiteral(
+            "System.EventID"
+            );
+
+    profile.canonicalFields.messagePath.clear();
+
+    XmlImporter importer(profile);
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<Events>"
+                "<Event>"
+                "<System>"
+                "<EventID Qualifiers=\"16384\">"
+                "255"
+                "</EventID>"
+                "</System>"
+                "</Event>"
+                "</Events>"
+                )
+            );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(
+        result.records.first()
+            .eventCode.has_value()
+        );
+
+    QCOMPARE(
+        result.records.first()
+            .eventCode.value(),
+        QStringLiteral("255")
         );
 }
 

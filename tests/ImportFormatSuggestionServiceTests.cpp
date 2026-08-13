@@ -30,6 +30,9 @@ private slots:
     void apacheCommonContentSuggestsPreset();
     void combinedAccessContentSuggestsPreset();
     void iisW3cContentSuggestsPreset();
+    void singleWindowsEventXmlSuggestsPreset();
+    void windowsEventXmlCollectionSuggestsPreset();
+    void ordinaryXmlDoesNotSuggestWindowsEvent();
 
 private:
     static bool writeFile(
@@ -831,6 +834,180 @@ void
         suggestion.profilePresetId,
         BuiltInImportProfilePresetIds::
         IisW3c
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    singleWindowsEventXmlSuggestsPreset()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "windows-event.xml"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<?xml version=\"1.0\"?>"
+                "<Event "
+                "xmlns=\"http://schemas.microsoft.com/"
+                "win/2004/08/events/event\">"
+                "<System>"
+                "<EventID>1001</EventID>"
+                "</System>"
+                "</Event>"
+                )
+            )
+        );
+
+    const ImportFormatSuggestion suggestion =
+        ImportFormatSuggestionService()
+            .suggestForFile(
+                filePath
+                );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("xml")
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Windows Event XML"
+            )
+        );
+
+    QCOMPARE(
+        suggestion.profilePresetId,
+        BuiltInImportProfilePresetIds::
+        WindowsEventXml
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    windowsEventXmlCollectionSuggestsPreset()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "windows-events.xml"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<?xml version=\"1.0\"?>"
+                "<Events>"
+                "<Event "
+                "xmlns=\"http://schemas.microsoft.com/"
+                "win/2004/08/events/event\">"
+                "<System>"
+                "<EventID>1001</EventID>"
+                "</System>"
+                "</Event>"
+                "<Event "
+                "xmlns=\"http://schemas.microsoft.com/"
+                "win/2004/08/events/event\">"
+                "<System>"
+                "<EventID>1002</EventID>"
+                "</System>"
+                "</Event>"
+                "</Events>"
+                )
+            )
+        );
+
+    const ImportFormatSuggestion suggestion =
+        ImportFormatSuggestionService()
+            .suggestForFile(
+                filePath
+                );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("xml")
+        );
+
+    QCOMPARE(
+        suggestion.profilePresetId,
+        BuiltInImportProfilePresetIds::
+        WindowsEventXmlCollection
+        );
+}
+
+void
+    ImportFormatSuggestionServiceTests::
+    ordinaryXmlDoesNotSuggestWindowsEvent()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString filePath =
+        directory.filePath(
+            QStringLiteral(
+                "engineering-events.xml"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            filePath,
+            QByteArrayLiteral(
+                "<Events>"
+                "<Event>"
+                "<message>Test event</message>"
+                "</Event>"
+                "</Events>"
+                )
+            )
+        );
+
+    const ImportFormatSuggestion suggestion =
+        ImportFormatSuggestionService()
+            .suggestForFile(
+                filePath
+                );
+
+    QVERIFY(
+        suggestion.hasSuggestion()
+        );
+
+    QCOMPARE(
+        suggestion.importerId,
+        QStringLiteral("xml")
+        );
+
+    QCOMPARE(
+        suggestion.displayName,
+        QStringLiteral(
+            "Structured XML"
+            )
+        );
+
+    QVERIFY(
+        suggestion.profilePresetId.isEmpty()
         );
 }
 

@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QRegularExpression>
+#include <QXmlStreamReader>
 
 #include "BuiltInImportProfilePresets.h"
 
@@ -53,6 +54,19 @@ ImportFormatSuggestion xmlSuggestion(
         QStringLiteral("xml"),
         QStringLiteral("Structured XML"),
         reason
+    };
+}
+
+ImportFormatSuggestion windowsEventXmlSuggestion(
+    const QString &reason,
+    const QString &presetId
+    )
+{
+    return {
+        QStringLiteral("xml"),
+        QStringLiteral("Windows Event XML"),
+        reason,
+        presetId
     };
 }
 
@@ -343,6 +357,116 @@ bool looksLikeIisW3cFieldsDirective(
            && hasIisRequestField
            && hasIisResponseField;
 }
+
+bool isWindowsEventNamespace(
+    const QString &namespaceUri
+    )
+{
+    return namespaceUri
+           == QStringLiteral(
+               "http://schemas.microsoft.com/"
+               "win/2004/08/events/event"
+               );
+}
+
+ImportFormatSuggestion
+detectWindowsEventXml(
+    const QString &filePath
+    )
+{
+    QFile file(filePath);
+
+    if (!file.open(
+            QIODevice::ReadOnly
+            | QIODevice::Text
+            )) {
+        return {};
+    }
+
+    QXmlStreamReader reader(&file);
+
+    bool rootSeen = false;
+    bool collectionRoot = false;
+
+    constexpr int maximumStartElements = 32;
+
+    int inspectedStartElements = 0;
+
+    while (!reader.atEnd()
+           && inspectedStartElements
+                  < maximumStartElements) {
+        reader.readNext();
+
+        if (!reader.isStartElement()) {
+            continue;
+        }
+
+        ++inspectedStartElements;
+
+        const QString elementName =
+            reader.name().toString();
+
+        const QString namespaceUri =
+            reader.namespaceUri()
+                .toString();
+
+        if (!rootSeen) {
+            rootSeen = true;
+
+            /*
+             * A single rendered Windows event uses
+             * Event as the document root.
+             */
+            if (elementName
+                    == QStringLiteral("Event")
+                && isWindowsEventNamespace(
+                    namespaceUri
+                    )) {
+                return windowsEventXmlSuggestion(
+                    QStringLiteral(
+                        "The XML document contains "
+                        "a Windows Event record."
+                        ),
+                    BuiltInImportProfilePresetIds::
+                    WindowsEventXml
+                    );
+            }
+
+            /*
+             * TraceScope also supports collections
+             * wrapped in an Events element.
+             */
+            collectionRoot =
+                elementName
+                == QStringLiteral("Events");
+
+            if (!collectionRoot) {
+                return {};
+            }
+
+            continue;
+        }
+
+        if (collectionRoot
+            && elementName
+                   == QStringLiteral("Event")
+            && isWindowsEventNamespace(
+                namespaceUri
+                )) {
+            return windowsEventXmlSuggestion(
+                QStringLiteral(
+                    "The XML document contains "
+                    "a collection of Windows Event "
+                    "records."
+                    ),
+                BuiltInImportProfilePresetIds::
+                WindowsEventXmlCollection
+                );
+        }
+    }
+
+    return {};
+}
 }
 
 ImportFormatSuggestion
@@ -380,6 +504,17 @@ ImportFormatSuggestionService::suggestForFile(
     }
 
     if (suffix == QStringLiteral("xml")) {
+        const ImportFormatSuggestion
+            windowsEventSuggestion =
+            detectWindowsEventXml(
+                filePath
+                );
+
+        if (windowsEventSuggestion
+                .hasSuggestion()) {
+            return windowsEventSuggestion;
+        }
+
         return xmlSuggestion(
             QStringLiteral(
                 "The file extension indicates "

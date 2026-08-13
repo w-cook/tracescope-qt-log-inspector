@@ -1,0 +1,133 @@
+{
+    "schemaVersion": 1,
+    "name": "Windows Event XML Engineering Session",
+    "importerId": "xml",
+    "recordPath": "Events.Event",
+    "canonicalFields": {
+        "timestamp": "System.TimeCreated.@SystemTime",
+        "severity": "System.Level",
+        "subsystem": "System.Provider.@Name",
+        "eventCode": "System.EventID",
+        "entityId": "EventData.NamedData.DeviceId",
+        "message": "RenderingInfo.Message"
+    },
+    "customFields": [
+        {
+            "name": "Channel",
+            "sourcePath": "System.Channel"
+        },
+        {
+            "name": "Computer",
+            "sourcePath": "System.Computer"
+        },
+        {
+            "name": "Event Record ID",
+            "sourcePath": "System.EventRecordID"
+        },
+        {
+            "name": "Provider GUID",
+            "sourcePath": "System.Provider.@Guid"
+        },
+        {
+            "name": "Process ID",
+            "sourcePath": "System.Execution.@ProcessID"
+        },
+        {
+            "name": "Thread ID",
+            "sourcePath": "System.Execution.@ThreadID"
+        },
+        {
+            "name": "Activity ID (GUID)",
+            "sourcePath": "System.Correlation.@ActivityID"
+        },
+        {
+            "name": "Related Activity ID (GUID)",
+            "sourcePath": "System.Correlation.@RelatedActivityID"
+        },
+        {
+            "name": "User SID",
+            "sourcePath": "System.Security.@UserID"
+        },
+        {
+            "name": "Task",
+            "sourcePath": "System.Task"
+        },
+        {
+            "name": "Opcode",
+            "sourcePath": "System.Opcode"
+        },
+        {
+            "name": "Keywords (Hex Mask)",
+            "sourcePath": "System.Keywords"
+        },
+        {
+            "name": "Run ID",
+            "sourcePath": "EventData.NamedData.RunId"
+        },
+        {
+            "name": "Component",
+            "sourcePath": "EventData.NamedData.Component"
+        },
+        {
+            "name": "Result",
+            "sourcePath": "EventData.NamedData.Result"
+        },
+        {
+            "name": "Duration (ms)",
+            "sourcePath": "EventData.NamedData.DurationMs"
+        },
+        {
+            "name": "Queue Depth",
+            "sourcePath": "EventData.NamedData.QueueDepth"
+        },
+        {
+            "name": "Temperature (C)",
+            "sourcePath": "EventData.NamedData.TemperatureC"
+        },
+        {
+            "name": "Missed Updates",
+            "sourcePath": "EventData.NamedData.MissedUpdates"
+        },
+        {
+            "name": "Artifact",
+            "sourcePath": "EventData.NamedData.Artifact"
+        },
+        {
+            "name": "Event Version",
+            "sourcePath": "System.Version"
+        },
+        {
+            "name": "Event Qualifiers",
+            "sourcePath": "System.EventID.@Qualifiers"
+        },
+        {
+            "name": "Rendering Culture",
+            "sourcePath": "RenderingInfo.@Culture"
+        },
+        {
+            "name": "Rendered Level",
+            "sourcePath": "RenderingInfo.Level"
+        },
+        {
+            "name": "Task Name",
+            "sourcePath": "RenderingInfo.Task"
+        },
+        {
+            "name": "Opcode Name",
+            "sourcePath": "RenderingInfo.Opcode"
+        }
+    ],
+    "severityAliases": {
+        "1": "CRITICAL",
+        "2": "ERROR",
+        "3": "WARN",
+        "4": "INFO",
+        "5": "TRACE"
+    },
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

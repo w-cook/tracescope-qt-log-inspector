@@ -175,6 +175,158 @@ ImportProfile createIisW3cProfile()
 
     return profile;
 }
+
+ImportProfile createWindowsEventXmlProfile(
+    const QString &recordPath
+    )
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Windows Event XML"
+            );
+
+    profile.importerId =
+        QStringLiteral("xml");
+
+    profile.recordPath =
+        recordPath;
+
+    profile.canonicalFields.timestampPath =
+        QStringLiteral(
+            "System.TimeCreated.@SystemTime"
+            );
+
+    profile.canonicalFields.severityPath =
+        QStringLiteral(
+            "System.Level"
+            );
+
+    profile.canonicalFields.subsystemPath =
+        QStringLiteral(
+            "System.Provider.@Name"
+            );
+
+    profile.canonicalFields.eventCodePath =
+        QStringLiteral(
+            "System.EventID"
+            );
+
+    /*
+     * A Windows event does not have a universal
+     * application-domain entity identifier.
+     */
+    profile.canonicalFields.entityIdPath.clear();
+
+    /*
+     * RenderingInfo is present when rendered event
+     * information is available. Plain event XML can
+     * still be investigated when it is absent.
+     */
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "RenderingInfo.Message"
+            );
+
+    profile.customFields = {
+        {
+            QStringLiteral("Channel"),
+            QStringLiteral("System.Channel")
+        },
+        {
+            QStringLiteral("Computer"),
+            QStringLiteral("System.Computer")
+        },
+        {
+            QStringLiteral("Event Record ID"),
+            QStringLiteral(
+                "System.EventRecordID"
+                )
+        },
+        {
+            QStringLiteral("Provider GUID"),
+            QStringLiteral(
+                "System.Provider.@Guid"
+                )
+        },
+        {
+            QStringLiteral("Process ID"),
+            QStringLiteral(
+                "System.Execution.@ProcessID"
+                )
+        },
+        {
+            QStringLiteral("Thread ID"),
+            QStringLiteral(
+                "System.Execution.@ThreadID"
+                )
+        },
+        {
+            QStringLiteral("Activity ID"),
+            QStringLiteral(
+                "System.Correlation.@ActivityID"
+                )
+        },
+        {
+            QStringLiteral("Related Activity ID"),
+            QStringLiteral(
+                "System.Correlation.@RelatedActivityID"
+                )
+        },
+        {
+            QStringLiteral("User ID"),
+            QStringLiteral(
+                "System.Security.@UserID"
+                )
+        },
+        {
+            QStringLiteral("Task"),
+            QStringLiteral("System.Task")
+        },
+        {
+            QStringLiteral("Opcode"),
+            QStringLiteral("System.Opcode")
+        },
+        {
+            QStringLiteral("Keywords"),
+            QStringLiteral(
+                "System.Keywords"
+                )
+        }
+    };
+
+    profile.severityAliases = {
+        {
+            QStringLiteral("1"),
+            RecordSeverity::Critical
+        },
+        {
+            QStringLiteral("2"),
+            RecordSeverity::Error
+        },
+        {
+            QStringLiteral("3"),
+            RecordSeverity::Warning
+        },
+        {
+            QStringLiteral("4"),
+            RecordSeverity::Info
+        },
+        {
+            QStringLiteral("5"),
+            RecordSeverity::Trace
+        }
+    };
+
+    profile.timestampRules = {
+        TimestampRule {}
+    };
+
+    profile.preserveUnmappedFields = true;
+
+    return profile;
+}
 }
 
 std::optional<ImportProfile>
@@ -214,6 +366,24 @@ builtInImportProfilePreset(
         == BuiltInImportProfilePresetIds::
         IisW3c) {
         return createIisW3cProfile();
+    }
+
+    if (presetId
+        == BuiltInImportProfilePresetIds::
+        WindowsEventXml) {
+        return createWindowsEventXmlProfile(
+            QString()
+            );
+    }
+
+    if (presetId
+        == BuiltInImportProfilePresetIds::
+        WindowsEventXmlCollection) {
+        return createWindowsEventXmlProfile(
+            QStringLiteral(
+                "Events.Event"
+                )
+            );
     }
 
     return std::nullopt;
