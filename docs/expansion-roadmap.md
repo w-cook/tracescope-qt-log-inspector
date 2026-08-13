@@ -28,6 +28,30 @@ The expansion will follow these principles:
 * Avoid paid infrastructure and unnecessary external services.
 * Complete each phase with passing tests and downloadable Windows and Linux packages.
 
+## Product Positioning, Adoption, and Scope Discipline
+
+TraceScope remains focused on file-based telemetry and diagnostic investigation for applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. Broader adoption is desirable, but new capabilities should strengthen this primary use case rather than reposition the application around unrelated markets.
+
+TraceScope occupies the space between raw-file and text-log viewers and centralized observability platforms. Its value is a structured, repeatable, offline investigation workflow without requiring log-shipping infrastructure, a hosted backend, user accounts, or an indexing service.
+
+The project should be evaluated against the tools its intended users may already reach for, including text editors and command-line utilities, fast raw-log viewers, structured desktop log-analysis tools, and centralized observability systems. TraceScope does not need to outperform every category at its specialty. Instead, it should reduce the friction of moving from unfamiliar files to a useful structured investigation while preserving source-specific information and keeping the workflow local and reproducible.
+
+Format breadth is an enabling capability rather than the primary product differentiator. TraceScope should support a practical set of representative structured and operational log families plus reusable configurable import profiles. Additional formats should be added only when they materially reduce friction for the intended audience or reuse existing importer architecture at low incremental cost.
+
+Once representative ingestion coverage is established, development priority shifts from format count to investigation depth. Large-file responsiveness, multi-session investigation, advanced filtering and navigation, findings, deterministic analytics, session comparison, persistence, live following, and reporting are expected to provide more target-user value than indefinitely expanding the built-in format list.
+
+Roadmap evolution should normally substitute, reinterpret, or reprioritize planned work rather than increase the overall project scope. New work should earn its place through demonstrated target-user value, architectural leverage, or replacement of lower-value planned work. The expansion should remain finishable on approximately the scale originally intended.
+
+Important target workflows include:
+
+* moving quickly from unfamiliar source files to structured investigation
+* reusing parsing and normalization configuration instead of rebuilding one-off scripts
+* preserving source-specific fields alongside common investigation fields
+* investigating related logs from multiple applications or system components
+* comparing failed, degraded, and known-good runs
+* navigating efficiently around warnings, errors, bursts, and surrounding context
+* recording findings and producing useful investigation output
+
 ## Current Prototype Baseline
 
 The original prototype uses:
@@ -148,7 +172,7 @@ Reusable import profiles are versioned, human-readable JSON so mappings can be r
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Later phases add additional built-in formats, responsive large-file processing, multi-session investigations, persistence, live following, and broader investigation/reporting capabilities.
+Phase 6 broadens representative built-in source coverage. After that ingestion baseline is established, later phases prioritize responsive large-file processing, multi-session investigation, advanced navigation and filtering, findings, comparison, persistence, live following, analytics, and reporting rather than continuing to accumulate built-in formats.
 
 ## Development Phases
 
@@ -319,22 +343,38 @@ Additional maintenance completed during the phase:
 
 ### Phase 6 — Additional Built-In Formats
 
-**Status: Next active phase.**
+**Status: Active phase, targeting `v0.7.0`.**
 
-Expand supported source formats while keeping behavior explicit and profile-driven.
+Expand source coverage across representative structured and operational log families while keeping normalization explicit, profile-driven, testable, and reproducible.
 
-Planned format order:
+Phase 6 is intended to establish sufficient ingestion breadth for the later investigation phases. It is not intended to accumulate every known log format or compete on format count alone.
 
-1. CSV and TSV
-2. JSON arrays and structured JSON documents
-3. regex-configurable plain-text logs
-4. possibly key-value logs after the primary formats are stable
+Current Phase 6 scope includes:
 
-Each format will include representative sample files, reusable profiles, and automated tests.
+* CSV and TSV
+* JSON arrays and structured JSON documents
+* regex-configurable plain-text logs
+* key-value and logfmt-style records
+* Syslog RFC 3164 and RFC 5424
+* Apache Common access logs through a reusable built-in regex profile
+* Apache/Nginx Combined access logs through a reusable built-in regex profile
+* IIS W3C Extended Logs
+* structured XML
+* Windows Event XML through the structured XML architecture where practical
+
+Format implementations should reuse existing importer and profile infrastructure whenever the source structure permits it. Dedicated importers are justified when a format has structure or semantics that cannot be represented cleanly through a configurable generic importer.
+
+Each supported family should include appropriate format detection or suggestion behavior, representative sample files, reusable profiles or built-in presets where useful, preview integration, and automated tests.
+
+Native EVTX ingestion, CEF, LEEF, and other additional format families are not required for `v0.7.0`. They may be reconsidered later only if target-user demand or architectural leverage justifies replacing higher-cost or lower-value planned work; they should not silently increase the roadmap's total scope.
+
+After structured XML and Windows Event XML support are complete and the Phase 6 integration, samples, tests, documentation, and release verification are finished, built-in ingestion breadth is considered sufficient for the current expansion.
 
 ### Phase 7 — Responsive Large-File Import
 
-Improve responsiveness and memory behavior for larger log files.
+With representative ingestion coverage established in Phase 6, subsequent development prioritizes the quality and depth of investigation over additional format count.
+
+Improve responsiveness and memory behavior so the structured investigation workflow remains practical for realistically large engineering and diagnostic log files rather than forcing users back to raw-text tools when file size increases.
 
 Planned deliverables:
 
@@ -345,9 +385,13 @@ Planned deliverables:
 * measured performance scenarios
 * documented, conservative performance claims
 
+Performance work should be measured against practical investigation workflows and should avoid unsupported claims about maximum file sizes or throughput.
+
 ### Phase 8 — Multi-Session Investigation Workspace
 
-Allow multiple imported sessions to coexist within one application instance.
+Allow multiple imported sessions to coexist within one application instance so related logs from different applications, services, devices, test runs, or system components can be investigated without repeatedly replacing the active source.
+
+The goal is not merely tabbed file viewing. The workspace should preserve enough per-session context that an engineer can move between related evidence while retaining the source, diagnostics, and profile information needed to understand how each session was imported.
 
 Planned deliverables:
 
@@ -362,14 +406,16 @@ Planned deliverables:
 
 ### Phase 9 — Advanced Filtering and Navigation
 
-Expand investigation controls beyond the prototype filters.
+Expand investigation controls beyond the prototype filters so users can move efficiently from a large normalized record set to the small portion relevant to a failure, warning pattern, subsystem, entity, time window, or source-specific field.
+
+Canonical fields remain optional. Filters that depend on event code, entity ID, severity, or other canonical values should be available when those values exist without preventing investigation of sources that rely primarily on dynamic custom attributes.
 
 Planned deliverables:
 
 * multiple severity selection
 * time-range filtering
-* event-code filtering
-* entity filtering
+* event-code filtering when present
+* entity filtering when present
 * dynamic custom-field filtering
 * filter reset
 * saved filter presets
@@ -379,7 +425,9 @@ Planned deliverables:
 
 ### Phase 10 — Bookmarks, Notes, and Findings
 
-Add local investigation state tied to stable event identities.
+Add local investigation state tied to stable event identities so engineers can preserve what they discovered while working through QA failures, field-support packages, engineering test results, and other diagnostic sessions.
+
+This phase should turn transient navigation into a lightweight investigation record without introducing a collaborative backend, ticketing system, or account model.
 
 Planned deliverables:
 
@@ -392,7 +440,9 @@ Planned deliverables:
 
 ### Phase 11 — Analytics and Burst Detection
 
-Add deterministic, explainable investigation summaries.
+Add deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
+
+Analytics should degrade gracefully when a source does not provide a particular canonical field. A missing severity, event code, subsystem, or entity ID should disable or reduce only the analysis that depends on that field rather than reducing the usefulness of unrelated records.
 
 Planned deliverables:
 
@@ -400,10 +450,10 @@ Planned deliverables:
 * automatic/adaptive timeline bucket sizing
 * second-, minute-, and hour-scale timeline grouping as appropriate
 * full date/time-aware bucket identities and labels
-* event-code frequencies
-* top entities
-* subsystem trends
-* severity trends
+* event-code frequencies when event codes are present
+* top entities when entity IDs are present
+* subsystem trends when subsystem data is present
+* severity trends when severity data is present
 * deterministic warning and error burst detection
 * drill-down to underlying records
 
@@ -411,14 +461,16 @@ Deterministic burst detection will not be described as AI anomaly detection.
 
 ### Phase 12 — Session Comparison
 
-Provide structured comparisons between two imported sessions.
+Provide structured comparisons between two imported sessions, with particular value for engineering workflows such as comparing a failed or degraded run against a known-good run.
+
+Comparison should use shared canonical dimensions where they are available while remaining useful when one or both sessions omit particular canonical fields. The feature should surface meaningful differences without claiming causal diagnosis.
 
 Planned deliverables:
 
 * total-record differences
-* severity-count differences
-* subsystem differences
-* event-code differences
+* severity-count differences when severity is available
+* subsystem differences when subsystem data is available
+* event-code differences when event codes are available
 * values appearing only in one session
 * duration differences
 * event-rate differences
@@ -427,7 +479,9 @@ Planned deliverables:
 
 ### Phase 13 — Workspace and Profile Persistence
 
-Allow investigations to be saved and reopened locally.
+Allow investigations to be saved and reopened locally so a useful multi-session investigation does not disappear when the application closes.
+
+Persistence should preserve the local, reproducible nature of TraceScope and should support continued work on investigations without introducing infrastructure that is unnecessary for the target workflow.
 
 Planned deliverables:
 
@@ -444,7 +498,9 @@ Persistence will use local, versioned JSON unless later requirements demonstrate
 
 ### Phase 14 — Live File Following
 
-Support files that are actively receiving appended records.
+Support files that are actively receiving appended records so TraceScope can be used during application runs, QA execution, simulations, engineering tests, and other situations where investigators need to observe a diagnostic log as it grows.
+
+Live following should extend the existing investigation model rather than create a separate monitoring product. TraceScope will remain file-oriented and offline rather than becoming a centralized collection service.
 
 Planned deliverables:
 
@@ -459,7 +515,9 @@ Planned deliverables:
 
 ### Phase 15 — Reporting and Export
 
-Expand investigation output beyond the existing investigation-record CSV workflow.
+Expand investigation output beyond the existing investigation-record CSV workflow so useful findings can leave TraceScope and be shared with other engineers, QA, field support, or downstream issue/documentation workflows.
+
+Reporting should summarize and preserve investigation results rather than attempt to become a collaborative case-management system.
 
 Planned deliverables:
 
@@ -470,7 +528,9 @@ Planned deliverables:
 
 ### Phase 16 — Documentation and 1.0 Release
 
-Complete the expansion with polished documentation and a stable downloadable release.
+Complete the expansion with polished documentation and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
+
+Final documentation should make the supported-format boundary, optional canonical-field model, profile-driven import architecture, large-file behavior, investigation workflow, and scope exclusions clear enough that both prospective users and employers can understand what the application does without overstating its capabilities.
 
 Planned deliverables:
 
