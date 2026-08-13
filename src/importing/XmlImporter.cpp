@@ -56,12 +56,128 @@ void appendDiagnostic(
         );
 }
 
+bool appendNamedDataValue(
+    QJsonObject &object,
+    const QString &elementName,
+    const QJsonValue &value
+    )
+{
+    /*
+     * Some structured XML formats represent a
+     * dynamic field collection with elements such
+     * as:
+     *
+     * <Data Name="ProcessName">worker.exe</Data>
+     *
+     * Keep those fields individually addressable
+     * instead of collapsing them into a positional
+     * array.
+     *
+     * The original XML remains preserved separately
+     * as rawSource.
+     */
+    if (elementName
+            != QStringLiteral("Data")
+        || !value.isObject()) {
+        return false;
+    }
+
+    const QJsonObject dataObject =
+        value.toObject();
+
+    const QJsonValue nameValue =
+        dataObject.value(
+            QStringLiteral("@Name")
+            );
+
+    if (!nameValue.isString()) {
+        return false;
+    }
+
+    const QString fieldName =
+        nameValue
+            .toString()
+            .trimmed();
+
+    if (fieldName.isEmpty()) {
+        return false;
+    }
+
+    const QJsonValue fieldValue =
+        dataObject.contains(
+            QStringLiteral("#text")
+            )
+            ? dataObject.value(
+                  QStringLiteral("#text")
+                  )
+            : QJsonValue(
+                  QString()
+                  );
+
+    QJsonObject namedValues =
+        object.value(
+                  QStringLiteral(
+                      "NamedData"
+                      )
+                  )
+            .toObject();
+
+    if (!namedValues.contains(
+            fieldName
+            )) {
+        namedValues.insert(
+            fieldName,
+            fieldValue
+            );
+    } else {
+        QJsonArray repeatedValues;
+
+        const QJsonValue existing =
+            namedValues.value(
+                fieldName
+                );
+
+        if (existing.isArray()) {
+            repeatedValues =
+                existing.toArray();
+        } else {
+            repeatedValues.append(
+                existing
+                );
+        }
+
+        repeatedValues.append(
+            fieldValue
+            );
+
+        namedValues.insert(
+            fieldName,
+            repeatedValues
+            );
+    }
+
+    object.insert(
+        QStringLiteral("NamedData"),
+        namedValues
+        );
+
+    return true;
+}
+
 void appendChildValue(
     QJsonObject &object,
     const QString &name,
     const QJsonValue &value
     )
 {
+    if (appendNamedDataValue(
+            object,
+            name,
+            value
+            )) {
+        return;
+    }
+
     if (!object.contains(name)) {
         object.insert(
             name,

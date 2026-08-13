@@ -80,6 +80,8 @@ private slots:
     void honorsRecordLimit();
     void importFilePreservesSourceMetadata();
     void importFileReportsOpenFailure();
+    void convertsNamedDataElementsToFields();
+    void preservesRepeatedNamedDataValues();
 };
 
 void
@@ -806,6 +808,158 @@ void
                 )
             )
         != nullptr
+        );
+}
+
+void
+    XmlImporterTests::
+    convertsNamedDataElementsToFields()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "Events.Event"
+            );
+
+    profile.canonicalFields.messagePath.clear();
+
+    profile.preserveUnmappedFields =
+        true;
+
+    XmlImporter importer(profile);
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<Events>"
+                "<Event>"
+                "<EventData>"
+                "<Data Name=\"ProcessName\">"
+                "worker.exe"
+                "</Data>"
+                "<Data Name=\"ProcessId\">"
+                "4812"
+                "</Data>"
+                "<Data Name=\"Result\">"
+                "Timeout"
+                "</Data>"
+                "</EventData>"
+                "</Event>"
+                "</Events>"
+                )
+            );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "EventData.NamedData.ProcessName"
+                    )
+                )
+            .toString(),
+        QStringLiteral("worker.exe")
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "EventData.NamedData.ProcessId"
+                    )
+                )
+            .toString(),
+        QStringLiteral("4812")
+        );
+
+    QCOMPARE(
+        record.customAttributes
+            .value(
+                QStringLiteral(
+                    "EventData.NamedData.Result"
+                    )
+                )
+            .toString(),
+        QStringLiteral("Timeout")
+        );
+}
+
+void
+    XmlImporterTests::
+    preservesRepeatedNamedDataValues()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "Events.Event"
+            );
+
+    profile.canonicalFields.messagePath.clear();
+
+    profile.preserveUnmappedFields =
+        true;
+
+    XmlImporter importer(profile);
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<Events>"
+                "<Event>"
+                "<EventData>"
+                "<Data Name=\"Tag\">network</Data>"
+                "<Data Name=\"Tag\">latency</Data>"
+                "</EventData>"
+                "</Event>"
+                "</Events>"
+                )
+            );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const QVariant value =
+        result.records.first()
+            .customAttributes
+            .value(
+                QStringLiteral(
+                    "EventData.NamedData.Tag"
+                    )
+                );
+
+    QVERIFY(
+        value.canConvert<QVariantList>()
+        );
+
+    const QVariantList values =
+        value.toList();
+
+    QCOMPARE(
+        values.size(),
+        2
+        );
+
+    QCOMPARE(
+        values.at(0).toString(),
+        QStringLiteral("network")
+        );
+
+    QCOMPARE(
+        values.at(1).toString(),
+        QStringLiteral("latency")
         );
 }
 
