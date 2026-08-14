@@ -41,6 +41,46 @@
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
 
+namespace
+{
+void configureEventCountAxis(
+    QValueAxis *axis,
+    int maxCount
+    )
+{
+    axis->setTitleText(
+        QStringLiteral("Events")
+        );
+
+    axis->setLabelFormat(
+        QStringLiteral("%d")
+        );
+
+    axis->setRange(
+        0,
+        std::max(1, maxCount)
+        );
+
+    if (maxCount <= 10) {
+        axis->setTickType(
+            QValueAxis::TicksDynamic
+            );
+
+        axis->setTickAnchor(0);
+        axis->setTickInterval(1);
+
+        return;
+    }
+
+    axis->setTickType(
+        QValueAxis::TicksFixed
+        );
+
+    axis->setTickCount(6);
+    axis->applyNiceNumbers();
+}
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     summaryLabel(new QLabel("No log file loaded.")),
@@ -923,25 +963,10 @@ void MainWindow::updateTimelineChart(
         auto *axisY =
             new QValueAxis();
 
-        axisY->setTitleText(
-            "Events"
-            );
-
-        axisY->setLabelFormat(
-            "%d"
-            );
-
-        axisY->setRange(
-            0,
+        configureEventCountAxis(
+            axisY,
             maxCount
             );
-
-        axisY->setTickType(
-            QValueAxis::TicksDynamic
-            );
-
-        axisY->setTickAnchor(0);
-        axisY->setTickInterval(1);
 
         chart->addAxis(
             axisY,
@@ -1049,8 +1074,6 @@ void MainWindow::updateTimelineChart(
     series->attachAxis(axisX);
 
     auto *axisY = new QValueAxis();
-    axisY->setTitleText("Events");
-    axisY->setLabelFormat("%d");
 
     int maxCount = 1;
 
@@ -1098,15 +1121,23 @@ void MainWindow::updateTimelineChart(
                 );
     }
 
-    axisY->setRange(0, maxCount);
-    axisY->setTickType(QValueAxis::TicksDynamic);
-    axisY->setTickAnchor(0);
-    axisY->setTickInterval(1);
+    configureEventCountAxis(
+        axisY,
+        maxCount
+        );
 
-    chart->addAxis(axisY, Qt::AlignLeft);
-    series->attachAxis(axisY);
+    chart->addAxis(
+        axisY,
+        Qt::AlignLeft
+        );
 
-    timelineChartView->setChart(chart);
+    series->attachAxis(
+        axisY
+        );
+
+    timelineChartView->setChart(
+        chart
+        );
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
