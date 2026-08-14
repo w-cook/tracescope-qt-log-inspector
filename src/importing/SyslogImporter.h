@@ -20,7 +20,8 @@ public:
     ImportResult importFile(
         const QString &filePath,
         qint64 maxProcessedRecords =
-        ILogImporter::UnlimitedRecordLimit
+        ILogImporter::UnlimitedRecordLimit,
+        const ImportExecutionContext &executionContext = {}
         ) const override;
 
     ImportResult importLines(

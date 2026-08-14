@@ -21,7 +21,8 @@ public:
     ImportResult importFile(
         const QString &filePath,
         qint64 maxProcessedRecords =
-        UnlimitedRecordLimit
+        UnlimitedRecordLimit,
+        const ImportExecutionContext &executionContext = {}
         ) const override;
 
     ImportResult importContent(

@@ -91,6 +91,8 @@ qt_add_executable(TraceScope
     src/importing/IisW3cImporter.cpp
     src/importing/XmlImporter.h
     src/importing/XmlImporter.cpp
+    src/importing/ImportProgress.h
+    src/importing/ImportExecutionContext.h
 
 )
 

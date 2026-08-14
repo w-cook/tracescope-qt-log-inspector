@@ -490,7 +490,8 @@ ImportResult IisW3cImporter::importLines(
 
 ImportResult IisW3cImporter::importFile(
     const QString &filePath,
-    qint64 maxProcessedRecords
+    qint64 maxProcessedRecords,
+    const ImportExecutionContext &executionContext
     ) const
 {
     QFile file(filePath);
