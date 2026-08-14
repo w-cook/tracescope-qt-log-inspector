@@ -10,7 +10,6 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QStringList>
-#include <QTextStream>
 #include <QVariant>
 
 #include "../domain/RecordIdentity.h"
@@ -366,6 +365,95 @@ InvestigationRecord createRecord(
 
     return record;
 }
+
+void processRegexRecord(
+    const QString &rawSource,
+    const QString &sourcePath,
+    qint64 recordNumber,
+    const QRegularExpression &expression,
+    const QStringList &captureNames,
+    const ImportProfile &profile,
+    ImportResult &result
+    )
+{
+    if (rawSource.trimmed().isEmpty()) {
+        return;
+    }
+
+    ++result.processedRecordCount;
+
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            recordNumber
+            );
+
+    const QRegularExpressionMatch match =
+        expression.match(
+            rawSource
+            );
+
+    const bool completeMatch =
+        match.hasMatch()
+        && match.capturedStart(0) == 0
+        && match.capturedLength(0)
+               == rawSource.size();
+
+    if (!completeMatch) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "REGEX_RECORD_NO_MATCH"
+                ),
+            QStringLiteral(
+                "The source record does not match "
+                "the configured regular expression."
+                ),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    QHash<QString, QString> values;
+
+    for (qsizetype captureIndex = 1;
+         captureIndex < captureNames.size();
+         ++captureIndex) {
+        const QString captureName =
+            captureNames.at(
+                captureIndex
+                );
+
+        if (captureName.isEmpty()) {
+            continue;
+        }
+
+        if (match.capturedStart(
+                captureIndex
+                ) < 0) {
+            continue;
+        }
+
+        values.insert(
+            captureName,
+            match.captured(
+                captureIndex
+                )
+            );
+    }
+
+    result.records.append(
+        createRecord(
+            values,
+            rawSource,
+            source,
+            profile,
+            result
+            )
+        );
+}
 }
 
 RegexTextImporter::RegexTextImporter(
@@ -427,93 +515,14 @@ ImportResult RegexTextImporter::importLines(
     for (qsizetype index = 0;
          index < lines.size();
          ++index) {
-        const QString rawSource =
-            lines.at(index);
-
-        if (rawSource.trimmed().isEmpty()) {
-            continue;
-        }
-
-        ++result.processedRecordCount;
-
-        const RecordSourceMetadata source =
-            createSourceMetadata(
-                sourcePath,
-                index + 1
-                );
-
-        const QRegularExpressionMatch match =
-            expression.match(
-                rawSource
-                );
-
-        const bool completeMatch =
-            match.hasMatch()
-            && match.capturedStart(0) == 0
-            && match.capturedLength(0)
-                   == rawSource.size();
-
-        if (!completeMatch) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "REGEX_RECORD_NO_MATCH"
-                    ),
-                QStringLiteral(
-                    "The source record does not match "
-                    "the configured regular expression."
-                    ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        QHash<QString, QString> values;
-
-        for (qsizetype captureIndex = 1;
-             captureIndex <
-             captureNames.size();
-             ++captureIndex) {
-            const QString captureName =
-                captureNames.at(
-                    captureIndex
-                    );
-
-            if (captureName.isEmpty()) {
-                continue;
-            }
-
-            /*
-             * An optional capture group that did not
-             * participate in this match is absent from
-             * the source-field set. A capture that
-             * participated but captured an empty string
-             * remains a real field.
-             */
-            if (match.capturedStart(
-                    captureIndex
-                    ) < 0) {
-                continue;
-            }
-
-            values.insert(
-                captureName,
-                match.captured(
-                    captureIndex
-                    )
-                );
-        }
-
-        result.records.append(
-            createRecord(
-                values,
-                rawSource,
-                source,
-                profile,
-                result
-                )
+        processRegexRecord(
+            lines.at(index),
+            sourcePath,
+            index + 1,
+            expression,
+            captureNames,
+            profile,
+            result
             );
     }
 
@@ -555,43 +564,117 @@ ImportResult RegexTextImporter::importFile(
         return result;
     }
 
-    QTextStream stream(&file);
+    const QRegularExpression expression(
+        profile.regexPattern
+        );
 
-    QStringList lines;
+    if (!expression.isValid()) {
+        ImportResult result;
 
-    qint64 processedRecords = 0;
-    bool sourceTruncated = false;
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "INVALID_REGEX_PATTERN"
+                ),
+            QStringLiteral(
+                "The configured regular expression "
+                "is invalid: %1"
+                )
+                .arg(
+                    expression.errorString()
+                    ),
+            ImportDiagnosticSeverity::Error
+            );
 
-    while (!stream.atEnd()) {
-        const QString line =
-            stream.readLine();
+        return result;
+    }
 
-        if (maxProcessedRecords > 0
-            && processedRecords >=
-                   maxProcessedRecords) {
-            if (!line.trimmed().isEmpty()) {
-                sourceTruncated = true;
+    const QStringList captureNames =
+        expression.namedCaptureGroups();
+
+    constexpr qint64 progressReportByteInterval =
+        256 * 1024;
+
+    ImportResult result;
+
+    const qint64 totalBytes =
+        file.size();
+
+    qint64 physicalLineNumber = 0;
+    qint64 lastReportedBytes = 0;
+
+    executionContext.report({
+        0,
+        totalBytes,
+        0
+    });
+
+    while (!file.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            result.cancelled = true;
+            break;
+        }
+
+        QByteArray lineBytes =
+            file.readLine();
+
+        ++physicalLineNumber;
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        if (!rawSource.trimmed().isEmpty()) {
+            if (maxProcessedRecords > 0
+                && result.processedRecordCount >=
+                       maxProcessedRecords) {
+                result.sourceTruncated = true;
                 break;
             }
 
-            continue;
+            processRegexRecord(
+                rawSource,
+                filePath,
+                physicalLineNumber,
+                expression,
+                captureNames,
+                profile,
+                result
+                );
         }
 
-        lines.append(line);
+        const qint64 bytesProcessed =
+            file.pos();
 
-        if (!line.trimmed().isEmpty()) {
-            ++processedRecords;
+        if (bytesProcessed
+                - lastReportedBytes
+            >= progressReportByteInterval) {
+            executionContext.report({
+                bytesProcessed,
+                totalBytes,
+                result.processedRecordCount
+            });
+
+            lastReportedBytes =
+                bytesProcessed;
         }
     }
 
-    ImportResult result =
-        importLines(
-            lines,
-            filePath
-            );
-
-    result.sourceTruncated =
-        sourceTruncated;
+    executionContext.report({
+        file.pos(),
+        totalBytes,
+        result.processedRecordCount
+    });
 
     return result;
 }

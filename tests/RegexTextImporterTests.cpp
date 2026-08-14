@@ -31,6 +31,8 @@ private slots:
     void importFilePreservesPhysicalLineNumbers();
     void importFileHonorsRecordLimit();
     void importFileReportsOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
 };
 
 namespace
@@ -917,6 +919,126 @@ void RegexTextImporterTests::
             .source->recordNumber,
         qint64(0)
         );
+}
+
+void RegexTextImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "2026-08-11T12:00:00Z "
+           "[INFO] [Orders] First\n"
+        << "2026-08-11T12:01:00Z "
+           "[WARN] [Orders] Second\n";
+
+    stream.flush();
+    file.close();
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(value);
+        };
+
+    RegexTextImporter importer(
+        basicRegexProfile()
+        );
+
+    const ImportResult result =
+        importer.importFile(
+            file.fileName(),
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QVERIFY(!progress.isEmpty());
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(file.fileName()).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void RegexTextImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "2026-08-11T12:00:00Z "
+           "[INFO] [Orders] First\n"
+        << "2026-08-11T12:01:00Z "
+           "[WARN] [Orders] Second\n"
+        << "2026-08-11T12:02:00Z "
+           "[ERROR] [Orders] Third\n";
+
+    stream.flush();
+    file.close();
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            return cancellationChecks > 1;
+        };
+
+    RegexTextImporter importer(
+        basicRegexProfile()
+        );
+
+    const ImportResult result =
+        importer.importFile(
+            file.fileName(),
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(result.cancelled);
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(!result.sourceTruncated);
 }
 
 QTEST_MAIN(
