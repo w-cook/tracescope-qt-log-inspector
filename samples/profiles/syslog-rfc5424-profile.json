@@ -44,8 +44,12 @@
             "sourcePath": "syslogVersion"
         },
         {
-            "name": "Structured Data",
+            "name": "Structured Data (Raw)",
             "sourcePath": "structuredData"
+        },
+        {
+            "name": "Request ID",
+            "sourcePath": "structuredDataFields.request@32473.requestId"
         }
     ],
     "severityAliases": {},
@@ -54,5 +58,5 @@
             "type": "iso8601"
         }
     ],
-    "preserveUnmappedFields": true
+    "preserveUnmappedFields": false
 }

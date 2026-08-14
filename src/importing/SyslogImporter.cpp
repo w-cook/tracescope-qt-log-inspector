@@ -11,6 +11,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QtGlobal>
+#include <QJsonArray>
 
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
@@ -425,6 +426,233 @@ bool parseStructuredDataAndMessage(
     return true;
 }
 
+QJsonObject parseStructuredDataFields(
+    const QString &structuredData
+    )
+{
+    QJsonObject elements;
+
+    qsizetype position = 0;
+
+    while (position < structuredData.size()) {
+        if (structuredData.at(position)
+            != QLatin1Char('[')) {
+            return {};
+        }
+
+        ++position;
+
+        const qsizetype idStart =
+            position;
+
+        while (position < structuredData.size()
+               && structuredData.at(position)
+                      != QLatin1Char(' ')
+               && structuredData.at(position)
+                      != QLatin1Char(']')) {
+            ++position;
+        }
+
+        const QString sdId =
+            structuredData.mid(
+                idStart,
+                position - idStart
+                );
+
+        if (sdId.isEmpty()) {
+            return {};
+        }
+
+        QJsonObject parameters;
+
+        while (position < structuredData.size()
+               && structuredData.at(position)
+                      != QLatin1Char(']')) {
+            if (structuredData.at(position)
+                != QLatin1Char(' ')) {
+                return {};
+            }
+
+            ++position;
+
+            const qsizetype nameStart =
+                position;
+
+            while (position < structuredData.size()
+                   && structuredData.at(position)
+                          != QLatin1Char('=')) {
+                if (structuredData.at(position)
+                        == QLatin1Char(' ')
+                    || structuredData.at(position)
+                           == QLatin1Char(']')) {
+                    return {};
+                }
+
+                ++position;
+            }
+
+            if (position
+                >= structuredData.size()) {
+                return {};
+            }
+
+            const QString parameterName =
+                structuredData.mid(
+                    nameStart,
+                    position - nameStart
+                    );
+
+            if (parameterName.isEmpty()) {
+                return {};
+            }
+
+            ++position;
+
+            if (position
+                    >= structuredData.size()
+                || structuredData.at(position)
+                       != QLatin1Char('"')) {
+                return {};
+            }
+
+            ++position;
+
+            QString parameterValue;
+            bool closingQuoteFound = false;
+
+            while (position
+                   < structuredData.size()) {
+                const QChar character =
+                    structuredData.at(position);
+
+                if (character
+                    == QLatin1Char('"')) {
+                    ++position;
+                    closingQuoteFound = true;
+                    break;
+                }
+
+                if (character
+                    == QLatin1Char('\\')) {
+                    if (position + 1
+                        >= structuredData.size()) {
+                        parameterValue.append(
+                            character
+                            );
+
+                        ++position;
+                        continue;
+                    }
+
+                    const QChar escaped =
+                        structuredData.at(
+                            position + 1
+                            );
+
+                    if (escaped
+                            == QLatin1Char('"')
+                        || escaped
+                               == QLatin1Char('\\')
+                        || escaped
+                               == QLatin1Char(']')) {
+                        parameterValue.append(
+                            escaped
+                            );
+
+                        position += 2;
+                        continue;
+                    }
+
+                    /*
+                     * RFC 5424 says an unknown
+                     * escape preserves the
+                     * backslash literally.
+                     */
+                    parameterValue.append(
+                        character
+                        );
+
+                    ++position;
+                    continue;
+                }
+
+                parameterValue.append(
+                    character
+                    );
+
+                ++position;
+            }
+
+            if (!closingQuoteFound) {
+                return {};
+            }
+
+            const QJsonValue existing =
+                parameters.value(
+                    parameterName
+                    );
+
+            if (existing.isUndefined()) {
+                parameters.insert(
+                    parameterName,
+                    parameterValue
+                    );
+            } else if (existing.isArray()) {
+                QJsonArray values =
+                    existing.toArray();
+
+                values.append(
+                    parameterValue
+                    );
+
+                parameters.insert(
+                    parameterName,
+                    values
+                    );
+            } else {
+                QJsonArray values;
+
+                values.append(
+                    existing
+                    );
+
+                values.append(
+                    parameterValue
+                    );
+
+                parameters.insert(
+                    parameterName,
+                    values
+                    );
+            }
+        }
+
+        if (position
+                >= structuredData.size()
+            || structuredData.at(position)
+                   != QLatin1Char(']')) {
+            return {};
+        }
+
+        ++position;
+
+        /*
+         * RFC 5424 does not permit the same
+         * SD-ID more than once in one message.
+         */
+        if (elements.contains(sdId)) {
+            return {};
+        }
+
+        elements.insert(
+            sdId,
+            parameters
+            );
+    }
+
+    return elements;
+}
+
 ParsedSyslogLine parseRfc5424(
     const QString &line,
     int priority,
@@ -572,6 +800,20 @@ ParsedSyslogLine parseRfc5424(
                 "structuredData"
                 ),
             structuredData
+            );
+    }
+
+    const QJsonObject structuredFields =
+        parseStructuredDataFields(
+            structuredData
+            );
+
+    if (!structuredFields.isEmpty()) {
+        result.values.insert(
+            QStringLiteral(
+                "structuredDataFields"
+                ),
+            structuredFields
             );
     }
 

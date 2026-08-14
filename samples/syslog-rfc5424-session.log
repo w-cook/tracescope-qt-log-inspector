@@ -6,6 +6,8 @@
 <134>1 2026-08-12T08:22:11.500Z api-02 payments-service 6204 PAYMENT_AUTH [payment@32473 requestId="REQ-9202" provider="ContosoPay"] Payment authorization completed
 <131>1 2026-08-12T08:22:45.044Z api-02 orders-database 7128 DB_TIMEOUT [database@32473 requestId="REQ-9203" database="OrdersDb" elapsedMs="5000"] Database command timed out
 <134>1 2026-08-12T08:23:02.380Z worker-03 orders-worker 5411 RETRY_SCHEDULED [retry@32473 requestId="REQ-9203" attempt="1" delayMs="2000"] Order processing retry scheduled
+<134>1 2026-08-12T08:23:18.140Z api-02 orders-service 4120 REQUEST_ROUTED [request@32473 requestId="REQ-9204" customerRegion="us-east"][routing@32473 route="priority" destination="worker-03"] Order request routed to priority processing
+<132>1 2026-08-12T08:23:31.625Z worker-03 diagnostics-agent 5510 RETRY_NOTE [detail@32473 note="Retry \"accepted\" at C:\\temp with bracket \]"] Diagnostic note preserved escaped structured-data characters
 <130>1 2026-08-12T08:24:16.771Z worker-04 telemetry-pipeline 9102 QUEUE_UNAVAILABLE [queue@32473 queue="telemetry-events" region="us-east"] Telemetry queue is unavailable
 <134>1 2026-08-12T08:24:43.320Z worker-04 telemetry-pipeline 9102 QUEUE_RECOVERED [queue@32473 queue="telemetry-events"] Telemetry queue connectivity restored
 <134>1 2026-08-12T08:25:12.994Z api-01 orders-service 4120 SESSION_COMPLETE [summary@32473 processedOrders="47" warningCount="1" errorCount="1" criticalCount="1"] Service investigation sample completed
