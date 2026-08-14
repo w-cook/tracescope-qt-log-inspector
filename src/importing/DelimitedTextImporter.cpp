@@ -8,7 +8,6 @@
 #include <QFileInfo>
 #include <QHash>
 #include <QSet>
-#include <QTextStream>
 #include <QVariant>
 
 #include "../domain/RecordIdentity.h"
@@ -466,6 +465,209 @@ InvestigationRecord createInvestigationRecord(
 
     return record;
 }
+
+struct ParsedDelimitedHeader
+{
+    QStringList headers;
+    bool valid = false;
+};
+
+ParsedDelimitedHeader parseDelimitedHeader(
+    const QString &rawSource,
+    const QString &sourcePath,
+    qint64 recordNumber,
+    QChar delimiter,
+    ImportResult &result
+    )
+{
+    ParsedDelimitedHeader header;
+
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            recordNumber
+            );
+
+    const ParsedDelimitedRecord parsed =
+        parseDelimitedRecord(
+            rawSource,
+            delimiter
+            );
+
+    if (!parsed.valid) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "MALFORMED_DELIMITED_HEADER"
+                ),
+            QStringLiteral(
+                "The delimited header could not be parsed: %1"
+                ).arg(parsed.errorMessage),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return header;
+    }
+
+    header.headers = parsed.fields;
+
+    if (!header.headers.isEmpty()
+        && !header.headers.first().isEmpty()
+        && header.headers.first()
+                   .at(0)
+                   .unicode()
+               == 0xFEFF) {
+        header.headers[0].remove(0, 1);
+    }
+
+    QSet<QString> normalizedHeaders;
+    bool headerIsValid = true;
+
+    for (qsizetype index = 0;
+         index < header.headers.size();
+         ++index) {
+        header.headers[index] =
+            header.headers.at(index).trimmed();
+
+        const QString &name =
+            header.headers.at(index);
+
+        if (name.isEmpty()) {
+            appendDiagnostic(
+                result,
+                QStringLiteral(
+                    "EMPTY_DELIMITED_HEADER"
+                    ),
+                QStringLiteral(
+                    "Delimited source headers cannot be empty."
+                    ),
+                ImportDiagnosticSeverity::Error,
+                source
+                );
+
+            headerIsValid = false;
+            continue;
+        }
+
+        const QString normalized =
+            name.toCaseFolded();
+
+        if (normalizedHeaders.contains(
+                normalized
+                )) {
+            appendDiagnostic(
+                result,
+                QStringLiteral(
+                    "DUPLICATE_DELIMITED_HEADER"
+                    ),
+                QStringLiteral(
+                    "Delimited source header '%1' is duplicated."
+                    ).arg(name),
+                ImportDiagnosticSeverity::Error,
+                source
+                );
+
+            headerIsValid = false;
+            continue;
+        }
+
+        normalizedHeaders.insert(
+            normalized
+            );
+    }
+
+    header.valid = headerIsValid;
+
+    return header;
+}
+
+void processDelimitedRecord(
+    const QString &rawSource,
+    const QString &sourcePath,
+    qint64 recordNumber,
+    QChar delimiter,
+    const QStringList &headers,
+    const ImportProfile &profile,
+    ImportResult &result
+    )
+{
+    if (rawSource.trimmed().isEmpty()) {
+        return;
+    }
+
+    ++result.processedRecordCount;
+
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            recordNumber
+            );
+
+    const ParsedDelimitedRecord parsed =
+        parseDelimitedRecord(
+            rawSource,
+            delimiter
+            );
+
+    if (!parsed.valid) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "MALFORMED_DELIMITED_RECORD"
+                ),
+            QStringLiteral(
+                "The delimited source record could not be parsed: %1"
+                ).arg(parsed.errorMessage),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    if (parsed.fields.size()
+        != headers.size()) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "DELIMITED_COLUMN_COUNT_MISMATCH"
+                ),
+            QStringLiteral(
+                "The source record contains %1 columns, "
+                "but the header defines %2."
+                )
+                .arg(parsed.fields.size())
+                .arg(headers.size()),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    QHash<QString, QString> values;
+
+    for (qsizetype fieldIndex = 0;
+         fieldIndex < headers.size();
+         ++fieldIndex) {
+        values.insert(
+            headers.at(fieldIndex),
+            parsed.fields.at(fieldIndex)
+            );
+    }
+
+    result.records.append(
+        createInvestigationRecord(
+            values,
+            headers,
+            rawSource,
+            source,
+            profile,
+            result
+            )
+        );
+}
 }
 
 DelimitedTextImporter::DelimitedTextImporter(
@@ -507,7 +709,9 @@ ImportResult DelimitedTextImporter::importLines(
     for (qsizetype index = 0;
          index < lines.size();
          ++index) {
-        if (!lines.at(index).trimmed().isEmpty()) {
+        if (!lines.at(index)
+                 .trimmed()
+                 .isEmpty()) {
             headerIndex = index;
             break;
         }
@@ -520,7 +724,8 @@ ImportResult DelimitedTextImporter::importLines(
                 "DELIMITED_HEADER_REQUIRED"
                 ),
             QStringLiteral(
-                "The delimited source does not contain a header record."
+                "The delimited source does not contain "
+                "a header record."
                 ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
@@ -532,195 +737,34 @@ ImportResult DelimitedTextImporter::importLines(
         return result;
     }
 
-    const QString headerSource =
-        lines.at(headerIndex);
-
-    const RecordSourceMetadata headerMetadata =
-        createSourceMetadata(
+    const ParsedDelimitedHeader parsedHeader =
+        parseDelimitedHeader(
+            lines.at(headerIndex),
             sourcePath,
-            headerIndex + 1
-            );
-
-    ParsedDelimitedRecord parsedHeader =
-        parseDelimitedRecord(
-            headerSource,
-            delimiter
+            headerIndex + 1,
+            delimiter,
+            result
             );
 
     if (!parsedHeader.valid) {
-        appendDiagnostic(
-            result,
-            QStringLiteral(
-                "MALFORMED_DELIMITED_HEADER"
-                ),
-            QStringLiteral(
-                "The delimited header could not be parsed: %1"
-                ).arg(
-                    parsedHeader.errorMessage
-                    ),
-            ImportDiagnosticSeverity::Error,
-            headerMetadata
-            );
-
         return result;
     }
 
-    QStringList headers =
-        parsedHeader.fields;
+    const QStringList &headers =
+        parsedHeader.headers;
 
-    if (!headers.isEmpty()
-        && !headers.first().isEmpty()
-        && headers.first()
-                   .at(0)
-                   .unicode()
-               == 0xFEFF) {
-        headers[0].remove(0, 1);
-    }
-
-    QSet<QString> normalizedHeaders;
-    bool headerIsValid = true;
-
-    for (qsizetype index = 0;
-         index < headers.size();
-         ++index) {
-        headers[index] =
-            headers.at(index).trimmed();
-
-        const QString &header =
-            headers.at(index);
-
-        if (header.isEmpty()) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "EMPTY_DELIMITED_HEADER"
-                    ),
-                QStringLiteral(
-                    "Delimited source headers cannot be empty."
-                    ),
-                ImportDiagnosticSeverity::Error,
-                headerMetadata
-                );
-
-            headerIsValid = false;
-            continue;
-        }
-
-        const QString normalized =
-            header.toCaseFolded();
-
-        if (normalizedHeaders.contains(
-                normalized
-                )) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "DUPLICATE_DELIMITED_HEADER"
-                    ),
-                QStringLiteral(
-                    "Delimited source header '%1' is duplicated."
-                    ).arg(header),
-                ImportDiagnosticSeverity::Error,
-                headerMetadata
-                );
-
-            headerIsValid = false;
-            continue;
-        }
-
-        normalizedHeaders.insert(
-            normalized
-            );
-    }
-
-    if (!headerIsValid) {
-        return result;
-    }
-
-    for (qsizetype index = headerIndex + 1;
+    for (qsizetype index =
+         headerIndex + 1;
          index < lines.size();
          ++index) {
-        const QString rawSource =
-            lines.at(index);
-
-        if (rawSource.trimmed().isEmpty()) {
-            continue;
-        }
-
-        ++result.processedRecordCount;
-
-        const RecordSourceMetadata source =
-            createSourceMetadata(
-                sourcePath,
-                index + 1
-                );
-
-        const ParsedDelimitedRecord parsed =
-            parseDelimitedRecord(
-                rawSource,
-                delimiter
-                );
-
-        if (!parsed.valid) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "MALFORMED_DELIMITED_RECORD"
-                    ),
-                QStringLiteral(
-                    "The delimited source record could not be parsed: %1"
-                    ).arg(
-                        parsed.errorMessage
-                        ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        if (parsed.fields.size()
-            != headers.size()) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "DELIMITED_COLUMN_COUNT_MISMATCH"
-                    ),
-                QStringLiteral(
-                    "The source record contains %1 columns, "
-                    "but the header defines %2."
-                    ).arg(
-                        parsed.fields.size()
-                        ).arg(
-                        headers.size()
-                        ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        QHash<QString, QString> values;
-
-        for (qsizetype fieldIndex = 0;
-             fieldIndex < headers.size();
-             ++fieldIndex) {
-            values.insert(
-                headers.at(fieldIndex),
-                parsed.fields.at(fieldIndex)
-                );
-        }
-
-        result.records.append(
-            createInvestigationRecord(
-                values,
-                headers,
-                rawSource,
-                source,
-                profile,
-                result
-                )
+        processDelimitedRecord(
+            lines.at(index),
+            sourcePath,
+            index + 1,
+            delimiter,
+            headers,
+            profile,
+            result
             );
     }
 
@@ -764,52 +808,139 @@ ImportResult DelimitedTextImporter::importFile(
         return result;
     }
 
-    QTextStream stream(&file);
+    constexpr qint64 progressReportByteInterval =
+        256 * 1024;
 
-    QStringList lines;
+    ImportResult result;
+
+    const qint64 totalBytes =
+        file.size();
+
+    qint64 physicalLineNumber = 0;
+    qint64 lastReportedBytes = 0;
 
     bool headerFound = false;
-    qint64 processedRecords = 0;
-    bool sourceTruncated = false;
+    QStringList headers;
 
-    while (!stream.atEnd()) {
-        const QString line =
-            stream.readLine();
+    executionContext.report({
+        0,
+        totalBytes,
+        0
+    });
 
-        if (!headerFound) {
-            lines.append(line);
-
-            if (!line.trimmed().isEmpty()) {
-                headerFound = true;
-            }
-
-            continue;
-        }
-
-        if (line.trimmed().isEmpty()) {
-            lines.append(line);
-            continue;
-        }
-
-        if (maxProcessedRecords > 0
-            && processedRecords >=
-                   maxProcessedRecords) {
-            sourceTruncated = true;
+    while (!file.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            result.cancelled = true;
             break;
         }
 
-        lines.append(line);
-        ++processedRecords;
+        QByteArray lineBytes =
+            file.readLine();
+
+        ++physicalLineNumber;
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        if (!headerFound) {
+            if (!rawSource.trimmed().isEmpty()) {
+                const ParsedDelimitedHeader
+                    parsedHeader =
+                    parseDelimitedHeader(
+                        rawSource,
+                        filePath,
+                        physicalLineNumber,
+                        delimiter,
+                        result
+                        );
+
+                if (!parsedHeader.valid) {
+                    executionContext.report({
+                        file.pos(),
+                        totalBytes,
+                        result.processedRecordCount
+                    });
+
+                    return result;
+                }
+
+                headers =
+                    parsedHeader.headers;
+
+                headerFound = true;
+            }
+        } else if (
+            !rawSource.trimmed().isEmpty()
+            ) {
+            if (maxProcessedRecords > 0
+                && result.processedRecordCount >=
+                       maxProcessedRecords) {
+                result.sourceTruncated = true;
+                break;
+            }
+
+            processDelimitedRecord(
+                rawSource,
+                filePath,
+                physicalLineNumber,
+                delimiter,
+                headers,
+                profile,
+                result
+                );
+        }
+
+        const qint64 bytesProcessed =
+            file.pos();
+
+        if (bytesProcessed
+                - lastReportedBytes
+            >= progressReportByteInterval) {
+            executionContext.report({
+                bytesProcessed,
+                totalBytes,
+                result.processedRecordCount
+            });
+
+            lastReportedBytes =
+                bytesProcessed;
+        }
     }
 
-    ImportResult result =
-        importLines(
-            lines,
-            filePath
+    if (!headerFound
+        && !result.cancelled) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "DELIMITED_HEADER_REQUIRED"
+                ),
+            QStringLiteral(
+                "The delimited source does not contain a header record."
+                ),
+            ImportDiagnosticSeverity::Error,
+            createSourceMetadata(
+                filePath,
+                0
+                )
             );
+    }
 
-    result.sourceTruncated =
-        sourceTruncated;
+    executionContext.report({
+        file.pos(),
+        totalBytes,
+        result.processedRecordCount
+    });
 
     return result;
 }

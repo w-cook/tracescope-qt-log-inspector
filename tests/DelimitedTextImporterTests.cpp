@@ -99,6 +99,8 @@ private slots:
     void importFilePreservesSourceMetadata();
     void importFileHonorsRecordLimit();
     void importFileReportsOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
 };
 
 void DelimitedTextImporterTests::csvImporterHasStableIdentity()
@@ -844,6 +846,124 @@ void DelimitedTextImporterTests::importFileReportsOpenFailure()
         diagnostic->severity,
         ImportDiagnosticSeverity::Error
         );
+}
+
+void DelimitedTextImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "timestamp,level,message\n"
+                "2026-08-11T08:00:00Z,INFO,One\n"
+                "2026-08-11T08:01:00Z,WARN,Two\n"
+                )
+            )
+        );
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(value);
+        };
+
+    const DelimitedTextImporter importer =
+        createCsvImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            file.fileName(),
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QVERIFY(!progress.isEmpty());
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(file.fileName()).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void DelimitedTextImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "timestamp,level,message\n"
+                "2026-08-11T08:00:00Z,INFO,One\n"
+                "2026-08-11T08:01:00Z,INFO,Two\n"
+                "2026-08-11T08:02:00Z,INFO,Three\n"
+                )
+            )
+        );
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            /*
+             * First check: header.
+             * Second check: first data record.
+             * Cancel before the second data record.
+             */
+            return cancellationChecks > 2;
+        };
+
+    const DelimitedTextImporter importer =
+        createCsvImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            file.fileName(),
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(result.cancelled);
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(!result.sourceTruncated);
 }
 
 QTEST_MAIN(DelimitedTextImporterTests)
