@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include <QDateTime>
 #include <QMainWindow>
 #include <QVector>
 
@@ -22,6 +25,7 @@ class QGroupBox;
 class QChartView;
 class QDragEnterEvent;
 class QDropEvent;
+class QTimer;
 
 class MainWindow : public QMainWindow
 {
@@ -56,8 +60,13 @@ private:
     QComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
 
+    QTimer *searchDebounceTimer;
+
     bool hasSeverityData = false;
     bool hasSubsystemData = false;
+
+    std::optional<QDateTime> timelineFirstMinute;
+    std::optional<QDateTime> timelineLastMinute;
 
     QString currentFilePath;
 
@@ -99,8 +108,7 @@ private:
 
     QGroupBox *buildTimelinePanel();
     void updateTimelineChart(
-        const QVector<TelemetryEvent> &events,
-        const QVector<TelemetryEvent> &rangeEvents
+        const QVector<TelemetryEvent> &events
         );
 
     void updateDataCapabilities();

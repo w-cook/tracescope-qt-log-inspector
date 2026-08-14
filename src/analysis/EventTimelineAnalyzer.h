@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QVector>
+#include <QDateTime>
 
 #include "../domain/TelemetryEvent.h"
 #include "EventCountBucket.h"
@@ -14,6 +15,7 @@ public:
 
     QVector<EventCountBucket> groupEventsByMinute(
         const QVector<TelemetryEvent> &events,
-        const QVector<TelemetryEvent> &rangeEvents
+        const QDateTime &firstMinute,
+        const QDateTime &lastMinute
         ) const;
 };

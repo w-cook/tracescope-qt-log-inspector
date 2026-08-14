@@ -297,7 +297,18 @@ EventTimelineAnalyzer analyzer;
 const auto buckets =
     analyzer.groupEventsByMinute(
         filteredEvents,
-        allEvents
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-07-07T11:02:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            ),
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-07-07T11:05:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            )
         );
 
 QCOMPARE(buckets.size(), 4);

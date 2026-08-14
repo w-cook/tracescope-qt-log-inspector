@@ -2,6 +2,7 @@
 
 #include <QSortFilterProxyModel>
 #include <QString>
+#include <QStringMatcher>
 
 #include "InvestigationTableModel.h"
 
@@ -32,6 +33,8 @@ private:
     QString m_severityFilter;
     QString m_subsystemFilter;
     QString m_searchText;
+
+    QStringMatcher m_searchMatcher;
 
     const InvestigationTableModel *
     investigationModel() const;

@@ -26,6 +26,9 @@
 #include <QUrl>
 #include <QAbstractItemView>
 #include <QFontMetrics>
+#include <QTime>
+#include <QTimer>
+
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
 #include <QtCharts/QBarSet>
@@ -33,6 +36,7 @@
 #include <QtCharts/QChartView>
 #include <QtCharts/QValueAxis>
 #include <QtCharts/QLegend>
+
 #include <algorithm>
 #include <utility>
 
@@ -43,6 +47,8 @@
 
 namespace
 {
+constexpr int SearchDebounceIntervalMs = 600;
+
 void configureEventCountAxis(
     QValueAxis *axis,
     int maxCount
@@ -92,7 +98,8 @@ MainWindow::MainWindow(QWidget *parent)
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new QComboBox(this)),
     subsystemFilterCombo(new QComboBox(this)),
-    searchInput(new QLineEdit(this))
+    searchInput(new QLineEdit(this)),
+    searchDebounceTimer(new QTimer(this))
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
     resize(1100, 760);
@@ -388,6 +395,12 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
         "Search canonical fields and custom attributes..."
         );
 
+    searchDebounceTimer->setSingleShot(true);
+
+    searchDebounceTimer->setInterval(
+        SearchDebounceIntervalMs
+        );
+
     auto *filterLayout = new QHBoxLayout();
 
     filterLayout->addWidget(levelFilterCombo);
@@ -396,9 +409,15 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     layout->addLayout(filterLayout);
 
-    connect(levelFilterCombo, &QComboBox::currentIndexChanged, this, [this]() {
-        applyFilters();
-    });
+    connect(
+        levelFilterCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            searchDebounceTimer->stop();
+            applyFilters();
+        }
+        );
 
     connect(
         subsystemFilterCombo,
@@ -410,14 +429,38 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
                     ->currentData()
                     .toString()
                 );
-
+            searchDebounceTimer->stop();
             applyFilters();
         }
         );
 
-    connect(searchInput, &QLineEdit::textChanged, this, [this]() {
-        applyFilters();
-    });
+    connect(
+        searchInput,
+        &QLineEdit::textChanged,
+        this,
+        [this]() {
+            searchDebounceTimer->start();
+        }
+        );
+
+    connect(
+        searchInput,
+        &QLineEdit::returnPressed,
+        this,
+        [this]() {
+            searchDebounceTimer->stop();
+            applyFilters();
+        }
+        );
+
+    connect(
+        searchDebounceTimer,
+        &QTimer::timeout,
+        this,
+        [this]() {
+            applyFilters();
+        }
+        );
 }
 
 void MainWindow::applyFilters()
@@ -441,13 +484,6 @@ void MainWindow::applyFilters()
             visibleRecords
             );
 
-    const QVector<TelemetryEvent>
-        allEvents =
-        toTelemetryEvents(
-            investigationController
-                ->allRecords()
-            );
-
     updateSummary(
         visibleEvents,
         currentFilePath
@@ -458,8 +494,7 @@ void MainWindow::applyFilters()
         );
 
     updateTimelineChart(
-        visibleEvents,
-        allEvents
+        visibleEvents
         );
 }
 
@@ -862,14 +897,29 @@ QGroupBox *MainWindow::buildTimelinePanel()
 }
 
 void MainWindow::updateTimelineChart(
-    const QVector<TelemetryEvent> &events,
-    const QVector<TelemetryEvent> &rangeEvents
+    const QVector<TelemetryEvent> &events
     )
 {
+    if (!timelineFirstMinute.has_value()
+        || !timelineLastMinute.has_value()) {
+        auto *chart = new QChart();
+
+        chart->setTitle(
+            "No events to display"
+            );
+
+        timelineChartView->setChart(
+            chart
+            );
+
+        return;
+    }
+
     const auto buckets =
         timelineAnalyzer.groupEventsByMinute(
             events,
-            rangeEvents
+            *timelineFirstMinute,
+            *timelineLastMinute
             );
 
     if (buckets.isEmpty()) {
@@ -880,15 +930,7 @@ void MainWindow::updateTimelineChart(
     }
 
     const bool showSeveritySeries =
-        std::any_of(
-            rangeEvents.constBegin(),
-            rangeEvents.constEnd(),
-            [](const TelemetryEvent &event) {
-                return !event.level
-                            .trimmed()
-                            .isEmpty();
-            }
-            );
+        hasSeverityData;
 
     if (!showSeveritySeries) {
         auto *totalSet =
@@ -1183,9 +1225,12 @@ void MainWindow::updateDataCapabilities()
     hasSeverityData = false;
     hasSubsystemData = false;
 
+    timelineFirstMinute.reset();
+    timelineLastMinute.reset();
+
     const QVector<InvestigationRecord> &records =
         investigationController->allRecords();
-
+    
     for (const InvestigationRecord &record
          : records) {
         hasSeverityData =
@@ -1196,9 +1241,32 @@ void MainWindow::updateDataCapabilities()
             hasSubsystemData
             || record.subsystem.has_value();
 
-        if (hasSeverityData
-            && hasSubsystemData) {
-            break;
+        if (!record.timestamp.has_value()) {
+            continue;
+        }
+
+        QDateTime minute =
+            record.timestamp->toUTC();
+
+        minute.setTime(
+            QTime(
+                minute.time().hour(),
+                minute.time().minute()
+                )
+            );
+
+        if (!timelineFirstMinute.has_value()
+            || minute <
+                   *timelineFirstMinute) {
+            timelineFirstMinute =
+                minute;
+        }
+
+        if (!timelineLastMinute.has_value()
+            || minute >
+                   *timelineLastMinute) {
+            timelineLastMinute =
+                minute;
         }
     }
 

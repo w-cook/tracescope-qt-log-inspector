@@ -8,6 +8,26 @@
 
 namespace
 {
+std::optional<QDateTime> normalizedMinute(
+    QDateTime timestamp
+    )
+{
+    if (!timestamp.isValid()) {
+        return std::nullopt;
+    }
+
+    timestamp = timestamp.toUTC();
+
+    timestamp.setTime(
+        QTime(
+            timestamp.time().hour(),
+            timestamp.time().minute()
+            )
+        );
+
+    return timestamp;
+}
+
 std::optional<QDateTime> eventMinute(
     const TelemetryEvent &event
     )
@@ -40,7 +60,7 @@ std::optional<QDateTime> eventMinute(
             )
         );
 
-    return timestamp;
+    return normalizedMinute(timestamp);
 }
 
 std::optional<QDateTime> earliestMinute(
@@ -94,38 +114,54 @@ QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
     const QVector<TelemetryEvent> &events
     ) const
 {
-    return groupEventsByMinute(
-        events,
-        events
-        );
-}
-
-QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
-    const QVector<TelemetryEvent> &events,
-    const QVector<TelemetryEvent> &rangeEvents
-    ) const
-{
     const auto firstMinute =
-        earliestMinute(rangeEvents);
+        earliestMinute(events);
 
     const auto lastMinute =
-        latestMinute(rangeEvents);
+        latestMinute(events);
 
     if (!firstMinute.has_value()
         || !lastMinute.has_value()) {
         return {};
     }
 
+    return groupEventsByMinute(
+        events,
+        *firstMinute,
+        *lastMinute
+        );
+}
+
+QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
+    const QVector<TelemetryEvent> &events,
+    const QDateTime &firstMinute,
+    const QDateTime &lastMinute
+    ) const
+{
+    const auto normalizedFirstMinute =
+        normalizedMinute(firstMinute);
+
+    const auto normalizedLastMinute =
+        normalizedMinute(lastMinute);
+
+    if (!normalizedFirstMinute.has_value()
+        || !normalizedLastMinute.has_value()
+        || *normalizedFirstMinute >
+               *normalizedLastMinute) {
+        return {};
+    }
+
     const bool spansMultipleDates =
-        firstMinute->date()
-        != lastMinute->date();
+        normalizedFirstMinute->date()
+        != normalizedLastMinute->date();
 
     QMap<QDateTime, EventCountBucket>
         bucketsByMinute;
 
     for (
-        QDateTime minute = *firstMinute;
-        minute <= *lastMinute;
+        QDateTime minute =
+        *normalizedFirstMinute;
+        minute <= *normalizedLastMinute;
         minute = minute.addSecs(60)
         ) {
         EventCountBucket bucket;
