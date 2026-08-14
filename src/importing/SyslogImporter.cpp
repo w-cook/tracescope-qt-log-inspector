@@ -10,7 +10,6 @@
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QRegularExpression>
-#include <QTextStream>
 #include <QtGlobal>
 
 #include "ImportDiagnostic.h"
@@ -881,6 +880,88 @@ ParsedSyslogLine parseLine(
 
     return result;
 }
+
+void processSyslogRecord(
+    const QString &rawSource,
+    const QString &sourcePath,
+    qint64 recordNumber,
+    const ImportProfile &profile,
+    const QDate &legacyReferenceDate,
+    ImportResult &result,
+    bool &usedLegacyYearInference
+    )
+{
+    if (rawSource.trimmed().isEmpty()) {
+        return;
+    }
+
+    ++result.processedRecordCount;
+
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            recordNumber
+            );
+
+    const ParsedSyslogLine parsed =
+        parseLine(
+            rawSource,
+            legacyReferenceDate
+            );
+
+    if (!parsed.success) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "SYSLOG_RECORD_MALFORMED"
+                ),
+            parsed.errorMessage,
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    usedLegacyYearInference =
+        usedLegacyYearInference
+        || parsed.usedLegacyYearInference;
+
+    result.records.append(
+        JsonObjectRecordMapper::mapRecord(
+            parsed.values,
+            rawSource,
+            source,
+            profile,
+            result
+            )
+        );
+}
+
+void appendLegacyYearInferenceDiagnostic(
+    ImportResult &result,
+    bool usedLegacyYearInference
+    )
+{
+    if (!usedLegacyYearInference) {
+        return;
+    }
+
+    appendDiagnostic(
+        result,
+        QStringLiteral(
+            "SYSLOG_LEGACY_TIMESTAMP_INFERRED"
+            ),
+        QStringLiteral(
+            "RFC 3164 timestamps do not include "
+            "a year or timezone. TraceScope "
+            "inferred the nearest year relative "
+            "to the import reference date and "
+            "interpreted the timestamp as local time."
+            ),
+        ImportDiagnosticSeverity::Information
+        );
+}
 }
 
 SyslogImporter::SyslogImporter(
@@ -926,72 +1007,21 @@ ImportResult SyslogImporter::importLines(
     for (qsizetype index = 0;
          index < lines.size();
          ++index) {
-        const QString rawSource =
-            lines.at(index);
-
-        if (rawSource.trimmed().isEmpty()) {
-            continue;
-        }
-
-        ++result.processedRecordCount;
-
-        const RecordSourceMetadata source =
-            createSourceMetadata(
-                sourcePath,
-                index + 1
-                );
-
-        const ParsedSyslogLine parsed =
-            parseLine(
-                rawSource,
-                legacyReferenceDate
-                );
-
-        if (!parsed.success) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "SYSLOG_RECORD_MALFORMED"
-                    ),
-                parsed.errorMessage,
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        usedLegacyYearInference =
-            usedLegacyYearInference
-            || parsed.usedLegacyYearInference;
-
-        result.records.append(
-            JsonObjectRecordMapper::mapRecord(
-                parsed.values,
-                rawSource,
-                source,
-                profile,
-                result
-                )
-            );
-    }
-
-    if (usedLegacyYearInference) {
-        appendDiagnostic(
+        processSyslogRecord(
+            lines.at(index),
+            sourcePath,
+            index + 1,
+            profile,
+            legacyReferenceDate,
             result,
-            QStringLiteral(
-                "SYSLOG_LEGACY_TIMESTAMP_INFERRED"
-                ),
-            QStringLiteral(
-                "RFC 3164 timestamps do not include "
-                "a year or timezone. TraceScope "
-                "inferred the nearest year relative "
-                "to the import reference date and "
-                "interpreted the timestamp as local time."
-                ),
-            ImportDiagnosticSeverity::Information
+            usedLegacyYearInference
             );
     }
+
+    appendLegacyYearInferenceDiagnostic(
+        result,
+        usedLegacyYearInference
+        );
 
     return result;
 }
@@ -1031,43 +1061,96 @@ ImportResult SyslogImporter::importFile(
         return result;
     }
 
-    QTextStream stream(&file);
+    constexpr qint64 progressReportByteInterval =
+        256 * 1024;
 
-    QStringList lines;
+    ImportResult result;
 
-    qint64 processedRecords = 0;
-    bool sourceTruncated = false;
+    const qint64 totalBytes =
+        file.size();
 
-    while (!stream.atEnd()) {
-        const QString line =
-            stream.readLine();
+    qint64 physicalLineNumber = 0;
+    qint64 lastReportedBytes = 0;
 
-        if (maxProcessedRecords > 0
-            && processedRecords >=
-                   maxProcessedRecords) {
-            if (!line.trimmed().isEmpty()) {
-                sourceTruncated = true;
+    bool usedLegacyYearInference = false;
+
+    executionContext.report({
+        0,
+        totalBytes,
+        0
+    });
+
+    while (!file.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            result.cancelled = true;
+            break;
+        }
+
+        QByteArray lineBytes =
+            file.readLine();
+
+        ++physicalLineNumber;
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        if (!rawSource.trimmed().isEmpty()) {
+            if (maxProcessedRecords > 0
+                && result.processedRecordCount >=
+                       maxProcessedRecords) {
+                result.sourceTruncated = true;
                 break;
             }
 
-            continue;
+            processSyslogRecord(
+                rawSource,
+                filePath,
+                physicalLineNumber,
+                profile,
+                legacyReferenceDate,
+                result,
+                usedLegacyYearInference
+                );
         }
 
-        lines.append(line);
+        const qint64 bytesProcessed =
+            file.pos();
 
-        if (!line.trimmed().isEmpty()) {
-            ++processedRecords;
+        if (bytesProcessed
+                - lastReportedBytes
+            >= progressReportByteInterval) {
+            executionContext.report({
+                bytesProcessed,
+                totalBytes,
+                result.processedRecordCount
+            });
+
+            lastReportedBytes =
+                bytesProcessed;
         }
     }
 
-    ImportResult result =
-        importLines(
-            lines,
-            filePath
-            );
+    appendLegacyYearInferenceDiagnostic(
+        result,
+        usedLegacyYearInference
+        );
 
-    result.sourceTruncated =
-        sourceTruncated;
+    executionContext.report({
+        file.pos(),
+        totalBytes,
+        result.processedRecordCount
+    });
 
     return result;
 }

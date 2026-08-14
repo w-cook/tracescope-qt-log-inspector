@@ -30,6 +30,8 @@ private slots:
 
     void importFileHonorsRecordLimit();
     void importFileReportsOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
 };
 
 namespace
@@ -997,6 +999,148 @@ void SyslogImporterTests::
         result.diagnostics.first()
             .severity,
         ImportDiagnosticSeverity::Error
+        );
+}
+
+void SyslogImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "<14>1 2026-08-12T08:00:00Z "
+           "host app - EVENT_1 - First\n"
+        << "<12>1 2026-08-12T08:01:00Z "
+           "host app - EVENT_2 - Second\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(value);
+        };
+
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QVERIFY(!progress.isEmpty());
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().totalBytes,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void SyslogImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "<14>1 2026-08-12T08:00:00Z "
+           "host app - EVENT_1 - First\n"
+        << "<12>1 2026-08-12T08:01:00Z "
+           "host app - EVENT_2 - Second\n"
+        << "<11>1 2026-08-12T08:02:00Z "
+           "host app - EVENT_3 - Third\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            return cancellationChecks > 1;
+        };
+
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(result.cancelled);
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(!result.sourceTruncated);
+
+    QCOMPARE(
+        result.records.first()
+            .message.value(),
+        QStringLiteral("First")
         );
 }
 
