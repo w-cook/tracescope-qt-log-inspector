@@ -40,7 +40,6 @@
 #include <algorithm>
 #include <utility>
 
-#include "compatibility/TelemetryEventAdapter.h"
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
@@ -310,7 +309,7 @@ void MainWindow::loadLogFile(
 }
 
 void MainWindow::updateSummary(
-    const QVector<TelemetryEvent> &events,
+    const QVector<InvestigationRecord> &records,
     const QString &filePath
     )
 {
@@ -326,7 +325,7 @@ void MainWindow::updateSummary(
             QString(
                 "TOTAL: %1 visible of %2 events from %3"
                 )
-                .arg(events.size())
+                .arg(records.size())
                 .arg(
                     investigationController
                         ->totalRecordCount()
@@ -337,19 +336,36 @@ void MainWindow::updateSummary(
         return;
     }
 
-    for (const TelemetryEvent &event : events) {
-        if (event.level == "TRACE") {
-            ++traceCount;
-        } else if (event.level == "DEBUG") {
-            ++debugCount;
-        } else if (event.level == "INFO") {
-            ++infoCount;
-        } else if (event.level == "WARN") {
-            ++warningCount;
-        } else if (event.level == "ERROR") {
-            ++errorCount;
-        } else if (event.level == "CRITICAL") {
-            ++criticalCount;
+    for (const InvestigationRecord &record
+         : records) {
+        if (!record.severity.has_value()) {
+            continue;
+        }
+
+        switch (record.severity.value()) {
+            case RecordSeverity::Trace:
+                ++traceCount;
+                break;
+
+            case RecordSeverity::Debug:
+                ++debugCount;
+                break;
+
+            case RecordSeverity::Info:
+                ++infoCount;
+                break;
+
+            case RecordSeverity::Warning:
+                ++warningCount;
+                break;
+
+            case RecordSeverity::Error:
+                ++errorCount;
+                break;
+
+            case RecordSeverity::Critical:
+                ++criticalCount;
+                break;
         }
     }
 
@@ -359,7 +375,7 @@ void MainWindow::updateSummary(
             "TRACE: %4 | DEBUG: %5 | INFO: %6 | "
             "WARN: %7 | ERROR: %8 | CRITICAL: %9"
             )
-            .arg(events.size())
+            .arg(records.size())
             .arg(investigationController->totalRecordCount())
             .arg(filePath)
             .arg(traceCount)
@@ -478,23 +494,17 @@ void MainWindow::applyFilters()
         visibleRecords =
         investigationController->visibleRecords();
 
-    const QVector<TelemetryEvent>
-        visibleEvents =
-        toTelemetryEvents(
-            visibleRecords
-            );
-
     updateSummary(
-        visibleEvents,
+        visibleRecords,
         currentFilePath
         );
 
     updateIssueSummary(
-        visibleEvents
+        visibleRecords
         );
 
     updateTimelineChart(
-        visibleEvents
+        visibleRecords
         );
 }
 
@@ -775,7 +785,7 @@ QGroupBox *MainWindow::buildIssueSummaryPanel()
     return issueSummaryGroup;
 }
 
-void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
+void MainWindow::updateIssueSummary(const QVector<InvestigationRecord> &records)
 {
     if (!hasSeverityData
         || !hasSubsystemData) {
@@ -783,7 +793,7 @@ void MainWindow::updateIssueSummary(const QVector<TelemetryEvent> &events)
         return;
     }
 
-    const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(events);
+    const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(records);
 
     issueSummaryTable->setRowCount(groups.size());
 
@@ -897,7 +907,7 @@ QGroupBox *MainWindow::buildTimelinePanel()
 }
 
 void MainWindow::updateTimelineChart(
-    const QVector<TelemetryEvent> &events
+    const QVector<InvestigationRecord> &records
     )
 {
     if (!timelineFirstMinute.has_value()
@@ -916,8 +926,8 @@ void MainWindow::updateTimelineChart(
     }
 
     const auto buckets =
-        timelineAnalyzer.groupEventsByMinute(
-            events,
+        timelineAnalyzer.groupRecordsByMinute(
+            records,
             *timelineFirstMinute,
             *timelineLastMinute
             );

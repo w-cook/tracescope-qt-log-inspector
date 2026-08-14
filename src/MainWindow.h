@@ -7,7 +7,6 @@
 #include <QVector>
 
 #include "domain/InvestigationRecord.h"
-#include "domain/TelemetryEvent.h"
 #include "importing/ImportProfile.h"
 #include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
@@ -84,7 +83,7 @@ private:
         );
 
     void updateSummary(
-        const QVector<TelemetryEvent> &events,
+        const QVector<InvestigationRecord> &records,
         const QString &filePath
         );
 
@@ -101,14 +100,14 @@ private:
 
     QGroupBox *buildIssueSummaryPanel();
     void updateIssueSummary(
-        const QVector<TelemetryEvent> &events
+        const QVector<InvestigationRecord> &records
         );
 
     void exportFilteredResults();
 
     QGroupBox *buildTimelinePanel();
     void updateTimelineChart(
-        const QVector<TelemetryEvent> &events
+        const QVector<InvestigationRecord> &records
         );
 
     void updateDataCapabilities();

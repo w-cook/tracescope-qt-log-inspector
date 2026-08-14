@@ -28,50 +28,29 @@ std::optional<QDateTime> normalizedMinute(
     return timestamp;
 }
 
-std::optional<QDateTime> eventMinute(
-    const TelemetryEvent &event
+std::optional<QDateTime> recordMinute(
+    const InvestigationRecord &record
     )
 {
-    QDateTime timestamp =
-        QDateTime::fromString(
-            event.timestamp,
-            Qt::ISODateWithMs
-            );
-
-    if (!timestamp.isValid()) {
-        timestamp =
-            QDateTime::fromString(
-                event.timestamp,
-                Qt::ISODate
-                );
-    }
-
-    if (!timestamp.isValid()) {
+    if (!record.timestamp.has_value()) {
         return std::nullopt;
     }
 
-    timestamp =
-        timestamp.toUTC();
-
-    timestamp.setTime(
-        QTime(
-            timestamp.time().hour(),
-            timestamp.time().minute()
-            )
+    return normalizedMinute(
+        record.timestamp.value()
         );
-
-    return normalizedMinute(timestamp);
 }
 
 std::optional<QDateTime> earliestMinute(
-    const QVector<TelemetryEvent> &events
+    const QVector<InvestigationRecord> &records
     )
 {
     std::optional<QDateTime> earliest;
 
-    for (const TelemetryEvent &event : events) {
+    for (const InvestigationRecord &record
+         : records) {
         const auto minute =
-            eventMinute(event);
+            recordMinute(record);
 
         if (!minute.has_value()) {
             continue;
@@ -87,14 +66,15 @@ std::optional<QDateTime> earliestMinute(
 }
 
 std::optional<QDateTime> latestMinute(
-    const QVector<TelemetryEvent> &events
+    const QVector<InvestigationRecord> &records
     )
 {
     std::optional<QDateTime> latest;
 
-    for (const TelemetryEvent &event : events) {
+    for (const InvestigationRecord &record
+         : records) {
         const auto minute =
-            eventMinute(event);
+            recordMinute(record);
 
         if (!minute.has_value()) {
             continue;
@@ -110,30 +90,30 @@ std::optional<QDateTime> latestMinute(
 }
 }
 
-QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
-    const QVector<TelemetryEvent> &events
+QVector<EventCountBucket> EventTimelineAnalyzer::groupRecordsByMinute(
+    const QVector<InvestigationRecord> &records
     ) const
 {
     const auto firstMinute =
-        earliestMinute(events);
+        earliestMinute(records);
 
     const auto lastMinute =
-        latestMinute(events);
+        latestMinute(records);
 
     if (!firstMinute.has_value()
         || !lastMinute.has_value()) {
         return {};
     }
 
-    return groupEventsByMinute(
-        events,
+    return groupRecordsByMinute(
+        records,
         *firstMinute,
         *lastMinute
         );
 }
 
-QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
-    const QVector<TelemetryEvent> &events,
+QVector<EventCountBucket> EventTimelineAnalyzer::groupRecordsByMinute(
+    const QVector<InvestigationRecord> &records,
     const QDateTime &firstMinute,
     const QDateTime &lastMinute
     ) const
@@ -183,9 +163,10 @@ QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
             );
     }
 
-    for (const TelemetryEvent &event : events) {
+    for (const InvestigationRecord &record
+         : records) {
         const auto minute =
-            eventMinute(event);
+            recordMinute(record);
 
         if (!minute.has_value()) {
             continue;
@@ -204,36 +185,35 @@ QVector<EventCountBucket> EventTimelineAnalyzer::groupEventsByMinute(
         EventCountBucket &bucket =
             iterator.value();
 
-        if (event.level
-            == QStringLiteral("TRACE")) {
-            ++bucket.traceCount;
-        } else if (
-            event.level
-            == QStringLiteral("DEBUG")
-            ) {
-            ++bucket.debugCount;
-        } else if (
-            event.level
-            == QStringLiteral("INFO")
-            ) {
-            ++bucket.infoCount;
-        } else if (
-            event.level
-            == QStringLiteral("WARN")
-            ) {
-            ++bucket.warningCount;
-        } else if (
-            event.level
-            == QStringLiteral("ERROR")
-            ) {
-            ++bucket.errorCount;
-        } else if (
-            event.level
-            == QStringLiteral("CRITICAL")
-            ) {
-            ++bucket.criticalCount;
-        } else {
+        if (!record.severity.has_value()) {
             ++bucket.unspecifiedCount;
+            continue;
+        }
+
+        switch (record.severity.value()) {
+            case RecordSeverity::Trace:
+                ++bucket.traceCount;
+                break;
+
+            case RecordSeverity::Debug:
+                ++bucket.debugCount;
+                break;
+
+            case RecordSeverity::Info:
+                ++bucket.infoCount;
+                break;
+
+            case RecordSeverity::Warning:
+                ++bucket.warningCount;
+                break;
+
+            case RecordSeverity::Error:
+                ++bucket.errorCount;
+                break;
+
+            case RecordSeverity::Critical:
+                ++bucket.criticalCount;
+                break;
         }
     }
 

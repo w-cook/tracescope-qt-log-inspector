@@ -3,18 +3,20 @@
 #include <QVector>
 #include <QDateTime>
 
-#include "../domain/TelemetryEvent.h"
+#include "../domain/InvestigationRecord.h"
 #include "EventCountBucket.h"
 
 class EventTimelineAnalyzer
 {
 public:
-    QVector<EventCountBucket> groupEventsByMinute(
-        const QVector<TelemetryEvent> &events
+    QVector<EventCountBucket>
+    groupRecordsByMinute(
+        const QVector<InvestigationRecord> &records
         ) const;
 
-    QVector<EventCountBucket> groupEventsByMinute(
-        const QVector<TelemetryEvent> &events,
+    QVector<EventCountBucket>
+    groupRecordsByMinute(
+        const QVector<InvestigationRecord> &records,
         const QDateTime &firstMinute,
         const QDateTime &lastMinute
         ) const;

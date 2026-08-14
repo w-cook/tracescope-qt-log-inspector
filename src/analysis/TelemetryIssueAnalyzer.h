@@ -2,13 +2,13 @@
 
 #include <QVector>
 
-#include "../domain/TelemetryEvent.h"
+#include "../domain/InvestigationRecord.h"
 #include "TelemetryIssueGroup.h"
 
 class TelemetryIssueAnalyzer
 {
 public:
     QVector<TelemetryIssueGroup> groupWarningsAndErrorsBySubsystem(
-        const QVector<TelemetryEvent> &events
+        const QVector<InvestigationRecord> &records
         ) const;
 };
