@@ -13,12 +13,9 @@
 #include <QJsonValue>
 #include <QSet>
 #include <QStringList>
-#include <QTextStream>
 #include <QVariant>
+#include <QByteArray>
 
-#include "../domain/RecordIdentity.h"
-#include "../domain/RecordSeverity.h"
-#include "../domain/RecordTimestamp.h"
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -95,75 +92,11 @@ ImportResult JsonLinesImporter::importLines(
     for (qsizetype index = 0;
          index < lines.size();
          ++index) {
-        const QString rawSource =
-            lines.at(index);
-
-        const QString trimmed =
-            rawSource.trimmed();
-
-        if (trimmed.isEmpty()) {
-            continue;
-        }
-
-        ++result.processedRecordCount;
-
-        const RecordSourceMetadata source =
-            createSourceMetadata(
-                sourcePath,
-                index + 1
-                );
-
-        QJsonParseError parseError;
-
-        const QJsonDocument document =
-            QJsonDocument::fromJson(
-                trimmed.toUtf8(),
-                &parseError
-                );
-
-        if (parseError.error !=
-            QJsonParseError::NoError) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "MALFORMED_JSON"
-                    ),
-                QStringLiteral(
-                    "The source record is not valid JSON: %1"
-                    ).arg(
-                        parseError.errorString()
-                        ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        if (!document.isObject()) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "JSON_VALUE_NOT_OBJECT"
-                    ),
-                QStringLiteral(
-                    "The JSON source record must be an object."
-                    ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        result.records.append(
-            JsonObjectRecordMapper::mapRecord(
-                document.object(),
-                rawSource,
-                source,
-                profile,
-                result
-                )
+        processLine(
+            lines.at(index),
+            sourcePath,
+            index + 1,
+            result
             );
     }
 
@@ -178,10 +111,7 @@ ImportResult JsonLinesImporter::importFile(
 {
     QFile file(filePath);
 
-    if (!file.open(
-            QIODevice::ReadOnly |
-            QIODevice::Text
-            )) {
+    if (!file.open(QIODevice::ReadOnly)) {
         ImportResult result;
 
         const RecordSourceMetadata source =
@@ -205,42 +135,166 @@ ImportResult JsonLinesImporter::importFile(
         return result;
     }
 
-    QTextStream stream(&file);
+    constexpr qint64 progressReportByteInterval =
+        256 * 1024;
 
-    QStringList lines;
-    qint64 processedRecords = 0;
-    bool sourceTruncated = false;
+    ImportResult result;
 
-    while (!stream.atEnd()) {
-        const QString line =
-            stream.readLine();
+    const qint64 totalBytes =
+        file.size();
 
-        if (maxProcessedRecords > 0
-            && processedRecords >=
-                   maxProcessedRecords) {
-            if (!line.trimmed().isEmpty()) {
-                sourceTruncated = true;
-                break;
-            }
+    qint64 physicalLineNumber = 0;
+    qint64 lastReportedBytes = 0;
 
-            continue;
+    executionContext.report({
+        0,
+        totalBytes,
+        0
+    });
+
+    while (!file.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            result.cancelled = true;
+            break;
         }
 
-        lines.append(line);
+        QByteArray lineBytes =
+            file.readLine();
 
-        if (!line.trimmed().isEmpty()) {
-            ++processedRecords;
+        ++physicalLineNumber;
+
+        QString rawSource =
+            QString::fromUtf8(lineBytes);
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        const bool hasRecord =
+            !rawSource.trimmed().isEmpty();
+
+        if (maxProcessedRecords > 0
+            && result.processedRecordCount >=
+                   maxProcessedRecords) {
+            if (hasRecord) {
+                result.sourceTruncated = true;
+                break;
+            }
+        } else {
+            processLine(
+                rawSource,
+                filePath,
+                physicalLineNumber,
+                result
+                );
+        }
+
+        const qint64 bytesProcessed =
+            file.pos();
+
+        if (bytesProcessed -
+                lastReportedBytes >=
+            progressReportByteInterval) {
+            executionContext.report({
+                bytesProcessed,
+                totalBytes,
+                result.processedRecordCount
+            });
+
+            lastReportedBytes =
+                bytesProcessed;
         }
     }
 
-    ImportResult result =
-        importLines(
-            lines,
-            filePath
-            );
+    const qint64 finalBytesProcessed =
+        file.pos();
 
-    result.sourceTruncated =
-        sourceTruncated;
+    executionContext.report({
+        finalBytesProcessed,
+        totalBytes,
+        result.processedRecordCount
+    });
 
     return result;
+}
+
+void JsonLinesImporter::processLine(
+    const QString &rawSource,
+    const QString &sourcePath,
+    qint64 recordNumber,
+    ImportResult &result
+    ) const
+{
+    const QString trimmed =
+        rawSource.trimmed();
+
+    if (trimmed.isEmpty()) {
+        return;
+    }
+
+    ++result.processedRecordCount;
+
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            recordNumber
+            );
+
+    QJsonParseError parseError;
+
+    const QJsonDocument document =
+        QJsonDocument::fromJson(
+            trimmed.toUtf8(),
+            &parseError
+            );
+
+    if (parseError.error !=
+        QJsonParseError::NoError) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "MALFORMED_JSON"
+                ),
+            QStringLiteral(
+                "The source record is not valid JSON: %1"
+                ).arg(
+                    parseError.errorString()
+                    ),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    if (!document.isObject()) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "JSON_VALUE_NOT_OBJECT"
+                ),
+            QStringLiteral(
+                "The JSON source record must be an object."
+                ),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    result.records.append(
+        JsonObjectRecordMapper::mapRecord(
+            document.object(),
+            rawSource,
+            source,
+            profile,
+            result
+            )
+        );
 }

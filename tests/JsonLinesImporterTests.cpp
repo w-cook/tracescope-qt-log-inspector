@@ -29,6 +29,9 @@ private slots:
     void importFileReportsOpenFailure();
     void importFileHonorsRecordLimit();
 
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
+
     void customConfigMapsAlternativeTopLevelFields();
     void customConfigMapsNestedFields();
     void nestedMappingsPreserveSourceAttributes();
@@ -707,6 +710,134 @@ void JsonLinesImporterTests::importFileHonorsRecordLimit()
         );
 
     QVERIFY(result.sourceTruncated);
+}
+
+void JsonLinesImporterTests::importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    file.write(
+        "{\"message\":\"One\"}\n"
+        "{\"message\":\"Two\"}\n"
+        );
+
+    file.flush();
+
+    const QString path =
+        file.fileName();
+
+    const qint64 expectedSize =
+        file.size();
+
+    file.close();
+
+    QVector<ImportProgress> updates;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&updates](
+            const ImportProgress &progress
+            ) {
+            updates.append(progress);
+        };
+
+    JsonLinesImporter importer;
+
+    const ImportResult result =
+        importer.importFile(
+            path,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QVERIFY(!updates.isEmpty());
+
+    QCOMPARE(
+        updates.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        updates.first().totalBytes,
+        expectedSize
+        );
+
+    QCOMPARE(
+        updates.last().bytesProcessed,
+        expectedSize
+        );
+
+    QCOMPARE(
+        updates.last().totalBytes,
+        expectedSize
+        );
+
+    QCOMPARE(
+        updates.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void JsonLinesImporterTests::importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    file.write(
+        "{\"message\":\"One\"}\n"
+        "{\"message\":\"Two\"}\n"
+        "{\"message\":\"Three\"}\n"
+        );
+
+    file.flush();
+
+    const QString path =
+        file.fileName();
+
+    file.close();
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            return cancellationChecks > 1;
+        };
+
+    JsonLinesImporter importer;
+
+    const ImportResult result =
+        importer.importFile(
+            path,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(result.cancelled);
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(!result.sourceTruncated);
 }
 
 void JsonLinesImporterTests::customConfigMapsAlternativeTopLevelFields()
