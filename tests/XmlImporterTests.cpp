@@ -1,6 +1,8 @@
 #include <QtTest/QtTest>
 
 #include <QTemporaryFile>
+#include <QFileInfo>
+#include <QVector>
 
 #include "../src/importing/XmlImporter.h"
 
@@ -81,6 +83,8 @@ private slots:
     void honorsRecordLimit();
     void importFilePreservesSourceMetadata();
     void importFileReportsOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
     void convertsNamedDataElementsToFields();
     void preservesRepeatedNamedDataValues();
 };
@@ -862,6 +866,184 @@ void
                 )
             )
         != nullptr
+        );
+}
+
+void
+    XmlImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    const QString filePath =
+        writeTemporaryContent(
+            file,
+            QByteArrayLiteral(
+                "<session>"
+                "<event><message>First</message></event>"
+                "<event><message>Second</message></event>"
+                "</session>"
+                )
+            );
+
+    QVERIFY(
+        !filePath.isEmpty()
+        );
+
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.event"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral("message");
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(value);
+        };
+
+    XmlImporter importer(profile);
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QVERIFY(
+        !result.cancelled
+        );
+
+    QVERIFY(
+        !progress.isEmpty()
+        );
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().totalBytes,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void
+    XmlImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    const QString filePath =
+        writeTemporaryContent(
+            file,
+            QByteArrayLiteral(
+                "<session>"
+                "<event><message>First</message></event>"
+                "<event><message>Second</message></event>"
+                "</session>"
+                )
+            );
+
+    QVERIFY(
+        !filePath.isEmpty()
+        );
+
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.event"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral("message");
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        []() {
+            return true;
+        };
+
+    XmlImporter importer(profile);
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(
+        result.cancelled
+        );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        0
+        );
+
+    QVERIFY(
+        !result.sourceTruncated
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_RECORD_PATH_NOT_FOUND"
+                )
+            )
+        == nullptr
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_DOCUMENT_EMPTY"
+                )
+            )
+        == nullptr
         );
 }
 

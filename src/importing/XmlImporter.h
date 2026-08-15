@@ -37,7 +37,8 @@ private:
     ImportResult importDevice(
         QIODevice &device,
         const QString &sourcePath,
-        qint64 maxProcessedRecords
+        qint64 maxProcessedRecords,
+        const ImportExecutionContext &executionContext
         ) const;
 
     ImportProfile profile;
