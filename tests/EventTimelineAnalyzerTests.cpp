@@ -18,6 +18,12 @@ private slots:
     void filteredRecordsPreserveFullTimelineRange();
     void groupRecordsByMinuteHandlesMidnightBoundary();
     void groupRecordsByMinuteCountsUnspecifiedSeverity();
+    void groupRecordsByFiveMinuteInterval();
+    void groupRecordsByHundredMilliseconds();
+    void windowedIntervalMaterializesOnlyRequestedBuckets();
+    void millisecondBucketCountDoesNotMaterializeTimeline();
+    void intervalGroupingPreservesEmptyBuckets();
+    void intervalGroupingRejectsInvalidInterval();
 };
 
 static InvestigationRecord makeRecord(
@@ -459,6 +465,337 @@ void EventTimelineAnalyzerTests::
     QCOMPARE(
         buckets.first().totalCount(),
         3
+        );
+}
+
+void EventTimelineAnalyzerTests::
+    groupRecordsByFiveMinuteInterval()
+{
+    const QVector<InvestigationRecord>
+        records = {
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:01:00.000Z"
+                    ),
+                RecordSeverity::Info
+                ),
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:04:59.000Z"
+                    ),
+                RecordSeverity::Warning
+                ),
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:05:00.000Z"
+                    ),
+                RecordSeverity::Error
+                )
+        };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupRecordsByInterval(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-15T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-15T10:09:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            5
+            );
+
+    QCOMPARE(
+        buckets.size(),
+        2
+        );
+
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral("10:00")
+        );
+
+    QCOMPARE(
+        buckets.at(0).infoCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).warningCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral("10:05")
+        );
+
+    QCOMPARE(
+        buckets.at(1).errorCount,
+        1
+        );
+}
+
+void EventTimelineAnalyzerTests::
+    groupRecordsByHundredMilliseconds()
+{
+    const QVector<InvestigationRecord>
+        records = {
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:00:00.015Z"
+                    ),
+                RecordSeverity::Info
+                ),
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:00:00.099Z"
+                    ),
+                RecordSeverity::Warning
+                ),
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:00:00.100Z"
+                    ),
+                RecordSeverity::Error
+                )
+        };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer
+            .groupRecordsByIntervalMilliseconds(
+                records,
+                QDateTime::fromString(
+                    QStringLiteral(
+                        "2026-08-15T10:00:00.000Z"
+                        ),
+                    Qt::ISODateWithMs
+                    ),
+                QDateTime::fromString(
+                    QStringLiteral(
+                        "2026-08-15T10:00:00.199Z"
+                        ),
+                    Qt::ISODateWithMs
+                    ),
+                100
+                );
+
+    QCOMPARE(
+        buckets.size(),
+        2
+        );
+
+    QCOMPARE(
+        buckets.at(0).infoCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).warningCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(1).errorCount,
+        1
+        );
+
+    QCOMPARE(
+        buckets.at(0).label,
+        QStringLiteral(
+            "10:00:00.000"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(1).label,
+        QStringLiteral(
+            "10:00:00.100"
+            )
+        );
+}
+
+void EventTimelineAnalyzerTests::
+    windowedIntervalMaterializesOnlyRequestedBuckets()
+{
+    const QVector<InvestigationRecord>
+        records = {
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:00:00.003Z"
+                    ),
+                RecordSeverity::Info
+                ),
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:00:05.007Z"
+                    ),
+                RecordSeverity::Error
+                )
+        };
+
+    EventTimelineAnalyzer analyzer;
+
+    const QDateTime firstTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-15T10:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const QDateTime lastTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-15T10:10:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const auto buckets =
+        analyzer
+            .groupRecordsByIntervalWindowMilliseconds(
+                records,
+                firstTimestamp,
+                lastTimestamp,
+                1,
+                5000,
+                20
+                );
+
+    QCOMPARE(
+        buckets.size(),
+        20
+        );
+
+    QCOMPARE(
+        buckets.first().label,
+        QStringLiteral(
+            "10:00:05.000"
+            )
+        );
+
+    QCOMPARE(
+        buckets.at(7).errorCount,
+        1
+        );
+}
+
+void EventTimelineAnalyzerTests::
+    millisecondBucketCountDoesNotMaterializeTimeline()
+{
+    EventTimelineAnalyzer analyzer;
+
+    const QDateTime firstTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-15T10:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const QDateTime lastTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-15T14:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const qint64 bucketCount =
+        analyzer
+            .intervalBucketCountMilliseconds(
+                firstTimestamp,
+                lastTimestamp,
+                1
+                );
+
+    QCOMPARE(
+        bucketCount,
+        qint64(14'400'001)
+        );
+}
+
+void EventTimelineAnalyzerTests::
+    intervalGroupingPreservesEmptyBuckets()
+{
+    const QVector<InvestigationRecord>
+        records = {
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:01:00.000Z"
+                    ),
+                RecordSeverity::Info
+                ),
+            makeRecord(
+                QStringLiteral(
+                    "2026-08-15T10:16:00.000Z"
+                    ),
+                RecordSeverity::Warning
+                )
+        };
+
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupRecordsByInterval(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-15T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-15T10:19:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            5
+            );
+
+    QCOMPARE(
+        buckets.size(),
+        4
+        );
+
+    QCOMPARE(
+        buckets.at(1).totalCount(),
+        0
+        );
+
+    QCOMPARE(
+        buckets.at(2).totalCount(),
+        0
+        );
+}
+
+void EventTimelineAnalyzerTests::
+    intervalGroupingRejectsInvalidInterval()
+{
+    EventTimelineAnalyzer analyzer;
+
+    const auto buckets =
+        analyzer.groupRecordsByInterval(
+            {},
+            QDateTime::currentDateTimeUtc(),
+            QDateTime::currentDateTimeUtc(),
+            0
+            );
+
+    QVERIFY(
+        buckets.isEmpty()
         );
 }
 

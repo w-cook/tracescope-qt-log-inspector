@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QString>
 #include <QSet>
+#include <QFutureWatcher>
 
 #include "../importing/ImportFormatSuggestionService.h"
 #include "../importing/ImportPreviewService.h"
@@ -57,6 +58,11 @@ private:
     QLabel *previewSummaryLabel;
     QTableWidget *previewTable;
     QPlainTextEdit *rawSourcePreview;
+
+    QPushButton *refreshPreviewButton;
+
+    QFutureWatcher<ImportPreviewResult>
+        *previewWatcher = nullptr;
 
     QTimer *previewRefreshTimer;
 
@@ -167,6 +173,17 @@ private:
     void loadProfile();
 
     void schedulePreviewRefresh();
+
+    void startManualPreview();
+
+    void displayPreviewResult(
+        const QString &filePath,
+        const ImportPreviewResult &preview
+        );
+
+    void applyDetectedCustomFieldMappings(
+        const ImportPreviewResult &preview
+        );
 
     void createProfileFromSource(
         bool userInitiated

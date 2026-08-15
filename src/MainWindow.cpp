@@ -26,9 +26,17 @@
 #include <QUrl>
 #include <QAbstractItemView>
 #include <QFontMetrics>
-#include <QTime>
 #include <QTimer>
 #include <QtConcurrentRun>
+#include <QFileInfo>
+#include <QProgressDialog>
+#include <QPromise>
+#include <QSignalBlocker>
+#include <QMargins>
+#include <QGraphicsLayout>
+#include <QFrame>
+#include <QVariant>
+#include <QTimeZone>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -39,6 +47,7 @@
 #include <QtCharts/QLegend>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include "importing/BuiltInImporterRegistry.h"
@@ -49,41 +58,304 @@ namespace
 {
 constexpr int SearchDebounceIntervalMs = 600;
 
+constexpr int TimelineAutoTargetBuckets = 20;
+
+constexpr int TimelineVisibleBucketCount = 20;
+
+constexpr int TimelineScaledScrollMaximum = 1'000'000;
+
+constexpr qint64 MillisecondsPerSecond = 1'000;
+
+constexpr qint64 MillisecondsPerMinute = 60 * MillisecondsPerSecond;
+
+constexpr qint64 MillisecondsPerHour = 60 * MillisecondsPerMinute;
+
+constexpr qint64 MillisecondsPerDay = 24 * MillisecondsPerHour;
+
+qint64 automaticTimelineIntervalMilliseconds(
+    const QDateTime &firstTimestamp,
+    const QDateTime &lastTimestamp
+    )
+{
+    if (!firstTimestamp.isValid()
+        || !lastTimestamp.isValid()
+        || firstTimestamp > lastTimestamp) {
+        return MillisecondsPerMinute;
+    }
+
+    const qint64 spanMilliseconds =
+        std::max<qint64>(
+            1,
+            firstTimestamp.msecsTo(
+                lastTimestamp
+                )
+                + 1
+            );
+
+    const QList<qint64> candidates {
+        1,
+        10,
+        100,
+        500,
+
+        1 * MillisecondsPerSecond,
+        5 * MillisecondsPerSecond,
+        15 * MillisecondsPerSecond,
+        30 * MillisecondsPerSecond,
+
+        1 * MillisecondsPerMinute,
+        5 * MillisecondsPerMinute,
+        15 * MillisecondsPerMinute,
+        30 * MillisecondsPerMinute,
+
+        1 * MillisecondsPerHour,
+        3 * MillisecondsPerHour,
+        6 * MillisecondsPerHour,
+        12 * MillisecondsPerHour,
+
+        1 * MillisecondsPerDay,
+        3 * MillisecondsPerDay,
+        7 * MillisecondsPerDay
+    };
+
+    for (const qint64 intervalMilliseconds
+         : candidates) {
+        const qint64 bucketCount =
+            (
+                spanMilliseconds
+                + intervalMilliseconds
+                - 1
+                )
+            / intervalMilliseconds;
+
+        if (bucketCount
+            <= TimelineAutoTargetBuckets) {
+            return intervalMilliseconds;
+        }
+    }
+
+    /*
+     * For unusually long investigations,
+     * continue scaling in whole-day units.
+     */
+    const qint64 targetMilliseconds =
+        (
+            spanMilliseconds
+            + TimelineAutoTargetBuckets
+            - 1
+            )
+        / TimelineAutoTargetBuckets;
+
+    const qint64 wholeDays =
+        std::max<qint64>(
+            1,
+            (
+                targetMilliseconds
+                + MillisecondsPerDay
+                - 1
+                )
+                / MillisecondsPerDay
+            );
+
+    return wholeDays
+           * MillisecondsPerDay;
+}
+
 void configureEventCountAxis(
     QValueAxis *axis,
     int maxCount
     )
 {
-    axis->setTitleText(
-        QStringLiteral("Events")
-        );
+    const int effectiveMax =
+        std::max(
+            1,
+            maxCount
+            );
 
     axis->setLabelFormat(
         QStringLiteral("%d")
         );
 
-    axis->setRange(
-        0,
-        std::max(1, maxCount)
+    axis->setTruncateLabels(
+        false
         );
 
-    if (maxCount <= 10) {
-        axis->setTickType(
-            QValueAxis::TicksDynamic
-            );
+    /*
+     * Keep the Y range tied directly to the
+     * observed data maximum. Do not use
+     * applyNiceNumbers(), because it can expand
+     * the range and consume valuable vertical
+     * plot space.
+     */
+    axis->setRange(
+        0,
+        effectiveMax
+        );
 
-        axis->setTickAnchor(0);
-        axis->setTickInterval(1);
+    axis->setTickType(
+        QValueAxis::TicksDynamic
+        );
+
+    axis->setTickAnchor(
+        0
+        );
+
+    if (effectiveMax <= 10) {
+        axis->setTickInterval(
+            1
+            );
 
         return;
     }
 
-    axis->setTickType(
-        QValueAxis::TicksFixed
-        );
+    /*
+     * Aim for roughly five intervals while
+     * retaining integer event-count labels.
+     */
+    const int tickInterval =
+        std::max(
+            1,
+            static_cast<int>(
+                std::ceil(
+                    static_cast<double>(
+                        effectiveMax
+                        )
+                    / 5.0
+                    )
+                )
+            );
 
-    axis->setTickCount(6);
-    axis->applyNiceNumbers();
+    axis->setTickInterval(
+        tickInterval
+        );
+}
+
+int timelineScrollMaximum(
+    qint64 totalBucketCount
+    )
+{
+    const qint64 maximumStartBucketIndex =
+        std::max<qint64>(
+            0,
+            totalBucketCount
+                - TimelineVisibleBucketCount
+            );
+
+    if (maximumStartBucketIndex
+        <= std::numeric_limits<int>::max()) {
+        return static_cast<int>(
+            maximumStartBucketIndex
+            );
+    }
+
+    return TimelineScaledScrollMaximum;
+}
+
+qint64 timelineStartBucketIndex(
+    qint64 totalBucketCount,
+    int scrollValue
+    )
+{
+    const qint64 maximumStartBucketIndex =
+        std::max<qint64>(
+            0,
+            totalBucketCount
+                - TimelineVisibleBucketCount
+            );
+
+    if (maximumStartBucketIndex <= 0) {
+        return 0;
+    }
+
+    if (maximumStartBucketIndex
+        <= std::numeric_limits<int>::max()) {
+        return std::clamp<qint64>(
+            scrollValue,
+            0,
+            maximumStartBucketIndex
+            );
+    }
+
+    const int clampedScrollValue =
+        std::clamp(
+            scrollValue,
+            0,
+            TimelineScaledScrollMaximum
+            );
+
+    const long double fraction =
+        static_cast<long double>(
+            clampedScrollValue
+            )
+        / static_cast<long double>(
+            TimelineScaledScrollMaximum
+            );
+
+    return std::clamp<qint64>(
+        static_cast<qint64>(
+            std::llround(
+                fraction
+                * static_cast<long double>(
+                    maximumStartBucketIndex
+                    )
+                )
+            ),
+        0,
+        maximumStartBucketIndex
+        );
+}
+
+qint64 normalizedTimelineBucketEpoch(
+    const QDateTime &timestamp,
+    qint64 intervalMilliseconds
+    )
+{
+    const qint64 epochMilliseconds =
+        timestamp.toMSecsSinceEpoch();
+
+    qint64 remainder =
+        epochMilliseconds
+        % intervalMilliseconds;
+
+    if (remainder < 0) {
+        remainder +=
+            intervalMilliseconds;
+    }
+
+    return epochMilliseconds
+           - remainder;
+}
+
+QString timelineDisplayLabel(
+    const QString &canonicalLabel,
+    qint64 intervalMilliseconds
+    )
+{
+    /*
+     * Fine-resolution windows contain at most
+     * twenty adjacent buckets, so the surrounding
+     * visible-range label supplies the full date
+     * and time context.
+     */
+    if (intervalMilliseconds < 1000) {
+        /*
+         * HH:mm:ss.zzz -> ss.zzz
+         *
+         * This remains unique within a twenty
+         * bucket sub-second window.
+         */
+        return canonicalLabel.right(
+            6
+            );
+    }
+
+    /*
+     * Keep complete second-scale labels. Even a
+     * 30-second interval spans several minutes
+     * within a twenty-bucket window, so HH:mm:ss
+     * is useful context.
+     */
+    return canonicalLabel;
 }
 }
 
@@ -308,6 +580,45 @@ void MainWindow::loadLogFile(
     importWatcher =
         watcher;
 
+    const QString displayFileName =
+        QFileInfo(filePath)
+            .fileName();
+
+    auto *progressDialog =
+        new QProgressDialog(
+            tr(
+                "Importing %1...\n"
+                "Preparing import..."
+                )
+                .arg(
+                    displayFileName
+                    ),
+            tr("Cancel"),
+            0,
+            0,
+            this
+            );
+
+    progressDialog->setWindowTitle(
+        tr("Import Log File")
+        );
+
+    progressDialog->setWindowModality(
+        Qt::NonModal
+        );
+
+    progressDialog->setMinimumDuration(
+        500
+        );
+
+    progressDialog->setAutoClose(
+        false
+        );
+
+    progressDialog->setAutoReset(
+        false
+        );
+
     if (openAction != nullptr) {
         openAction->setEnabled(false);
     }
@@ -315,12 +626,71 @@ void MainWindow::loadLogFile(
     setAcceptDrops(false);
 
     connect(
+        progressDialog,
+        &QProgressDialog::canceled,
+        watcher,
+        &QFutureWatcher<ImportResult>::cancel
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<ImportResult>::
+        progressRangeChanged,
+        progressDialog,
+        &QProgressDialog::setRange
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<ImportResult>::
+        progressValueChanged,
+        progressDialog,
+        &QProgressDialog::setValue
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<ImportResult>::
+        progressTextChanged,
+        this,
+        [progressDialog, displayFileName](
+            const QString &progressText
+            ) {
+            QString label =
+                tr(
+                    "Importing %1..."
+                    )
+                    .arg(
+                        displayFileName
+                        );
+
+            if (!progressText.isEmpty()) {
+                label +=
+                    QStringLiteral("\n")
+                    + progressText;
+            }
+
+            progressDialog->setLabelText(
+                label
+                );
+        }
+        );
+
+    connect(
         watcher,
         &QFutureWatcher<ImportResult>::finished,
         this,
-        [this, watcher, filePath]() {
-            const ImportResult result =
-                watcher->result();
+        [
+            this,
+            watcher,
+            progressDialog,
+            filePath
+        ]() {
+            const bool cancelled =
+                watcher->isCanceled();
+
+            progressDialog->hide();
+            progressDialog->deleteLater();
 
             if (importWatcher == watcher) {
                 importWatcher =
@@ -333,6 +703,14 @@ void MainWindow::loadLogFile(
 
             setAcceptDrops(true);
 
+            if (cancelled) {
+                watcher->deleteLater();
+                return;
+            }
+
+            const ImportResult result =
+                watcher->result();
+
             watcher->deleteLater();
 
             completeLogFileImport(
@@ -344,9 +722,121 @@ void MainWindow::loadLogFile(
 
     watcher->setFuture(
         QtConcurrent::run(
-            [importer, filePath]() {
-                return importer->importFile(
-                    filePath
+            [
+                importer,
+                filePath
+            ](
+                QPromise<ImportResult> &promise
+            ) {
+                /*
+                 * Stay indeterminate until the
+                 * importer reports measurable
+                 * source progress.
+                 */
+                promise.setProgressRange(
+                    0,
+                    0
+                    );
+
+                bool determinateProgress =
+                    false;
+
+                ImportExecutionContext
+                    executionContext;
+
+                executionContext
+                    .isCancellationRequested =
+                    [&promise]() {
+                        return promise.isCanceled();
+                    };
+
+                executionContext.reportProgress =
+                    [
+                        &promise,
+                        &determinateProgress
+                    ](
+                        const ImportProgress &progress
+                    ) {
+                        if (progress.totalBytes <= 0) {
+                            return;
+                        }
+
+                        if (!determinateProgress) {
+                            promise.setProgressRange(
+                                0,
+                                100
+                                );
+
+                            determinateProgress =
+                                true;
+                        }
+
+                        const double percentageValue =
+                            100.0
+                            * static_cast<double>(
+                                progress.bytesProcessed
+                                )
+                            / static_cast<double>(
+                                progress.totalBytes
+                                );
+
+                        const int percentage =
+                            std::clamp(
+                                static_cast<int>(
+                                    percentageValue
+                                    ),
+                                0,
+                                100
+                                );
+
+                        const QString progressText =
+                            QStringLiteral(
+                                "%1 records processed"
+                                )
+                                .arg(
+                                    progress
+                                        .processedRecordCount
+                                    );
+
+                        promise
+                            .setProgressValueAndText(
+                                percentage,
+                                progressText
+                                );
+                    };
+
+                ImportResult result =
+                    importer->importFile(
+                        filePath,
+                        ILogImporter::
+                        UnlimitedRecordLimit,
+                        executionContext
+                        );
+
+                /*
+                 * A cancelled future intentionally
+                 * publishes no partial result.
+                 */
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                if (determinateProgress) {
+                    promise
+                        .setProgressValueAndText(
+                            100,
+                            QStringLiteral(
+                                "%1 records processed"
+                                )
+                                .arg(
+                                    result
+                                        .processedRecordCount
+                                    )
+                            );
+                }
+
+                promise.addResult(
+                    std::move(result)
                     );
             }
             )
@@ -358,14 +848,6 @@ void MainWindow::completeLogFileImport(
     const ImportResult &result
     )
 {
-    /*
-     * A cancelled import must never replace
-     * the currently loaded investigation with
-     * a partial result.
-     *
-     * Cancellation will be wired to the UI in
-     * the next Phase 7 slice.
-     */
     if (result.cancelled) {
         return;
     }
@@ -571,6 +1053,9 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
 void MainWindow::applyFilters()
 {
+    timelineScaleValid =
+        false;
+
     investigationController->setFilters(
         levelFilterCombo->currentData().toString(),
         subsystemFilterCombo->currentData().toString(),
@@ -977,21 +1462,366 @@ void MainWindow::exportFilteredResults()
 QGroupBox *MainWindow::buildTimelinePanel()
 {
     auto *timelineGroup =
-        new QGroupBox("Event Counts Over Time", this);
+        new QGroupBox(
+            tr("Event Counts Over Time"),
+            this
+            );
+
+    auto *timelineLayout =
+        new QVBoxLayout(
+            timelineGroup
+            );
+
+    timelineLayout->setContentsMargins(
+        4,
+        2,
+        4,
+        2
+        );
+
+    timelineLayout->setSpacing(
+        2
+        );
+
+    auto *controlsLayout =
+        new QHBoxLayout();
+
+    controlsLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    controlsLayout->setSpacing(
+        6
+        );
+
+    auto *intervalLabel =
+        new QLabel(
+            tr("Bucket size:"),
+            timelineGroup
+            );
+
+    timelineIntervalCombo =
+        new QComboBox(
+            timelineGroup
+            );
+
+    timelineIntervalCombo->addItem(
+        tr("Auto"),
+        QVariant::fromValue<qint64>(
+            0
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("1 ms"),
+        QVariant::fromValue<qint64>(
+            1
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("10 ms"),
+        QVariant::fromValue<qint64>(
+            10
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("100 ms"),
+        QVariant::fromValue<qint64>(
+            100
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("500 ms"),
+        QVariant::fromValue<qint64>(
+            500
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("1 second"),
+        QVariant::fromValue<qint64>(
+            1 * MillisecondsPerSecond
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("5 seconds"),
+        QVariant::fromValue<qint64>(
+            5 * MillisecondsPerSecond
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("15 seconds"),
+        QVariant::fromValue<qint64>(
+            15 * MillisecondsPerSecond
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("30 seconds"),
+        QVariant::fromValue<qint64>(
+            30 * MillisecondsPerSecond
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("1 minute"),
+        QVariant::fromValue<qint64>(
+            1 * MillisecondsPerMinute
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("5 minutes"),
+        QVariant::fromValue<qint64>(
+            5 * MillisecondsPerMinute
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("15 minutes"),
+        QVariant::fromValue<qint64>(
+            15 * MillisecondsPerMinute
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("30 minutes"),
+        QVariant::fromValue<qint64>(
+            30 * MillisecondsPerMinute
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("1 hour"),
+        QVariant::fromValue<qint64>(
+            1 * MillisecondsPerHour
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("3 hours"),
+        QVariant::fromValue<qint64>(
+            3 * MillisecondsPerHour
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("6 hours"),
+        QVariant::fromValue<qint64>(
+            6 * MillisecondsPerHour
+            )
+        );
+
+    timelineIntervalCombo->addItem(
+        tr("1 day"),
+        QVariant::fromValue<qint64>(
+            1 * MillisecondsPerDay
+            )
+        );
+
+    int intervalPopupWidth = 0;
+
+    for (int index = 0;
+         index < timelineIntervalCombo->count();
+         ++index) {
+        intervalPopupWidth =
+            std::max(
+                intervalPopupWidth,
+                timelineIntervalCombo
+                    ->fontMetrics()
+                    .horizontalAdvance(
+                        timelineIntervalCombo
+                            ->itemText(index)
+                        )
+                );
+    }
+
+    timelineIntervalCombo
+        ->view()
+        ->setMinimumWidth(
+            intervalPopupWidth + 40
+            );
+
+    timelineIntervalCombo->setToolTip(
+        tr(
+            "Auto chooses a readable interval for "
+            "the complete investigation. Selecting "
+            "a specific interval preserves that "
+            "resolution and lets you navigate "
+            "through the timeline horizontally."
+            )
+        );
+
+    controlsLayout->addWidget(
+        intervalLabel
+        );
+
+    controlsLayout->addWidget(
+        timelineIntervalCombo
+        );
+
+    timelineRangeLabel =
+        new QLabel(
+            tr("Visible: —"),
+            timelineGroup
+            );
+
+    timelineRangeLabel
+        ->setTextInteractionFlags(
+            Qt::TextSelectableByMouse
+            );
+
+    timelineRangeLabel->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Preferred
+        );
+
+    controlsLayout->addSpacing(
+        12
+        );
+
+    controlsLayout->addWidget(
+        timelineRangeLabel,
+        1
+        );
+
+    timelineLayout->addLayout(
+        controlsLayout
+        );
 
     timelineChartView->setSizePolicy(
         QSizePolicy::Expanding,
-        QSizePolicy::Expanding
+        QSizePolicy::Ignored
         );
 
-    timelineChartView->setMinimumHeight(190);
-    timelineChartView->setRenderHint(QPainter::Antialiasing);
+    timelineChartView->setMinimumHeight(
+        0
+        );
 
-    timelineChartView->setAcceptDrops(false);
-    timelineChartView->viewport()->setAcceptDrops(false);
+    timelineChartView->setFrameShape(
+        QFrame::NoFrame
+        );
 
-    auto *timelineLayout = new QVBoxLayout(timelineGroup);
-    timelineLayout->addWidget(timelineChartView);
+    timelineChartView->setRenderHint(
+        QPainter::Antialiasing
+        );
+
+    timelineChartView
+        ->setHorizontalScrollBarPolicy(
+            Qt::ScrollBarAlwaysOff
+            );
+
+    timelineChartView
+        ->setVerticalScrollBarPolicy(
+            Qt::ScrollBarAlwaysOff
+            );
+
+    timelineChartView->setAcceptDrops(
+        false
+        );
+
+    timelineChartView
+        ->viewport()
+        ->setAcceptDrops(
+            false
+            );
+
+    timelineLayout->addWidget(
+        timelineChartView,
+        1
+        );
+
+    timelineScrollBar =
+        new QScrollBar(
+            Qt::Horizontal,
+            timelineGroup
+            );
+
+    timelineScrollBar->setVisible(
+        false
+        );
+
+    timelineScrollBar->setSingleStep(
+        1
+        );
+
+    /*
+     * Fine-resolution windows may require scanning
+     * a large record collection. Do not redraw the
+     * chart continuously while the user drags the
+     * scrollbar thumb.
+     */
+    timelineScrollBar->setTracking(
+        false
+        );
+
+    timelineLayout->addWidget(
+        timelineScrollBar
+        );
+
+    connect(
+        timelineScrollBar,
+        &QScrollBar::valueChanged,
+        this,
+        [this](int) {
+            const QVector<InvestigationRecord>
+                visibleRecords =
+                investigationController
+                    ->visibleRecords();
+
+            updateTimelineChart(
+                visibleRecords
+                );
+        }
+        );
+
+    connect(
+        timelineScrollBar,
+        &QScrollBar::sliderMoved,
+        this,
+        [this](int value) {
+            updateTimelineRangeLabel(
+                value
+                );
+        }
+        );
+
+    connect(
+        timelineIntervalCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            timelineScaleValid =
+                false;
+
+            if (timelineScrollBar != nullptr) {
+                const QSignalBlocker blocker(
+                    timelineScrollBar
+                    );
+
+                timelineScrollBar->setValue(
+                    0
+                    );
+            }
+
+            const QVector<InvestigationRecord>
+                visibleRecords =
+                investigationController
+                    ->visibleRecords();
+
+            updateTimelineChart(
+                visibleRecords
+                );
+        }
+        );
 
     return timelineGroup;
 }
@@ -1000,60 +1830,338 @@ void MainWindow::updateTimelineChart(
     const QVector<InvestigationRecord> &records
     )
 {
-    if (!timelineFirstMinute.has_value()
-        || !timelineLastMinute.has_value()) {
-        auto *chart = new QChart();
+    auto showEmptyTimeline =
+        [this]() {
+            if (timelineScrollBar != nullptr) {
+                const QSignalBlocker blocker(
+                    timelineScrollBar
+                    );
 
-        chart->setTitle(
-            "No events to display"
-            );
+                timelineScrollBar->setRange(
+                    0,
+                    0
+                    );
 
-        timelineChartView->setChart(
-            chart
-            );
+                timelineScrollBar->setValue(
+                    0
+                    );
 
+                timelineScrollBar->setVisible(
+                    false
+                    );
+            }
+
+            if (timelineRangeLabel != nullptr) {
+                timelineRangeLabel->setText(
+                    tr("Visible: —")
+                    );
+            }
+
+            auto *chart =
+                new QChart();
+
+            chart->setMargins(
+                QMargins(
+                    0,
+                    0,
+                    0,
+                    0
+                    )
+                );
+
+            chart->setTitle(
+                tr("No events to display")
+                );
+
+            timelineChartView->setChart(
+                chart
+                );
+        };
+
+    /*
+     * A timeline cannot be generated unless the
+     * complete investigation has valid temporal
+     * boundaries.
+     */
+    if (!timelineFirstTimestamp.has_value()
+        || !timelineLastTimestamp.has_value()) {
+        showEmptyTimeline();
         return;
     }
 
-    const auto buckets =
-        timelineAnalyzer.groupRecordsByMinute(
-            records,
-            *timelineFirstMinute,
-            *timelineLastMinute
-            );
+    /*
+     * Zero represents Auto. Every explicit combo
+     * value is stored in milliseconds.
+     */
+    const qint64 requestedIntervalMilliseconds =
+        timelineIntervalCombo != nullptr
+            ? timelineIntervalCombo
+                  ->currentData()
+                  .toLongLong()
+            : 0;
+
+    const bool automaticInterval =
+        requestedIntervalMilliseconds <= 0;
+
+    const qint64 intervalMilliseconds =
+        automaticInterval
+            ? automaticTimelineIntervalMilliseconds(
+                  *timelineFirstTimestamp,
+                  *timelineLastTimestamp
+                  )
+            : requestedIntervalMilliseconds;
+
+    if (intervalMilliseconds <= 0) {
+        showEmptyTimeline();
+        return;
+    }
+
+    /*
+     * Calculate a stable Y-axis maximum for the
+     * complete currently filtered investigation.
+     *
+     * This result is cached because moving the
+     * horizontal timeline window must not require
+     * rescanning every visible record.
+     */
+    if (!timelineScaleValid
+        || timelineScaleIntervalMilliseconds
+               != intervalMilliseconds) {
+        const EventTimelineScale scale =
+            timelineAnalyzer
+                .scaleForIntervalMilliseconds(
+                    records,
+                    *timelineFirstTimestamp,
+                    *timelineLastTimestamp,
+                    intervalMilliseconds
+                    );
+
+        timelineScaleMaximum =
+            std::max(
+                1,
+                hasSeverityData
+                    ? scale.maximumSeriesCount
+                    : scale.maximumTotalCount
+                );
+
+        timelineScaleIntervalMilliseconds =
+            intervalMilliseconds;
+
+        timelineScaleValid =
+            true;
+    }
+
+    /*
+     * Determine how many logical buckets exist
+     * across the complete investigation without
+     * actually materializing all of them.
+     */
+    const qint64 totalBucketCount =
+        timelineAnalyzer
+            .intervalBucketCountMilliseconds(
+                *timelineFirstTimestamp,
+                *timelineLastTimestamp,
+                intervalMilliseconds
+                );
+
+    if (totalBucketCount <= 0) {
+        showEmptyTimeline();
+        return;
+    }
+
+    QVector<EventCountBucket> buckets;
+
+    if (automaticInterval) {
+        /*
+         * Auto selects a resolution intended to
+         * keep the complete overview compact, so
+         * materializing its complete bucket set is
+         * safe.
+         */
+        buckets =
+            timelineAnalyzer
+                .groupRecordsByIntervalMilliseconds(
+                    records,
+                    *timelineFirstTimestamp,
+                    *timelineLastTimestamp,
+                    intervalMilliseconds
+                    );
+
+        if (timelineScrollBar != nullptr) {
+            const QSignalBlocker blocker(
+                timelineScrollBar
+                );
+
+            timelineScrollBar->setRange(
+                0,
+                0
+                );
+
+            timelineScrollBar->setValue(
+                0
+                );
+
+            timelineScrollBar->setVisible(
+                false
+                );
+        }
+    } else {
+        /*
+         * Explicit resolutions preserve the
+         * selected detail level. Only the current
+         * visible window is materialized.
+         */
+        const qint64 maximumStartBucketIndex =
+            std::max<qint64>(
+                0,
+                totalBucketCount
+                    - TimelineVisibleBucketCount
+                );
+
+        const int scrollMaximum =
+            timelineScrollMaximum(
+                totalBucketCount
+                );
+
+        int scrollValue = 0;
+
+        if (timelineScrollBar != nullptr) {
+            scrollValue =
+                std::clamp(
+                    timelineScrollBar->value(),
+                    0,
+                    scrollMaximum
+                    );
+
+            int pageStep = 1;
+
+            /*
+             * When every scrollbar position maps
+             * directly to one logical bucket, make
+             * Page Up/Down move approximately one
+             * visible window.
+             */
+            if (maximumStartBucketIndex
+                <= std::numeric_limits<int>::max()) {
+                pageStep =
+                    std::max(
+                        1,
+                        std::min(
+                            TimelineVisibleBucketCount,
+                            std::max(
+                                1,
+                                scrollMaximum
+                                )
+                            )
+                        );
+            } else if (scrollMaximum > 0) {
+                /*
+                 * Extremely large logical ranges
+                 * use a scaled integer scrollbar.
+                 */
+                const long double pageFraction =
+                    static_cast<long double>(
+                        TimelineVisibleBucketCount
+                        )
+                    / static_cast<long double>(
+                        totalBucketCount
+                        );
+
+                pageStep =
+                    std::max(
+                        1,
+                        static_cast<int>(
+                            std::llround(
+                                static_cast<long double>(
+                                    scrollMaximum
+                                    )
+                                * pageFraction
+                                )
+                            )
+                        );
+            }
+
+            {
+                const QSignalBlocker blocker(
+                    timelineScrollBar
+                    );
+
+                timelineScrollBar->setRange(
+                    0,
+                    scrollMaximum
+                    );
+
+                timelineScrollBar->setSingleStep(
+                    1
+                    );
+
+                timelineScrollBar->setPageStep(
+                    pageStep
+                    );
+
+                timelineScrollBar->setValue(
+                    scrollValue
+                    );
+            }
+
+            timelineScrollBar->setVisible(
+                maximumStartBucketIndex > 0
+                );
+        }
+
+        const qint64 startBucketIndex =
+            timelineStartBucketIndex(
+                totalBucketCount,
+                scrollValue
+                );
+
+        /*
+         * Only the visible window is constructed.
+         * A multi-hour 1-ms investigation can
+         * therefore contain millions of logical
+         * buckets without millions of chart
+         * objects being allocated.
+         */
+        buckets =
+            timelineAnalyzer
+                .groupRecordsByIntervalWindowMilliseconds(
+                    records,
+                    *timelineFirstTimestamp,
+                    *timelineLastTimestamp,
+                    intervalMilliseconds,
+                    startBucketIndex,
+                    TimelineVisibleBucketCount
+                    );
+    }
 
     if (buckets.isEmpty()) {
-        auto *chart = new QChart();
-        chart->setTitle("No events to display");
-        timelineChartView->setChart(chart);
+        showEmptyTimeline();
         return;
     }
 
-    const bool showSeveritySeries =
-        hasSeverityData;
-
-    if (!showSeveritySeries) {
+    /*
+     * When severity is unavailable, render one
+     * TOTAL series.
+     */
+    if (!hasSeverityData) {
         auto *totalSet =
             new QBarSet(
-                "TOTAL"
+                tr("TOTAL")
                 );
 
         QStringList categories;
 
-        int maxCount = 1;
-
         for (const EventCountBucket &bucket
-             : buckets) {
-            categories << bucket.label;
+             : std::as_const(buckets)) {
+            categories.append(
+                timelineDisplayLabel(
+                    bucket.label,
+                    intervalMilliseconds
+                    )
+                );
 
             *totalSet
                 << bucket.totalCount();
-
-            maxCount =
-                std::max(
-                    maxCount,
-                    bucket.totalCount()
-                    );
         }
 
         auto *series =
@@ -1066,12 +2174,17 @@ void MainWindow::updateTimelineChart(
         auto *chart =
             new QChart();
 
-        chart->addSeries(
-            series
+        chart->setMargins(
+            QMargins(
+                0,
+                0,
+                0,
+                0
+                )
             );
 
-        chart->setTitle(
-            "Filtered Event Counts by Minute"
+        chart->addSeries(
+            series
             );
 
         chart->setAnimationOptions(
@@ -1079,9 +2192,8 @@ void MainWindow::updateTimelineChart(
             );
 
         /*
-     * A single TOTAL series does not need a
-     * legend explaining what the only bar means.
-     */
+         * A single TOTAL series needs no legend.
+         */
         chart->legend()->setVisible(
             false
             );
@@ -1091,6 +2203,10 @@ void MainWindow::updateTimelineChart(
 
         axisX->append(
             categories
+            );
+
+        axisX->setTruncateLabels(
+            false
             );
 
         chart->addAxis(
@@ -1105,9 +2221,14 @@ void MainWindow::updateTimelineChart(
         auto *axisY =
             new QValueAxis();
 
+        /*
+         * Use the maximum calculated from the
+         * complete filtered investigation, not
+         * only this horizontal window.
+         */
         configureEventCountAxis(
             axisY,
-            maxCount
+            timelineScaleMaximum
             );
 
         chart->addAxis(
@@ -1123,49 +2244,82 @@ void MainWindow::updateTimelineChart(
             chart
             );
 
+        updateTimelineRangeLabel(
+            timelineScrollBar != nullptr
+                ? timelineScrollBar->value()
+                : 0
+            );
+
         return;
     }
 
+    /*
+     * Severity-aware timeline.
+     */
     auto *traceSet =
-        new QBarSet("TRACE");
+        new QBarSet(
+            tr("TRACE")
+            );
 
     auto *debugSet =
-        new QBarSet("DEBUG");
+        new QBarSet(
+            tr("DEBUG")
+            );
 
     auto *infoSet =
-        new QBarSet("INFO");
+        new QBarSet(
+            tr("INFO")
+            );
 
     auto *warnSet =
-        new QBarSet("WARN");
+        new QBarSet(
+            tr("WARN")
+            );
 
     auto *errorSet =
-        new QBarSet("ERROR");
+        new QBarSet(
+            tr("ERROR")
+            );
 
     auto *criticalSet =
-        new QBarSet("CRITICAL");
+        new QBarSet(
+            tr("CRITICAL")
+            );
 
-    bool hasUnspecifiedEvents = false;
+    bool hasUnspecifiedEvents =
+        false;
 
-    for (const EventCountBucket &bucket : buckets) {
+    for (const EventCountBucket &bucket
+         : std::as_const(buckets)) {
         if (bucket.unspecifiedCount > 0) {
-            hasUnspecifiedEvents = true;
+            hasUnspecifiedEvents =
+                true;
+
             break;
         }
     }
 
-    QBarSet *unspecifiedSet = nullptr;
+    QBarSet *unspecifiedSet =
+        nullptr;
 
     if (hasUnspecifiedEvents) {
         unspecifiedSet =
             new QBarSet(
-                "UNSPECIFIED"
+                tr("UNSPECIFIED")
                 );
     }
 
     QStringList categories;
 
-    for (const EventCountBucket &bucket : buckets) {
-        categories << bucket.label;
+    for (const EventCountBucket &bucket
+         : std::as_const(buckets)) {
+        categories.append(
+            timelineDisplayLabel(
+                bucket.label,
+                intervalMilliseconds
+                )
+            );
+
         *traceSet
             << bucket.traceCount;
 
@@ -1190,13 +2344,32 @@ void MainWindow::updateTimelineChart(
         }
     }
 
-    auto *series = new QBarSeries();
-    series->append(traceSet);
-    series->append(debugSet);
-    series->append(infoSet);
-    series->append(warnSet);
-    series->append(errorSet);
-    series->append(criticalSet);
+    auto *series =
+        new QBarSeries();
+
+    series->append(
+        traceSet
+        );
+
+    series->append(
+        debugSet
+        );
+
+    series->append(
+        infoSet
+        );
+
+    series->append(
+        warnSet
+        );
+
+    series->append(
+        errorSet
+        );
+
+    series->append(
+        criticalSet
+        );
 
     if (unspecifiedSet != nullptr) {
         series->append(
@@ -1204,68 +2377,85 @@ void MainWindow::updateTimelineChart(
             );
     }
 
-    auto *chart = new QChart();
-    chart->addSeries(series);
-    chart->setTitle("Filtered Event Counts by Minute");
-    chart->setAnimationOptions(QChart::NoAnimation);
-    chart->legend()->setAlignment(Qt::AlignBottom);
+    auto *chart =
+        new QChart();
 
-    auto *axisX = new QBarCategoryAxis();
-    axisX->append(categories);
-    chart->addAxis(axisX, Qt::AlignBottom);
-    series->attachAxis(axisX);
+    chart->setMargins(
+        QMargins(
+            0,
+            0,
+            0,
+            0
+            )
+        );
 
-    auto *axisY = new QValueAxis();
+    chart->addSeries(
+        series
+        );
 
-    int maxCount = 1;
+    chart->setAnimationOptions(
+        QChart::NoAnimation
+        );
 
-    for (const EventCountBucket &bucket : buckets) {
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.traceCount
-                );
+    /*
+     * Keep the severity key beneath the chart.
+     * The timeline panel is too short for all
+     * severity values to fit reliably in a
+     * right-hand vertical legend.
+     */
+    QLegend *legend =
+        chart->legend();
 
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.debugCount
-                );
+    legend->setAlignment(
+        Qt::AlignBottom
+        );
 
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.infoCount
-                );
+    legend->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
 
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.warningCount
-                );
-
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.errorCount
-                );
-
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.criticalCount
-                );
-
-        maxCount =
-            std::max(
-                maxCount,
-                bucket.unspecifiedCount
-                );
+    if (legend->layout() != nullptr) {
+        legend->layout()
+        ->setContentsMargins(
+            0,
+            0,
+            0,
+            0
+            );
     }
 
+    auto *axisX =
+        new QBarCategoryAxis();
+
+    axisX->append(
+        categories
+        );
+
+    axisX->setTruncateLabels(
+        false
+        );
+
+    chart->addAxis(
+        axisX,
+        Qt::AlignBottom
+        );
+
+    series->attachAxis(
+        axisX
+        );
+
+    auto *axisY =
+        new QValueAxis();
+
+    /*
+     * Keep the Y-axis scale fixed while scrolling.
+     */
     configureEventCountAxis(
         axisY,
-        maxCount
+        timelineScaleMaximum
         );
 
     chart->addAxis(
@@ -1279,6 +2469,12 @@ void MainWindow::updateTimelineChart(
 
     timelineChartView->setChart(
         chart
+        );
+
+    updateTimelineRangeLabel(
+        timelineScrollBar != nullptr
+            ? timelineScrollBar->value()
+            : 0
         );
 }
 
@@ -1328,13 +2524,198 @@ void MainWindow::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
 }
 
+void MainWindow::updateTimelineRangeLabel(
+    int scrollValue
+    )
+{
+    if (timelineRangeLabel == nullptr) {
+        return;
+    }
+
+    if (!timelineFirstTimestamp.has_value()
+        || !timelineLastTimestamp.has_value()) {
+        timelineRangeLabel->setText(
+            tr("Visible: —")
+            );
+
+        return;
+    }
+
+    const qint64 requestedIntervalMilliseconds =
+        timelineIntervalCombo != nullptr
+            ? timelineIntervalCombo
+                  ->currentData()
+                  .toLongLong()
+            : 0;
+
+    const bool automaticInterval =
+        requestedIntervalMilliseconds <= 0;
+
+    const qint64 intervalMilliseconds =
+        automaticInterval
+            ? automaticTimelineIntervalMilliseconds(
+                  *timelineFirstTimestamp,
+                  *timelineLastTimestamp
+                  )
+            : requestedIntervalMilliseconds;
+
+    if (intervalMilliseconds <= 0) {
+        timelineRangeLabel->setText(
+            tr("Visible: —")
+            );
+
+        return;
+    }
+
+    const qint64 totalBucketCount =
+        timelineAnalyzer
+            .intervalBucketCountMilliseconds(
+                *timelineFirstTimestamp,
+                *timelineLastTimestamp,
+                intervalMilliseconds
+                );
+
+    if (totalBucketCount <= 0) {
+        timelineRangeLabel->setText(
+            tr("Visible: —")
+            );
+
+        return;
+    }
+
+    qint64 startBucketIndex = 0;
+    qint64 visibleBucketCount =
+        totalBucketCount;
+
+    if (!automaticInterval) {
+        startBucketIndex =
+            timelineStartBucketIndex(
+                totalBucketCount,
+                scrollValue
+                );
+
+        visibleBucketCount =
+            std::min<qint64>(
+                TimelineVisibleBucketCount,
+                totalBucketCount
+                    - startBucketIndex
+                );
+    }
+
+    const qint64 firstBucketEpoch =
+        normalizedTimelineBucketEpoch(
+            *timelineFirstTimestamp,
+            intervalMilliseconds
+            );
+
+    const qint64 visibleFirstEpoch =
+        firstBucketEpoch
+        + startBucketIndex
+              * intervalMilliseconds;
+
+    qint64 visibleLastEpoch =
+        visibleFirstEpoch
+        + visibleBucketCount
+              * intervalMilliseconds
+        - 1;
+
+    visibleLastEpoch =
+        std::min(
+            visibleLastEpoch,
+            timelineLastTimestamp
+                ->toMSecsSinceEpoch()
+            );
+
+    const QDateTime visibleFirst =
+        QDateTime::fromMSecsSinceEpoch(
+            visibleFirstEpoch,
+            QTimeZone::UTC
+            );
+
+    const QDateTime visibleLast =
+        QDateTime::fromMSecsSinceEpoch(
+            visibleLastEpoch,
+            QTimeZone::UTC
+            );
+
+    QString firstText;
+    QString lastText;
+
+    if (intervalMilliseconds < 1000) {
+        firstText =
+            visibleFirst.toString(
+                QStringLiteral(
+                    "yyyy-MM-dd HH:mm:ss.zzz"
+                    )
+                );
+
+        if (visibleFirst.date()
+            == visibleLast.date()) {
+            lastText =
+                visibleLast.toString(
+                    QStringLiteral(
+                        "HH:mm:ss.zzz"
+                        )
+                    );
+        } else {
+            lastText =
+                visibleLast.toString(
+                    QStringLiteral(
+                        "yyyy-MM-dd HH:mm:ss.zzz"
+                        )
+                    );
+        }
+    } else {
+        firstText =
+            visibleFirst.toString(
+                QStringLiteral(
+                    "yyyy-MM-dd HH:mm:ss"
+                    )
+                );
+
+        if (visibleFirst.date()
+            == visibleLast.date()) {
+            lastText =
+                visibleLast.toString(
+                    QStringLiteral(
+                        "HH:mm:ss"
+                        )
+                    );
+        } else {
+            lastText =
+                visibleLast.toString(
+                    QStringLiteral(
+                        "yyyy-MM-dd HH:mm:ss"
+                        )
+                    );
+        }
+    }
+
+    const QString rangeText =
+        tr("Visible: %1 – %2 UTC")
+            .arg(
+                firstText,
+                lastText
+                );
+
+    timelineRangeLabel->setText(
+        rangeText
+        );
+
+    if (timelineScrollBar != nullptr) {
+        timelineScrollBar->setToolTip(
+            rangeText
+            );
+    }
+}
+
 void MainWindow::updateDataCapabilities()
 {
     hasSeverityData = false;
     hasSubsystemData = false;
 
-    timelineFirstMinute.reset();
-    timelineLastMinute.reset();
+    timelineFirstTimestamp.reset();
+    timelineLastTimestamp.reset();
 
     const QVector<InvestigationRecord> &records =
         investigationController->allRecords();
@@ -1353,28 +2734,25 @@ void MainWindow::updateDataCapabilities()
             continue;
         }
 
-        QDateTime minute =
+        const QDateTime timestamp =
             record.timestamp->toUTC();
 
-        minute.setTime(
-            QTime(
-                minute.time().hour(),
-                minute.time().minute()
-                )
-            );
-
-        if (!timelineFirstMinute.has_value()
-            || minute <
-                   *timelineFirstMinute) {
-            timelineFirstMinute =
-                minute;
+        if (!timestamp.isValid()) {
+            continue;
         }
 
-        if (!timelineLastMinute.has_value()
-            || minute >
-                   *timelineLastMinute) {
-            timelineLastMinute =
-                minute;
+        if (!timelineFirstTimestamp.has_value()
+            || timestamp
+                   < *timelineFirstTimestamp) {
+            timelineFirstTimestamp =
+                timestamp;
+        }
+
+        if (!timelineLastTimestamp.has_value()
+            || timestamp
+                   > *timelineLastTimestamp) {
+            timelineLastTimestamp =
+                timestamp;
         }
     }
 

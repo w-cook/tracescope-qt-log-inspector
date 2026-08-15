@@ -28,6 +28,7 @@ class QDragEnterEvent;
 class QDropEvent;
 class QTimer;
 class QAction;
+class QScrollBar;
 
 class MainWindow : public QMainWindow
 {
@@ -72,8 +73,26 @@ private:
     bool hasSeverityData = false;
     bool hasSubsystemData = false;
 
-    std::optional<QDateTime> timelineFirstMinute;
-    std::optional<QDateTime> timelineLastMinute;
+    std::optional<QDateTime> timelineFirstTimestamp;
+    std::optional<QDateTime> timelineLastTimestamp;
+
+    QComboBox *timelineIntervalCombo =
+        nullptr;
+
+    QScrollBar *timelineScrollBar =
+        nullptr;
+
+    QLabel *timelineRangeLabel =
+        nullptr;
+
+    bool timelineScaleValid =
+        false;
+
+    qint64 timelineScaleIntervalMilliseconds =
+        0;
+
+    int timelineScaleMaximum =
+        1;
 
     QString currentFilePath;
 
@@ -120,6 +139,10 @@ private:
     QGroupBox *buildTimelinePanel();
     void updateTimelineChart(
         const QVector<InvestigationRecord> &records
+        );
+
+    void updateTimelineRangeLabel(
+        int scrollValue
         );
 
     void updateDataCapabilities();

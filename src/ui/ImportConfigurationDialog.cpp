@@ -27,6 +27,7 @@
 #include <QSaveFile>
 #include <QTimer>
 #include <QFile>
+#include <QtConcurrentRun>
 
 #include <memory>
 #include <utility>
@@ -48,6 +49,23 @@ QString customFieldMappingKey(
            + mapping.sourcePath
                  .trimmed()
                  .toCaseFolded();
+}
+
+constexpr qint64
+    AutomaticStructuredJsonPreviewMaxBytes =
+    16 * 1024 * 1024;
+
+bool requiresManualStructuredJsonPreview(
+    const QFileInfo &fileInfo,
+    const ImportProfile &profile
+    )
+{
+    return profile.importerId
+               == QStringLiteral(
+                   "structured-json"
+                   )
+           && fileInfo.size()
+                  > AutomaticStructuredJsonPreviewMaxBytes;
 }
 }
 
@@ -78,6 +96,12 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
         ),
     rawSourcePreview(
         new QPlainTextEdit(this)
+        ),
+    refreshPreviewButton(
+        new QPushButton(
+            tr("Refresh Preview"),
+            this
+            )
         ),
     profileNameEdit(
         new QLineEdit(this)
@@ -716,8 +740,24 @@ void ImportConfigurationDialog::buildLayout()
 
     previewSummaryLabel->setWordWrap(true);
 
-    previewLayout->addWidget(
-        previewSummaryLabel
+    auto *previewHeaderLayout =
+        new QHBoxLayout();
+
+    previewHeaderLayout->addWidget(
+        previewSummaryLabel,
+        1
+        );
+
+    previewHeaderLayout->addWidget(
+        refreshPreviewButton
+        );
+
+    previewLayout->addLayout(
+        previewHeaderLayout
+        );
+
+    refreshPreviewButton->setVisible(
+        false
         );
 
     previewTable->setColumnCount(7);
@@ -1110,6 +1150,15 @@ void ImportConfigurationDialog::buildLayout()
         );
 
     connect(
+        refreshPreviewButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            startManualPreview();
+        }
+        );
+
+    connect(
         recordPathEdit,
         &QLineEdit::textChanged,
         this,
@@ -1267,6 +1316,13 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
 
     if (!fileInfo.exists()
         || !fileInfo.isFile()) {
+        return;
+    }
+
+    if (requiresManualStructuredJsonPreview(
+            fileInfo,
+            workingProfile
+            )) {
         return;
     }
 
@@ -1580,409 +1636,45 @@ void ImportConfigurationDialog::updatePreview()
         return;
     }
 
-    const ImportPreviewResult preview =
-        previewService.previewFile(
-            filePath,
+    const bool requiresManualPreview =
+        requiresManualStructuredJsonPreview(
+            fileInfo,
             workingProfile
             );
 
-    if (!preview.errorMessage.isEmpty()) {
+    refreshPreviewButton->setVisible(
+        requiresManualPreview
+        );
+
+    if (requiresManualPreview) {
         clearPreview(
-            tr("Preview unavailable: %1")
+            tr(
+                "Automatic preview is disabled for "
+                "large structured JSON documents because "
+                "previewing requires parsing the complete "
+                "document. Import configuration remains "
+                "available. Click Refresh Preview to "
+                "generate the first %1 processed records "
+                "in the background."
+                )
                 .arg(
-                    preview.errorMessage
+                    ImportPreviewService::
+                    DefaultMaxProcessedRecords
                     )
             );
 
         return;
     }
 
-    const QVector<InvestigationRecord> &records =
-        preview.importResult.records;
-
-    previewSourcePath =
-        filePath;
-
-    const bool showTimestamp =
-        !workingProfile
-             .canonicalFields
-             .timestampPath
-             .trimmed()
-             .isEmpty();
-
-    const bool showSeverity =
-        !workingProfile
-             .canonicalFields
-             .severityPath
-             .trimmed()
-             .isEmpty();
-
-    const bool showSubsystem =
-        !workingProfile
-             .canonicalFields
-             .subsystemPath
-             .trimmed()
-             .isEmpty();
-
-    const bool showEventCode =
-        !workingProfile
-             .canonicalFields
-             .eventCodePath
-             .trimmed()
-             .isEmpty();
-
-    const bool showEntityId =
-        !workingProfile
-             .canonicalFields
-             .entityIdPath
-             .trimmed()
-             .isEmpty();
-
-    const bool showMessage =
-        !workingProfile
-             .canonicalFields
-             .messagePath
-             .trimmed()
-             .isEmpty();
-
-    QStringList headers;
-
-    if (showTimestamp) {
-        headers.append(
-            tr("Timestamp")
-            );
-    }
-
-    if (showSeverity) {
-        headers.append(
-            tr("Severity")
-            );
-    }
-
-    if (showSubsystem) {
-        headers.append(
-            tr("Subsystem")
-            );
-    }
-
-    if (showEventCode) {
-        headers.append(
-            tr("Event Code")
-            );
-    }
-
-    if (showEntityId) {
-        headers.append(
-            tr("Entity ID")
-            );
-    }
-
-    if (showMessage) {
-        headers.append(
-            tr("Message")
-            );
-    }
-
-    const int canonicalColumnCount =
-        headers.size();
-
-    QSet<QString> mappedCustomFieldNames;
-
-    for (const CustomFieldMapping &mapping
-         : std::as_const(
-             workingProfile.customFields
-             )) {
-        headers.append(
-            mapping.name
+    const ImportPreviewResult preview =
+        previewService.previewFile(
+            filePath,
+            workingProfile
             );
 
-        mappedCustomFieldNames.insert(
-            mapping.name
-            );
-    }
-
-    headers.append(
-        tr("Unmapped Custom Fields")
-        );
-
-    const int previousColumnCount =
-        previewTable->columnCount();
-
-    previewTable->clearContents();
-
-    previewTable->setColumnCount(
-        headers.size()
-        );
-
-    previewTable->setHorizontalHeaderLabels(
-        headers
-        );
-
-    QHeaderView *previewHeader =
-        previewTable->horizontalHeader();
-
-    previewHeader->setStretchLastSection(false);
-
-    for (
-        int column = 0;
-        column < headers.size();
-        ++column
-        ) {
-        previewHeader->setSectionResizeMode(
-            column,
-            QHeaderView::Interactive
-            );
-    }
-
-    if (previousColumnCount
-        != headers.size()) {
-        for (
-            int column =
-            canonicalColumnCount;
-            column < headers.size() - 1;
-            ++column
-            ) {
-            previewTable->setColumnWidth(
-                column,
-                140
-                );
-        }
-
-        if (!headers.isEmpty()) {
-            previewTable->setColumnWidth(
-                headers.size() - 1,
-                220
-                );
-        }
-    }
-
-    previewTable->setRowCount(
-        records.size()
-        );
-
-    for (int row = 0;
-         row < records.size();
-         ++row) {
-        const InvestigationRecord &record =
-            records.at(row);
-
-        const QString timestamp =
-            record.timestamp.has_value()
-                ? record.timestamp
-                      ->toString(
-                          Qt::ISODateWithMs
-                          )
-                : QString();
-
-        const QString severity =
-            record.severity.has_value()
-                ? recordSeverityToString(
-                      record.severity.value()
-                      )
-                : QString();
-
-        const QString subsystem =
-            record.subsystem.value_or(
-                QString()
-                );
-
-        const QString eventCode =
-            record.eventCode.value_or(
-                QString()
-                );
-
-        const QString entityId =
-            record.entityId.value_or(
-                QString()
-                );
-
-        const QString message =
-            record.message.value_or(
-                QString()
-                );
-
-        QStringList mappedCustomValues;
-
-        for (const CustomFieldMapping &mapping
-             : std::as_const(
-                 workingProfile.customFields
-                 )) {
-            const auto iterator =
-                record.customAttributes.constFind(
-                    mapping.name
-                    );
-
-            if (iterator ==
-                record.customAttributes.constEnd()) {
-                mappedCustomValues.append(
-                    QString()
-                    );
-
-                continue;
-            }
-
-            mappedCustomValues.append(
-                iterator.value().toString()
-                );
-        }
-
-        QStringList unmappedFieldValues;
-
-        QStringList attributeNames =
-            record.customAttributes.keys();
-
-        attributeNames.sort(
-            Qt::CaseInsensitive
-            );
-
-        for (const QString &name
-             : std::as_const(
-                 attributeNames
-                 )) {
-            if (mappedCustomFieldNames.contains(
-                    name
-                    )) {
-                continue;
-            }
-
-            unmappedFieldValues.append(
-                QStringLiteral("%1=%2")
-                    .arg(
-                        name,
-                        record
-                            .customAttributes
-                            .value(name)
-                            .toString()
-                        )
-                );
-        }
-
-        const QString unmappedFields =
-            unmappedFieldValues.join(
-                QStringLiteral("; ")
-                );
-
-        QStringList values;
-
-        if (showTimestamp) {
-            values.append(
-                timestamp
-                );
-        }
-
-        if (showSeverity) {
-            values.append(
-                severity
-                );
-        }
-
-        if (showSubsystem) {
-            values.append(
-                subsystem
-                );
-        }
-
-        if (showEventCode) {
-            values.append(
-                eventCode
-                );
-        }
-
-        if (showEntityId) {
-            values.append(
-                entityId
-                );
-        }
-
-        if (showMessage) {
-            values.append(
-                message
-                );
-        }
-
-        values.append(
-            mappedCustomValues
-            );
-
-        values.append(
-            unmappedFields
-            );
-
-        for (int column = 0;
-             column < values.size();
-             ++column) {
-            auto *item =
-                new QTableWidgetItem(
-                    values.at(column)
-                    );
-
-            if (column == 0) {
-                item->setData(
-                    Qt::UserRole,
-                    record.rawSource
-                    );
-            }
-
-            previewTable->setItem(
-                row,
-                column,
-                item
-                );
-        }
-    }
-
-    QString summary =
-        tr(
-            "Preview: %1 imported of %2 processed "
-            "record(s); %3 skipped."
-            )
-            .arg(
-                preview.importResult
-                    .importedRecordCount()
-                )
-            .arg(
-                preview.importResult
-                    .processedRecordCount
-                )
-            .arg(
-                preview.importResult
-                    .skippedRecordCount()
-                );
-
-    if (!records.isEmpty()) {
-        previewTable->selectRow(0);
-
-        updateRawSourcePreview(0);
-    } else {
-        rawSourcePreview->clear();
-    }
-
-    if (!preview.importResult
-             .diagnostics
-             .isEmpty()) {
-        summary +=
-            tr(" %1 diagnostic(s).")
-                .arg(
-                    preview.importResult
-                        .diagnostics
-                        .size()
-                    );
-    }
-
-    if (preview.sourceTruncated) {
-        summary +=
-            tr(
-                " Preview is limited to the first "
-                "%1 processed records."
-                )
-                .arg(
-                    ImportPreviewService::
-                    DefaultMaxProcessedRecords
-                    );
-    }
-
-    previewSummaryLabel->setText(
-        summary
+    displayPreviewResult(
+        filePath,
+        preview
         );
 }
 
@@ -3242,6 +2934,739 @@ void ImportConfigurationDialog::updateFormatSpecificControls()
         importerId
         == QStringLiteral(
             "regex-text"
+            )
+        );
+}
+
+void ImportConfigurationDialog::displayPreviewResult(
+    const QString &filePath,
+    const ImportPreviewResult &preview)
+{
+    if (!preview.errorMessage.isEmpty()) {
+        clearPreview(
+            tr("Preview unavailable: %1")
+                .arg(
+                    preview.errorMessage
+                    )
+            );
+
+        return;
+    }
+
+    const QVector<InvestigationRecord> &records =
+        preview.importResult.records;
+
+    previewSourcePath =
+        filePath;
+
+    const bool showTimestamp =
+        !workingProfile
+             .canonicalFields
+             .timestampPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showSeverity =
+        !workingProfile
+             .canonicalFields
+             .severityPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showSubsystem =
+        !workingProfile
+             .canonicalFields
+             .subsystemPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showEventCode =
+        !workingProfile
+             .canonicalFields
+             .eventCodePath
+             .trimmed()
+             .isEmpty();
+
+    const bool showEntityId =
+        !workingProfile
+             .canonicalFields
+             .entityIdPath
+             .trimmed()
+             .isEmpty();
+
+    const bool showMessage =
+        !workingProfile
+             .canonicalFields
+             .messagePath
+             .trimmed()
+             .isEmpty();
+
+    QStringList headers;
+
+    if (showTimestamp) {
+        headers.append(
+            tr("Timestamp")
+            );
+    }
+
+    if (showSeverity) {
+        headers.append(
+            tr("Severity")
+            );
+    }
+
+    if (showSubsystem) {
+        headers.append(
+            tr("Subsystem")
+            );
+    }
+
+    if (showEventCode) {
+        headers.append(
+            tr("Event Code")
+            );
+    }
+
+    if (showEntityId) {
+        headers.append(
+            tr("Entity ID")
+            );
+    }
+
+    if (showMessage) {
+        headers.append(
+            tr("Message")
+            );
+    }
+
+    const int canonicalColumnCount =
+        headers.size();
+
+    QSet<QString> mappedCustomFieldNames;
+
+    for (const CustomFieldMapping &mapping
+         : std::as_const(
+             workingProfile.customFields
+             )) {
+        headers.append(
+            mapping.name
+            );
+
+        mappedCustomFieldNames.insert(
+            mapping.name
+            );
+    }
+
+    headers.append(
+        tr("Unmapped Custom Fields")
+        );
+
+    const int previousColumnCount =
+        previewTable->columnCount();
+
+    previewTable->clearContents();
+
+    previewTable->setColumnCount(
+        headers.size()
+        );
+
+    previewTable->setHorizontalHeaderLabels(
+        headers
+        );
+
+    QHeaderView *previewHeader =
+        previewTable->horizontalHeader();
+
+    previewHeader->setStretchLastSection(false);
+
+    for (
+        int column = 0;
+        column < headers.size();
+        ++column
+        ) {
+        previewHeader->setSectionResizeMode(
+            column,
+            QHeaderView::Interactive
+            );
+    }
+
+    if (previousColumnCount
+        != headers.size()) {
+        for (
+            int column =
+            canonicalColumnCount;
+            column < headers.size() - 1;
+            ++column
+            ) {
+            previewTable->setColumnWidth(
+                column,
+                140
+                );
+        }
+
+        if (!headers.isEmpty()) {
+            previewTable->setColumnWidth(
+                headers.size() - 1,
+                220
+                );
+        }
+    }
+
+    previewTable->setRowCount(
+        records.size()
+        );
+
+    for (int row = 0;
+         row < records.size();
+         ++row) {
+        const InvestigationRecord &record =
+            records.at(row);
+
+        const QString timestamp =
+            record.timestamp.has_value()
+                ? record.timestamp
+                      ->toString(
+                          Qt::ISODateWithMs
+                          )
+                : QString();
+
+        const QString severity =
+            record.severity.has_value()
+                ? recordSeverityToString(
+                      record.severity.value()
+                      )
+                : QString();
+
+        const QString subsystem =
+            record.subsystem.value_or(
+                QString()
+                );
+
+        const QString eventCode =
+            record.eventCode.value_or(
+                QString()
+                );
+
+        const QString entityId =
+            record.entityId.value_or(
+                QString()
+                );
+
+        const QString message =
+            record.message.value_or(
+                QString()
+                );
+
+        QStringList mappedCustomValues;
+
+        for (const CustomFieldMapping &mapping
+             : std::as_const(
+                 workingProfile.customFields
+                 )) {
+            const auto iterator =
+                record.customAttributes.constFind(
+                    mapping.name
+                    );
+
+            if (iterator ==
+                record.customAttributes.constEnd()) {
+                mappedCustomValues.append(
+                    QString()
+                    );
+
+                continue;
+            }
+
+            mappedCustomValues.append(
+                iterator.value().toString()
+                );
+        }
+
+        QStringList unmappedFieldValues;
+
+        QStringList attributeNames =
+            record.customAttributes.keys();
+
+        attributeNames.sort(
+            Qt::CaseInsensitive
+            );
+
+        for (const QString &name
+             : std::as_const(
+                 attributeNames
+                 )) {
+            if (mappedCustomFieldNames.contains(
+                    name
+                    )) {
+                continue;
+            }
+
+            unmappedFieldValues.append(
+                QStringLiteral("%1=%2")
+                    .arg(
+                        name,
+                        record
+                            .customAttributes
+                            .value(name)
+                            .toString()
+                        )
+                );
+        }
+
+        const QString unmappedFields =
+            unmappedFieldValues.join(
+                QStringLiteral("; ")
+                );
+
+        QStringList values;
+
+        if (showTimestamp) {
+            values.append(
+                timestamp
+                );
+        }
+
+        if (showSeverity) {
+            values.append(
+                severity
+                );
+        }
+
+        if (showSubsystem) {
+            values.append(
+                subsystem
+                );
+        }
+
+        if (showEventCode) {
+            values.append(
+                eventCode
+                );
+        }
+
+        if (showEntityId) {
+            values.append(
+                entityId
+                );
+        }
+
+        if (showMessage) {
+            values.append(
+                message
+                );
+        }
+
+        values.append(
+            mappedCustomValues
+            );
+
+        values.append(
+            unmappedFields
+            );
+
+        for (int column = 0;
+             column < values.size();
+             ++column) {
+            auto *item =
+                new QTableWidgetItem(
+                    values.at(column)
+                    );
+
+            if (column == 0) {
+                item->setData(
+                    Qt::UserRole,
+                    record.rawSource
+                    );
+            }
+
+            previewTable->setItem(
+                row,
+                column,
+                item
+                );
+        }
+    }
+
+    QString summary =
+        tr(
+            "Preview: %1 imported of %2 processed "
+            "record(s); %3 skipped."
+            )
+            .arg(
+                preview.importResult
+                    .importedRecordCount()
+                )
+            .arg(
+                preview.importResult
+                    .processedRecordCount
+                )
+            .arg(
+                preview.importResult
+                    .skippedRecordCount()
+                );
+
+    if (!records.isEmpty()) {
+        previewTable->selectRow(0);
+
+        updateRawSourcePreview(0);
+    } else {
+        rawSourcePreview->clear();
+    }
+
+    if (!preview.importResult
+             .diagnostics
+             .isEmpty()) {
+        summary +=
+            tr(" %1 diagnostic(s).")
+                .arg(
+                    preview.importResult
+                        .diagnostics
+                        .size()
+                    );
+    }
+
+    if (preview.sourceTruncated) {
+        summary +=
+            tr(
+                " Preview is limited to the first "
+                "%1 processed records."
+                )
+                .arg(
+                    ImportPreviewService::
+                    DefaultMaxProcessedRecords
+                    );
+    }
+
+    previewSummaryLabel->setText(
+        summary
+        );
+}
+
+void ImportConfigurationDialog::
+    applyDetectedCustomFieldMappings(
+        const ImportPreviewResult &preview
+        )
+{
+    if (!preview.canDisplayPreview()) {
+        return;
+    }
+
+    QList<CustomFieldMapping>
+        retainedMappings;
+
+    for (const CustomFieldMapping &mapping
+         : std::as_const(
+             workingProfile.customFields
+             )) {
+        if (autoDetectedCustomFieldKeys
+                .contains(
+                    customFieldMappingKey(
+                        mapping
+                        )
+                    )) {
+            continue;
+        }
+
+        retainedMappings.append(
+            mapping
+            );
+    }
+
+    QSet<QString>
+        explicitlyMappedNames;
+
+    for (const CustomFieldMapping &mapping
+         : std::as_const(
+             retainedMappings
+             )) {
+        explicitlyMappedNames.insert(
+            mapping.name
+                .trimmed()
+                .toCaseFolded()
+            );
+    }
+
+    QSet<QString> detectedFields;
+
+    for (const InvestigationRecord &record
+         : preview.importResult.records) {
+        for (auto iterator =
+             record.customAttributes
+                 .constBegin();
+             iterator !=
+             record.customAttributes
+                 .constEnd();
+             ++iterator) {
+            const QString fieldName =
+                iterator.key().trimmed();
+
+            if (fieldName.isEmpty()) {
+                continue;
+            }
+
+            if (explicitlyMappedNames
+                    .contains(
+                        fieldName
+                            .toCaseFolded()
+                        )) {
+                continue;
+            }
+
+            detectedFields.insert(
+                fieldName
+                );
+        }
+    }
+
+    QStringList sortedFields =
+        detectedFields.values();
+
+    sortedFields.sort(
+        Qt::CaseInsensitive
+        );
+
+    QList<CustomFieldMapping>
+        updatedMappings =
+        retainedMappings;
+
+    QSet<QString>
+        updatedAutoDetectedKeys;
+
+    for (const QString &fieldName
+         : std::as_const(
+             sortedFields
+             )) {
+        bool alreadyMapped = false;
+
+        for (const CustomFieldMapping &mapping
+             : std::as_const(
+                 updatedMappings
+                 )) {
+            if (mapping.sourcePath
+                    .trimmed()
+                    .compare(
+                        fieldName,
+                        Qt::CaseInsensitive
+                        )
+                == 0) {
+                alreadyMapped = true;
+                break;
+            }
+        }
+
+        if (alreadyMapped) {
+            continue;
+        }
+
+        const CustomFieldMapping mapping {
+            fieldName,
+            fieldName
+        };
+
+        updatedMappings.append(
+            mapping
+            );
+
+        updatedAutoDetectedKeys.insert(
+            customFieldMappingKey(
+                mapping
+                )
+            );
+    }
+
+    workingProfile.customFields =
+        std::move(
+            updatedMappings
+            );
+
+    autoDetectedCustomFieldKeys =
+        std::move(
+            updatedAutoDetectedKeys
+            );
+
+    populateCustomFieldMappings();
+
+    updateValidationState(false);
+}
+
+void ImportConfigurationDialog::
+    startManualPreview()
+{
+    if (previewWatcher != nullptr) {
+        return;
+    }
+
+    const QString filePath =
+        selectedFilePath();
+
+    const QFileInfo fileInfo(
+        filePath
+        );
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        return;
+    }
+
+    const ProfileValidationResult validation =
+        profileValidator.validate(
+            workingProfile
+            );
+
+    if (!validation.isValid()) {
+        return;
+    }
+
+    ImportProfile previewProfile =
+        workingProfile;
+
+    const bool detectCustomFields =
+        customFieldDetectionSourcePath
+        != filePath;
+
+    if (detectCustomFields) {
+        QList<CustomFieldMapping>
+            retainedMappings;
+
+        for (const CustomFieldMapping &mapping
+             : std::as_const(
+                 previewProfile.customFields
+                 )) {
+            if (autoDetectedCustomFieldKeys
+                    .contains(
+                        customFieldMappingKey(
+                            mapping
+                            )
+                        )) {
+                continue;
+            }
+
+            retainedMappings.append(
+                mapping
+                );
+        }
+
+        previewProfile.customFields =
+            std::move(
+                retainedMappings
+                );
+
+        /*
+         * Detection needs visibility into source
+         * fields that are not already mapped.
+         */
+        previewProfile.preserveUnmappedFields =
+            true;
+    }
+
+    const QByteArray profileSnapshot =
+        profileSerializer.serialize(
+            workingProfile
+            );
+
+    auto *watcher =
+        new QFutureWatcher<
+            ImportPreviewResult
+            >(
+            this
+            );
+
+    previewWatcher =
+        watcher;
+
+    refreshPreviewButton->setEnabled(
+        false
+        );
+
+    refreshPreviewButton->setText(
+        tr("Generating...")
+        );
+
+    previewSummaryLabel->setText(
+        tr(
+            "Generating preview in the background. "
+            "The import configuration remains usable."
+            )
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            ImportPreviewResult
+            >::finished,
+        this,
+        [
+            this,
+            watcher,
+            filePath,
+            profileSnapshot,
+            detectCustomFields
+        ]() {
+            const ImportPreviewResult preview =
+                watcher->result();
+
+            if (previewWatcher == watcher) {
+                previewWatcher =
+                    nullptr;
+            }
+
+            watcher->deleteLater();
+
+            refreshPreviewButton
+                ->setEnabled(
+                    true
+                    );
+
+            refreshPreviewButton
+                ->setText(
+                    tr("Refresh Preview")
+                    );
+
+            /*
+             * Do not display a preview that was
+             * generated for a file or profile the
+             * user has since changed.
+             */
+            if (selectedFilePath()
+                    != filePath
+                || profileSerializer.serialize(
+                       workingProfile
+                       )
+                       != profileSnapshot) {
+                updatePreview();
+                return;
+            }
+
+            if (detectCustomFields
+                && preview
+                       .canDisplayPreview()) {
+                applyDetectedCustomFieldMappings(
+                    preview
+                    );
+
+                customFieldDetectionSourcePath =
+                    filePath;
+            }
+
+            displayPreviewResult(
+                filePath,
+                preview
+                );
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [
+                filePath,
+                previewProfile
+            ]() {
+                return ImportPreviewService()
+                .previewFile(
+                    filePath,
+                    previewProfile
+                    );
+            }
             )
         );
 }
