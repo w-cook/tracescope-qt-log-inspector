@@ -7,7 +7,6 @@
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QRegularExpression>
-#include <QTextStream>
 
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
@@ -291,6 +290,167 @@ void insertGeneratedMessage(
             )
         );
 }
+
+void processIisLine(
+    const QString &rawSource,
+    const QString &sourcePath,
+    qint64 recordNumber,
+    QStringList &activeFields,
+    const ImportProfile &profile,
+    ImportResult &result
+    )
+{
+    const QString normalized =
+        normalizeLine(
+            rawSource
+            );
+
+    const QString trimmed =
+        normalized.trimmed();
+
+    if (trimmed.isEmpty()) {
+        return;
+    }
+
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            recordNumber
+            );
+
+    /*
+     * W3C directives and comments do not
+     * represent imported records.
+     */
+    if (trimmed.startsWith(
+            QLatin1Char('#')
+            )) {
+        if (!isFieldsDirective(
+                trimmed
+                )) {
+            return;
+        }
+
+        QStringList fields =
+            parseFieldsDirective(
+                trimmed
+                );
+
+        if (fields.isEmpty()) {
+            activeFields.clear();
+
+            appendDiagnostic(
+                result,
+                QStringLiteral(
+                    "IIS_W3C_FIELDS_EMPTY"
+                    ),
+                QStringLiteral(
+                    "The #Fields directive does not "
+                    "define any source fields."
+                    ),
+                ImportDiagnosticSeverity::Error,
+                source
+                );
+
+            return;
+        }
+
+        activeFields =
+            std::move(fields);
+
+        return;
+    }
+
+    ++result.processedRecordCount;
+
+    if (activeFields.isEmpty()) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "IIS_W3C_FIELDS_REQUIRED"
+                ),
+            QStringLiteral(
+                "The record appears before a valid "
+                "#Fields directive."
+                ),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    const QStringList values =
+        splitWhitespace(
+            trimmed
+            );
+
+    if (values.size()
+        != activeFields.size()) {
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "IIS_W3C_FIELD_COUNT_MISMATCH"
+                ),
+            QStringLiteral(
+                "The record contains %1 field value(s), "
+                "but the active #Fields directive defines "
+                "%2 field(s)."
+                )
+                .arg(
+                    values.size()
+                    )
+                .arg(
+                    activeFields.size()
+                    ),
+            ImportDiagnosticSeverity::Error,
+            source
+            );
+
+        return;
+    }
+
+    QJsonObject sourceValues;
+
+    insertSourceFields(
+        activeFields,
+        values,
+        sourceValues
+        );
+
+    insertGeneratedTimestamp(
+        sourceValues
+        );
+
+    insertGeneratedMessage(
+        sourceValues
+        );
+
+    /*
+     * date and time have been consumed into the
+     * generated canonical timestamp. The raw source
+     * still preserves the original values, so keeping
+     * them as custom attributes only creates duplicate
+     * investigation columns.
+     */
+    sourceValues.remove(
+        QStringLiteral("date")
+        );
+
+    sourceValues.remove(
+        QStringLiteral("time")
+        );
+
+    result.records.append(
+        JsonObjectRecordMapper::mapRecord(
+            sourceValues,
+            rawSource,
+            source,
+            profile,
+            result
+            )
+        );
+}
 }
 
 IisW3cImporter::IisW3cImporter(
@@ -330,158 +490,13 @@ ImportResult IisW3cImporter::importLines(
     for (qsizetype index = 0;
          index < lines.size();
          ++index) {
-        const QString rawSource =
-            lines.at(index);
-
-        const QString normalized =
-            normalizeLine(
-                rawSource
-                );
-
-        const QString trimmed =
-            normalized.trimmed();
-
-        if (trimmed.isEmpty()) {
-            continue;
-        }
-
-        const RecordSourceMetadata source =
-            createSourceMetadata(
-                sourcePath,
-                index + 1
-                );
-
-        /*
-         * W3C directives and comments do not
-         * represent imported records.
-         */
-        if (trimmed.startsWith(
-                QLatin1Char('#')
-                )) {
-            if (!isFieldsDirective(
-                    trimmed
-                    )) {
-                continue;
-            }
-
-            QStringList fields =
-                parseFieldsDirective(
-                    trimmed
-                    );
-
-            if (fields.isEmpty()) {
-                activeFields.clear();
-
-                appendDiagnostic(
-                    result,
-                    QStringLiteral(
-                        "IIS_W3C_FIELDS_EMPTY"
-                        ),
-                    QStringLiteral(
-                        "The #Fields directive does not "
-                        "define any source fields."
-                        ),
-                    ImportDiagnosticSeverity::Error,
-                    source
-                    );
-
-                continue;
-            }
-
-            activeFields =
-                std::move(fields);
-
-            continue;
-        }
-
-        ++result.processedRecordCount;
-
-        if (activeFields.isEmpty()) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "IIS_W3C_FIELDS_REQUIRED"
-                    ),
-                QStringLiteral(
-                    "The record appears before a valid "
-                    "#Fields directive."
-                    ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        const QStringList values =
-            splitWhitespace(
-                trimmed
-                );
-
-        if (values.size()
-            != activeFields.size()) {
-            appendDiagnostic(
-                result,
-                QStringLiteral(
-                    "IIS_W3C_FIELD_COUNT_MISMATCH"
-                    ),
-                QStringLiteral(
-                    "The record contains %1 field value(s), "
-                    "but the active #Fields directive defines "
-                    "%2 field(s)."
-                    )
-                    .arg(
-                        values.size()
-                        )
-                    .arg(
-                        activeFields.size()
-                        ),
-                ImportDiagnosticSeverity::Error,
-                source
-                );
-
-            continue;
-        }
-
-        QJsonObject sourceValues;
-
-        insertSourceFields(
+        processIisLine(
+            lines.at(index),
+            sourcePath,
+            index + 1,
             activeFields,
-            values,
-            sourceValues
-            );
-
-        insertGeneratedTimestamp(
-            sourceValues
-            );
-
-        insertGeneratedMessage(
-            sourceValues
-            );
-
-        /*
-         * date and time have been consumed into the
-         * generated canonical timestamp. The raw source
-         * still preserves the original values, so keeping
-         * them as custom attributes only creates duplicate
-         * investigation columns.
-         */
-        sourceValues.remove(
-            QStringLiteral("date")
-            );
-
-        sourceValues.remove(
-            QStringLiteral("time")
-            );
-
-        result.records.append(
-            JsonObjectRecordMapper::mapRecord(
-                sourceValues,
-                rawSource,
-                source,
-                profile,
-                result
-                )
+            profile,
+            result
             );
     }
 
@@ -523,47 +538,94 @@ ImportResult IisW3cImporter::importFile(
         return result;
     }
 
-    QTextStream stream(&file);
+    constexpr qint64 progressReportByteInterval =
+        256 * 1024;
 
-    QStringList lines;
+    ImportResult result;
 
-    qint64 processedRecords = 0;
-    bool sourceTruncated = false;
+    QStringList activeFields;
 
-    while (!stream.atEnd()) {
-        const QString line =
-            stream.readLine();
+    const qint64 totalBytes =
+        file.size();
+
+    qint64 physicalLineNumber = 0;
+    qint64 lastReportedBytes = 0;
+
+    executionContext.report({
+        0,
+        totalBytes,
+        0
+    });
+
+    while (!file.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            result.cancelled = true;
+            break;
+        }
+
+        QByteArray lineBytes =
+            file.readLine();
+
+        ++physicalLineNumber;
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
 
         const bool dataRecord =
             isDataRecordLine(
-                line
+                rawSource
                 );
 
         if (maxProcessedRecords > 0
             && dataRecord
-            && processedRecords
+            && result.processedRecordCount
                    >= maxProcessedRecords) {
-            sourceTruncated = true;
+            result.sourceTruncated = true;
             break;
         }
 
-        lines.append(
-            line
+        processIisLine(
+            rawSource,
+            filePath,
+            physicalLineNumber,
+            activeFields,
+            profile,
+            result
             );
 
-        if (dataRecord) {
-            ++processedRecords;
+        const qint64 bytesProcessed =
+            file.pos();
+
+        if (bytesProcessed
+                - lastReportedBytes
+            >= progressReportByteInterval) {
+            executionContext.report({
+                bytesProcessed,
+                totalBytes,
+                result.processedRecordCount
+            });
+
+            lastReportedBytes =
+                bytesProcessed;
         }
     }
 
-    ImportResult result =
-        importLines(
-            lines,
-            filePath
-            );
-
-    result.sourceTruncated =
-        sourceTruncated;
+    executionContext.report({
+        file.pos(),
+        totalBytes,
+        result.processedRecordCount
+    });
 
     return result;
 }

@@ -2,6 +2,8 @@
 
 #include <QTemporaryFile>
 #include <QTextStream>
+#include <QFileInfo>
+#include <QVector>
 
 #include "../src/importing/IisW3cImporter.h"
 
@@ -28,6 +30,8 @@ private slots:
 
     void honorsProcessedRecordLimit();
     void reportsFileOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
 };
 
 namespace
@@ -998,6 +1002,159 @@ void IisW3cImporterTests::
         result.diagnostics.first()
             .severity,
         ImportDiagnosticSeverity::Error
+        );
+}
+
+void IisW3cImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "#Fields: date time cs-method "
+           "cs-uri-stem sc-status\n"
+        << "2026-08-12 16:10:00 "
+           "GET /first 200\n"
+        << "2026-08-12 16:11:00 "
+           "GET /second 200\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(value);
+        };
+
+    IisW3cImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QVERIFY(!progress.isEmpty());
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().totalBytes,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void IisW3cImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "#Fields: date time cs-method "
+           "cs-uri-stem sc-status\n"
+        << "2026-08-12 16:10:00 "
+           "GET /first 200\n"
+        << "2026-08-12 16:11:00 "
+           "GET /second 200\n"
+        << "2026-08-12 16:12:00 "
+           "GET /third 200\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            /*
+             * The first check precedes the #Fields
+             * directive and the second precedes the
+             * first data record.
+             */
+            return cancellationChecks > 2;
+        };
+
+    IisW3cImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(result.cancelled);
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(!result.sourceTruncated);
+
+    QCOMPARE(
+        result.records.first()
+            .message.value(),
+        QStringLiteral(
+            "GET /first"
+            )
         );
 }
 
