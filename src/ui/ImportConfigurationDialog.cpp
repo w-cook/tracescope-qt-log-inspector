@@ -805,22 +805,82 @@ void ImportConfigurationDialog::buildLayout()
     previewTable->setColumnWidth(5, 300); // Message
     previewTable->setColumnWidth(6, 220); // Unmapped Custom Fields
 
-    previewLayout->addWidget(
-        previewTable,
+    /*
+ * Let the record table and selected raw-source
+ * view share the available preview space through
+ * a vertical splitter. The raw-source section
+ * starts compact but can be expanded for
+ * multiline JSON, XML, stack traces, and similar
+ * records.
+ */
+    auto *previewSplitter =
+        new QSplitter(
+            Qt::Vertical,
+            previewGroup
+            );
+
+    previewSplitter->setChildrenCollapsible(
+        false
+        );
+
+    /*
+ * The table should receive additional space when
+ * the dialog grows. The raw-source panel keeps
+ * its user-selected size unless the splitter is
+ * moved explicitly.
+ */
+    previewSplitter->setStretchFactor(
+        0,
         1
+        );
+
+    previewSplitter->setStretchFactor(
+        1,
+        0
+        );
+
+    previewTable->setMinimumHeight(
+        120
+        );
+
+    previewSplitter->addWidget(
+        previewTable
+        );
+
+    auto *rawSourcePanel =
+        new QWidget(
+            previewSplitter
+            );
+
+    auto *rawSourceLayout =
+        new QVBoxLayout(
+            rawSourcePanel
+            );
+
+    rawSourceLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    rawSourceLayout->setSpacing(
+        4
         );
 
     auto *rawSourceLabel =
         new QLabel(
             tr("Selected Raw Source:"),
-            previewGroup
+            rawSourcePanel
             );
 
-    previewLayout->addWidget(
+    rawSourceLayout->addWidget(
         rawSourceLabel
         );
 
-    rawSourcePreview->setReadOnly(true);
+    rawSourcePreview->setReadOnly(
+        true
+        );
 
     rawSourcePreview->setLineWrapMode(
         QPlainTextEdit::NoWrap
@@ -833,10 +893,35 @@ void ImportConfigurationDialog::buildLayout()
             )
         );
 
-    rawSourcePreview->setFixedHeight(55);
+    rawSourcePreview->setMinimumHeight(
+        45
+        );
+
+    rawSourceLayout->addWidget(
+        rawSourcePreview,
+        1
+        );
+
+    previewSplitter->addWidget(
+        rawSourcePanel
+        );
+
+    /*
+     * Keep the default appearance close to the
+     * existing compact raw-source preview. The user
+     * can drag the splitter upward whenever more
+     * vertical space is useful.
+     */
+    previewSplitter->setSizes(
+        QList<int>{
+            360,
+            80
+        }
+        );
 
     previewLayout->addWidget(
-        rawSourcePreview
+        previewSplitter,
+        1
         );
 
     auto *contentSplitter =
