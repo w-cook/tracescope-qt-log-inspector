@@ -28,6 +28,7 @@
 #include <QFontMetrics>
 #include <QTime>
 #include <QTimer>
+#include <QtConcurrentRun>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -113,7 +114,11 @@ void MainWindow::createMenus()
 {
     auto *fileMenu = menuBar()->addMenu("&File");
 
-    auto *openAction = new QAction("&Open Log File...", this);
+    openAction =
+        new QAction(
+            "&Open Log File...",
+            this
+            );
     openAction->setShortcut(QKeySequence::Open);
 
     connect(openAction, &QAction::triggered, this, [this]() {
@@ -230,6 +235,20 @@ void MainWindow::buildLayout()
 
 void MainWindow::openLogFile(const QString &initialFilePath)
 {
+    if (importWatcher != nullptr) {
+        QMessageBox::information(
+            this,
+            tr("Import In Progress"),
+            tr(
+                "A log file is already being imported. "
+                "Wait for the current import to finish "
+                "before starting another import."
+                )
+            );
+
+        return;
+    }
+
     ImportConfigurationDialog dialog(this);
 
     if (!initialFilePath.isEmpty()) {
@@ -253,6 +272,10 @@ void MainWindow::loadLogFile(
     const ImportProfile &profile
     )
 {
+    if (importWatcher != nullptr) {
+        return;
+    }
+
     const ImporterRegistry registry =
         createBuiltInImporterRegistry(
             profile
@@ -277,12 +300,78 @@ void MainWindow::loadLogFile(
         return;
     }
 
-    const ImportResult result =
-        importer->importFile(
-            filePath
+    auto *watcher =
+        new QFutureWatcher<ImportResult>(
+            this
             );
 
-    currentFilePath = filePath;
+    importWatcher =
+        watcher;
+
+    if (openAction != nullptr) {
+        openAction->setEnabled(false);
+    }
+
+    setAcceptDrops(false);
+
+    connect(
+        watcher,
+        &QFutureWatcher<ImportResult>::finished,
+        this,
+        [this, watcher, filePath]() {
+            const ImportResult result =
+                watcher->result();
+
+            if (importWatcher == watcher) {
+                importWatcher =
+                    nullptr;
+            }
+
+            if (openAction != nullptr) {
+                openAction->setEnabled(true);
+            }
+
+            setAcceptDrops(true);
+
+            watcher->deleteLater();
+
+            completeLogFileImport(
+                filePath,
+                result
+                );
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [importer, filePath]() {
+                return importer->importFile(
+                    filePath
+                    );
+            }
+            )
+        );
+}
+
+void MainWindow::completeLogFileImport(
+    const QString &filePath,
+    const ImportResult &result
+    )
+{
+    /*
+     * A cancelled import must never replace
+     * the currently loaded investigation with
+     * a partial result.
+     *
+     * Cancellation will be wired to the UI in
+     * the next Phase 7 slice.
+     */
+    if (result.cancelled) {
+        return;
+    }
+
+    currentFilePath =
+        filePath;
 
     investigationController->setRecords(
         result.records
@@ -303,6 +392,7 @@ void MainWindow::loadLogFile(
     applyFilters();
 
     eventTable->resizeColumnsToContents();
+
     eventTable
         ->horizontalHeader()
         ->setStretchLastSection(true);
@@ -1194,6 +1284,10 @@ void MainWindow::updateTimelineChart(
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
+    if (importWatcher != nullptr) {
+        return;
+    }
+
     if (!event->mimeData()->hasUrls()) {
         return;
     }
@@ -1211,6 +1305,10 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
+    if (importWatcher != nullptr) {
+        return;
+    }
+
     if (!event->mimeData()->hasUrls()) {
         return;
     }

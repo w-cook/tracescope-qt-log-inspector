@@ -5,9 +5,11 @@
 #include <QDateTime>
 #include <QMainWindow>
 #include <QVector>
+#include <QFutureWatcher>
 
 #include "domain/InvestigationRecord.h"
 #include "importing/ImportProfile.h"
+#include "importing/ImportResult.h"
 #include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -25,6 +27,7 @@ class QChartView;
 class QDragEnterEvent;
 class QDropEvent;
 class QTimer;
+class QAction;
 
 class MainWindow : public QMainWindow
 {
@@ -61,6 +64,11 @@ private:
 
     QTimer *searchDebounceTimer;
 
+    QAction *openAction = nullptr;
+
+    QFutureWatcher<ImportResult> *importWatcher =
+        nullptr;
+
     bool hasSeverityData = false;
     bool hasSubsystemData = false;
 
@@ -80,6 +88,10 @@ private:
     void loadLogFile(
         const QString &filePath,
         const ImportProfile &profile
+        );
+    void completeLogFileImport(
+        const QString &filePath,
+        const ImportResult &result
         );
 
     void updateSummary(
