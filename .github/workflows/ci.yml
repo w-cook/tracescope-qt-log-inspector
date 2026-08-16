@@ -11,9 +11,9 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
-  WINDOWS_PACKAGE_NAME: TraceScope-v0.7.0-windows-x64
-  LINUX_PACKAGE_NAME: TraceScope-v0.7.0-linux-x86_64
-  SAMPLES_PACKAGE_NAME: TraceScope-v0.7.0-samples
+  WINDOWS_PACKAGE_NAME: TraceScope-v0.8.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v0.8.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v0.8.0-samples
 
 jobs:
   windows-build-and-test:
@@ -308,7 +308,7 @@ jobs:
 
           export PATH="$PWD/packaging-tools:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export VERSION="0.7.0"
+          export VERSION="0.8.0"
           export ARCH="x86_64"
           export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
           export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
