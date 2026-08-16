@@ -3,6 +3,7 @@
 #include <QtTypes>
 #include <QString>
 
+#include "ImportExecutionContext.h"
 #include "ImportResult.h"
 
 class ILogImporter
@@ -19,6 +20,8 @@ public:
     virtual ImportResult importFile(
         const QString &filePath,
         qint64 maxProcessedRecords =
-        UnlimitedRecordLimit
+        UnlimitedRecordLimit,
+        const ImportExecutionContext &executionContext =
+        {}
         ) const = 0;
 };

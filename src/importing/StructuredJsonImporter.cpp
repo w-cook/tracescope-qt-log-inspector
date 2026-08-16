@@ -410,7 +410,8 @@ ImportResult StructuredJsonImporter::importContent(
 
 ImportResult StructuredJsonImporter::importFile(
     const QString &filePath,
-    qint64 maxProcessedRecords
+    qint64 maxProcessedRecords,
+    const ImportExecutionContext &executionContext
     ) const
 {
     QFile file(filePath);

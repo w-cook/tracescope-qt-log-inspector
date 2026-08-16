@@ -4,6 +4,7 @@
 
 #include <QString>
 
+#include "ImportExecutionContext.h"
 #include "ImportPreviewResult.h"
 #include "ImportProfile.h"
 
@@ -17,6 +18,7 @@ public:
         const QString &filePath,
         const ImportProfile &profile,
         qint64 maxProcessedRecords =
-        DefaultMaxProcessedRecords
+        DefaultMaxProcessedRecords,
+        const ImportExecutionContext &executionContext = {}
         ) const;
 };

@@ -2,6 +2,7 @@
 
 #include <QTemporaryFile>
 #include <QTextStream>
+#include <QVariant>
 
 #include "../src/importing/SyslogImporter.h"
 
@@ -17,6 +18,10 @@ private slots:
     void mapsRfc5424PrioritySeverity();
     void preservesRfc5424StructuredData();
     void handlesRfc5424NilValues();
+    void exposesRfc5424StructuredDataParameters();
+    void exposesMultipleRfc5424StructuredDataElements();
+    void decodesRfc5424StructuredDataEscapes();
+    void preservesRepeatedRfc5424Parameters();
 
     void importsRfc3164Record();
     void parsesRfc3164TagAndProcessId();
@@ -30,6 +35,8 @@ private slots:
 
     void importFileHonorsRecordLimit();
     void importFileReportsOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
 };
 
 namespace
@@ -493,6 +500,254 @@ void SyslogImporterTests::
                      "processId"
                      )
                  )
+        );
+}
+
+void SyslogImporterTests::
+    exposesRfc5424StructuredDataParameters()
+{
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importLines({
+            QStringLiteral(
+                "<165>1 "
+                "2026-08-12T08:21:04.812Z "
+                "worker-02 supplier-gateway "
+                "8301 SUPPLIER_DELAY "
+                "[database@32473 "
+                "requestId=\"REQ-9203\" "
+                "database=\"OrdersDb\" "
+                "elapsedMs=\"5000\"] "
+                "Database request delayed"
+                )
+        });
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const auto &attributes =
+        result.records.first()
+            .customAttributes;
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "database@32473.requestId"
+                          )
+                      ).toString(),
+        QStringLiteral("REQ-9203")
+        );
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "database@32473.database"
+                          )
+                      ).toString(),
+        QStringLiteral("OrdersDb")
+        );
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "database@32473.elapsedMs"
+                          )
+                      ).toString(),
+        QStringLiteral("5000")
+        );
+
+    QVERIFY(
+        attributes.contains(
+            QStringLiteral(
+                "structuredData"
+                )
+            )
+        );
+}
+
+void SyslogImporterTests::
+    exposesMultipleRfc5424StructuredDataElements()
+{
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importLines({
+            QStringLiteral(
+                "<165>1 "
+                "2026-08-12T08:21:04.812Z "
+                "worker-02 supplier-gateway "
+                "8301 SUPPLIER_DELAY "
+                "[database@32473 "
+                "database=\"OrdersDb\"]"
+                "[request@32473 "
+                "requestId=\"REQ-9203\"] "
+                "Request delayed"
+                )
+        });
+
+    const auto &attributes =
+        result.records.first()
+            .customAttributes;
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "database@32473.database"
+                          )
+                      ).toString(),
+        QStringLiteral("OrdersDb")
+        );
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "request@32473.requestId"
+                          )
+                      ).toString(),
+        QStringLiteral("REQ-9203")
+        );
+}
+
+void SyslogImporterTests::
+    decodesRfc5424StructuredDataEscapes()
+{
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importLines({
+            QStringLiteral(
+                "<165>1 "
+                "2026-08-12T08:21:04.812Z "
+                "worker-02 supplier-gateway "
+                "8301 SUPPLIER_DELAY "
+                "[detail@32473 "
+                "note=\"Quoted \\\"value\\\" "
+                "from C:\\\\temp with bracket \\]\"] "
+                "Structured data escape test"
+                )
+        });
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const auto &attributes =
+        result.records.first()
+            .customAttributes;
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "detail@32473.note"
+                          )
+                      ).toString(),
+        QStringLiteral(
+            "Quoted \"value\" "
+            "from C:\\temp with bracket ]"
+            )
+        );
+
+    /*
+     * The original structured-data representation
+     * should still be preserved unchanged.
+     */
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredData"
+                          )
+                      ).toString(),
+        QStringLiteral(
+            "[detail@32473 "
+            "note=\"Quoted \\\"value\\\" "
+            "from C:\\\\temp with bracket \\]\"]"
+            )
+        );
+}
+
+void SyslogImporterTests::
+    preservesRepeatedRfc5424Parameters()
+{
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importLines({
+            QStringLiteral(
+                "<165>1 "
+                "2026-08-12T08:21:04.812Z "
+                "worker-02 supplier-gateway "
+                "8301 SUPPLIER_DELAY "
+                "[tag@32473 "
+                "value=\"alpha\" "
+                "value=\"beta\" "
+                "value=\"gamma\"] "
+                "Repeated structured-data parameter test"
+                )
+        });
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const auto &attributes =
+        result.records.first()
+            .customAttributes;
+
+    const QVariantList values =
+        attributes.value(
+                      QStringLiteral(
+                          "structuredDataFields."
+                          "tag@32473.value"
+                          )
+                      ).toList();
+
+    QCOMPARE(
+        values.size(),
+        3
+        );
+
+    QCOMPARE(
+        values.at(0).toString(),
+        QStringLiteral("alpha")
+        );
+
+    QCOMPARE(
+        values.at(1).toString(),
+        QStringLiteral("beta")
+        );
+
+    QCOMPARE(
+        values.at(2).toString(),
+        QStringLiteral("gamma")
+        );
+
+    QCOMPARE(
+        attributes.value(
+                      QStringLiteral(
+                          "structuredData"
+                          )
+                      ).toString(),
+        QStringLiteral(
+            "[tag@32473 "
+            "value=\"alpha\" "
+            "value=\"beta\" "
+            "value=\"gamma\"]"
+            )
         );
 }
 
@@ -997,6 +1252,148 @@ void SyslogImporterTests::
         result.diagnostics.first()
             .severity,
         ImportDiagnosticSeverity::Error
+        );
+}
+
+void SyslogImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "<14>1 2026-08-12T08:00:00Z "
+           "host app - EVENT_1 - First\n"
+        << "<12>1 2026-08-12T08:01:00Z "
+           "host app - EVENT_2 - Second\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(value);
+        };
+
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QVERIFY(!progress.isEmpty());
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().totalBytes,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+}
+
+void SyslogImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(file.open());
+
+    QTextStream stream(&file);
+
+    stream
+        << "<14>1 2026-08-12T08:00:00Z "
+           "host app - EVENT_1 - First\n"
+        << "<12>1 2026-08-12T08:01:00Z "
+           "host app - EVENT_2 - Second\n"
+        << "<11>1 2026-08-12T08:02:00Z "
+           "host app - EVENT_3 - Third\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            return cancellationChecks > 1;
+        };
+
+    SyslogImporter importer =
+        createImporter();
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(result.cancelled);
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(!result.sourceTruncated);
+
+    QCOMPARE(
+        result.records.first()
+            .message.value(),
+        QStringLiteral("First")
         );
 }
 

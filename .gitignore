@@ -22,3 +22,6 @@ Thumbs.db
 *.obj
 *.o
 *.pdb
+
+# Local large-file performance fixtures
+performance-fixtures/

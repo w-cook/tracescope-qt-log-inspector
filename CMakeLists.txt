@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.7.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Test Charts)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test Charts Concurrent)
 
 qt_standard_project_setup()
 
@@ -91,6 +91,8 @@ qt_add_executable(TraceScope
     src/importing/IisW3cImporter.cpp
     src/importing/XmlImporter.h
     src/importing/XmlImporter.cpp
+    src/importing/ImportProgress.h
+    src/importing/ImportExecutionContext.h
 
 )
 
@@ -98,6 +100,7 @@ target_link_libraries(TraceScope
     PRIVATE
         Qt6::Widgets
         Qt6::Charts
+        Qt6::Concurrent
 )
 
 enable_testing()

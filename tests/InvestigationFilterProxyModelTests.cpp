@@ -13,6 +13,8 @@ private slots:
     void filtersBySubsystem();
     void searchesCanonicalFieldsCaseInsensitively();
     void searchesCustomAttributes();
+    void searchesNormalizedSeverityWithRawSource();
+    void searchesNormalizedTimestampWithRawSource();
     void sortsUsingTypedTimestampValues();
     void mapsProxyRowsBackToSourceRecords();
 };
@@ -187,6 +189,83 @@ void InvestigationFilterProxyModelTests::
     QCOMPARE(
         record->recordId,
         QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    searchesNormalizedSeverityWithRawSource()
+{
+    InvestigationRecord record;
+
+    record.recordId =
+        QStringLiteral("record-alias");
+
+    record.severity =
+        RecordSeverity::Warning;
+
+    record.rawSource =
+        QStringLiteral(
+            R"({"level":"W","message":"Something happened"})"
+            );
+
+    InvestigationTableModel sourceModel;
+
+    sourceModel.setRecords({
+        record
+    });
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSearchText(
+        QStringLiteral("WARN")
+        );
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        1
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    searchesNormalizedTimestampWithRawSource()
+{
+    InvestigationRecord record;
+
+    record.recordId =
+        QStringLiteral("record-timestamp");
+
+    record.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-14T12:34:56.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    record.rawSource =
+        QStringLiteral(
+            R"({"time":"08/14/2026 12:34:56"})"
+            );
+
+    InvestigationTableModel sourceModel;
+
+    sourceModel.setRecords({
+        record
+    });
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setSearchText(
+        QStringLiteral(
+            "2026-08-14T12:34:56"
+            )
+        );
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        1
         );
 }
 

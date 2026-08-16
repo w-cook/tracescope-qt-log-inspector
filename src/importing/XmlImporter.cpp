@@ -206,9 +206,45 @@ void appendChildValue(
         );
 }
 
+constexpr qint64 progressReportByteInterval =
+    256 * 1024;
+
+void reportProgressIfNeeded(
+    QIODevice &device,
+    qint64 totalBytes,
+    qint64 processedRecordCount,
+    qint64 &lastReportedBytes,
+    const ImportExecutionContext &executionContext
+    )
+{
+    const qint64 bytesProcessed =
+        device.pos();
+
+    if (bytesProcessed
+            - lastReportedBytes
+        < progressReportByteInterval) {
+        return;
+    }
+
+    executionContext.report({
+        bytesProcessed,
+        totalBytes,
+        processedRecordCount
+    });
+
+    lastReportedBytes =
+        bytesProcessed;
+}
+
 QJsonValue readElementValue(
     QXmlStreamReader &reader,
-    QXmlStreamWriter &writer
+    QXmlStreamWriter &writer,
+    QIODevice &device,
+    qint64 totalBytes,
+    qint64 processedRecordCount,
+    qint64 &lastReportedBytes,
+    const ImportExecutionContext &executionContext,
+    bool &cancelled
     )
 {
     /*
@@ -239,7 +275,21 @@ QJsonValue readElementValue(
     bool hasChildElements = false;
 
     while (!reader.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            cancelled = true;
+            return {};
+        }
+
         reader.readNext();
+
+        reportProgressIfNeeded(
+            device,
+            totalBytes,
+            processedRecordCount,
+            lastReportedBytes,
+            executionContext
+            );
 
         if (reader.isStartElement()) {
             hasChildElements = true;
@@ -250,8 +300,18 @@ QJsonValue readElementValue(
             const QJsonValue childValue =
                 readElementValue(
                     reader,
-                    writer
+                    writer,
+                    device,
+                    totalBytes,
+                    processedRecordCount,
+                    lastReportedBytes,
+                    executionContext,
+                    cancelled
                     );
+
+            if (cancelled) {
+                return {};
+            }
 
             appendChildValue(
                 object,
@@ -370,13 +430,15 @@ ImportResult XmlImporter::importContent(
     return importDevice(
         buffer,
         sourcePath,
-        maxProcessedRecords
+        maxProcessedRecords,
+        {}
         );
 }
 
 ImportResult XmlImporter::importFile(
     const QString &filePath,
-    qint64 maxProcessedRecords
+    qint64 maxProcessedRecords,
+    const ImportExecutionContext &executionContext
     ) const
 {
     QFile file(filePath);
@@ -410,17 +472,30 @@ ImportResult XmlImporter::importFile(
     return importDevice(
         file,
         filePath,
-        maxProcessedRecords
+        maxProcessedRecords,
+        executionContext
         );
 }
 
 ImportResult XmlImporter::importDevice(
     QIODevice &device,
     const QString &sourcePath,
-    qint64 maxProcessedRecords
+    qint64 maxProcessedRecords,
+    const ImportExecutionContext &executionContext
     ) const
 {
     ImportResult result;
+
+    const qint64 totalBytes =
+        device.size();
+
+    qint64 lastReportedBytes = 0;
+
+    executionContext.report({
+        0,
+        totalBytes,
+        0
+    });
 
     QXmlStreamReader reader(&device);
 
@@ -435,7 +510,21 @@ ImportResult XmlImporter::importDevice(
     QStringList currentPath;
 
     while (!reader.atEnd()) {
+        if (executionContext
+                .cancellationRequested()) {
+            result.cancelled = true;
+            break;
+        }
+
         reader.readNext();
+
+        reportProgressIfNeeded(
+            device,
+            totalBytes,
+            result.processedRecordCount,
+            lastReportedBytes,
+            executionContext
+            );
 
         if (reader.isStartElement()) {
             currentPath.append(
@@ -469,8 +558,18 @@ ImportResult XmlImporter::importDevice(
             const QJsonValue parsedValue =
                 readElementValue(
                     reader,
-                    writer
+                    writer,
+                    device,
+                    totalBytes,
+                    result.processedRecordCount,
+                    lastReportedBytes,
+                    executionContext,
+                    result.cancelled
                     );
+
+            if (result.cancelled) {
+                break;
+            }
 
             const RecordSourceMetadata source =
                 createSourceMetadata(
@@ -505,7 +604,8 @@ ImportResult XmlImporter::importDevice(
     }
 
     if (reader.hasError()
-        && !result.sourceTruncated) {
+        && !result.sourceTruncated
+        && !result.cancelled) {
         appendDiagnostic(
             result,
             QStringLiteral(
@@ -534,7 +634,8 @@ ImportResult XmlImporter::importDevice(
         return result;
     }
 
-    if (result.processedRecordCount == 0) {
+    if (!result.cancelled
+        && result.processedRecordCount == 0) {
         if (useDocumentRoot) {
             appendDiagnostic(
                 result,
@@ -572,6 +673,12 @@ ImportResult XmlImporter::importDevice(
                 );
         }
     }
+
+    executionContext.report({
+        device.pos(),
+        totalBytes,
+        result.processedRecordCount
+    });
 
     return result;
 }

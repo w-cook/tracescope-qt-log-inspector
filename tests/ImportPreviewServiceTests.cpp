@@ -27,6 +27,7 @@ private slots:
     void previewUsesProfileMappings();
     void previewReturnsImportDiagnostics();
     void combinedWebAccessPresetPreviewsRecords();
+    void previewPropagatesCancellation();
 };
 
 QString writeTemporaryContent(
@@ -1340,6 +1341,78 @@ void ImportPreviewServiceTests::
 
     QVERIFY(
         record.timestamp.has_value()
+        );
+}
+
+void
+    ImportPreviewServiceTests::
+    previewPropagatesCancellation()
+{
+    QTemporaryFile file;
+
+    const QString path =
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "<session>"
+                "<event><message>First</message></event>"
+                "<event><message>Second</message></event>"
+                "</session>"
+                )
+            );
+
+    QVERIFY(
+        !path.isEmpty()
+        );
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Cancellable XML Preview"
+            );
+
+    profile.importerId =
+        QStringLiteral("xml");
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.event"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral("message");
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        []() {
+            return true;
+        };
+
+    const ImportPreviewResult result =
+        ImportPreviewService()
+            .previewFile(
+                path,
+                profile,
+                ImportPreviewService::
+                DefaultMaxProcessedRecords,
+                context
+                );
+
+    QVERIFY(
+        result.importResult.cancelled
+        );
+
+    QCOMPARE(
+        result.importResult
+            .processedRecordCount,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        result.importResult.records.size(),
+        0
         );
 }
 

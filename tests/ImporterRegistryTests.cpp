@@ -27,7 +27,8 @@ public:
 
     ImportResult importFile(
         const QString &,
-        qint64
+        qint64,
+        const ImportExecutionContext &
         ) const override
     {
         return {};

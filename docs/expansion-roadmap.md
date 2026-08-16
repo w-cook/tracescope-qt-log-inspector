@@ -118,6 +118,12 @@ Completed release milestones:
 | `v0.6.0` | Import Configuration Interface | prerelease |
 | `v0.7.0` | Additional Built-In Formats | prerelease |
 
+Current release target:
+
+| Version | Milestone | Status |
+| --- | --- | --- |
+| `v0.8.0` | Responsive Large-File Import | release preparation in progress |
+
 Release assets follow a consistent naming convention:
 
 ```text
@@ -153,7 +159,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.7.0`:
+Implemented foundations through the current Phase 7 development branch:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -171,12 +177,16 @@ Implemented foundations through `v0.7.0`:
 * Qt model/view presentation of flexible records and dynamic custom attributes
 * investigation-record CSV export with user-facing canonical headers and configured custom-field names
 * representative sample logs and reusable profiles across the supported source families
+* streamed file processing for line-oriented and XML importers where the source format permits incremental parsing
+* import parsing outside the UI thread with progress and cooperative cancellation
+* large structured-document preview safeguards with cancellable background preview generation
+* scalable event-count timeline rendering with automatic and manual resolutions, windowed fine-resolution navigation, and bounded on-screen bucket materialization
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Later phases now prioritize responsive large-file processing, multi-session investigation, advanced navigation and filtering, findings, comparison, persistence, live following, analytics, and reporting rather than continuing to accumulate built-in formats.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` candidate keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Later phases now prioritize multi-session investigation, advanced navigation and filtering, findings, comparison, persistence, live following, deterministic analytics, and reporting rather than continuing to accumulate built-in formats.
 
 ## Development Phases
 
@@ -384,20 +394,56 @@ Phase 6 establishes sufficient ingestion breadth for the current expansion. Nati
 
 ### Phase 7 — Responsive Large-File Import
 
-With representative ingestion coverage established in `v0.7.0`, subsequent development prioritizes the quality and depth of investigation over additional format count.
+**Status: Implementation complete; `v0.8.0` release preparation in progress.**
 
-Improve responsiveness and memory behavior so the structured investigation workflow remains practical for realistically large engineering and diagnostic log files rather than forcing users back to raw-text tools as file size increases.
+With representative ingestion coverage established in `v0.7.0`, this phase shifts development priority from additional format count to the responsiveness and scalability of practical investigations.
 
-Planned deliverables:
+The goal is to keep the structured investigation workflow usable as representative engineering and diagnostic files grow, while documenting observed behavior conservatively rather than implying a universal maximum file size or throughput guarantee.
 
-* streamed file reading
-* parsing outside the UI thread
-* progress reporting
-* cancellation
-* measured performance scenarios
-* documented, conservative performance claims
+Completed deliverables:
 
-Performance work should be measured against practical investigation workflows and should avoid unsupported claims about maximum file sizes or throughput.
+* streamed file reading for line-oriented and XML importers where the source format permits incremental processing
+* import parsing outside the UI thread so long-running imports do not freeze the desktop interface
+* determinate byte/record progress reporting for streamed import paths
+* indeterminate progress for structured JSON, where meaningful incremental percentage reporting is not currently available
+* cooperative import cancellation that preserves the previously loaded investigation and does not install partial results
+* responsive large structured-JSON and XML configuration by suppressing expensive automatic previews above the large-document threshold
+* explicit background preview generation for large structured documents
+* cooperative cancellation of obsolete background previews when the selected source or profile changes
+* bounded preview generation that continues to honor the configured preview-record limit
+* measured end-to-end Release-build performance scenarios across representative JSON Lines, CSV, IIS W3C, Windows Event XML, and structured JSON sources
+* conservative performance documentation that reports test-system observations rather than maximum supported file sizes, record counts, or parser-throughput guarantees
+
+Measured Phase 7 scenarios on the documented Windows development system:
+
+| Source family | Records | Approx. source size | Median end-to-end import time | Import UI behavior |
+| --- | ---: | ---: | ---: | --- |
+| JSON Lines | 220,000 | 109.4 MiB | 7.2 s | responsive; determinate progress |
+| CSV | 180,000 | 30.7 MiB | 3.0 s | responsive; determinate progress |
+| IIS W3C | 180,000 | 19.6 MiB | 9.2 s | responsive; determinate progress |
+| Windows Event XML collection | 90,000 | ~102 MiB | 14.8 s | responsive; determinate progress |
+| Structured JSON | 120,000 | 64.1 MiB | 6.5 s | responsive; indeterminate progress |
+
+All measured scenarios remained responsive after the resulting investigation was displayed. Cancellation was also manually verified against large JSON Lines and Windows Event XML imports, with the prior investigation preserved and no partial result installed. These observations are evidence from one test system and are not hard limits or guarantees for other files or machines.
+
+Timeline scalability work was pulled forward from the later analytics phase because large-file testing exposed it as part of the same practical responsiveness problem. Completed timeline work now includes:
+
+* user-selectable timeline resolutions from millisecond through day-scale intervals
+* automatic/adaptive resolution selection based on the investigation time span
+* full date/time-aware bucket calculation and context-sensitive labels
+* bounded windowed rendering for fine-resolution timelines instead of materializing enormous bucket ranges
+* horizontal navigation when the selected resolution produces more buckets than can be displayed at once
+* scaled scrollbar handling for very large bucket-index ranges
+* live visible-time-range feedback while dragging the timeline scrollbar
+* stable Y-axis scaling while navigating horizontally
+* layout refinements that keep timeline axes and legend information usable while fitting the chart vertically within its designated area
+
+Additional maintenance completed during the phase:
+
+* made the Import Configuration raw-source preview vertically resizable for multiline structured JSON and XML records
+* corrected large-XML preview behavior discovered during performance verification without weakening conservative Windows Event XML format detection
+
+Performance work should continue to be measured against practical investigation workflows. Future documentation must keep observed test scenarios distinct from unsupported maximum-size, memory, or throughput claims.
 
 ### Phase 8 — Multi-Session Investigation Workspace
 
@@ -454,20 +500,18 @@ Planned deliverables:
 
 Add deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
 
+The scalable timeline foundation originally planned in this phase was pulled forward and completed during Phase 7 because large-file verification showed that timeline resolution, bucket sizing, and navigation were necessary to keep large investigations usable. Phase 11 should build new analysis on that existing timeline behavior rather than reimplement it.
+
 Analytics should degrade gracefully when a source does not provide a particular canonical field. A missing severity, event code, subsystem, or entity ID should disable or reduce only the analysis that depends on that field rather than reducing the usefulness of unrelated records.
 
 Planned deliverables:
 
-* user-selectable timeline bucket intervals
-* automatic/adaptive timeline bucket sizing
-* second-, minute-, and hour-scale timeline grouping as appropriate
-* full date/time-aware bucket identities and labels
 * event-code frequencies when event codes are present
 * top entities when entity IDs are present
 * subsystem trends when subsystem data is present
 * severity trends when severity data is present
 * deterministic warning and error burst detection
-* drill-down to underlying records
+* timeline/summary drill-down to underlying records where it materially improves investigation flow
 
 Deterministic burst detection will not be described as AI anomaly detection.
 

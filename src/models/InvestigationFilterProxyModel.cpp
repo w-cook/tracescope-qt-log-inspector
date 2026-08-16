@@ -9,6 +9,10 @@ InvestigationFilterProxyModel::
     setDynamicSortFilter(true);
     setSortCaseSensitivity(Qt::CaseInsensitive);
     setSortRole(InvestigationTableModel::SortRole);
+
+    m_searchMatcher.setCaseSensitivity(
+        Qt::CaseInsensitive
+        );
 }
 
 void InvestigationFilterProxyModel::setSeverityFilter(
@@ -63,6 +67,10 @@ void InvestigationFilterProxyModel::setSearchText(
     beginFilterChange();
 
     m_searchText = normalized;
+
+    m_searchMatcher.setPattern(
+        m_searchText
+        );
 
     endFilterChange(
         QSortFilterProxyModel::Direction::Rows
@@ -142,25 +150,47 @@ bool InvestigationFilterProxyModel::matchesSearchText(
     const InvestigationRecord &record
     ) const
 {
-    const auto containsSearchText =
+    const auto matches =
         [this](const QString &value) {
-            return value.contains(
-                m_searchText,
-                Qt::CaseInsensitive
-                );
+            return m_searchMatcher.indexIn(
+                       value
+                       ) >= 0;
         };
 
-    if (record.timestamp.has_value()
-        && containsSearchText(
-            record.timestamp->toString(
-                Qt::ISODateWithMs
-                )
-            )) {
+    /*
+     * The preserved source representation is an
+     * efficient fast path for typical searches.
+     * Decoded fields are still checked afterward
+     * so escaped or normalized values remain
+     * searchable.
+     */
+    if (!record.rawSource.isEmpty()
+        && matches(record.rawSource)) {
+        return true;
+    }
+
+    if (record.message.has_value()
+        && matches(record.message.value())) {
+        return true;
+    }
+
+    if (record.subsystem.has_value()
+        && matches(record.subsystem.value())) {
+        return true;
+    }
+
+    if (record.eventCode.has_value()
+        && matches(record.eventCode.value())) {
+        return true;
+    }
+
+    if (record.entityId.has_value()
+        && matches(record.entityId.value())) {
         return true;
     }
 
     if (record.severity.has_value()
-        && containsSearchText(
+        && matches(
             recordSeverityToString(
                 record.severity.value()
                 )
@@ -168,30 +198,11 @@ bool InvestigationFilterProxyModel::matchesSearchText(
         return true;
     }
 
-    if (record.subsystem.has_value()
-        && containsSearchText(
-            record.subsystem.value()
-            )) {
-        return true;
-    }
-
-    if (record.eventCode.has_value()
-        && containsSearchText(
-            record.eventCode.value()
-            )) {
-        return true;
-    }
-
-    if (record.entityId.has_value()
-        && containsSearchText(
-            record.entityId.value()
-            )) {
-        return true;
-    }
-
-    if (record.message.has_value()
-        && containsSearchText(
-            record.message.value()
+    if (record.timestamp.has_value()
+        && matches(
+            record.timestamp->toString(
+                Qt::ISODateWithMs
+                )
             )) {
         return true;
     }
@@ -199,10 +210,11 @@ bool InvestigationFilterProxyModel::matchesSearchText(
     for (
         auto iterator =
         record.customAttributes.constBegin();
-        iterator != record.customAttributes.constEnd();
+        iterator !=
+        record.customAttributes.constEnd();
         ++iterator
         ) {
-        if (containsSearchText(
+        if (matches(
                 iterator.value().toString()
                 )) {
             return true;

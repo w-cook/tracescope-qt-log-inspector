@@ -23,7 +23,8 @@ public:
     ImportResult importFile(
         const QString &filePath,
         qint64 maxProcessedRecords =
-        ILogImporter::UnlimitedRecordLimit
+        ILogImporter::UnlimitedRecordLimit,
+        const ImportExecutionContext &executionContext = {}
         ) const override;
 
     ImportResult importLines(
@@ -32,5 +33,12 @@ public:
         ) const;
 
 private:
+    void processLine(
+        const QString &rawSource,
+        const QString &sourcePath,
+        qint64 recordNumber,
+        ImportResult &result
+        ) const;
+
     ImportProfile profile;
 };

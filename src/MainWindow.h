@@ -1,11 +1,15 @@
 #pragma once
 
+#include <optional>
+
+#include <QDateTime>
 #include <QMainWindow>
 #include <QVector>
+#include <QFutureWatcher>
 
 #include "domain/InvestigationRecord.h"
-#include "domain/TelemetryEvent.h"
 #include "importing/ImportProfile.h"
+#include "importing/ImportResult.h"
 #include "controllers/InvestigationController.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -22,6 +26,9 @@ class QGroupBox;
 class QChartView;
 class QDragEnterEvent;
 class QDropEvent;
+class QTimer;
+class QAction;
+class QScrollBar;
 
 class MainWindow : public QMainWindow
 {
@@ -56,8 +63,36 @@ private:
     QComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
 
+    QTimer *searchDebounceTimer;
+
+    QAction *openAction = nullptr;
+
+    QFutureWatcher<ImportResult> *importWatcher =
+        nullptr;
+
     bool hasSeverityData = false;
     bool hasSubsystemData = false;
+
+    std::optional<QDateTime> timelineFirstTimestamp;
+    std::optional<QDateTime> timelineLastTimestamp;
+
+    QComboBox *timelineIntervalCombo =
+        nullptr;
+
+    QScrollBar *timelineScrollBar =
+        nullptr;
+
+    QLabel *timelineRangeLabel =
+        nullptr;
+
+    bool timelineScaleValid =
+        false;
+
+    qint64 timelineScaleIntervalMilliseconds =
+        0;
+
+    int timelineScaleMaximum =
+        1;
 
     QString currentFilePath;
 
@@ -73,9 +108,13 @@ private:
         const QString &filePath,
         const ImportProfile &profile
         );
+    void completeLogFileImport(
+        const QString &filePath,
+        const ImportResult &result
+        );
 
     void updateSummary(
-        const QVector<TelemetryEvent> &events,
+        const QVector<InvestigationRecord> &records,
         const QString &filePath
         );
 
@@ -92,15 +131,18 @@ private:
 
     QGroupBox *buildIssueSummaryPanel();
     void updateIssueSummary(
-        const QVector<TelemetryEvent> &events
+        const QVector<InvestigationRecord> &records
         );
 
     void exportFilteredResults();
 
     QGroupBox *buildTimelinePanel();
     void updateTimelineChart(
-        const QVector<TelemetryEvent> &events,
-        const QVector<TelemetryEvent> &rangeEvents
+        const QVector<InvestigationRecord> &records
+        );
+
+    void updateTimelineRangeLabel(
+        int scrollValue
         );
 
     void updateDataCapabilities();

@@ -2,6 +2,7 @@
 
 #include <QTemporaryFile>
 #include <QTextStream>
+#include <QFileInfo>
 
 #include "../src/importing/KeyValueTextImporter.h"
 
@@ -33,6 +34,8 @@ private slots:
     void preservesPhysicalLineNumbers();
     void importFileHonorsRecordLimit();
     void importFileReportsOpenFailure();
+    void importFileReportsProgress();
+    void importFileCanBeCancelled();
 };
 
 namespace
@@ -910,6 +913,161 @@ void KeyValueTextImporterTests::
         result.diagnostics.first()
             .severity,
         ImportDiagnosticSeverity::Error
+        );
+}
+
+void KeyValueTextImporterTests::
+    importFileReportsProgress()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        file.open()
+        );
+
+    QTextStream stream(&file);
+
+    stream
+        << "level=INFO message=One\n"
+        << "level=WARN message=Two\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    QVector<ImportProgress> progress;
+
+    ImportExecutionContext context;
+
+    context.reportProgress =
+        [&progress](
+            const ImportProgress &value
+            ) {
+            progress.append(
+                value
+                );
+        };
+
+    KeyValueTextImporter importer(
+        basicKeyValueProfile()
+        );
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QVERIFY(
+        !progress.isEmpty()
+        );
+
+    QCOMPARE(
+        progress.first().bytesProcessed,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        progress.last().bytesProcessed,
+        QFileInfo(filePath).size()
+        );
+
+    QCOMPARE(
+        progress.last().processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        progress.last().totalBytes,
+        QFileInfo(filePath).size()
+        );
+}
+
+void KeyValueTextImporterTests::
+    importFileCanBeCancelled()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        file.open()
+        );
+
+    QTextStream stream(&file);
+
+    stream
+        << "level=INFO message=One\n"
+        << "level=WARN message=Two\n"
+        << "level=ERROR message=Three\n";
+
+    stream.flush();
+
+    const QString filePath =
+        file.fileName();
+
+    file.close();
+
+    int cancellationChecks = 0;
+
+    ImportExecutionContext context;
+
+    context.isCancellationRequested =
+        [&cancellationChecks]() {
+            ++cancellationChecks;
+
+            /*
+             * Allow the first record to be read,
+             * then cancel before the second.
+             */
+            return cancellationChecks > 1;
+        };
+
+    KeyValueTextImporter importer(
+        basicKeyValueProfile()
+        );
+
+    const ImportResult result =
+        importer.importFile(
+            filePath,
+            ILogImporter::UnlimitedRecordLimit,
+            context
+            );
+
+    QVERIFY(
+        result.cancelled
+        );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(
+        !result.sourceTruncated
+        );
+
+    QCOMPARE(
+        result.records.first()
+            .message.value(),
+        QStringLiteral("One")
         );
 }
 

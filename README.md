@@ -4,23 +4,23 @@
 
 TraceScope is a native C++/Qt desktop application for importing, normalizing, filtering, inspecting, visualizing, and exporting structured telemetry and diagnostic logs.
 
-It began as a focused JSON Lines inspector and has grown into a configurable offline workbench. The `v0.7.0` milestone adds broad file-format support while keeping one consistent workflow: choose a source, preview how it will be mapped, adjust or load an import profile when needed, then filter, inspect, visualize, and export the normalized records.
+It began as a focused JSON Lines inspector and has grown into a configurable offline workbench. The `v0.8.0` milestone makes larger investigations more practical by moving import work outside the UI thread, adding streamed source reading, progress reporting, and cancellation where supported, keeping large structured-document configuration responsive, and scaling the timeline to fine-grained and long-duration investigations.
 
-TraceScope is intended for file-based logs from applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. It does not claim to automatically understand every arbitrary log format. Import behavior stays explicit, testable, and reproducible.
+TraceScope is intended for file-based logs from applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. It does not claim to automatically understand every arbitrary log format or guarantee a fixed maximum file size. Import behavior stays explicit, testable, and reproducible.
 
 ## Screenshots
 
-The `v0.7.0` screenshots use `structured-engineering-session.xml` with the matching `structured-xml-engineering-session-profile.json` profile. The same sample is carried from import configuration through investigation, filtering, and CSV export.
+The primary `v0.8.0` workflow screenshots use `structured-engineering-session.xml` with the matching `structured-xml-engineering-session-profile.json` profile. The same sample is carried from import configuration through investigation, filtering, timeline navigation, and CSV export. A separate large Windows Event XML scenario demonstrates responsive background import.
 
 ### Import Configuration
 
-Choose or drag in a source file, review the suggested format, load or edit a reusable profile, inspect mapped preview records, and validate the configuration before importing.
+Choose or drag in a source file, review the suggested format, load or edit a reusable profile, inspect mapped preview records and multiline raw source, and validate the configuration before importing.
 
 ![TraceScope Import Configuration](docs/screenshots/tracescope-import-configuration.png)
 
 ### TraceScope Dashboard
 
-The main investigation view combines summary counts, filtering controls, a multi-minute timeline, dynamic source-specific columns, grouped issue counts, and selected-record details.
+The main investigation view combines summary counts, filtering controls, selectable timeline resolution, dynamic source-specific columns, grouped issue counts, and selected-record details.
 
 ![TraceScope Dashboard](docs/screenshots/tracescope-dashboard.png)
 
@@ -29,6 +29,18 @@ The main investigation view combines summary counts, filtering controls, a multi
 Filtering updates the table, summaries, grouped issues, timeline, and visible custom fields together. Empty timeline intervals remain visible between the first and last matching records so gaps are not hidden by the filter.
 
 ![TraceScope Filtered Warnings](docs/screenshots/tracescope-filtered-warnings.png)
+
+### Fine-Resolution Timeline Navigation
+
+Manual fine-resolution buckets use a bounded visible window with horizontal navigation instead of attempting to render an unbounded number of chart buckets at once. Timeline labels, legend placement, and vertical scaling remain usable while navigating.
+
+![TraceScope Timeline Navigation](docs/screenshots/tracescope-timeline-navigation.png)
+
+### Responsive Large-File Import
+
+Large imports run outside the UI thread. Streamed importers can report determinate progress and support cancellation while the desktop interface remains responsive.
+
+![TraceScope Large-File Import](docs/screenshots/tracescope-large-file-import.png)
 
 ### Exported CSV
 
@@ -40,19 +52,19 @@ The export workflow writes the currently visible records to CSV using readable c
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The `v0.7.0` package set uses:
+The `v0.8.0` package set uses:
 
 ```text
-TraceScope-v0.7.0-windows-x64.zip
-TraceScope-v0.7.0-linux-x86_64.AppImage
-TraceScope-v0.7.0-samples.zip
+TraceScope-v0.8.0-windows-x64.zip
+TraceScope-v0.8.0-linux-x86_64.AppImage
+TraceScope-v0.8.0-samples.zip
 ```
 
-Historical `v0.1.0` through `v0.6.0` prereleases remain available as earlier development milestones.
+Historical `v0.1.0` through `v0.7.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.7.0-windows-x64.zip`.
+1. Download `TraceScope-v0.8.0-windows-x64.zip`.
 2. Extract the complete ZIP.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory.
@@ -61,24 +73,24 @@ The package includes the required Qt libraries, plugins, MinGW runtime dependenc
 
 ### Linux
 
-1. Download `TraceScope-v0.7.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.8.0-linux-x86_64.AppImage`.
 2. Make it executable:
 
 ```bash
-chmod +x TraceScope-v0.7.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.8.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.7.0-linux-x86_64.AppImage
+./TraceScope-v0.8.0-linux-x86_64.AppImage
 ```
 
 ### Sample Logs and Profiles
 
-`TraceScope-v0.7.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable profiles.
+`TraceScope-v0.8.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable profiles.
 
-Representative `v0.7.0` pairs include:
+Representative source/profile pairs include:
 
 - Structured XML: `structured-engineering-session.xml` with `structured-xml-engineering-session-profile.json`
 - Windows Event XML: `windows-event-engineering-session.xml` with `windows-event-engineering-session-profile.json`
@@ -88,7 +100,7 @@ Representative `v0.7.0` pairs include:
 - Web access logs: Apache Common, Apache/Nginx Combined, and IIS W3C samples
 - Configurable text: regex-based application-log samples and a logfmt-style service session
 
-The samples are intentionally varied so format detection, profile reuse, canonical mappings, custom fields, severity aliases, timestamps, preview behavior, filtering, and export can all be exercised without external services.
+The samples are intentionally varied so format detection, profile reuse, canonical mappings, custom fields, severity aliases, timestamps, preview behavior, filtering, timeline analysis, and export can all be exercised without external services.
 
 Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the packaged applications.
 
@@ -117,11 +129,26 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - Select or drag-and-drop a source file and display a likely-format suggestion
 - Create a fresh source-derived profile with automatic custom-field detection
 - Preview a bounded set of mapped records without changing the active investigation session
-- Inspect the complete raw source for the selected preview record
+- Inspect the complete raw source for the selected preview record in a vertically resizable area
 - Keep the last valid preview visible while temporarily invalid edits are corrected
 - Resize preview columns to keep long values readable
+- Disable automatic preview for large structured documents so configuration remains responsive
+- Generate large structured-document previews in the background and cancel obsolete preview work when the source or configuration changes
 - Save reusable profiles and load them only after validation
 - Retain an intentional profile when switching sources so compatibility can be checked without silently resetting the configuration
+
+### Large-File Responsiveness
+
+- Run file importing outside the UI thread so the desktop interface remains responsive during parsing and result preparation
+- Stream source reading for supported line-oriented and XML import paths instead of requiring the complete source byte stream in memory before parsing
+- Report determinate byte/record progress when an importer can provide meaningful incremental progress
+- Use indeterminate progress for complete-document processing such as structured JSON rather than presenting an artificial percentage
+- Support cooperative cancellation for streamed imports without replacing the current investigation with partial results
+- Keep normalized records, raw-source values, dynamic attributes, and investigation state resident for the active investigation rather than claiming constant-memory behavior
+
+Measured Release-build scenarios cover representative JSON Lines, CSV, IIS W3C, Windows Event XML, and structured JSON investigations containing up to 220,000 records and approximately 109 MiB on the documented test system. These are measured observations rather than maximum supported file-size or throughput guarantees.
+
+See [Performance Notes](docs/performance.md) for the measurement method, test environment, scenario results, cancellation checks, and interpretation boundaries.
 
 ### Investigation Workflow
 
@@ -133,7 +160,10 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - Preserve correct selected-record mapping after sorting and filtering
 - Inspect canonical fields, custom attributes, and raw source for the selected record
 - View session-level event counts and grouped warning/error summaries
-- Visualize filtered event counts in minute-based timeline buckets while preserving empty intervals within the displayed range
+- Visualize filtered event counts with automatic or manually selected timeline resolutions from millisecond through day-scale intervals
+- Preserve empty timeline intervals within the displayed range so gaps remain visible
+- Use bounded windowed rendering and horizontal navigation when fine resolutions would otherwise produce too many timeline buckets
+- Keep timeline range context, legend placement, and vertical scaling stable while navigating
 
 ### Export, Samples, and Verification
 
@@ -141,12 +171,12 @@ Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the pac
 - Use user-facing canonical column names and configured custom-field names in CSV output
 - Preserve deterministic custom-column ordering and blank cells for attributes absent from individual records
 - Retain CSV escaping and compact JSON serialization for structured custom values
-- Include demonstration logs and reusable profiles for every major `v0.7.0` source family
+- Include demonstration logs and reusable profiles for every major supported source family
 - Build and test on Windows and Linux through GitHub Actions
 - Produce portable Windows x64, Linux AppImage, and platform-neutral sample packages
 - Verify representative packaged samples and smoke-test the packaged Windows and Linux applications in CI
 
-The desktop UI consumes `InvestigationRecord` data directly for the primary table, filtering, searching, selected-record inspection, and CSV export. Existing telemetry-oriented summary and timeline components remain connected through a compatibility adapter while later phases continue reducing legacy assumptions where useful.
+The desktop UI consumes `InvestigationRecord` data directly for the primary table, filtering, searching, selected-record inspection, and CSV export. Existing telemetry-oriented summary and timeline analysis remain connected through a compatibility adapter while later phases continue reducing legacy assumptions where useful.
 
 ## Import Model
 
@@ -182,11 +212,11 @@ Different source formats need different amounts of configuration. TraceScope kee
 
 Import profiles map source-specific field names into the optional canonical fields and can also promote useful source values into readable custom columns. Values that are not explicitly mapped can still be preserved.
 
-Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.7.0`.
+Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.8.0`.
 
 ## Development Status
 
-Completed expansion milestones:
+Implemented expansion milestones:
 
 | Version | Milestone |
 | --- | --- |
@@ -198,12 +228,15 @@ Completed expansion milestones:
 | `v0.5.0` | Versioned import profiles, validation, serialization, profile-aware importing, and preview logic |
 | `v0.6.0` | Desktop import configuration, mapping-aware preview, reusable profile save/load, and sample profiles |
 | `v0.7.0` | Additional built-in formats, format detection/presets, and expanded cross-format samples |
+| `v0.8.0` | Responsive large-file import, progress/cancellation, scalable timeline resolution/navigation, and measured performance scenarios |
 
-The next phase is **Responsive Large-File Import**. Later phases deepen the investigation workflow with multi-session workspaces, advanced filtering and navigation, bookmarks and findings, deterministic analytics, session comparison, persistence, live file following, and reporting.
+The next planned phase is **Multi-Session Investigation Workspace**. Later phases deepen the investigation workflow with advanced filtering and navigation, bookmarks and findings, deterministic analytics, session comparison, persistence, live file following, and reporting.
 
 See the [TraceScope Expansion Roadmap](docs/expansion-roadmap.md) for the detailed phase plan, release discipline, and scope boundaries.
 
-Planned capabilities are not presented as implemented until their corresponding phases are completed, tested, packaged, and released.
+See [Performance Notes](docs/performance.md) for measured large-file scenarios and the limits of those measurements.
+
+Planned capabilities are not presented as implemented until their corresponding phases are completed and verified.
 
 ## Tech Stack
 
@@ -212,6 +245,7 @@ Planned capabilities are not presented as implemented until their corresponding 
 - Qt Widgets
 - Qt Charts
 - Qt Model/View
+- Qt Concurrent
 - CMake
 - Qt Test
 - MinGW 64-bit on Windows
@@ -233,6 +267,7 @@ The trusted local Windows development baseline uses Qt 6.11.1 with MinGW 64-bit.
 docs/
 ├── original-prototype-plan.md    # Historical initial implementation plan
 ├── expansion-roadmap.md          # Expansion architecture and phased roadmap
+├── performance.md                # Measured large-file scenarios and interpretation
 └── screenshots/                  # Portfolio screenshots
 
 packaging/
@@ -323,7 +358,7 @@ The current CTest suite contains 25 executables:
 - `ImportPreviewServiceTests`
 - `ImportFormatSuggestionServiceTests`
 
-Coverage includes the flexible record domain, import results and diagnostics, each built-in importer family, profile validation and serialization, preview and format-suggestion behavior, filtering and analysis, dynamic CSV export, Qt model/view behavior, proxy/source mapping, and controller coordination.
+Coverage includes the flexible record domain, import results and diagnostics, each built-in importer family, import execution progress/cancellation, profile validation and serialization, preview and format-suggestion behavior, filtering and analysis, dynamic CSV export, Qt model/view behavior, proxy/source mapping, and controller coordination.
 
 The same CTest suite runs in GitHub Actions on Windows and Linux.
 
@@ -331,15 +366,15 @@ The same CTest suite runs in GitHub Actions on Windows and Linux.
 
 The GitHub Actions workflow runs three parallel jobs with read-only repository permissions:
 
-- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.7.0-windows-x64.zip`
-- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.7.0-linux-x86_64.AppImage`
-- **Samples:** verifies representative Phase 6 source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.7.0-samples.zip`
+- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.8.0-windows-x64.zip`
+- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.8.0-linux-x86_64.AppImage`
+- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.8.0-samples.zip`
 
 Workflow artifacts validate candidate packages. Approved packages are attached permanently to GitHub Releases.
 
 ## Design Goals
 
-TraceScope emphasizes practical native desktop development, clear separation between importing, investigation data, presentation, analysis, and export, testable non-UI logic, explicit source mapping, raw-source preservation, offline operation, conservative product claims, and repeatable cross-platform releases.
+TraceScope emphasizes practical native desktop development, clear separation between importing, investigation data, presentation, analysis, and export, testable non-UI logic, explicit source mapping, raw-source preservation, offline operation, conservative product claims, responsive investigation workflows, and repeatable cross-platform releases.
 
 ## License
 
