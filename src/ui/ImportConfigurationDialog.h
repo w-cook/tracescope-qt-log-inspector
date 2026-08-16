@@ -175,6 +175,7 @@ private:
     void schedulePreviewRefresh();
 
     void startManualPreview();
+    void cancelManualPreview();
 
     void displayPreviewResult(
         const QString &filePath,

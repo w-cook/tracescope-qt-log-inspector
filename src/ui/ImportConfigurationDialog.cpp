@@ -28,6 +28,7 @@
 #include <QTimer>
 #include <QFile>
 #include <QtConcurrentRun>
+#include <QPromise>
 
 #include <memory>
 #include <utility>
@@ -52,20 +53,27 @@ QString customFieldMappingKey(
 }
 
 constexpr qint64
-    AutomaticStructuredJsonPreviewMaxBytes =
+    AutomaticStructuredDocumentPreviewMaxBytes =
     16 * 1024 * 1024;
 
-bool requiresManualStructuredJsonPreview(
+bool requiresManualStructuredDocumentPreview(
     const QFileInfo &fileInfo,
     const ImportProfile &profile
     )
 {
-    return profile.importerId
+    const bool isStructuredDocument =
+        profile.importerId
+            == QStringLiteral(
+                "structured-json"
+                )
+        || profile.importerId
                == QStringLiteral(
-                   "structured-json"
-                   )
+                   "xml"
+                   );
+
+    return isStructuredDocument
            && fileInfo.size()
-                  > AutomaticStructuredJsonPreviewMaxBytes;
+                  > AutomaticStructuredDocumentPreviewMaxBytes;
 }
 }
 
@@ -1366,6 +1374,7 @@ void ImportConfigurationDialog::browseForFile()
 
 void ImportConfigurationDialog::updateSourceState()
 {
+    cancelManualPreview();
     updateFormatSuggestion();
 
     const QString filePath =
@@ -1404,7 +1413,7 @@ void ImportConfigurationDialog::detectCustomFieldMappings()
         return;
     }
 
-    if (requiresManualStructuredJsonPreview(
+    if (requiresManualStructuredDocumentPreview(
             fileInfo,
             workingProfile
             )) {
@@ -1722,7 +1731,7 @@ void ImportConfigurationDialog::updatePreview()
     }
 
     const bool requiresManualPreview =
-        requiresManualStructuredJsonPreview(
+        requiresManualStructuredDocumentPreview(
             fileInfo,
             workingProfile
             );
@@ -1735,12 +1744,11 @@ void ImportConfigurationDialog::updatePreview()
         clearPreview(
             tr(
                 "Automatic preview is disabled for "
-                "large structured JSON documents because "
-                "previewing requires parsing the complete "
-                "document. Import configuration remains "
-                "available. Click Refresh Preview to "
-                "generate the first %1 processed records "
-                "in the background."
+                "large structured documents to keep the "
+                "Import Configuration interface responsive. "
+                "Import configuration remains available. "
+                "Click Refresh Preview to generate the "
+                "first %1 processed records in the background."
                 )
                 .arg(
                     ImportPreviewService::
@@ -2825,6 +2833,8 @@ void ImportConfigurationDialog::loadProfile()
         return;
     }
 
+    cancelManualPreview();
+
     workingProfile =
         loadedProfile;
 
@@ -2846,6 +2856,7 @@ void ImportConfigurationDialog::loadProfile()
 
 void ImportConfigurationDialog::schedulePreviewRefresh()
 {
+    cancelManualPreview();
     previewRefreshTimer->start();
 }
 
@@ -3649,6 +3660,8 @@ void ImportConfigurationDialog::
             workingProfile
             );
 
+    previewRefreshTimer->stop();
+
     auto *watcher =
         new QFutureWatcher<
             ImportPreviewResult
@@ -3687,25 +3700,28 @@ void ImportConfigurationDialog::
             profileSnapshot,
             detectCustomFields
         ]() {
-            const ImportPreviewResult preview =
-                watcher->result();
+            const bool cancelled =
+                watcher->isCanceled();
 
             if (previewWatcher == watcher) {
-                previewWatcher =
-                    nullptr;
+                previewWatcher = nullptr;
             }
 
             watcher->deleteLater();
 
-            refreshPreviewButton
-                ->setEnabled(
-                    true
-                    );
+            refreshPreviewButton->setEnabled(true);
 
-            refreshPreviewButton
-                ->setText(
-                    tr("Refresh Preview")
-                    );
+            refreshPreviewButton->setText(
+                tr("Refresh Preview")
+                );
+
+            if (cancelled) {
+                updatePreview();
+                return;
+            }
+
+            const ImportPreviewResult preview =
+                watcher->result();
 
             /*
              * Do not display a preview that was
@@ -3745,13 +3761,46 @@ void ImportConfigurationDialog::
             [
                 filePath,
                 previewProfile
-            ]() {
-                return ImportPreviewService()
-                .previewFile(
-                    filePath,
-                    previewProfile
+            ](
+                QPromise<ImportPreviewResult> &promise
+                ) {
+                ImportExecutionContext
+                    executionContext;
+
+                executionContext
+                    .isCancellationRequested =
+                    [&promise]() {
+                        return promise.isCanceled();
+                    };
+
+                ImportPreviewResult preview =
+                    ImportPreviewService()
+                        .previewFile(
+                            filePath,
+                            previewProfile,
+                            ImportPreviewService::
+                            DefaultMaxProcessedRecords,
+                            executionContext
+                            );
+
+                if (promise.isCanceled()
+                    || preview.importResult.cancelled) {
+                    return;
+                }
+
+                promise.addResult(
+                    std::move(preview)
                     );
             }
             )
         );
+}
+
+void ImportConfigurationDialog::cancelManualPreview()
+{
+    if (previewWatcher == nullptr) {
+        return;
+    }
+
+    previewWatcher->cancel();
 }

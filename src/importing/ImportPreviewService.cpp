@@ -25,7 +25,8 @@ ImportPreviewResult serviceFailure(
 ImportPreviewResult ImportPreviewService::previewFile(
     const QString &filePath,
     const ImportProfile &profile,
-    qint64 maxProcessedRecords
+    qint64 maxProcessedRecords,
+    const ImportExecutionContext &executionContext
     ) const
 {
     ImportPreviewResult result;
@@ -76,7 +77,8 @@ ImportPreviewResult ImportPreviewService::previewFile(
     result.importResult =
         importer->importFile(
             filePath,
-            maxProcessedRecords
+            maxProcessedRecords,
+            executionContext
             );
 
     result.sourceTruncated =
