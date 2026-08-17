@@ -30,6 +30,7 @@ class QDropEvent;
 class QTimer;
 class QAction;
 class QScrollBar;
+class QTabBar;
 
 class MainWindow : public QMainWindow
 {
@@ -48,6 +49,7 @@ protected:
         ) override;
 
 private:
+    QTabBar *sessionTabBar;
     QLabel *summaryLabel;
     QTableView *eventTable;
     QPlainTextEdit *eventDetailText;

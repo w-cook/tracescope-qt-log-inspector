@@ -37,6 +37,7 @@
 #include <QFrame>
 #include <QVariant>
 #include <QTimeZone>
+#include <QTabBar>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -362,6 +363,7 @@ QString timelineDisplayLabel(
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
+    sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
     eventDetailText(new QPlainTextEdit(this)),
@@ -385,10 +387,97 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(
         workspace,
+        &InvestigationWorkspace::sessionAdded,
+        this,
+        [this](int index) {
+            InvestigationSession *session =
+                workspace->sessionAt(index);
+
+            if (session == nullptr) {
+                return;
+            }
+
+            const QSignalBlocker blocker(
+                sessionTabBar
+                );
+
+            sessionTabBar->insertTab(
+                index,
+                session
+                    ->sourceMetadata()
+                    .sourceName
+                );
+
+            sessionTabBar->setTabToolTip(
+                index,
+                session
+                    ->sourceMetadata()
+                    .sourcePath
+                );
+
+            sessionTabBar->setVisible(true);
+        }
+        );
+
+    connect(
+        workspace,
+        &InvestigationWorkspace::sessionClosed,
+        this,
+        [this](int index) {
+            const QSignalBlocker blocker(
+                sessionTabBar
+                );
+
+            sessionTabBar->removeTab(index);
+
+            sessionTabBar->setVisible(
+                workspace->sessionCount() > 0
+                );
+        }
+        );
+
+    connect(
+        workspace,
         &InvestigationWorkspace::activeSessionChanged,
         this,
-        [this](int) {
+        [this](int index) {
+            {
+                const QSignalBlocker blocker(
+                    sessionTabBar
+                    );
+
+                sessionTabBar->setCurrentIndex(
+                    index
+                    );
+            }
+
             bindActiveSession();
+        }
+        );
+
+    connect(
+        sessionTabBar,
+        &QTabBar::currentChanged,
+        this,
+        [this](int index) {
+            if (index < 0) {
+                return;
+            }
+
+            workspace->setActiveSession(
+                index
+                );
+        }
+        );
+
+    connect(
+        sessionTabBar,
+        &QTabBar::tabCloseRequested,
+        this,
+        [this](int index) {
+            workspace->closeSession(
+                index
+                );
         }
         );
 }
@@ -439,6 +528,24 @@ void MainWindow::buildLayout()
 {
     auto *centralWidget = new QWidget(this);
     auto *layout = new QVBoxLayout(centralWidget);
+
+    sessionTabBar->setTabsClosable(true);
+
+    sessionTabBar->setExpanding(false);
+
+    sessionTabBar->setDocumentMode(true);
+
+    sessionTabBar->setUsesScrollButtons(true);
+
+    sessionTabBar->setElideMode(
+        Qt::ElideMiddle
+        );
+
+    sessionTabBar->setVisible(false);
+
+    layout->addWidget(
+        sessionTabBar
+        );
 
     layout->addWidget(summaryLabel);
     buildFilterControls(layout);
@@ -2864,6 +2971,39 @@ void MainWindow::bindActiveSession()
 
         clearEventDetail();
 
+        levelFilterCombo->blockSignals(true);
+        subsystemFilterCombo->blockSignals(true);
+        searchInput->blockSignals(true);
+
+        levelFilterCombo->setCurrentIndex(0);
+        subsystemFilterCombo->setCurrentIndex(0);
+        searchInput->clear();
+
+        levelFilterCombo->blockSignals(false);
+        subsystemFilterCombo->blockSignals(false);
+        searchInput->blockSignals(false);
+
+        hasSeverityData = false;
+        hasSubsystemData = false;
+
+        levelFilterCombo->setVisible(false);
+        subsystemFilterCombo->setVisible(false);
+
+        issueSummaryTable->setRowCount(0);
+
+        if (issueSummaryGroup != nullptr) {
+            issueSummaryGroup->setVisible(false);
+        }
+
+        timelineFirstTimestamp.reset();
+        timelineLastTimestamp.reset();
+
+        timelineScaleValid = false;
+
+        updateTimelineChart(
+            QVector<InvestigationRecord>()
+            );
+
         summaryLabel->setText(
             tr("No log file loaded.")
             );
@@ -2886,11 +3026,6 @@ void MainWindow::bindActiveSession()
 
     connectEventTableSelectionModel();
 
-    /*
-     * The proxy belongs to the session, so these
-     * values survive while another session is
-     * active.
-     */
     InvestigationFilterProxyModel *proxyModel =
         investigationController
             ->proxyModel();
@@ -2903,6 +3038,8 @@ void MainWindow::bindActiveSession()
 
     const QString searchText =
         proxyModel->searchText();
+
+    updateDataCapabilities();
 
     refreshSubsystemFilterOptions();
 
@@ -2944,7 +3081,6 @@ void MainWindow::bindActiveSession()
     subsystemFilterCombo->blockSignals(false);
     searchInput->blockSignals(false);
 
-    updateDataCapabilities();
     applyFilters();
 
     eventTable->resizeColumnsToContents();
