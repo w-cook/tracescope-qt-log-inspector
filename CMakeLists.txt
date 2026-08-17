@@ -93,6 +93,8 @@ qt_add_executable(TraceScope
     src/importing/XmlImporter.cpp
     src/importing/ImportProgress.h
     src/importing/ImportExecutionContext.h
+    src/workspace/InvestigationSession.h
+    src/workspace/InvestigationSession.cpp
 
 )
 
