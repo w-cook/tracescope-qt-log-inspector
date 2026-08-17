@@ -48,6 +48,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <utility>
 
 #include "importing/BuiltInImporterRegistry.h"
@@ -366,7 +367,8 @@ MainWindow::MainWindow(QWidget *parent)
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
     issueSummaryGroup(nullptr),
-    investigationController(new InvestigationController(this)),
+    workspace(new InvestigationWorkspace(this)),
+    investigationController(nullptr),
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new QComboBox(this)),
     subsystemFilterCombo(new QComboBox(this)),
@@ -380,6 +382,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     createMenus();
     buildLayout();
+
+    connect(
+        workspace,
+        &InvestigationWorkspace::activeSessionChanged,
+        this,
+        [this](int) {
+            bindActiveSession();
+        }
+        );
 }
 
 void MainWindow::createMenus()
@@ -436,8 +447,6 @@ void MainWindow::buildLayout()
 
     auto *eventsGroup = new QGroupBox("Telemetry Events", this);
     auto *eventsLayout = new QVBoxLayout(eventsGroup);
-
-    eventTable->setModel(investigationController->proxyModel());
 
     eventTable->setSizePolicy(
         QSizePolicy::Expanding,
@@ -684,7 +693,8 @@ void MainWindow::loadLogFile(
             this,
             watcher,
             progressDialog,
-            filePath
+            filePath,
+            profile
         ]() {
             const bool cancelled =
                 watcher->isCanceled();
@@ -708,14 +718,15 @@ void MainWindow::loadLogFile(
                 return;
             }
 
-            const ImportResult result =
+            ImportResult result =
                 watcher->result();
 
             watcher->deleteLater();
 
             completeLogFileImport(
                 filePath,
-                result
+                profile,
+                std::move(result)
                 );
         }
         );
@@ -845,21 +856,29 @@ void MainWindow::loadLogFile(
 
 void MainWindow::completeLogFileImport(
     const QString &filePath,
-    const ImportResult &result
+    const ImportProfile &profile,
+    ImportResult result
     )
 {
     if (result.cancelled) {
         return;
     }
 
-    currentFilePath =
-        filePath;
+    const bool noRecordsLoaded =
+        result.records.isEmpty();
 
-    investigationController->setRecords(
-        result.records
+    auto session =
+        std::make_unique<InvestigationSession>(
+            filePath,
+            profile,
+            std::move(result)
+            );
+
+    workspace->addSession(
+        std::move(session)
         );
 
-    if (result.records.isEmpty()) {
+    if (noRecordsLoaded) {
         QMessageBox::warning(
             this,
             "No Events Loaded",
@@ -868,16 +887,6 @@ void MainWindow::completeLogFileImport(
             "or unsupported."
             );
     }
-
-    refreshSubsystemFilterOptions();
-    updateDataCapabilities();
-    applyFilters();
-
-    eventTable->resizeColumnsToContents();
-
-    eventTable
-        ->horizontalHeader()
-        ->setStretchLastSection(true);
 }
 
 void MainWindow::updateSummary(
@@ -1053,6 +1062,10 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
 void MainWindow::applyFilters()
 {
+    if (investigationController == nullptr) {
+        return;
+    }
+
     timelineScaleValid =
         false;
 
@@ -1085,6 +1098,10 @@ void MainWindow::applyFilters()
 
 void MainWindow::refreshSubsystemFilterOptions()
 {
+    if (investigationController == nullptr) {
+        return;
+    }
+
     const QString selectedSubsystem =
         subsystemFilterCombo
             ->currentData()
@@ -1195,23 +1212,17 @@ QGroupBox *MainWindow::buildDetailPanel()
     auto *detailLayout = new QVBoxLayout(detailGroup);
     detailLayout->addWidget(eventDetailText);
 
-    connect(
-        eventTable->selectionModel(),
-        &QItemSelectionModel::selectionChanged,
-        this,
-        [this](
-            const QItemSelection &,
-            const QItemSelection &
-            ) {
-            updateEventDetailFromSelection();
-        }
-        );
-
     return detailGroup;
 }
 
 void MainWindow::updateEventDetailFromSelection()
 {
+    if (investigationController == nullptr
+        || eventTable->selectionModel() == nullptr) {
+        clearEventDetail();
+        return;
+    }
+
     const QModelIndexList selectedRows =
         eventTable->selectionModel()
             ->selectedRows();
@@ -1409,6 +1420,16 @@ void MainWindow::updateIssueSummary(const QVector<InvestigationRecord> &records)
 
 void MainWindow::exportFilteredResults()
 {
+    if (investigationController == nullptr) {
+        QMessageBox::information(
+            this,
+            "No Records to Export",
+            "There are no currently visible records to export."
+            );
+
+        return;
+    }
+
     const QVector<InvestigationRecord> records =
         investigationController->visibleRecords();
 
@@ -2717,6 +2738,10 @@ void MainWindow::updateDataCapabilities()
     timelineFirstTimestamp.reset();
     timelineLastTimestamp.reset();
 
+    if (investigationController == nullptr) {
+        return;
+    }
+
     const QVector<InvestigationRecord> &records =
         investigationController->allRecords();
     
@@ -2790,4 +2815,141 @@ void MainWindow::updateDataCapabilities()
             && hasSubsystemData
             );
     }
+}
+
+void MainWindow::connectEventTableSelectionModel()
+{
+    QObject::disconnect(
+        eventSelectionConnection
+        );
+
+    QItemSelectionModel *selectionModel =
+        eventTable->selectionModel();
+
+    if (selectionModel == nullptr) {
+        eventSelectionConnection =
+            QMetaObject::Connection();
+
+        return;
+    }
+
+    eventSelectionConnection =
+        connect(
+            selectionModel,
+            &QItemSelectionModel::selectionChanged,
+            this,
+            [this](
+                const QItemSelection &,
+                const QItemSelection &
+                ) {
+                updateEventDetailFromSelection();
+            }
+            );
+}
+
+void MainWindow::bindActiveSession()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        investigationController =
+            nullptr;
+
+        currentFilePath.clear();
+
+        eventTable->setModel(nullptr);
+
+        connectEventTableSelectionModel();
+
+        clearEventDetail();
+
+        summaryLabel->setText(
+            tr("No log file loaded.")
+            );
+
+        return;
+    }
+
+    investigationController =
+        session->investigationController();
+
+    currentFilePath =
+        session
+            ->sourceMetadata()
+            .sourcePath;
+
+    eventTable->setModel(
+        investigationController
+            ->proxyModel()
+        );
+
+    connectEventTableSelectionModel();
+
+    /*
+     * The proxy belongs to the session, so these
+     * values survive while another session is
+     * active.
+     */
+    InvestigationFilterProxyModel *proxyModel =
+        investigationController
+            ->proxyModel();
+
+    const QString severityFilter =
+        proxyModel->severityFilter();
+
+    const QString subsystemFilter =
+        proxyModel->subsystemFilter();
+
+    const QString searchText =
+        proxyModel->searchText();
+
+    refreshSubsystemFilterOptions();
+
+    levelFilterCombo->blockSignals(true);
+    subsystemFilterCombo->blockSignals(true);
+    searchInput->blockSignals(true);
+
+    int severityIndex =
+        levelFilterCombo->findData(
+            severityFilter
+            );
+
+    if (severityIndex < 0) {
+        severityIndex = 0;
+    }
+
+    levelFilterCombo->setCurrentIndex(
+        severityIndex
+        );
+
+    int subsystemIndex =
+        subsystemFilterCombo->findData(
+            subsystemFilter
+            );
+
+    if (subsystemIndex < 0) {
+        subsystemIndex = 0;
+    }
+
+    subsystemFilterCombo->setCurrentIndex(
+        subsystemIndex
+        );
+
+    searchInput->setText(
+        searchText
+        );
+
+    levelFilterCombo->blockSignals(false);
+    subsystemFilterCombo->blockSignals(false);
+    searchInput->blockSignals(false);
+
+    updateDataCapabilities();
+    applyFilters();
+
+    eventTable->resizeColumnsToContents();
+
+    eventTable
+        ->horizontalHeader()
+        ->setStretchLastSection(true);
 }

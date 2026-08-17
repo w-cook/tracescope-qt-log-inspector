@@ -7,13 +7,14 @@
 #include <QVector>
 #include <QFutureWatcher>
 
+#include "analysis/EventTimelineAnalyzer.h"
+#include "analysis/TelemetryIssueAnalyzer.h"
+#include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
+#include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
-#include "controllers/InvestigationController.h"
-#include "analysis/TelemetryIssueAnalyzer.h"
-#include "exporting/InvestigationCsvExporter.h"
-#include "analysis/EventTimelineAnalyzer.h"
+#include "workspace/InvestigationWorkspace.h"
 
 class QLabel;
 class QTableView;
@@ -53,11 +54,15 @@ private:
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
 
-    InvestigationController *investigationController;
+    InvestigationWorkspace *workspace;
+    InvestigationController *investigationController =
+        nullptr;
 
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationCsvExporter csvExporter;
+
+    QMetaObject::Connection eventSelectionConnection;
 
     QComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
@@ -110,7 +115,8 @@ private:
         );
     void completeLogFileImport(
         const QString &filePath,
-        const ImportResult &result
+        const ImportProfile &profile,
+        ImportResult result
         );
 
     void updateSummary(
@@ -146,4 +152,7 @@ private:
         );
 
     void updateDataCapabilities();
+
+    void bindActiveSession();
+    void connectEventTableSelectionModel();
 };
