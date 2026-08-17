@@ -117,12 +117,13 @@ Completed release milestones:
 | `v0.5.0` | Import Profiles and Preview Logic | prerelease |
 | `v0.6.0` | Import Configuration Interface | prerelease |
 | `v0.7.0` | Additional Built-In Formats | prerelease |
+| `v0.8.0` | Responsive Large-File Import | prerelease |
 
 Current release target:
 
 | Version | Milestone | Status |
 | --- | --- | --- |
-| `v0.8.0` | Responsive Large-File Import | release preparation in progress |
+| `v0.9.0` | Multi-Session Investigation Workspace | active development |
 
 Release assets follow a consistent naming convention:
 
@@ -159,7 +160,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through the current Phase 7 development branch:
+Implemented foundations through `v0.8.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -186,7 +187,7 @@ Reusable import profiles are versioned, human-readable JSON so mappings can be r
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` candidate keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Later phases now prioritize multi-session investigation, advanced navigation and filtering, findings, comparison, persistence, live following, deterministic analytics, and reporting rather than continuing to accumulate built-in formats.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 is now in active development and focuses on multi-session investigation before later phases expand navigation and filtering, findings, comparison, persistence, live following, deterministic analytics, and reporting rather than continuing to accumulate built-in formats.
 
 ## Development Phases
 
@@ -394,7 +395,7 @@ Phase 6 establishes sufficient ingestion breadth for the current expansion. Nati
 
 ### Phase 7 — Responsive Large-File Import
 
-**Status: Implementation complete; `v0.8.0` release preparation in progress.**
+**Status: Completed in `v0.8.0`.**
 
 With representative ingestion coverage established in `v0.7.0`, this phase shifts development priority from additional format count to the responsiveness and scalability of practical investigations.
 
@@ -446,6 +447,8 @@ Additional maintenance completed during the phase:
 Performance work should continue to be measured against practical investigation workflows. Future documentation must keep observed test scenarios distinct from unsupported maximum-size, memory, or throughput claims.
 
 ### Phase 8 — Multi-Session Investigation Workspace
+
+**Status: Active development; targeted for `v0.9.0`.**
 
 Allow multiple imported sessions to coexist within one application instance so related logs from different applications, services, devices, test runs, or system components can be investigated without repeatedly replacing the active source.
 
