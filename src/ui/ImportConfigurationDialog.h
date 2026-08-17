@@ -10,6 +10,7 @@
 #include "../importing/ImportProfile.h"
 #include "../importing/ImportProfileSerialization.h"
 #include "../importing/ImportProfileValidator.h"
+#include "../preferences/RecentItemsStore.h"
 
 class QDialogButtonBox;
 class QDragEnterEvent;
@@ -22,6 +23,7 @@ class QTableWidget;
 class QComboBox;
 class QPlainTextEdit;
 class QTimer;
+class QMenu;
 
 class ImportConfigurationDialog final
     : public QDialog
@@ -30,7 +32,9 @@ class ImportConfigurationDialog final
 
 public:
     explicit ImportConfigurationDialog(
-        QWidget *parent = nullptr
+        QWidget *parent = nullptr,
+        RecentItemsStore *recentItemsStore =
+        nullptr
         );
 
     QString selectedFilePath() const;
@@ -51,6 +55,9 @@ protected:
         ) override;
 
 private:
+    RecentItemsStore *recentItemsStore =
+        nullptr;
+
     QLineEdit *filePathEdit;
     QPushButton *browseButton;
     QLabel *formatSuggestionLabel;
@@ -75,6 +82,8 @@ private:
     QPushButton *newProfileFromSourceButton;
     QPushButton *loadProfileButton;
     QPushButton *saveProfileButton;
+    QPushButton *recentProfilesButton;
+    QMenu *recentProfilesMenu;
 
     QLineEdit *timestampPathEdit;
     QLineEdit *severityPathEdit;
@@ -171,6 +180,9 @@ private:
 
     void saveProfile();
     void loadProfile();
+    void loadProfileFromPath(
+        const QString &filePath
+        );
 
     void schedulePreviewRefresh();
 
@@ -189,4 +201,6 @@ private:
     void createProfileFromSource(
         bool userInitiated
         );
+
+    void refreshRecentProfilesMenu();
 };

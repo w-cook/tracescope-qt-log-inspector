@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.8.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.9.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -93,6 +93,12 @@ qt_add_executable(TraceScope
     src/importing/XmlImporter.cpp
     src/importing/ImportProgress.h
     src/importing/ImportExecutionContext.h
+    src/workspace/InvestigationSession.h
+    src/workspace/InvestigationSession.cpp
+    src/workspace/InvestigationWorkspace.h
+    src/workspace/InvestigationWorkspace.cpp
+    src/preferences/RecentItemsStore.h
+    src/preferences/RecentItemsStore.cpp
 
 )
 

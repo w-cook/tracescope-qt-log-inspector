@@ -6,14 +6,17 @@
 #include <QMainWindow>
 #include <QVector>
 #include <QFutureWatcher>
+#include <QSettings>
 
+#include "analysis/EventTimelineAnalyzer.h"
+#include "analysis/TelemetryIssueAnalyzer.h"
+#include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
+#include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
-#include "controllers/InvestigationController.h"
-#include "analysis/TelemetryIssueAnalyzer.h"
-#include "exporting/InvestigationCsvExporter.h"
-#include "analysis/EventTimelineAnalyzer.h"
+#include "preferences/RecentItemsStore.h"
+#include "workspace/InvestigationWorkspace.h"
 
 class QLabel;
 class QTableView;
@@ -29,6 +32,8 @@ class QDropEvent;
 class QTimer;
 class QAction;
 class QScrollBar;
+class QTabBar;
+class QMenu;
 
 class MainWindow : public QMainWindow
 {
@@ -47,17 +52,27 @@ protected:
         ) override;
 
 private:
+    QSettings settings;
+    RecentItemsStore recentItemsStore;
+
+    QMenu *recentFilesMenu = nullptr;
+
+    QTabBar *sessionTabBar;
     QLabel *summaryLabel;
     QTableView *eventTable;
     QPlainTextEdit *eventDetailText;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
 
-    InvestigationController *investigationController;
+    InvestigationWorkspace *workspace;
+    InvestigationController *investigationController =
+        nullptr;
 
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationCsvExporter csvExporter;
+
+    QMetaObject::Connection eventSelectionConnection;
 
     QComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
@@ -66,6 +81,7 @@ private:
     QTimer *searchDebounceTimer;
 
     QAction *openAction = nullptr;
+    QAction *reloadAction = nullptr;
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
@@ -106,11 +122,15 @@ private:
         );
     void loadLogFile(
         const QString &filePath,
-        const ImportProfile &profile
+        const ImportProfile &profile,
+        const QString &reloadSessionId =
+        QString()
         );
     void completeLogFileImport(
         const QString &filePath,
-        const ImportResult &result
+        const ImportProfile &profile,
+        ImportResult result,
+        const QString &reloadSessionId
         );
 
     void updateSummary(
@@ -146,4 +166,14 @@ private:
         );
 
     void updateDataCapabilities();
+
+    void bindActiveSession();
+    void connectEventTableSelectionModel();
+    void reloadActiveSession();
+
+    void refreshRecentFilesMenu();
+
+    void openRecentFile(
+        const QString &filePath
+        );
 };

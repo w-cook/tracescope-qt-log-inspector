@@ -45,6 +45,9 @@ public:
         const QModelIndex &proxyIndex
         ) const;
 
+    QVector<InvestigationRecord>
+    recordsForAnalysis() const;
+
 private:
     InvestigationTableModel m_sourceModel;
     InvestigationFilterProxyModel m_proxyModel;

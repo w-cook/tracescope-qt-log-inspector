@@ -142,3 +142,24 @@ InvestigationController::recordForProxyIndex(
         sourceIndex.row()
         );
 }
+
+QVector<InvestigationRecord>
+InvestigationController::recordsForAnalysis() const
+{
+    const bool filtersActive =
+        !m_proxyModel
+             .severityFilter()
+             .isEmpty()
+        || !m_proxyModel
+                .subsystemFilter()
+                .isEmpty()
+        || !m_proxyModel
+                .searchText()
+                .isEmpty();
+
+    if (!filtersActive) {
+        return m_sourceModel.records();
+    }
+
+    return visibleRecords();
+}

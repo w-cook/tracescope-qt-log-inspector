@@ -37,6 +37,7 @@
 #include <QFrame>
 #include <QVariant>
 #include <QTimeZone>
+#include <QTabBar>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -48,6 +49,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <utility>
 
 #include "importing/BuiltInImporterRegistry.h"
@@ -361,12 +363,16 @@ QString timelineDisplayLabel(
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
+    settings(),
+    recentItemsStore(settings),
+    sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
     issueSummaryGroup(nullptr),
-    investigationController(new InvestigationController(this)),
+    workspace(new InvestigationWorkspace(this)),
+    investigationController(nullptr),
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new QComboBox(this)),
     subsystemFilterCombo(new QComboBox(this)),
@@ -380,6 +386,117 @@ MainWindow::MainWindow(QWidget *parent)
 
     createMenus();
     buildLayout();
+
+    connect(
+        workspace,
+        &InvestigationWorkspace::sessionAdded,
+        this,
+        [this](int index) {
+            InvestigationSession *session =
+                workspace->sessionAt(index);
+
+            if (session == nullptr) {
+                return;
+            }
+
+            const QSignalBlocker blocker(
+                sessionTabBar
+                );
+
+            sessionTabBar->insertTab(
+                index,
+                session
+                    ->sourceMetadata()
+                    .sourceName
+                );
+
+            sessionTabBar->setTabToolTip(
+                index,
+                session
+                    ->sourceMetadata()
+                    .sourcePath
+                );
+
+            sessionTabBar->setVisible(true);
+        }
+        );
+
+    connect(
+        workspace,
+        &InvestigationWorkspace::sessionClosed,
+        this,
+        [this](int index) {
+            const QSignalBlocker blocker(
+                sessionTabBar
+                );
+
+            sessionTabBar->removeTab(index);
+
+            sessionTabBar->setVisible(
+                workspace->sessionCount() > 0
+                );
+        }
+        );
+
+    connect(
+        workspace,
+        &InvestigationWorkspace::activeSessionChanged,
+        this,
+        [this](int index) {
+            {
+                const QSignalBlocker blocker(
+                    sessionTabBar
+                    );
+
+                sessionTabBar->setCurrentIndex(
+                    index
+                    );
+            }
+
+            bindActiveSession();
+        }
+        );
+
+    connect(
+        workspace,
+        &InvestigationWorkspace::sessionReloaded,
+        this,
+        [this](int index) {
+            if (index
+                == workspace
+                       ->activeSessionIndex()) {
+                bindActiveSession();
+            }
+        }
+        );
+
+    connect(
+        sessionTabBar,
+        &QTabBar::currentChanged,
+        this,
+        [this](int index) {
+            if (index < 0) {
+                return;
+            }
+
+            workspace->setActiveSession(
+                index
+                );
+        }
+        );
+
+    connect(
+        sessionTabBar,
+        &QTabBar::tabCloseRequested,
+        this,
+        [this](int index) {
+            workspace->closeSession(
+                index
+                );
+        }
+        );
+
+    bindActiveSession();
 }
 
 void MainWindow::createMenus()
@@ -398,6 +515,51 @@ void MainWindow::createMenus()
     });
 
     fileMenu->addAction(openAction);
+
+    recentFilesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Files")
+            );
+
+    recentFilesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        recentFilesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshRecentFilesMenu();
+        }
+        );
+
+    refreshRecentFilesMenu();
+
+    reloadAction =
+        new QAction(
+            tr("&Reload Current Session"),
+            this
+            );
+
+    reloadAction->setShortcut(
+        QKeySequence::Refresh
+        );
+
+    reloadAction->setEnabled(false);
+
+    connect(
+        reloadAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            reloadActiveSession();
+        }
+        );
+
+    fileMenu->addAction(
+        reloadAction
+        );
 
     auto *exportAction = new QAction("&Export Filtered Results...", this);
     exportAction->setShortcut(QKeySequence::Save);
@@ -429,6 +591,24 @@ void MainWindow::buildLayout()
     auto *centralWidget = new QWidget(this);
     auto *layout = new QVBoxLayout(centralWidget);
 
+    sessionTabBar->setTabsClosable(true);
+
+    sessionTabBar->setExpanding(false);
+
+    sessionTabBar->setDocumentMode(true);
+
+    sessionTabBar->setUsesScrollButtons(true);
+
+    sessionTabBar->setElideMode(
+        Qt::ElideMiddle
+        );
+
+    sessionTabBar->setVisible(false);
+
+    layout->addWidget(
+        sessionTabBar
+        );
+
     layout->addWidget(summaryLabel);
     buildFilterControls(layout);
 
@@ -436,8 +616,6 @@ void MainWindow::buildLayout()
 
     auto *eventsGroup = new QGroupBox("Telemetry Events", this);
     auto *eventsLayout = new QVBoxLayout(eventsGroup);
-
-    eventTable->setModel(investigationController->proxyModel());
 
     eventTable->setSizePolicy(
         QSizePolicy::Expanding,
@@ -461,7 +639,59 @@ void MainWindow::buildLayout()
         Qt::AscendingOrder
         );
 
+    eventTable
+        ->horizontalHeader()
+        ->setResizeContentsPrecision(
+            200
+            );
+
     eventTable->horizontalHeader()->setStretchLastSection(true);
+
+    connect(
+        eventTable->horizontalHeader(),
+        &QHeaderView::sectionResized,
+        this,
+        [this](
+            int,
+            int,
+            int
+            ) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr
+                || eventTable->model() == nullptr) {
+                return;
+            }
+
+            const int columnCount =
+                eventTable
+                    ->horizontalHeader()
+                    ->count();
+
+            QVector<int> widths;
+
+            widths.reserve(
+                columnCount
+                );
+
+            for (
+                int column = 0;
+                column < columnCount;
+                ++column
+                ) {
+                widths.append(
+                    eventTable->columnWidth(
+                        column
+                        )
+                    );
+            }
+
+            session->setColumnWidths(
+                std::move(widths)
+                );
+        }
+        );
 
     eventsLayout->addWidget(eventTable);
 
@@ -521,7 +751,10 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         return;
     }
 
-    ImportConfigurationDialog dialog(this);
+    ImportConfigurationDialog dialog(
+        this,
+        &recentItemsStore
+        );
 
     if (!initialFilePath.isEmpty()) {
         dialog.setSelectedFilePath(
@@ -541,11 +774,16 @@ void MainWindow::openLogFile(const QString &initialFilePath)
 
 void MainWindow::loadLogFile(
     const QString &filePath,
-    const ImportProfile &profile
+    const ImportProfile &profile,
+    const QString &reloadSessionId
     )
 {
     if (importWatcher != nullptr) {
         return;
+    }
+
+    if (reloadAction != nullptr) {
+        reloadAction->setEnabled(false);
     }
 
     const ImporterRegistry registry =
@@ -684,7 +922,9 @@ void MainWindow::loadLogFile(
             this,
             watcher,
             progressDialog,
-            filePath
+            filePath,
+            profile,
+            reloadSessionId
         ]() {
             const bool cancelled =
                 watcher->isCanceled();
@@ -708,14 +948,23 @@ void MainWindow::loadLogFile(
                 return;
             }
 
-            const ImportResult result =
+            ImportResult result =
                 watcher->result();
 
             watcher->deleteLater();
 
+            if (reloadAction != nullptr) {
+                reloadAction->setEnabled(
+                    workspace->activeSession()
+                    != nullptr
+                    );
+            }
+
             completeLogFileImport(
                 filePath,
-                result
+                profile,
+                std::move(result),
+                reloadSessionId
                 );
         }
         );
@@ -845,21 +1094,44 @@ void MainWindow::loadLogFile(
 
 void MainWindow::completeLogFileImport(
     const QString &filePath,
-    const ImportResult &result
+    const ImportProfile &profile,
+    ImportResult result,
+    const QString &reloadSessionId
     )
 {
     if (result.cancelled) {
         return;
     }
 
-    currentFilePath =
-        filePath;
+    const bool noRecordsLoaded =
+        result.records.isEmpty();
 
-    investigationController->setRecords(
-        result.records
+    if (reloadSessionId.isEmpty()) {
+        auto session =
+            std::make_unique<
+                InvestigationSession>(
+                filePath,
+                profile,
+                std::move(result)
+                );
+
+        workspace->addSession(
+            std::move(session)
+            );
+    } else {
+        workspace->reloadSession(
+            reloadSessionId,
+            std::move(result)
+            );
+    }
+
+    recentItemsStore.addRecentFile(
+        filePath
         );
 
-    if (result.records.isEmpty()) {
+    refreshRecentFilesMenu();
+
+    if (noRecordsLoaded) {
         QMessageBox::warning(
             this,
             "No Events Loaded",
@@ -868,16 +1140,6 @@ void MainWindow::completeLogFileImport(
             "or unsupported."
             );
     }
-
-    refreshSubsystemFilterOptions();
-    updateDataCapabilities();
-    applyFilters();
-
-    eventTable->resizeColumnsToContents();
-
-    eventTable
-        ->horizontalHeader()
-        ->setStretchLastSection(true);
 }
 
 void MainWindow::updateSummary(
@@ -1053,6 +1315,10 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
 void MainWindow::applyFilters()
 {
+    if (investigationController == nullptr) {
+        return;
+    }
+
     timelineScaleValid =
         false;
 
@@ -1067,7 +1333,8 @@ void MainWindow::applyFilters()
 
     const QVector<InvestigationRecord>
         visibleRecords =
-        investigationController->visibleRecords();
+        investigationController
+            ->recordsForAnalysis();
 
     updateSummary(
         visibleRecords,
@@ -1085,6 +1352,10 @@ void MainWindow::applyFilters()
 
 void MainWindow::refreshSubsystemFilterOptions()
 {
+    if (investigationController == nullptr) {
+        return;
+    }
+
     const QString selectedSubsystem =
         subsystemFilterCombo
             ->currentData()
@@ -1104,9 +1375,15 @@ void MainWindow::refreshSubsystemFilterOptions()
         Qt::ToolTipRole
         );
 
-    const QStringList subsystems =
-        investigationController
-            ->availableSubsystems();
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    const QStringList &subsystems =
+        session->availableSubsystems();
 
     int widestTextWidth =
         subsystemFilterCombo
@@ -1195,23 +1472,17 @@ QGroupBox *MainWindow::buildDetailPanel()
     auto *detailLayout = new QVBoxLayout(detailGroup);
     detailLayout->addWidget(eventDetailText);
 
-    connect(
-        eventTable->selectionModel(),
-        &QItemSelectionModel::selectionChanged,
-        this,
-        [this](
-            const QItemSelection &,
-            const QItemSelection &
-            ) {
-            updateEventDetailFromSelection();
-        }
-        );
-
     return detailGroup;
 }
 
 void MainWindow::updateEventDetailFromSelection()
 {
+    if (investigationController == nullptr
+        || eventTable->selectionModel() == nullptr) {
+        clearEventDetail();
+        return;
+    }
+
     const QModelIndexList selectedRows =
         eventTable->selectionModel()
             ->selectedRows();
@@ -1409,6 +1680,16 @@ void MainWindow::updateIssueSummary(const QVector<InvestigationRecord> &records)
 
 void MainWindow::exportFilteredResults()
 {
+    if (investigationController == nullptr) {
+        QMessageBox::information(
+            this,
+            "No Records to Export",
+            "There are no currently visible records to export."
+            );
+
+        return;
+    }
+
     const QVector<InvestigationRecord> records =
         investigationController->visibleRecords();
 
@@ -2717,44 +2998,24 @@ void MainWindow::updateDataCapabilities()
     timelineFirstTimestamp.reset();
     timelineLastTimestamp.reset();
 
-    const QVector<InvestigationRecord> &records =
-        investigationController->allRecords();
-    
-    for (const InvestigationRecord &record
-         : records) {
-        hasSeverityData =
-            hasSeverityData
-            || record.severity.has_value();
+    InvestigationSession *session =
+        workspace->activeSession();
 
-        hasSubsystemData =
-            hasSubsystemData
-            || record.subsystem.has_value();
-
-        if (!record.timestamp.has_value()) {
-            continue;
-        }
-
-        const QDateTime timestamp =
-            record.timestamp->toUTC();
-
-        if (!timestamp.isValid()) {
-            continue;
-        }
-
-        if (!timelineFirstTimestamp.has_value()
-            || timestamp
-                   < *timelineFirstTimestamp) {
-            timelineFirstTimestamp =
-                timestamp;
-        }
-
-        if (!timelineLastTimestamp.has_value()
-            || timestamp
-                   > *timelineLastTimestamp) {
-            timelineLastTimestamp =
-                timestamp;
-        }
+    if (session == nullptr) {
+        return;
     }
+
+    hasSeverityData =
+        session->hasSeverityData();
+
+    hasSubsystemData =
+        session->hasSubsystemData();
+
+    timelineFirstTimestamp =
+        session->firstTimestamp();
+
+    timelineLastTimestamp =
+        session->lastTimestamp();
 
     /*
      * Clear filters that no longer apply before
@@ -2790,4 +3051,337 @@ void MainWindow::updateDataCapabilities()
             && hasSubsystemData
             );
     }
+}
+
+void MainWindow::connectEventTableSelectionModel()
+{
+    QObject::disconnect(
+        eventSelectionConnection
+        );
+
+    QItemSelectionModel *selectionModel =
+        eventTable->selectionModel();
+
+    if (selectionModel == nullptr) {
+        eventSelectionConnection =
+            QMetaObject::Connection();
+
+        return;
+    }
+
+    eventSelectionConnection =
+        connect(
+            selectionModel,
+            &QItemSelectionModel::selectionChanged,
+            this,
+            [this](
+                const QItemSelection &,
+                const QItemSelection &
+                ) {
+                updateEventDetailFromSelection();
+            }
+            );
+}
+
+void MainWindow::bindActiveSession()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        if (reloadAction != nullptr) {
+            reloadAction->setEnabled(false);
+        }
+
+        investigationController =
+            nullptr;
+
+        currentFilePath.clear();
+
+        eventTable->setModel(nullptr);
+
+        connectEventTableSelectionModel();
+
+        clearEventDetail();
+
+        levelFilterCombo->blockSignals(true);
+        subsystemFilterCombo->blockSignals(true);
+        searchInput->blockSignals(true);
+
+        levelFilterCombo->setCurrentIndex(0);
+        subsystemFilterCombo->setCurrentIndex(0);
+        searchInput->clear();
+
+        levelFilterCombo->blockSignals(false);
+        subsystemFilterCombo->blockSignals(false);
+        searchInput->blockSignals(false);
+
+        hasSeverityData = false;
+        hasSubsystemData = false;
+
+        levelFilterCombo->setVisible(false);
+        subsystemFilterCombo->setVisible(false);
+        searchInput->setVisible(false);
+
+        issueSummaryTable->setRowCount(0);
+
+        if (issueSummaryGroup != nullptr) {
+            issueSummaryGroup->setVisible(false);
+        }
+
+        timelineFirstTimestamp.reset();
+        timelineLastTimestamp.reset();
+
+        timelineScaleValid = false;
+
+        updateTimelineChart(
+            QVector<InvestigationRecord>()
+            );
+
+        summaryLabel->setText(
+            tr("No log file loaded.")
+            );
+
+        return;
+    }
+
+    if (reloadAction != nullptr) {
+        reloadAction->setEnabled(
+            importWatcher == nullptr
+            );
+    }
+
+    investigationController =
+        session->investigationController();
+
+    currentFilePath =
+        session
+            ->sourceMetadata()
+            .sourcePath;
+
+    eventTable->setModel(
+        investigationController
+            ->proxyModel()
+        );
+
+    connectEventTableSelectionModel();
+
+    InvestigationFilterProxyModel *proxyModel =
+        investigationController
+            ->proxyModel();
+
+    const QString severityFilter =
+        proxyModel->severityFilter();
+
+    const QString subsystemFilter =
+        proxyModel->subsystemFilter();
+
+    const QString searchText =
+        proxyModel->searchText();
+
+    searchInput->setVisible(true);
+
+    updateDataCapabilities();
+
+    refreshSubsystemFilterOptions();
+
+    levelFilterCombo->blockSignals(true);
+    subsystemFilterCombo->blockSignals(true);
+    searchInput->blockSignals(true);
+
+    int severityIndex =
+        hasSeverityData
+            ? levelFilterCombo->findData(
+                  severityFilter
+                  )
+            : 0;
+
+    if (severityIndex < 0) {
+        severityIndex = 0;
+    }
+
+    levelFilterCombo->setCurrentIndex(
+        severityIndex
+        );
+
+    int subsystemIndex =
+        hasSubsystemData
+            ? subsystemFilterCombo->findData(
+                  subsystemFilter
+                  )
+            : 0;
+
+    if (subsystemIndex < 0) {
+        subsystemIndex = 0;
+    }
+
+    subsystemFilterCombo->setCurrentIndex(
+        subsystemIndex
+        );
+
+    searchInput->setText(
+        searchText
+        );
+
+    levelFilterCombo->blockSignals(false);
+    subsystemFilterCombo->blockSignals(false);
+    searchInput->blockSignals(false);
+
+    applyFilters();
+
+    const QVector<int> &columnWidths =
+        session->columnWidths();
+
+    const int columnCount =
+        eventTable
+            ->horizontalHeader()
+            ->count();
+
+    if (columnWidths.size()
+        == columnCount) {
+        for (
+            int column = 0;
+            column < columnCount;
+            ++column
+            ) {
+            eventTable->setColumnWidth(
+                column,
+                columnWidths[column]
+                );
+        }
+    } else {
+        eventTable->resizeColumnsToContents();
+
+        QVector<int> measuredWidths;
+
+        measuredWidths.reserve(
+            columnCount
+            );
+
+        for (
+            int column = 0;
+            column < columnCount;
+            ++column
+            ) {
+            measuredWidths.append(
+                eventTable->columnWidth(
+                    column
+                    )
+                );
+        }
+
+        session->setColumnWidths(
+            std::move(measuredWidths)
+            );
+    }
+
+    eventTable
+        ->horizontalHeader()
+        ->setStretchLastSection(true);
+}
+
+void MainWindow::reloadActiveSession()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    loadLogFile(
+        session
+            ->sourceMetadata()
+            .sourcePath,
+        session->importProfile(),
+        session->id()
+        );
+}
+
+void MainWindow::refreshRecentFilesMenu()
+{
+    if (recentFilesMenu == nullptr) {
+        return;
+    }
+
+    recentFilesMenu->clear();
+
+    const QStringList recentFiles =
+        recentItemsStore.recentFiles();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentFiles) {
+        const QFileInfo fileInfo(filePath);
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentFile(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            recentFilesMenu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [this, filePath]() {
+                openRecentFile(
+                    filePath
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    recentFilesMenu->setEnabled(
+        validItemCount > 0
+        );
+}
+
+void MainWindow::openRecentFile(
+    const QString &filePath
+    )
+{
+    const QFileInfo fileInfo(filePath);
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        recentItemsStore
+            .removeRecentFile(
+                filePath
+                );
+
+        refreshRecentFilesMenu();
+
+        QMessageBox::warning(
+            this,
+            tr("Recent File Not Found"),
+            tr(
+                "The recent log file no longer "
+                "exists at:\n%1"
+                )
+                .arg(filePath)
+            );
+
+        return;
+    }
+
+    openLogFile(
+        filePath
+        );
 }
