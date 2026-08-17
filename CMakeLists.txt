@@ -95,6 +95,8 @@ qt_add_executable(TraceScope
     src/importing/ImportExecutionContext.h
     src/workspace/InvestigationSession.h
     src/workspace/InvestigationSession.cpp
+    src/workspace/InvestigationWorkspace.h
+    src/workspace/InvestigationWorkspace.cpp
 
 )
 
