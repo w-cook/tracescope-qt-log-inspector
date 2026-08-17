@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include <QStringList>
 #include <QDateTime>
 #include <QString>
 #include <QVector>
@@ -48,6 +51,29 @@ public:
     InvestigationController *
     investigationController();
 
+    void reload(
+        ImportResult result
+        );
+
+    bool hasSeverityData() const;
+    bool hasSubsystemData() const;
+
+    const QStringList &
+    availableSubsystems() const;
+
+    const std::optional<QDateTime> &
+    firstTimestamp() const;
+
+    const std::optional<QDateTime> &
+    lastTimestamp() const;
+
+    const QVector<int> &
+    columnWidths() const;
+
+    void setColumnWidths(
+        QVector<int> widths
+        );
+
 private:
     QString m_id;
 
@@ -65,4 +91,27 @@ private:
 
     InvestigationController
         m_investigationController;
+
+    bool m_hasSeverityData = false;
+    bool m_hasSubsystemData = false;
+
+    QStringList m_availableSubsystems;
+
+    std::optional<QDateTime>
+        m_firstTimestamp;
+
+    std::optional<QDateTime>
+        m_lastTimestamp;
+
+    QVector<int> m_columnWidths;
+
+    void refreshSourceMetadata();
+
+    void installImportResult(
+        ImportResult result
+        );
+
+    void rebuildDerivedData(
+        const QVector<InvestigationRecord> &records
+        );
 };

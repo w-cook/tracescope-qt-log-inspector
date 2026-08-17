@@ -17,6 +17,7 @@ private slots:
     void closesInactiveSession();
     void closesActiveSession();
     void closesFinalSession();
+    void reloadsSessionById();
 };
 
 static std::unique_ptr<InvestigationSession>
@@ -258,6 +259,68 @@ void InvestigationWorkspaceTests::
     QVERIFY(
         workspace.activeSession()
         == nullptr
+        );
+}
+
+void InvestigationWorkspaceTests::
+    reloadsSessionById()
+{
+    InvestigationWorkspace workspace;
+
+    workspace.addSession(
+        createSession(
+            QStringLiteral("first.jsonl")
+            )
+        );
+
+    workspace.addSession(
+        createSession(
+            QStringLiteral("second.jsonl")
+            )
+        );
+
+    InvestigationSession *first =
+        workspace.sessionAt(0);
+
+    QVERIFY(first != nullptr);
+
+    const QString firstId =
+        first->id();
+
+    ImportResult result;
+
+    InvestigationRecord record;
+
+    record.recordId =
+        QStringLiteral("reloaded");
+
+    result.records.append(record);
+
+    QVERIFY(
+        workspace.reloadSession(
+            firstId,
+            std::move(result)
+            )
+        );
+
+    QCOMPARE(
+        workspace.sessionAt(0)
+            ->id(),
+        firstId
+        );
+
+    QCOMPARE(
+        workspace.sessionAt(0)
+            ->investigationController()
+            ->allRecords()
+            .first()
+            .recordId,
+        QStringLiteral("reloaded")
+        );
+
+    QCOMPARE(
+        workspace.activeSessionIndex(),
+        1
         );
 }
 

@@ -456,6 +456,19 @@ MainWindow::MainWindow(QWidget *parent)
         );
 
     connect(
+        workspace,
+        &InvestigationWorkspace::sessionReloaded,
+        this,
+        [this](int index) {
+            if (index
+                == workspace
+                       ->activeSessionIndex()) {
+                bindActiveSession();
+            }
+        }
+        );
+
+    connect(
         sessionTabBar,
         &QTabBar::currentChanged,
         this,
@@ -480,6 +493,8 @@ MainWindow::MainWindow(QWidget *parent)
                 );
         }
         );
+
+    bindActiveSession();
 }
 
 void MainWindow::createMenus()
@@ -498,6 +513,31 @@ void MainWindow::createMenus()
     });
 
     fileMenu->addAction(openAction);
+
+    reloadAction =
+        new QAction(
+            tr("&Reload Current Session"),
+            this
+            );
+
+    reloadAction->setShortcut(
+        QKeySequence::Refresh
+        );
+
+    reloadAction->setEnabled(false);
+
+    connect(
+        reloadAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            reloadActiveSession();
+        }
+        );
+
+    fileMenu->addAction(
+        reloadAction
+        );
 
     auto *exportAction = new QAction("&Export Filtered Results...", this);
     exportAction->setShortcut(QKeySequence::Save);
@@ -577,7 +617,59 @@ void MainWindow::buildLayout()
         Qt::AscendingOrder
         );
 
+    eventTable
+        ->horizontalHeader()
+        ->setResizeContentsPrecision(
+            200
+            );
+
     eventTable->horizontalHeader()->setStretchLastSection(true);
+
+    connect(
+        eventTable->horizontalHeader(),
+        &QHeaderView::sectionResized,
+        this,
+        [this](
+            int,
+            int,
+            int
+            ) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr
+                || eventTable->model() == nullptr) {
+                return;
+            }
+
+            const int columnCount =
+                eventTable
+                    ->horizontalHeader()
+                    ->count();
+
+            QVector<int> widths;
+
+            widths.reserve(
+                columnCount
+                );
+
+            for (
+                int column = 0;
+                column < columnCount;
+                ++column
+                ) {
+                widths.append(
+                    eventTable->columnWidth(
+                        column
+                        )
+                    );
+            }
+
+            session->setColumnWidths(
+                std::move(widths)
+                );
+        }
+        );
 
     eventsLayout->addWidget(eventTable);
 
@@ -657,11 +749,16 @@ void MainWindow::openLogFile(const QString &initialFilePath)
 
 void MainWindow::loadLogFile(
     const QString &filePath,
-    const ImportProfile &profile
+    const ImportProfile &profile,
+    const QString &reloadSessionId
     )
 {
     if (importWatcher != nullptr) {
         return;
+    }
+
+    if (reloadAction != nullptr) {
+        reloadAction->setEnabled(false);
     }
 
     const ImporterRegistry registry =
@@ -801,7 +898,8 @@ void MainWindow::loadLogFile(
             watcher,
             progressDialog,
             filePath,
-            profile
+            profile,
+            reloadSessionId
         ]() {
             const bool cancelled =
                 watcher->isCanceled();
@@ -830,10 +928,18 @@ void MainWindow::loadLogFile(
 
             watcher->deleteLater();
 
+            if (reloadAction != nullptr) {
+                reloadAction->setEnabled(
+                    workspace->activeSession()
+                    != nullptr
+                    );
+            }
+
             completeLogFileImport(
                 filePath,
                 profile,
-                std::move(result)
+                std::move(result),
+                reloadSessionId
                 );
         }
         );
@@ -964,7 +1070,8 @@ void MainWindow::loadLogFile(
 void MainWindow::completeLogFileImport(
     const QString &filePath,
     const ImportProfile &profile,
-    ImportResult result
+    ImportResult result,
+    const QString &reloadSessionId
     )
 {
     if (result.cancelled) {
@@ -974,16 +1081,24 @@ void MainWindow::completeLogFileImport(
     const bool noRecordsLoaded =
         result.records.isEmpty();
 
-    auto session =
-        std::make_unique<InvestigationSession>(
-            filePath,
-            profile,
+    if (reloadSessionId.isEmpty()) {
+        auto session =
+            std::make_unique<
+                InvestigationSession>(
+                filePath,
+                profile,
+                std::move(result)
+                );
+
+        workspace->addSession(
+            std::move(session)
+            );
+    } else {
+        workspace->reloadSession(
+            reloadSessionId,
             std::move(result)
             );
-
-    workspace->addSession(
-        std::move(session)
-        );
+    }
 
     if (noRecordsLoaded) {
         QMessageBox::warning(
@@ -1187,7 +1302,8 @@ void MainWindow::applyFilters()
 
     const QVector<InvestigationRecord>
         visibleRecords =
-        investigationController->visibleRecords();
+        investigationController
+            ->recordsForAnalysis();
 
     updateSummary(
         visibleRecords,
@@ -1228,9 +1344,15 @@ void MainWindow::refreshSubsystemFilterOptions()
         Qt::ToolTipRole
         );
 
-    const QStringList subsystems =
-        investigationController
-            ->availableSubsystems();
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    const QStringList &subsystems =
+        session->availableSubsystems();
 
     int widestTextWidth =
         subsystemFilterCombo
@@ -2845,48 +2967,24 @@ void MainWindow::updateDataCapabilities()
     timelineFirstTimestamp.reset();
     timelineLastTimestamp.reset();
 
-    if (investigationController == nullptr) {
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
         return;
     }
 
-    const QVector<InvestigationRecord> &records =
-        investigationController->allRecords();
-    
-    for (const InvestigationRecord &record
-         : records) {
-        hasSeverityData =
-            hasSeverityData
-            || record.severity.has_value();
+    hasSeverityData =
+        session->hasSeverityData();
 
-        hasSubsystemData =
-            hasSubsystemData
-            || record.subsystem.has_value();
+    hasSubsystemData =
+        session->hasSubsystemData();
 
-        if (!record.timestamp.has_value()) {
-            continue;
-        }
+    timelineFirstTimestamp =
+        session->firstTimestamp();
 
-        const QDateTime timestamp =
-            record.timestamp->toUTC();
-
-        if (!timestamp.isValid()) {
-            continue;
-        }
-
-        if (!timelineFirstTimestamp.has_value()
-            || timestamp
-                   < *timelineFirstTimestamp) {
-            timelineFirstTimestamp =
-                timestamp;
-        }
-
-        if (!timelineLastTimestamp.has_value()
-            || timestamp
-                   > *timelineLastTimestamp) {
-            timelineLastTimestamp =
-                timestamp;
-        }
-    }
+    timelineLastTimestamp =
+        session->lastTimestamp();
 
     /*
      * Clear filters that no longer apply before
@@ -2960,6 +3058,10 @@ void MainWindow::bindActiveSession()
         workspace->activeSession();
 
     if (session == nullptr) {
+        if (reloadAction != nullptr) {
+            reloadAction->setEnabled(false);
+        }
+
         investigationController =
             nullptr;
 
@@ -2988,6 +3090,7 @@ void MainWindow::bindActiveSession()
 
         levelFilterCombo->setVisible(false);
         subsystemFilterCombo->setVisible(false);
+        searchInput->setVisible(false);
 
         issueSummaryTable->setRowCount(0);
 
@@ -3009,6 +3112,12 @@ void MainWindow::bindActiveSession()
             );
 
         return;
+    }
+
+    if (reloadAction != nullptr) {
+        reloadAction->setEnabled(
+            importWatcher == nullptr
+            );
     }
 
     investigationController =
@@ -3039,6 +3148,8 @@ void MainWindow::bindActiveSession()
     const QString searchText =
         proxyModel->searchText();
 
+    searchInput->setVisible(true);
+
     updateDataCapabilities();
 
     refreshSubsystemFilterOptions();
@@ -3048,9 +3159,11 @@ void MainWindow::bindActiveSession()
     searchInput->blockSignals(true);
 
     int severityIndex =
-        levelFilterCombo->findData(
-            severityFilter
-            );
+        hasSeverityData
+            ? levelFilterCombo->findData(
+                  severityFilter
+                  )
+            : 0;
 
     if (severityIndex < 0) {
         severityIndex = 0;
@@ -3061,9 +3174,11 @@ void MainWindow::bindActiveSession()
         );
 
     int subsystemIndex =
-        subsystemFilterCombo->findData(
-            subsystemFilter
-            );
+        hasSubsystemData
+            ? subsystemFilterCombo->findData(
+                  subsystemFilter
+                  )
+            : 0;
 
     if (subsystemIndex < 0) {
         subsystemIndex = 0;
@@ -3083,9 +3198,71 @@ void MainWindow::bindActiveSession()
 
     applyFilters();
 
-    eventTable->resizeColumnsToContents();
+    const QVector<int> &columnWidths =
+        session->columnWidths();
+
+    const int columnCount =
+        eventTable
+            ->horizontalHeader()
+            ->count();
+
+    if (columnWidths.size()
+        == columnCount) {
+        for (
+            int column = 0;
+            column < columnCount;
+            ++column
+            ) {
+            eventTable->setColumnWidth(
+                column,
+                columnWidths[column]
+                );
+        }
+    } else {
+        eventTable->resizeColumnsToContents();
+
+        QVector<int> measuredWidths;
+
+        measuredWidths.reserve(
+            columnCount
+            );
+
+        for (
+            int column = 0;
+            column < columnCount;
+            ++column
+            ) {
+            measuredWidths.append(
+                eventTable->columnWidth(
+                    column
+                    )
+                );
+        }
+
+        session->setColumnWidths(
+            std::move(measuredWidths)
+            );
+    }
 
     eventTable
         ->horizontalHeader()
         ->setStretchLastSection(true);
+}
+
+void MainWindow::reloadActiveSession()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    loadLogFile(
+        session
+            ->sourceMetadata()
+            .sourcePath,
+        session->importProfile(),
+        session->id()
+        );
 }

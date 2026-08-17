@@ -34,10 +34,20 @@ public:
 
     bool closeSession(int index);
 
+    int indexOfSession(
+        const QString &sessionId
+        ) const;
+
+    bool reloadSession(
+        const QString &sessionId,
+        ImportResult result
+        );
+
 signals:
     void sessionAdded(int index);
     void activeSessionChanged(int index);
     void sessionClosed(int index);
+    void sessionReloaded(int index);
 
 private:
     std::vector<std::unique_ptr<InvestigationSession>>

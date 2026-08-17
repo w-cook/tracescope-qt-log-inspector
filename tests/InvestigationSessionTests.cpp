@@ -15,6 +15,7 @@ class InvestigationSessionTests : public QObject
 private slots:
     void preservesImportedSessionContext();
     void assignsDistinctSessionIds();
+    void reloadsContentWithoutChangingSessionIdentity();
 };
 
 void InvestigationSessionTests::
@@ -165,6 +166,104 @@ void InvestigationSessionTests::
     QVERIFY(
         first.id()
         != second.id()
+        );
+}
+
+void InvestigationSessionTests::
+    reloadsContentWithoutChangingSessionIdentity()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Test Profile");
+
+    ImportResult initialResult;
+
+    InvestigationRecord firstRecord;
+
+    firstRecord.recordId =
+        QStringLiteral("first");
+
+    initialResult.records.append(
+        firstRecord
+        );
+
+    InvestigationSession session(
+        QStringLiteral("session.jsonl"),
+        profile,
+        std::move(initialResult)
+        );
+
+    const QString originalId =
+        session.id();
+
+    session
+        .investigationController()
+        ->setFilters(
+            QStringLiteral("ERROR"),
+            QString(),
+            QStringLiteral("failure")
+            );
+
+    session.setColumnWidths({
+        120,
+        240
+    });
+
+    ImportResult reloadedResult;
+
+    InvestigationRecord secondRecord;
+
+    secondRecord.recordId =
+        QStringLiteral("second");
+
+    reloadedResult.records.append(
+        secondRecord
+        );
+
+    reloadedResult.processedRecordCount = 1;
+
+    session.reload(
+        std::move(reloadedResult)
+        );
+
+    QCOMPARE(
+        session.id(),
+        originalId
+        );
+
+    QVERIFY(
+        session.columnWidths().isEmpty()
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        1
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .first()
+            .recordId,
+        QStringLiteral("second")
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->proxyModel()
+            ->severityFilter(),
+        QStringLiteral("ERROR")
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->proxyModel()
+            ->searchText(),
+        QStringLiteral("failure")
         );
 }
 

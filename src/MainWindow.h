@@ -73,6 +73,7 @@ private:
     QTimer *searchDebounceTimer;
 
     QAction *openAction = nullptr;
+    QAction *reloadAction = nullptr;
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
@@ -113,12 +114,15 @@ private:
         );
     void loadLogFile(
         const QString &filePath,
-        const ImportProfile &profile
+        const ImportProfile &profile,
+        const QString &reloadSessionId =
+        QString()
         );
     void completeLogFileImport(
         const QString &filePath,
         const ImportProfile &profile,
-        ImportResult result
+        ImportResult result,
+        const QString &reloadSessionId
         );
 
     void updateSummary(
@@ -157,4 +161,5 @@ private:
 
     void bindActiveSession();
     void connectEventTableSelectionModel();
+    void reloadActiveSession();
 };

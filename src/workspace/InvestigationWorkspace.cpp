@@ -162,3 +162,52 @@ bool InvestigationWorkspace::closeSession(
 
     return true;
 }
+
+int InvestigationWorkspace::indexOfSession(
+    const QString &sessionId
+    ) const
+{
+    for (
+        int index = 0;
+        index < sessionCount();
+        ++index
+        ) {
+        const InvestigationSession *session =
+            sessionAt(index);
+
+        if (session != nullptr
+            && session->id() == sessionId) {
+            return index;
+        }
+    }
+
+    return -1;
+}
+
+bool InvestigationWorkspace::reloadSession(
+    const QString &sessionId,
+    ImportResult result
+    )
+{
+    const int index =
+        indexOfSession(sessionId);
+
+    if (index < 0) {
+        return false;
+    }
+
+    InvestigationSession *session =
+        sessionAt(index);
+
+    if (session == nullptr) {
+        return false;
+    }
+
+    session->reload(
+        std::move(result)
+        );
+
+    emit sessionReloaded(index);
+
+    return true;
+}
