@@ -29,6 +29,7 @@
 #include <QFile>
 #include <QtConcurrentRun>
 #include <QPromise>
+#include <QMenu>
 
 #include <memory>
 #include <utility>
@@ -77,8 +78,12 @@ bool requiresManualStructuredDocumentPreview(
 }
 }
 
-ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
+ImportConfigurationDialog::ImportConfigurationDialog(
+    QWidget *parent,
+    RecentItemsStore *recentItemsStore
+    )
     : QDialog(parent),
+    recentItemsStore(recentItemsStore),
     filePathEdit(new QLineEdit(this)),
     browseButton(
         new QPushButton(
@@ -146,6 +151,15 @@ ImportConfigurationDialog::ImportConfigurationDialog(QWidget *parent)
             tr("Save Profile..."),
             this
             )
+        ),
+    recentProfilesButton(
+        new QPushButton(
+            tr("Recent Profiles"),
+            this
+            )
+        ),
+    recentProfilesMenu(
+        new QMenu(this)
         ),
     timestampPathEdit(
         new QLineEdit(this)
@@ -459,6 +473,27 @@ void ImportConfigurationDialog::buildLayout()
 
     profileButtonLayout->addWidget(
         loadProfileButton
+        );
+
+    recentProfilesButton->setMenu(
+        recentProfilesMenu
+        );
+
+    recentProfilesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        recentProfilesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshRecentProfilesMenu();
+        }
+        );
+
+    profileButtonLayout->addWidget(
+        recentProfilesButton
         );
 
     profileButtonLayout->addWidget(
@@ -814,13 +849,13 @@ void ImportConfigurationDialog::buildLayout()
     previewTable->setColumnWidth(6, 220); // Unmapped Custom Fields
 
     /*
- * Let the record table and selected raw-source
- * view share the available preview space through
- * a vertical splitter. The raw-source section
- * starts compact but can be expanded for
- * multiline JSON, XML, stack traces, and similar
- * records.
- */
+     * Let the record table and selected raw-source
+     * view share the available preview space through
+     * a vertical splitter. The raw-source section
+     * starts compact but can be expanded for
+     * multiline JSON, XML, stack traces, and similar
+     * records.
+     */
     auto *previewSplitter =
         new QSplitter(
             Qt::Vertical,
@@ -832,11 +867,11 @@ void ImportConfigurationDialog::buildLayout()
         );
 
     /*
- * The table should receive additional space when
- * the dialog grows. The raw-source panel keeps
- * its user-selected size unless the splitter is
- * moved explicitly.
- */
+     * The table should receive additional space when
+     * the dialog grows. The raw-source panel keeps
+     * its user-selected size unless the splitter is
+     * moved explicitly.
+     */
     previewSplitter->setStretchFactor(
         0,
         1
@@ -1019,10 +1054,10 @@ void ImportConfigurationDialog::buildLayout()
                     .toString();
 
             /*
-         * Automatically detected mappings belong
-         * to the previous interpretation of the
-         * source, so discard only those mappings.
-         */
+             * Automatically detected mappings belong
+             * to the previous interpretation of the
+             * source, so discard only those mappings.
+             */
             QList<CustomFieldMapping>
                 retainedMappings;
 
@@ -1071,9 +1106,9 @@ void ImportConfigurationDialog::buildLayout()
                     ->toPlainText();
 
             /*
-         * A changed pattern defines a different
-         * source-field set.
-         */
+             * A changed pattern defines a different
+             * source-field set.
+             */
             customFieldDetectionSourcePath.clear();
 
             updateValidationState();
@@ -1344,6 +1379,8 @@ void ImportConfigurationDialog::buildLayout()
         this,
         &QDialog::reject
         );
+
+    refreshRecentProfilesMenu();
 }
 
 void ImportConfigurationDialog::browseForFile()
@@ -2680,6 +2717,14 @@ void ImportConfigurationDialog::saveProfile()
         return;
     }
 
+    if (recentItemsStore != nullptr) {
+        recentItemsStore->addRecentProfile(
+            filePath
+            );
+
+        refreshRecentProfilesMenu();
+    }
+
     QMessageBox::information(
         this,
         tr("Profile Saved"),
@@ -2706,6 +2751,15 @@ void ImportConfigurationDialog::loadProfile()
         return;
     }
 
+    loadProfileFromPath(
+        filePath
+        );
+}
+
+void ImportConfigurationDialog::loadProfileFromPath(
+    const QString &filePath
+    )
+{
     QFile file(filePath);
 
     if (!file.open(
@@ -2809,7 +2863,7 @@ void ImportConfigurationDialog::loadProfile()
 
         return;
     }
-    
+
     const ImporterRegistry registry =
         createBuiltInImporterRegistry(
             loadedProfile
@@ -2840,7 +2894,8 @@ void ImportConfigurationDialog::loadProfile()
 
     autoDetectedCustomFieldKeys.clear();
 
-    profileIsUserConfigured = true;
+    profileIsUserConfigured =
+        true;
 
     customFieldDetectionSourcePath =
         selectedFilePath();
@@ -2852,6 +2907,14 @@ void ImportConfigurationDialog::loadProfile()
     updateValidationState(false);
     updatePreview();
     updateImportAvailability();
+
+    if (recentItemsStore != nullptr) {
+        recentItemsStore->addRecentProfile(
+            filePath
+            );
+
+        refreshRecentProfilesMenu();
+    }
 }
 
 void ImportConfigurationDialog::schedulePreviewRefresh()
@@ -3803,4 +3866,65 @@ void ImportConfigurationDialog::cancelManualPreview()
     }
 
     previewWatcher->cancel();
+}
+
+void ImportConfigurationDialog::
+    refreshRecentProfilesMenu()
+{
+    recentProfilesMenu->clear();
+
+    if (recentItemsStore == nullptr) {
+        recentProfilesButton->setEnabled(
+            false
+            );
+
+        return;
+    }
+
+    const QStringList profiles =
+        recentItemsStore
+            ->recentProfiles();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : profiles) {
+        const QFileInfo fileInfo(filePath);
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                ->removeRecentProfile(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            recentProfilesMenu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [this, filePath]() {
+                loadProfileFromPath(
+                    filePath
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    recentProfilesButton->setEnabled(
+        validItemCount > 0
+        );
 }

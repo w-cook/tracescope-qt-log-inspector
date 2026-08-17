@@ -363,6 +363,8 @@ QString timelineDisplayLabel(
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
+    settings(),
+    recentItemsStore(settings),
     sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
@@ -513,6 +515,26 @@ void MainWindow::createMenus()
     });
 
     fileMenu->addAction(openAction);
+
+    recentFilesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Files")
+            );
+
+    recentFilesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        recentFilesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshRecentFilesMenu();
+        }
+        );
+
+    refreshRecentFilesMenu();
 
     reloadAction =
         new QAction(
@@ -729,7 +751,10 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         return;
     }
 
-    ImportConfigurationDialog dialog(this);
+    ImportConfigurationDialog dialog(
+        this,
+        &recentItemsStore
+        );
 
     if (!initialFilePath.isEmpty()) {
         dialog.setSelectedFilePath(
@@ -1099,6 +1124,12 @@ void MainWindow::completeLogFileImport(
             std::move(result)
             );
     }
+
+    recentItemsStore.addRecentFile(
+        filePath
+        );
+
+    refreshRecentFilesMenu();
 
     if (noRecordsLoaded) {
         QMessageBox::warning(
@@ -3264,5 +3295,93 @@ void MainWindow::reloadActiveSession()
             .sourcePath,
         session->importProfile(),
         session->id()
+        );
+}
+
+void MainWindow::refreshRecentFilesMenu()
+{
+    if (recentFilesMenu == nullptr) {
+        return;
+    }
+
+    recentFilesMenu->clear();
+
+    const QStringList recentFiles =
+        recentItemsStore.recentFiles();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentFiles) {
+        const QFileInfo fileInfo(filePath);
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentFile(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            recentFilesMenu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [this, filePath]() {
+                openRecentFile(
+                    filePath
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    recentFilesMenu->setEnabled(
+        validItemCount > 0
+        );
+}
+
+void MainWindow::openRecentFile(
+    const QString &filePath
+    )
+{
+    const QFileInfo fileInfo(filePath);
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        recentItemsStore
+            .removeRecentFile(
+                filePath
+                );
+
+        refreshRecentFilesMenu();
+
+        QMessageBox::warning(
+            this,
+            tr("Recent File Not Found"),
+            tr(
+                "The recent log file no longer "
+                "exists at:\n%1"
+                )
+                .arg(filePath)
+            );
+
+        return;
+    }
+
+    openLogFile(
+        filePath
         );
 }

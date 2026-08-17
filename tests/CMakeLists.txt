@@ -815,3 +815,24 @@ add_test(
     NAME InvestigationWorkspaceTests
     COMMAND InvestigationWorkspaceTests
 )
+
+qt_add_executable(
+    RecentItemsStoreTests
+
+    RecentItemsStoreTests.cpp
+
+    ../src/preferences/RecentItemsStore.h
+    ../src/preferences/RecentItemsStore.cpp
+)
+
+target_link_libraries(
+    RecentItemsStoreTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME RecentItemsStoreTests
+    COMMAND RecentItemsStoreTests
+)

@@ -97,6 +97,8 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationSession.cpp
     src/workspace/InvestigationWorkspace.h
     src/workspace/InvestigationWorkspace.cpp
+    src/preferences/RecentItemsStore.h
+    src/preferences/RecentItemsStore.cpp
 
 )
 

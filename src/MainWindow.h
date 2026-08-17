@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QVector>
 #include <QFutureWatcher>
+#include <QSettings>
 
 #include "analysis/EventTimelineAnalyzer.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
@@ -14,6 +15,7 @@
 #include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
+#include "preferences/RecentItemsStore.h"
 #include "workspace/InvestigationWorkspace.h"
 
 class QLabel;
@@ -31,6 +33,7 @@ class QTimer;
 class QAction;
 class QScrollBar;
 class QTabBar;
+class QMenu;
 
 class MainWindow : public QMainWindow
 {
@@ -49,6 +52,11 @@ protected:
         ) override;
 
 private:
+    QSettings settings;
+    RecentItemsStore recentItemsStore;
+
+    QMenu *recentFilesMenu = nullptr;
+
     QTabBar *sessionTabBar;
     QLabel *summaryLabel;
     QTableView *eventTable;
@@ -162,4 +170,10 @@ private:
     void bindActiveSession();
     void connectEventTableSelectionModel();
     void reloadActiveSession();
+
+    void refreshRecentFilesMenu();
+
+    void openRecentFile(
+        const QString &filePath
+        );
 };
