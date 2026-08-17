@@ -52,7 +52,7 @@ Important target workflows include:
 * navigating efficiently around warnings, errors, bursts, and surrounding context
 * recording findings and producing useful investigation output
 
-## Current Prototype Baseline
+## Original Prototype Baseline
 
 The original prototype uses:
 
@@ -118,12 +118,13 @@ Completed release milestones:
 | `v0.6.0` | Import Configuration Interface | prerelease |
 | `v0.7.0` | Additional Built-In Formats | prerelease |
 | `v0.8.0` | Responsive Large-File Import | prerelease |
+| `v0.9.0` | Multi-Session Investigation Workspace | prerelease |
 
-Current release target:
+Current development target:
 
 | Version | Milestone | Status |
 | --- | --- | --- |
-| `v0.9.0` | Multi-Session Investigation Workspace | active development |
+| `v0.10.0` | Advanced Filtering and Navigation | in progress |
 
 Release assets follow a consistent naming convention:
 
@@ -160,7 +161,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.8.0`:
+Implemented foundations through `v0.9.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -182,12 +183,15 @@ Implemented foundations through `v0.8.0`:
 * import parsing outside the UI thread with progress and cooperative cancellation
 * large structured-document preview safeguards with cancellable background preview generation
 * scalable event-count timeline rendering with automatic and manual resolutions, windowed fine-resolution navigation, and bounded on-screen bucket materialization
+* multi-session workspace ownership with independent per-session investigation controllers and retained import context
+* session switching, closing, and in-place reload using stable session identities
+* persistent recent-file and recent-profile history backed by local application settings
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 is now in active development and focuses on multi-session investigation before later phases expand navigation and filtering, findings, comparison, persistence, live following, deterministic analytics, and reporting rather than continuing to accumulate built-in formats.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 is now in progress and focuses on advanced filtering and navigation before later phases add findings, deterministic analytics, comparison, persistence, live following, and reporting rather than returning to open-ended format expansion.
 
 ## Development Phases
 
@@ -448,24 +452,37 @@ Performance work should continue to be measured against practical investigation 
 
 ### Phase 8 — Multi-Session Investigation Workspace
 
-**Status: Active development; targeted for `v0.9.0`.**
+**Status: Completed in `v0.9.0`.**
 
-Allow multiple imported sessions to coexist within one application instance so related logs from different applications, services, devices, test runs, or system components can be investigated without repeatedly replacing the active source.
+Expanded TraceScope from a single replaceable investigation into a workspace where related logs from different applications, services, devices, test runs, or system components can remain open together.
 
-The goal is not merely tabbed file viewing. The workspace should preserve enough per-session context that an engineer can move between related evidence while retaining the source, diagnostics, and profile information needed to understand how each session was imported.
+The implementation preserves meaningful per-session context rather than treating tabs as interchangeable file views. Each session owns its investigation controller and retains the source, import profile, diagnostics, filtering state, and presentation metadata needed to move between related evidence without rebuilding the investigation.
 
-Planned deliverables:
+Completed deliverables:
 
-* multiple open sessions
-* session switching
-* session closing
-* session reloading
-* per-session source metadata
-* per-session diagnostics
-* recent files
-* recent profiles
+* multiple open investigation sessions within one application instance
+* tabbed session switching with independent per-session filter and model state
+* session closing with deterministic active-session selection and a consistent empty-workspace state
+* stable session identities so session operations do not depend on mutable tab indexes
+* in-place session reloading using the original source path and import profile without creating duplicate tabs
+* reload behavior that refreshes source metadata and imported records while retaining applicable filters
+* cooperative reload cancellation that leaves the existing session unchanged
+* per-session source metadata including path, name, size, last-modified time, and import time
+* per-session retention of the import profile, import diagnostics, processed-record count, and source-truncation state
+* per-session cached data capabilities, timeline bounds, and column widths to avoid repeated full-dataset work while switching sessions
+* responsive switching verified with representative large performance fixtures
+* persistent recent-file history using local application settings
+* recent files reopened through the normal Import Configuration workflow rather than imported silently
+* persistent recent-profile history using the existing validated profile-loading path
+* bounded, deduplicated most-recent-first history for files and profiles with stale-path cleanup
+* automated coverage for session state, workspace add/switch/close/reload behavior, and recent-item persistence
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+* refreshed release screenshots covering the multi-session and recent-history workflows
 
 ### Phase 9 — Advanced Filtering and Navigation
+
+**Status: In progress; targeted for `v0.10.0`.**
 
 Expand investigation controls beyond the prototype filters so users can move efficiently from a large normalized record set to the small portion relevant to a failure, warning pattern, subsystem, entity, time window, or source-specific field.
 
