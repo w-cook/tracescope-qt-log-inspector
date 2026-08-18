@@ -67,6 +67,11 @@ public:
     const QStringList &
     availableEventCodes() const;
 
+    bool hasCustomFieldData() const;
+
+    const QStringList &
+    availableCustomFields() const;
+
     const QStringList &
     availableEntities() const;
 
@@ -105,6 +110,10 @@ private:
     bool m_hasSubsystemData = false;
 
     QStringList m_availableSubsystems;
+
+    bool m_hasCustomFieldData = false;
+
+    QStringList m_availableCustomFields;
 
     bool m_hasEventCodeData = false;
     bool m_hasEntityData = false;

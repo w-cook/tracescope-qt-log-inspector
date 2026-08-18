@@ -43,6 +43,14 @@ public:
 
     const InvestigationRecord *recordAt(int row) const;
 
+    bool isCustomColumn(
+        int column
+        ) const;
+
+    QString columnKey(
+        int column
+        ) const;
+
 private:
     struct ColumnDefinition
     {

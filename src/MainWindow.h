@@ -35,10 +35,12 @@ class QScrollBar;
 class QTabBar;
 class QMenu;
 class MultiSelectFilterComboBox;
+class CustomFieldFilterEditor;
 class QPushButton;
 class QCheckBox;
 class QDateTimeEdit;
 class QWidget;
+class QDialog;
 
 class MainWindow : public QMainWindow
 {
@@ -84,15 +86,23 @@ private:
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
 
+    QPushButton *customFiltersButton;
+    QDialog *customFiltersDialog;
+
+    QPushButton *timeRangeButton;
+    QDialog *timeRangeDialog;
+
     MultiSelectFilterComboBox *eventCodeFilterCombo;
     MultiSelectFilterComboBox *entityFilterCombo;
 
-    QWidget *canonicalFilterWidget = nullptr;
+    CustomFieldFilterEditor *customFieldFilterEditor;
+
     QWidget *eventCodeFilterWidget = nullptr;
     QWidget *entityFilterWidget = nullptr;
 
     bool hasEventCodeData = false;
     bool hasEntityData = false;
+    bool hasCustomFieldData = false;
 
     QWidget *timeRangeFilterWidget = nullptr;
 
@@ -170,6 +180,10 @@ private:
     void refreshSubsystemFilterOptions();
     void refreshCanonicalFilterOptions();
 
+    void updateCustomFiltersButton();
+
+    void updateTimeRangeButton();
+
     QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();
     void displayEventDetail(
@@ -210,4 +224,6 @@ private:
     void openRecentFile(
         const QString &filePath
         );
+
+    void resizeCustomFiltersDialogToContents();
 };

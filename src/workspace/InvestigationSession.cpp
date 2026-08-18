@@ -124,6 +124,19 @@ const QStringList &
 }
 
 bool InvestigationSession::
+    hasCustomFieldData() const
+{
+    return m_hasCustomFieldData;
+}
+
+const QStringList &
+    InvestigationSession::
+    availableCustomFields() const
+{
+    return m_availableCustomFields;
+}
+
+bool InvestigationSession::
     hasEventCodeData() const
 {
     return m_hasEventCodeData;
@@ -242,6 +255,9 @@ void InvestigationSession::rebuildDerivedData(
     m_hasEventCodeData = false;
     m_hasEntityData = false;
 
+    m_hasCustomFieldData = false;
+    m_availableCustomFields.clear();
+
     m_availableEventCodes.clear();
     m_availableEntities.clear();
 
@@ -252,6 +268,7 @@ void InvestigationSession::rebuildDerivedData(
     m_lastTimestamp.reset();
 
     QSet<QString> subsystems;
+    QSet<QString> customFields;
 
     for (const InvestigationRecord &record
          : records) {
@@ -290,6 +307,24 @@ void InvestigationSession::rebuildDerivedData(
                 );
         }
 
+        for (
+            auto iterator =
+            record.customAttributes.constBegin();
+            iterator !=
+            record.customAttributes.constEnd();
+            ++iterator
+            ) {
+            if (iterator.key().isEmpty()) {
+                continue;
+            }
+
+            m_hasCustomFieldData = true;
+
+            customFields.insert(
+                iterator.key()
+                );
+        }
+
         if (!record.timestamp.has_value()) {
             continue;
         }
@@ -317,6 +352,23 @@ void InvestigationSession::rebuildDerivedData(
 
     m_availableEventCodes =
         eventCodes.values();
+
+    m_availableCustomFields =
+        customFields.values();
+
+    std::sort(
+        m_availableCustomFields.begin(),
+        m_availableCustomFields.end(),
+        [](
+            const QString &left,
+            const QString &right
+            ) {
+            return left.compare(
+                       right,
+                       Qt::CaseInsensitive
+                       ) < 0;
+        }
+        );
 
     m_availableEntities =
         entities.values();

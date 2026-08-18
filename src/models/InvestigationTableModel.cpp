@@ -134,6 +134,32 @@ InvestigationTableModel::recordAt(int row) const
     return &m_records[row];
 }
 
+bool InvestigationTableModel::
+    isCustomColumn(
+        int column
+        ) const
+{
+    if (column < 0
+        || column >= m_columns.size()) {
+        return false;
+    }
+
+    return m_columns[column].custom;
+}
+
+QString InvestigationTableModel::
+    columnKey(
+        int column
+        ) const
+{
+    if (column < 0
+        || column >= m_columns.size()) {
+        return QString();
+    }
+
+    return m_columns[column].key;
+}
+
 void InvestigationTableModel::rebuildColumns()
 {
     m_columns.clear();
