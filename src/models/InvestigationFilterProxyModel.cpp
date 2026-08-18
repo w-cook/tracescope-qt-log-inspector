@@ -287,6 +287,66 @@ void InvestigationFilterProxyModel::
         );
 }
 
+void InvestigationFilterProxyModel::
+    setCustomFieldFilters(
+        const CustomFieldFilterMap &filters
+        )
+{
+    CustomFieldFilterMap normalized;
+
+    for (
+        auto filterIterator =
+        filters.constBegin();
+        filterIterator !=
+        filters.constEnd();
+        ++filterIterator
+        ) {
+        if (filterIterator
+                .key()
+                .isEmpty()
+            || filterIterator
+                   .value()
+                   .isEmpty()) {
+            continue;
+        }
+
+        QStringList values;
+
+        for (const QString &value
+             : filterIterator.value()) {
+            if (!values.contains(value)) {
+                values.append(value);
+            }
+        }
+
+        if (!values.isEmpty()) {
+            normalized.insert(
+                filterIterator.key(),
+                values
+                );
+        }
+    }
+
+    if (m_customFieldFilters
+        == normalized) {
+        return;
+    }
+
+    /*
+     * Custom values may be heavily interleaved
+     * throughout large investigations. Rebuilding
+     * the proxy avoids the expensive incremental
+     * row reconciliation already observed with
+     * other categorical filters.
+     */
+    beginResetModel();
+
+    m_customFieldFilters =
+        normalized;
+
+    endResetModel();
+}
+
 QStringList
 InvestigationFilterProxyModel::severityFilters() const
 {
@@ -320,6 +380,13 @@ QString InvestigationFilterProxyModel::
 QString InvestigationFilterProxyModel::searchText() const
 {
     return m_searchText;
+}
+
+const CustomFieldFilterMap &
+    InvestigationFilterProxyModel::
+    customFieldFilters() const
+{
+    return m_customFieldFilters;
 }
 
 QStringList
@@ -424,6 +491,39 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
         if (m_timeRangeEnd.has_value()
             && record->timestamp.value()
                    > m_timeRangeEnd.value()) {
+            return false;
+        }
+    }
+
+    for (
+        auto filterIterator =
+        m_customFieldFilters.constBegin();
+        filterIterator !=
+        m_customFieldFilters.constEnd();
+        ++filterIterator
+        ) {
+        const auto attributeIterator =
+            record->customAttributes.constFind(
+                filterIterator.key()
+                );
+
+        if (attributeIterator
+            == record
+                   ->customAttributes
+                   .constEnd()) {
+            return false;
+        }
+
+        const QString attributeValue =
+            attributeIterator
+                .value()
+                .toString();
+
+        if (!filterIterator
+                 .value()
+                 .contains(
+                     attributeValue
+                     )) {
             return false;
         }
     }

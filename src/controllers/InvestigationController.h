@@ -60,6 +60,10 @@ public:
         const std::optional<QDateTime> &endTime
         );
 
+    void setCustomFieldFilters(
+        const CustomFieldFilterMap &filters
+        );
+
     int totalRecordCount() const;
 
     QStringList availableSubsystems() const;

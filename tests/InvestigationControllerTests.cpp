@@ -14,6 +14,9 @@ private slots:
     void filtersByInclusiveTimeRange();
     void filtersMultipleEventCodes();
     void filtersMultipleEntities();
+    void filtersMultipleCustomFieldValues();
+    void combinesMultipleCustomFieldFilters();
+    void customFieldFilterExcludesMissingValues();
     void combinesEventCodeAndEntityFilters();
     void returnsSortedSubsystems();
     void mapsSortedProxyIndexToSourceRecord();
@@ -49,6 +52,16 @@ static QVector<InvestigationRecord> sampleRecords()
     startup.message =
         QStringLiteral("Started");
 
+    startup.customAttributes.insert(
+        QStringLiteral("region"),
+        QStringLiteral("east")
+        );
+
+    startup.customAttributes.insert(
+        QStringLiteral("rack"),
+        QStringLiteral("rack-1")
+        );
+
     InvestigationRecord tracking;
     tracking.recordId =
         QStringLiteral("record-tracking");
@@ -76,6 +89,21 @@ static QVector<InvestigationRecord> sampleRecords()
     tracking.message =
         QStringLiteral("Track lost");
 
+    tracking.customAttributes.insert(
+        QStringLiteral("region"),
+        QStringLiteral("west")
+        );
+
+    tracking.customAttributes.insert(
+        QStringLiteral("rack"),
+        QStringLiteral("rack-1")
+        );
+
+    tracking.customAttributes.insert(
+        QStringLiteral("ticket"),
+        QStringLiteral("INC-42")
+        );
+
     InvestigationRecord comms;
     comms.recordId =
         QStringLiteral("record-comms");
@@ -102,6 +130,16 @@ static QVector<InvestigationRecord> sampleRecords()
 
     comms.message =
         QStringLiteral("Packet loss");
+
+    comms.customAttributes.insert(
+        QStringLiteral("region"),
+        QStringLiteral("east")
+        );
+
+    comms.customAttributes.insert(
+        QStringLiteral("rack"),
+        QStringLiteral("rack-2")
+        );
 
     return {
         startup,
@@ -385,6 +423,120 @@ void InvestigationControllerTests::
     QCOMPARE(
         records[1].recordId,
         QStringLiteral("record-comms")
+        );
+}
+void InvestigationControllerTests::
+    filtersMultipleCustomFieldValues()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    CustomFieldFilterMap filters;
+
+    filters.insert(
+        QStringLiteral("region"),
+        QStringList {
+            QStringLiteral("east")
+        }
+        );
+
+    controller.setCustomFieldFilters(
+        filters
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(records.size(), 2);
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-startup")
+        );
+
+    QCOMPARE(
+        records[1].recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationControllerTests::
+    combinesMultipleCustomFieldFilters()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    CustomFieldFilterMap filters;
+
+    filters.insert(
+        QStringLiteral("region"),
+        QStringList {
+            QStringLiteral("east"),
+            QStringLiteral("west")
+        }
+        );
+
+    filters.insert(
+        QStringLiteral("rack"),
+        QStringList {
+            QStringLiteral("rack-2")
+        }
+        );
+
+    controller.setCustomFieldFilters(
+        filters
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(records.size(), 1);
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationControllerTests::
+    customFieldFilterExcludesMissingValues()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    CustomFieldFilterMap filters;
+
+    filters.insert(
+        QStringLiteral("ticket"),
+        QStringList {
+            QStringLiteral("INC-42")
+        }
+        );
+
+    controller.setCustomFieldFilters(
+        filters
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(records.size(), 1);
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-tracking")
         );
 }
 

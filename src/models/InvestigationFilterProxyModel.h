@@ -7,8 +7,12 @@
 #include <QString>
 #include <QStringMatcher>
 #include <QStringList>
+#include <QMap>
 
 #include "InvestigationTableModel.h"
+
+using CustomFieldFilterMap =
+    QMap<QString, QStringList>;
 
 class InvestigationFilterProxyModel : public QSortFilterProxyModel
 {
@@ -43,6 +47,10 @@ public:
         const QStringList &entityIds
         );
 
+    void setCustomFieldFilters(
+        const CustomFieldFilterMap &filters
+        );
+
     QStringList eventCodeFilters() const;
     QStringList entityFilters() const;
 
@@ -58,6 +66,9 @@ public:
     QString subsystemFilter() const;
     QString searchText() const;
 
+    const CustomFieldFilterMap &
+    customFieldFilters() const;
+
 protected:
     bool filterAcceptsRow(
         int sourceRow,
@@ -70,6 +81,8 @@ private:
     QString m_searchText;
     QStringList m_eventCodeFilters;
     QStringList m_entityFilters;
+
+    CustomFieldFilterMap m_customFieldFilters;
 
     std::optional<QDateTime> m_timeRangeStart;
     std::optional<QDateTime> m_timeRangeEnd;

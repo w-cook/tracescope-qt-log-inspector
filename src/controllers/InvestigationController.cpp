@@ -121,6 +121,17 @@ void InvestigationController::
         );
 }
 
+void InvestigationController::
+    setCustomFieldFilters(
+        const CustomFieldFilterMap &filters
+        )
+{
+    m_proxyModel
+        .setCustomFieldFilters(
+            filters
+            );
+}
+
 int InvestigationController::totalRecordCount() const
 {
     return m_sourceModel.rowCount();
@@ -225,26 +236,29 @@ InvestigationController::recordsForAnalysis() const
 {
     const bool filtersActive =
         !m_proxyModel
-             .severityFilters()
-             .isEmpty()
+            .severityFilters()
+            .isEmpty()
         || !m_proxyModel
-                .subsystemFilters()
-                .isEmpty()
+            .subsystemFilters()
+            .isEmpty()
         || !m_proxyModel
-                .searchText()
-                .isEmpty()
+            .searchText()
+            .isEmpty()
         || !m_proxyModel
-                .eventCodeFilters()
-                .isEmpty()
+            .eventCodeFilters()
+            .isEmpty()
         || !m_proxyModel
-                .entityFilters()
-                .isEmpty()
+            .entityFilters()
+            .isEmpty()
         || m_proxyModel
-               .timeRangeStart()
-               .has_value()
+            .timeRangeStart()
+            .has_value()
         || m_proxyModel
-               .timeRangeEnd()
-               .has_value();
+            .timeRangeEnd()
+            .has_value()
+        || !m_proxyModel
+            .customFieldFilters()
+            .isEmpty();
 
     if (!filtersActive) {
         return m_sourceModel.records();
