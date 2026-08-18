@@ -36,6 +36,9 @@ class QTabBar;
 class QMenu;
 class MultiSelectFilterComboBox;
 class QPushButton;
+class QCheckBox;
+class QDateTimeEdit;
+class QWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -80,6 +83,16 @@ private:
     QComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
+
+    QWidget *timeRangeFilterWidget = nullptr;
+
+    QCheckBox *timeRangeStartCheckBox = nullptr;
+    QDateTimeEdit *timeRangeStartEdit = nullptr;
+
+    QCheckBox *timeRangeEndCheckBox = nullptr;
+    QDateTimeEdit *timeRangeEndEdit = nullptr;
+
+    bool hasTimestampData = false;
 
     QTimer *searchDebounceTimer;
 
@@ -168,6 +181,12 @@ private:
     void updateTimelineRangeLabel(
         int scrollValue
         );
+
+    std::optional<QDateTime>
+    effectiveTimelineFirstTimestamp() const;
+
+    std::optional<QDateTime>
+    effectiveTimelineLastTimestamp() const;
 
     void updateDataCapabilities();
 

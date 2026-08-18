@@ -39,6 +39,8 @@
 #include <QTimeZone>
 #include <QTabBar>
 #include <QPushButton>
+#include <QCheckBox>
+#include <QDateTimeEdit>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -1298,6 +1300,110 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     layout->addLayout(filterLayout);
 
+    timeRangeFilterWidget =
+        new QWidget(this);
+
+    auto *timeRangeLayout =
+        new QHBoxLayout(
+            timeRangeFilterWidget
+            );
+
+    timeRangeLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    auto *timeRangeLabel =
+        new QLabel(
+            tr("Time range (UTC):"),
+            timeRangeFilterWidget
+            );
+
+    timeRangeStartCheckBox =
+        new QCheckBox(
+            tr("From"),
+            timeRangeFilterWidget
+            );
+
+    timeRangeStartEdit =
+        new QDateTimeEdit(
+            timeRangeFilterWidget
+            );
+
+    timeRangeEndCheckBox =
+        new QCheckBox(
+            tr("To"),
+            timeRangeFilterWidget
+            );
+
+    timeRangeEndEdit =
+        new QDateTimeEdit(
+            timeRangeFilterWidget
+            );
+
+    for (QDateTimeEdit *edit : {
+             timeRangeStartEdit,
+             timeRangeEndEdit
+         }) {
+        edit->setDisplayFormat(
+            QStringLiteral(
+                "yyyy-MM-dd HH:mm:ss.zzz"
+                )
+            );
+
+        edit->setTimeZone(
+            QTimeZone::UTC
+            );
+
+        edit->setKeyboardTracking(
+            true
+            );
+
+        edit->setEnabled(
+            false
+            );
+
+        edit->setMinimumWidth(
+            210
+            );
+    }
+
+    timeRangeLayout->addWidget(
+        timeRangeLabel
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeStartCheckBox
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeStartEdit
+        );
+
+    timeRangeLayout->addSpacing(
+        12
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeEndCheckBox
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeEndEdit
+        );
+
+    timeRangeLayout->addStretch();
+
+    layout->addWidget(
+        timeRangeFilterWidget
+        );
+
+    timeRangeFilterWidget->setVisible(
+        false
+        );
+
     connect(
         levelFilterCombo,
         &MultiSelectFilterComboBox::
@@ -1368,6 +1474,126 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
             applyFilters();
         }
         );
+
+    connect(
+        timeRangeStartCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this](bool checked) {
+            timeRangeStartEdit->setEnabled(
+                checked
+                );
+
+            if (checked
+                && timeRangeEndCheckBox
+                       ->isChecked()
+                && timeRangeStartEdit
+                           ->dateTime()
+                       > timeRangeEndEdit
+                             ->dateTime()) {
+                const QSignalBlocker blocker(
+                    timeRangeEndEdit
+                    );
+
+                timeRangeEndEdit->setDateTime(
+                    timeRangeStartEdit
+                        ->dateTime()
+                    );
+            }
+
+            applyFilters();
+        }
+        );
+
+    connect(
+        timeRangeEndCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this](bool checked) {
+            timeRangeEndEdit->setEnabled(
+                checked
+                );
+
+            if (checked
+                && timeRangeStartCheckBox
+                       ->isChecked()
+                && timeRangeEndEdit
+                           ->dateTime()
+                       < timeRangeStartEdit
+                             ->dateTime()) {
+                const QSignalBlocker blocker(
+                    timeRangeStartEdit
+                    );
+
+                timeRangeStartEdit->setDateTime(
+                    timeRangeEndEdit
+                        ->dateTime()
+                    );
+            }
+
+            applyFilters();
+        }
+        );
+
+    connect(
+        timeRangeStartEdit,
+        &QDateTimeEdit::dateTimeChanged,
+        this,
+        [this](
+            const QDateTime &dateTime
+            ) {
+            if (!timeRangeStartCheckBox
+                     ->isChecked()) {
+                return;
+            }
+
+            if (timeRangeEndCheckBox
+                    ->isChecked()
+                && dateTime
+                       > timeRangeEndEdit
+                             ->dateTime()) {
+                const QSignalBlocker blocker(
+                    timeRangeEndEdit
+                    );
+
+                timeRangeEndEdit->setDateTime(
+                    dateTime
+                    );
+            }
+
+            applyFilters();
+        }
+        );
+
+    connect(
+        timeRangeEndEdit,
+        &QDateTimeEdit::dateTimeChanged,
+        this,
+        [this](
+            const QDateTime &dateTime
+            ) {
+            if (!timeRangeEndCheckBox
+                     ->isChecked()) {
+                return;
+            }
+
+            if (timeRangeStartCheckBox
+                    ->isChecked()
+                && dateTime
+                       < timeRangeStartEdit
+                             ->dateTime()) {
+                const QSignalBlocker blocker(
+                    timeRangeStartEdit
+                    );
+
+                timeRangeStartEdit->setDateTime(
+                    dateTime
+                    );
+            }
+
+            applyFilters();
+        }
+        );
 }
 
 void MainWindow::applyFilters()
@@ -1386,6 +1612,34 @@ void MainWindow::applyFilters()
             .toString(),
         searchInput->text()
         );
+
+    const std::optional<QDateTime>
+        timeRangeStart =
+        timeRangeStartCheckBox != nullptr
+                && timeRangeStartCheckBox
+                       ->isChecked()
+            ? std::optional<QDateTime>(
+                  timeRangeStartEdit
+                      ->dateTime()
+                  )
+            : std::nullopt;
+
+    const std::optional<QDateTime>
+        timeRangeEnd =
+        timeRangeEndCheckBox != nullptr
+                && timeRangeEndCheckBox
+                       ->isChecked()
+            ? std::optional<QDateTime>(
+                  timeRangeEndEdit
+                      ->dateTime()
+                  )
+            : std::nullopt;
+
+    investigationController
+        ->setTimeRangeFilter(
+            timeRangeStart,
+            timeRangeEnd
+            );
 
     eventTable->clearSelection();
     clearEventDetail();
@@ -1430,6 +1684,22 @@ void MainWindow::resetFilters()
             searchInput
             );
 
+        const QSignalBlocker timeStartCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker timeStartEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker timeEndCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker timeEndEditBlocker(
+            timeRangeEndEdit
+            );
+
         levelFilterCombo->clearSelection();
 
         subsystemFilterCombo->setCurrentIndex(
@@ -1437,6 +1707,34 @@ void MainWindow::resetFilters()
             );
 
         searchInput->clear();
+
+        timeRangeStartCheckBox->setChecked(
+            false
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            false
+            );
+
+        timeRangeStartEdit->setEnabled(
+            false
+            );
+
+        timeRangeEndEdit->setEnabled(
+            false
+            );
+
+        if (timelineFirstTimestamp.has_value()) {
+            timeRangeStartEdit->setDateTime(
+                timelineFirstTimestamp.value()
+                );
+        }
+
+        if (timelineLastTimestamp.has_value()) {
+            timeRangeEndEdit->setDateTime(
+                timelineLastTimestamp.value()
+                );
+        }
     }
 
     applyFilters();
@@ -2256,8 +2554,18 @@ void MainWindow::updateTimelineChart(
      * complete investigation has valid temporal
      * boundaries.
      */
-    if (!timelineFirstTimestamp.has_value()
-        || !timelineLastTimestamp.has_value()) {
+    const std::optional<QDateTime>
+        effectiveFirstTimestamp =
+        effectiveTimelineFirstTimestamp();
+
+    const std::optional<QDateTime>
+        effectiveLastTimestamp =
+        effectiveTimelineLastTimestamp();
+
+    if (!effectiveFirstTimestamp.has_value()
+        || !effectiveLastTimestamp.has_value()
+        || effectiveFirstTimestamp.value()
+               > effectiveLastTimestamp.value()) {
         showEmptyTimeline();
         return;
     }
@@ -2279,8 +2587,8 @@ void MainWindow::updateTimelineChart(
     const qint64 intervalMilliseconds =
         automaticInterval
             ? automaticTimelineIntervalMilliseconds(
-                  *timelineFirstTimestamp,
-                  *timelineLastTimestamp
+                  *effectiveFirstTimestamp,
+                  *effectiveLastTimestamp
                   )
             : requestedIntervalMilliseconds;
 
@@ -2304,8 +2612,8 @@ void MainWindow::updateTimelineChart(
             timelineAnalyzer
                 .scaleForIntervalMilliseconds(
                     records,
-                    *timelineFirstTimestamp,
-                    *timelineLastTimestamp,
+                    *effectiveFirstTimestamp,
+                    *effectiveLastTimestamp,
                     intervalMilliseconds
                     );
 
@@ -2332,8 +2640,8 @@ void MainWindow::updateTimelineChart(
     const qint64 totalBucketCount =
         timelineAnalyzer
             .intervalBucketCountMilliseconds(
-                *timelineFirstTimestamp,
-                *timelineLastTimestamp,
+                *effectiveFirstTimestamp,
+                *effectiveLastTimestamp,
                 intervalMilliseconds
                 );
 
@@ -2355,8 +2663,8 @@ void MainWindow::updateTimelineChart(
             timelineAnalyzer
                 .groupRecordsByIntervalMilliseconds(
                     records,
-                    *timelineFirstTimestamp,
-                    *timelineLastTimestamp,
+                    *effectiveFirstTimestamp,
+                    *effectiveLastTimestamp,
                     intervalMilliseconds
                     );
 
@@ -2499,8 +2807,8 @@ void MainWindow::updateTimelineChart(
             timelineAnalyzer
                 .groupRecordsByIntervalWindowMilliseconds(
                     records,
-                    *timelineFirstTimestamp,
-                    *timelineLastTimestamp,
+                    *effectiveFirstTimestamp,
+                    *effectiveLastTimestamp,
                     intervalMilliseconds,
                     startBucketIndex,
                     TimelineVisibleBucketCount
@@ -2905,8 +3213,18 @@ void MainWindow::updateTimelineRangeLabel(
         return;
     }
 
-    if (!timelineFirstTimestamp.has_value()
-        || !timelineLastTimestamp.has_value()) {
+    const std::optional<QDateTime>
+        effectiveFirstTimestamp =
+        effectiveTimelineFirstTimestamp();
+
+    const std::optional<QDateTime>
+        effectiveLastTimestamp =
+        effectiveTimelineLastTimestamp();
+
+    if (!effectiveFirstTimestamp.has_value()
+        || !effectiveLastTimestamp.has_value()
+        || effectiveFirstTimestamp.value()
+               > effectiveLastTimestamp.value()) {
         timelineRangeLabel->setText(
             tr("Visible: —")
             );
@@ -2927,8 +3245,8 @@ void MainWindow::updateTimelineRangeLabel(
     const qint64 intervalMilliseconds =
         automaticInterval
             ? automaticTimelineIntervalMilliseconds(
-                  *timelineFirstTimestamp,
-                  *timelineLastTimestamp
+                  *effectiveFirstTimestamp,
+                  *effectiveLastTimestamp
                   )
             : requestedIntervalMilliseconds;
 
@@ -2943,8 +3261,8 @@ void MainWindow::updateTimelineRangeLabel(
     const qint64 totalBucketCount =
         timelineAnalyzer
             .intervalBucketCountMilliseconds(
-                *timelineFirstTimestamp,
-                *timelineLastTimestamp,
+                *effectiveFirstTimestamp,
+                *effectiveLastTimestamp,
                 intervalMilliseconds
                 );
 
@@ -2977,14 +3295,21 @@ void MainWindow::updateTimelineRangeLabel(
 
     const qint64 firstBucketEpoch =
         normalizedTimelineBucketEpoch(
-            *timelineFirstTimestamp,
+            *effectiveFirstTimestamp,
             intervalMilliseconds
             );
 
-    const qint64 visibleFirstEpoch =
+    qint64 visibleFirstEpoch =
         firstBucketEpoch
         + startBucketIndex
               * intervalMilliseconds;
+
+    visibleFirstEpoch =
+        std::max(
+            visibleFirstEpoch,
+            effectiveFirstTimestamp
+                ->toMSecsSinceEpoch()
+            );
 
     qint64 visibleLastEpoch =
         visibleFirstEpoch
@@ -2995,7 +3320,7 @@ void MainWindow::updateTimelineRangeLabel(
     visibleLastEpoch =
         std::min(
             visibleLastEpoch,
-            timelineLastTimestamp
+            effectiveLastTimestamp
                 ->toMSecsSinceEpoch()
             );
 
@@ -3082,6 +3407,62 @@ void MainWindow::updateTimelineRangeLabel(
     }
 }
 
+std::optional<QDateTime>
+MainWindow::effectiveTimelineFirstTimestamp() const
+{
+    if (!timelineFirstTimestamp.has_value()) {
+        return std::nullopt;
+    }
+
+    QDateTime effective =
+        timelineFirstTimestamp.value();
+
+    if (investigationController == nullptr) {
+        return effective;
+    }
+
+    const std::optional<QDateTime> &filterStart =
+        investigationController
+            ->proxyModel()
+            ->timeRangeStart();
+
+    if (filterStart.has_value()
+        && filterStart.value() > effective) {
+        effective =
+            filterStart.value();
+    }
+
+    return effective;
+}
+
+std::optional<QDateTime>
+MainWindow::effectiveTimelineLastTimestamp() const
+{
+    if (!timelineLastTimestamp.has_value()) {
+        return std::nullopt;
+    }
+
+    QDateTime effective =
+        timelineLastTimestamp.value();
+
+    if (investigationController == nullptr) {
+        return effective;
+    }
+
+    const std::optional<QDateTime> &filterEnd =
+        investigationController
+            ->proxyModel()
+            ->timeRangeEnd();
+
+    if (filterEnd.has_value()
+        && filterEnd.value() < effective) {
+        effective =
+            filterEnd.value();
+    }
+
+    return effective;
+}
+
 void MainWindow::updateDataCapabilities()
 {
     hasSeverityData = false;
@@ -3108,6 +3489,40 @@ void MainWindow::updateDataCapabilities()
 
     timelineLastTimestamp =
         session->lastTimestamp();
+
+    hasTimestampData =
+        timelineFirstTimestamp.has_value()
+        && timelineLastTimestamp.has_value();
+
+    if (!hasTimestampData) {
+        const QSignalBlocker startBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker endBlocker(
+            timeRangeEndCheckBox
+            );
+
+        timeRangeStartCheckBox->setChecked(
+            false
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            false
+            );
+
+        timeRangeStartEdit->setEnabled(
+            false
+            );
+
+        timeRangeEndEdit->setEnabled(
+            false
+            );
+    }
+
+    timeRangeFilterWidget->setVisible(
+        hasTimestampData
+        );
 
     /*
      * Clear filters that no longer apply before
@@ -3218,6 +3633,27 @@ void MainWindow::bindActiveSession()
 
         hasSeverityData = false;
         hasSubsystemData = false;
+        hasTimestampData = false;
+
+        timeRangeStartCheckBox->setChecked(
+            false
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            false
+            );
+
+        timeRangeStartEdit->setEnabled(
+            false
+            );
+
+        timeRangeEndEdit->setEnabled(
+            false
+            );
+
+        timeRangeFilterWidget->setVisible(
+            false
+            );
 
         levelFilterCombo->setVisible(false);
         subsystemFilterCombo->setVisible(false);
@@ -3280,6 +3716,14 @@ void MainWindow::bindActiveSession()
     const QString searchText =
         proxyModel->searchText();
 
+    const std::optional<QDateTime>
+        timeRangeStart =
+        proxyModel->timeRangeStart();
+
+    const std::optional<QDateTime>
+        timeRangeEnd =
+        proxyModel->timeRangeEnd();
+
     searchInput->setVisible(true);
     resetFiltersButton->setVisible(true);
 
@@ -3290,6 +3734,56 @@ void MainWindow::bindActiveSession()
     levelFilterCombo->blockSignals(true);
     subsystemFilterCombo->blockSignals(true);
     searchInput->blockSignals(true);
+
+    const QSignalBlocker
+        timeRangeStartCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+    const QSignalBlocker
+        timeRangeStartEditBlocker(
+            timeRangeStartEdit
+            );
+
+    const QSignalBlocker
+        timeRangeEndCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+    const QSignalBlocker
+        timeRangeEndEditBlocker(
+            timeRangeEndEdit
+            );
+
+    if (hasTimestampData) {
+        timeRangeStartEdit->setDateTime(
+            timeRangeStart.has_value()
+                ? timeRangeStart.value()
+                : timelineFirstTimestamp.value()
+            );
+
+        timeRangeEndEdit->setDateTime(
+            timeRangeEnd.has_value()
+                ? timeRangeEnd.value()
+                : timelineLastTimestamp.value()
+            );
+
+        timeRangeStartCheckBox->setChecked(
+            timeRangeStart.has_value()
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            timeRangeEnd.has_value()
+            );
+
+        timeRangeStartEdit->setEnabled(
+            timeRangeStart.has_value()
+            );
+
+        timeRangeEndEdit->setEnabled(
+            timeRangeEnd.has_value()
+            );
+    }
 
     resetFiltersButton->setEnabled(true);
 
