@@ -35,6 +35,7 @@ class QScrollBar;
 class QTabBar;
 class QMenu;
 class MultiSelectFilterComboBox;
+class QPushButton;
 
 class MainWindow : public QMainWindow
 {
@@ -78,6 +79,7 @@ private:
     MultiSelectFilterComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
+    QPushButton *resetFiltersButton;
 
     QTimer *searchDebounceTimer;
 
@@ -141,6 +143,7 @@ private:
 
     void buildFilterControls(QVBoxLayout *layout);
     void applyFilters();
+    void resetFilters();
     void refreshSubsystemFilterOptions();
 
     QGroupBox *buildDetailPanel();

@@ -38,6 +38,7 @@
 #include <QVariant>
 #include <QTimeZone>
 #include <QTabBar>
+#include <QPushButton>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -376,6 +377,12 @@ MainWindow::MainWindow(QWidget *parent)
     investigationController(nullptr),
     timelineChartView(new QChartView(this)),
     levelFilterCombo(new MultiSelectFilterComboBox(this)),
+    resetFiltersButton(
+        new QPushButton(
+            tr("Reset Filters"),
+            this
+            )
+        ),
     subsystemFilterCombo(new QComboBox(this)),
     searchInput(new QLineEdit(this)),
     searchDebounceTimer(new QTimer(this))
@@ -1287,6 +1294,7 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
     filterLayout->addWidget(levelFilterCombo);
     filterLayout->addWidget(subsystemFilterCombo);
     filterLayout->addWidget(searchInput);
+    filterLayout->addWidget(resetFiltersButton);
 
     layout->addLayout(filterLayout);
 
@@ -1299,6 +1307,23 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
             searchDebounceTimer->stop();
             applyFilters();
         }
+        );
+
+    connect(
+        resetFiltersButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            resetFilters();
+        }
+        );
+
+    resetFiltersButton->setEnabled(
+        false
+        );
+
+    resetFiltersButton->setVisible(
+        false
         );
 
     connect(
@@ -1382,6 +1407,39 @@ void MainWindow::applyFilters()
     updateTimelineChart(
         visibleRecords
         );
+}
+
+void MainWindow::resetFilters()
+{
+    if (investigationController == nullptr) {
+        return;
+    }
+
+    searchDebounceTimer->stop();
+
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
+        const QSignalBlocker searchBlocker(
+            searchInput
+            );
+
+        levelFilterCombo->clearSelection();
+
+        subsystemFilterCombo->setCurrentIndex(
+            0
+            );
+
+        searchInput->clear();
+    }
+
+    applyFilters();
 }
 
 void MainWindow::refreshSubsystemFilterOptions()
@@ -3142,6 +3200,10 @@ void MainWindow::bindActiveSession()
         subsystemFilterCombo->blockSignals(true);
         searchInput->blockSignals(true);
 
+        resetFiltersButton->setEnabled(
+            false
+            );
+
         levelFilterCombo->clearSelection();
         subsystemFilterCombo->setCurrentIndex(0);
         searchInput->clear();
@@ -3150,12 +3212,17 @@ void MainWindow::bindActiveSession()
         subsystemFilterCombo->blockSignals(false);
         searchInput->blockSignals(false);
 
+        resetFiltersButton->setEnabled(
+            false
+            );
+
         hasSeverityData = false;
         hasSubsystemData = false;
 
         levelFilterCombo->setVisible(false);
         subsystemFilterCombo->setVisible(false);
         searchInput->setVisible(false);
+        resetFiltersButton->setVisible(false);
 
         issueSummaryTable->setRowCount(0);
 
@@ -3214,6 +3281,7 @@ void MainWindow::bindActiveSession()
         proxyModel->searchText();
 
     searchInput->setVisible(true);
+    resetFiltersButton->setVisible(true);
 
     updateDataCapabilities();
 
@@ -3222,6 +3290,8 @@ void MainWindow::bindActiveSession()
     levelFilterCombo->blockSignals(true);
     subsystemFilterCombo->blockSignals(true);
     searchInput->blockSignals(true);
+
+    resetFiltersButton->setEnabled(true);
 
     levelFilterCombo->setSelectedValues(
         hasSeverityData
