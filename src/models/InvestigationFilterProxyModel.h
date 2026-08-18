@@ -21,7 +21,13 @@ public:
 
     void setSeverityFilters(const QStringList &severities);
     void setSeverityFilter(const QString &severity);
-    void setSubsystemFilter(const QString &subsystem);
+    void setSubsystemFilters(
+        const QStringList &subsystems
+        );
+
+    void setSubsystemFilter(
+        const QString &subsystem
+        );
     void setSearchText(const QString &searchText);
 
     void setTimeRangeFilter(
@@ -48,6 +54,7 @@ public:
 
     QStringList severityFilters() const;
     QString severityFilter() const;
+    QStringList subsystemFilters() const;
     QString subsystemFilter() const;
     QString searchText() const;
 
@@ -59,7 +66,7 @@ protected:
 
 private:
     QStringList m_severityFilters;
-    QString m_subsystemFilter;
+    QStringList m_subsystemFilters;
     QString m_searchText;
     QStringList m_eventCodeFilters;
     QStringList m_entityFilters;

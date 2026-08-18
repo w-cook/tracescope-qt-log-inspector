@@ -10,6 +10,7 @@ private slots:
     void setRecordsUpdatesModels();
     void filtersVisibleRecords();
     void filtersMultipleSeverities();
+    void filtersMultipleSubsystems();
     void filtersByInclusiveTimeRange();
     void filtersMultipleEventCodes();
     void filtersMultipleEntities();
@@ -200,6 +201,54 @@ void InvestigationControllerTests::
     QCOMPARE(
         records[0].recordId,
         QStringLiteral("record-tracking")
+        );
+
+    QCOMPARE(
+        records[1].recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationControllerTests::
+    filtersMultipleSubsystems()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setFilters(
+        QStringList(),
+        QStringList {
+            QStringLiteral(" Startup "),
+            QStringLiteral("Comms"),
+            QStringLiteral("Startup")
+        },
+        QString()
+        );
+
+    QCOMPARE(
+        controller
+            .proxyModel()
+            ->subsystemFilters(),
+        QStringList({
+            QStringLiteral("Startup"),
+            QStringLiteral("Comms")
+        })
+        );
+
+    const QVector<InvestigationRecord> records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-startup")
         );
 
     QCOMPARE(

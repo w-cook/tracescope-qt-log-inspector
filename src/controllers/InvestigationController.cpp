@@ -59,12 +59,29 @@ void InvestigationController::setFilters(
     const QString &searchText
     )
 {
+    setFilters(
+        severities,
+        subsystem.trimmed().isEmpty()
+            ? QStringList()
+            : QStringList {
+                  subsystem.trimmed()
+              },
+        searchText
+        );
+}
+
+void InvestigationController::setFilters(
+    const QStringList &severities,
+    const QStringList &subsystems,
+    const QString &searchText
+    )
+{
     m_proxyModel.setSeverityFilters(
         severities
         );
 
-    m_proxyModel.setSubsystemFilter(
-        subsystem
+    m_proxyModel.setSubsystemFilters(
+        subsystems
         );
 
     m_proxyModel.setSearchText(
@@ -211,7 +228,7 @@ InvestigationController::recordsForAnalysis() const
              .severityFilters()
              .isEmpty()
         || !m_proxyModel
-                .subsystemFilter()
+                .subsystemFilters()
                 .isEmpty()
         || !m_proxyModel
                 .searchText()

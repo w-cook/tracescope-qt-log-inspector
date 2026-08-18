@@ -41,6 +41,12 @@ public:
         const QString &searchText
         );
 
+    void setFilters(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText
+        );
+
     void setEventCodeFilters(
         const QStringList &eventCodes
         );

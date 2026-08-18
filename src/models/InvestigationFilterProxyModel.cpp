@@ -100,22 +100,71 @@ void InvestigationFilterProxyModel::setSeverityFilter(
         );
 }
 
-void InvestigationFilterProxyModel::setSubsystemFilter(
-    const QString &subsystem
-    )
+void InvestigationFilterProxyModel::
+    setSubsystemFilters(
+        const QStringList &subsystems
+        )
 {
-    const QString normalized = subsystem.trimmed();
+    QStringList normalized;
 
-    if (m_subsystemFilter == normalized) {
+    normalized.reserve(
+        subsystems.size()
+        );
+
+    for (const QString &subsystem
+         : subsystems) {
+        const QString candidate =
+            subsystem.trimmed();
+
+        if (candidate.isEmpty()
+            || normalized.contains(
+                candidate
+                )) {
+            continue;
+        }
+
+        normalized.append(
+            candidate
+            );
+    }
+
+    if (m_subsystemFilters
+        == normalized) {
         return;
     }
 
-    beginFilterChange();
+    /*
+     * Subsystem values may be heavily interleaved
+     * throughout large investigations. Incremental
+     * proxy row reconciliation can become much
+     * more expensive than rebuilding the proxy.
+     *
+     * Investigation selection is intentionally
+     * cleared whenever filters change, so model
+     * reset semantics are appropriate here.
+     */
+    beginResetModel();
 
-    m_subsystemFilter = normalized;
+    m_subsystemFilters =
+        normalized;
 
-    endFilterChange(
-        QSortFilterProxyModel::Direction::Rows
+    endResetModel();
+}
+
+void InvestigationFilterProxyModel::
+    setSubsystemFilter(
+        const QString &subsystem
+        )
+{
+    const QString normalized =
+        subsystem.trimmed();
+
+    setSubsystemFilters(
+        normalized.isEmpty()
+            ? QStringList()
+            : QStringList {
+                  normalized
+              }
         );
 }
 
@@ -254,9 +303,18 @@ InvestigationFilterProxyModel::severityFilter() const
     return m_severityFilters.at(0);
 }
 
-QString InvestigationFilterProxyModel::subsystemFilter() const
+QStringList InvestigationFilterProxyModel::
+    subsystemFilters() const
 {
-    return m_subsystemFilter;
+    return m_subsystemFilters;
+}
+
+QString InvestigationFilterProxyModel::
+    subsystemFilter() const
+{
+    return m_subsystemFilters.size() == 1
+               ? m_subsystemFilters.first()
+               : QString();
 }
 
 QString InvestigationFilterProxyModel::searchText() const
@@ -324,10 +382,11 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
         }
     }
 
-    if (!m_subsystemFilter.isEmpty()) {
+    if (!m_subsystemFilters.isEmpty()) {
         if (!record->subsystem.has_value()
-            || record->subsystem.value()
-                   != m_subsystemFilter) {
+            || !m_subsystemFilters.contains(
+                record->subsystem.value()
+                )) {
             return false;
         }
     }

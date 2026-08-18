@@ -80,7 +80,7 @@ private:
     QMetaObject::Connection eventSelectionConnection;
 
     MultiSelectFilterComboBox *levelFilterCombo;
-    QComboBox *subsystemFilterCombo;
+    MultiSelectFilterComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
 

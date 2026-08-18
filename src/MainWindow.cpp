@@ -385,7 +385,7 @@ MainWindow::MainWindow(QWidget *parent)
             this
             )
         ),
-    subsystemFilterCombo(new QComboBox(this)),
+    subsystemFilterCombo(new MultiSelectFilterComboBox(this)),
     eventCodeFilterCombo(new MultiSelectFilterComboBox(this)),
     entityFilterCombo(new MultiSelectFilterComboBox(this)),
     searchInput(new QLineEdit(this)),
@@ -1273,7 +1273,10 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
         170
         );
 
-    subsystemFilterCombo->addItem("All subsystems", "");
+    subsystemFilterCombo
+        ->setEmptySelectionText(
+            tr("All subsystems")
+            );
 
     subsystemFilterCombo->setMinimumWidth(240);
 
@@ -1553,15 +1556,12 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     connect(
         subsystemFilterCombo,
-        &QComboBox::currentIndexChanged,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
         this,
         [this]() {
-            subsystemFilterCombo->setToolTip(
-                subsystemFilterCombo
-                    ->currentData()
-                    .toString()
-                );
             searchDebounceTimer->stop();
+
             applyFilters();
         }
         );
@@ -1747,8 +1747,7 @@ void MainWindow::applyFilters()
     investigationController->setFilters(
         levelFilterCombo->selectedValues(),
         subsystemFilterCombo
-            ->currentData()
-            .toString(),
+            ->selectedValues(),
         searchInput->text()
         );
 
@@ -1861,9 +1860,7 @@ void MainWindow::resetFilters()
 
         levelFilterCombo->clearSelection();
 
-        subsystemFilterCombo->setCurrentIndex(
-            0
-            );
+        subsystemFilterCombo->clearSelection();
 
         searchInput->clear();
 
@@ -1903,30 +1900,13 @@ void MainWindow::resetFilters()
     applyFilters();
 }
 
-void MainWindow::refreshSubsystemFilterOptions()
+void MainWindow::
+    refreshSubsystemFilterOptions()
 {
-    if (investigationController == nullptr) {
+    if (investigationController
+        == nullptr) {
         return;
     }
-
-    const QString selectedSubsystem =
-        subsystemFilterCombo
-            ->currentData()
-            .toString();
-
-    subsystemFilterCombo->blockSignals(true);
-    subsystemFilterCombo->clear();
-
-    subsystemFilterCombo->addItem(
-        "All subsystems",
-        ""
-        );
-
-    subsystemFilterCombo->setItemData(
-        0,
-        QStringLiteral("All subsystems"),
-        Qt::ToolTipRole
-        );
 
     InvestigationSession *session =
         workspace->activeSession();
@@ -1934,6 +1914,16 @@ void MainWindow::refreshSubsystemFilterOptions()
     if (session == nullptr) {
         return;
     }
+
+    const QStringList selectedSubsystems =
+        subsystemFilterCombo
+            ->selectedValues();
+
+    const QSignalBlocker blocker(
+        subsystemFilterCombo
+        );
+
+    subsystemFilterCombo->clear();
 
     const QStringList &subsystems =
         session->availableSubsystems();
@@ -1949,19 +1939,11 @@ void MainWindow::refreshSubsystemFilterOptions()
 
     for (const QString &subsystem
          : subsystems) {
-        subsystemFilterCombo->addItem(
-            subsystem,
-            subsystem
-            );
-
-        const int itemIndex =
-            subsystemFilterCombo->count() - 1;
-
-        subsystemFilterCombo->setItemData(
-            itemIndex,
-            subsystem,
-            Qt::ToolTipRole
-            );
+        subsystemFilterCombo
+            ->addFilterItem(
+                subsystem,
+                subsystem
+                );
 
         widestTextWidth =
             std::max(
@@ -1974,11 +1956,6 @@ void MainWindow::refreshSubsystemFilterOptions()
                 );
     }
 
-    /*
-     * Keep the filter control itself compact,
-     * but let its popup expand enough to show
-     * long subsystem/logger names clearly.
-     */
     const int popupWidth =
         std::clamp(
             widestTextWidth + 40,
@@ -1992,24 +1969,10 @@ void MainWindow::refreshSubsystemFilterOptions()
             popupWidth
             );
 
-    const int previousIndex =
-        subsystemFilterCombo->findData(
-            selectedSubsystem
+    subsystemFilterCombo
+        ->setSelectedValues(
+            selectedSubsystems
             );
-
-    if (previousIndex >= 0) {
-        subsystemFilterCombo->setCurrentIndex(
-            previousIndex
-            );
-    }
-
-    subsystemFilterCombo->setToolTip(
-        subsystemFilterCombo
-            ->currentData()
-            .toString()
-        );
-
-    subsystemFilterCombo->blockSignals(false);
 }
 
 void MainWindow::refreshCanonicalFilterOptions()
@@ -3769,9 +3732,12 @@ void MainWindow::updateDataCapabilities()
     }
 
     if (!hasSubsystemData) {
-        subsystemFilterCombo->blockSignals(true);
-        subsystemFilterCombo->setCurrentIndex(0);
-        subsystemFilterCombo->blockSignals(false);
+        const QSignalBlocker blocker(
+            subsystemFilterCombo
+            );
+
+        subsystemFilterCombo
+            ->clearSelection();
     }
 
     if (!hasEventCodeData) {
@@ -3887,7 +3853,7 @@ void MainWindow::bindActiveSession()
             );
 
         levelFilterCombo->clearSelection();
-        subsystemFilterCombo->setCurrentIndex(0);
+        subsystemFilterCombo->clearSelection();
         searchInput->clear();
         eventCodeFilterCombo->clearSelection();
         entityFilterCombo->clearSelection();
@@ -3984,8 +3950,8 @@ void MainWindow::bindActiveSession()
     const QStringList severityFilters =
         proxyModel->severityFilters();
 
-    const QString subsystemFilter =
-        proxyModel->subsystemFilter();
+    const QStringList subsystemFilters =
+        proxyModel->subsystemFilters();
 
     const QStringList eventCodeFilters =
         proxyModel->eventCodeFilters();
@@ -4084,20 +4050,12 @@ void MainWindow::bindActiveSession()
             : QStringList()
         );
 
-    int subsystemIndex =
-        hasSubsystemData
-            ? subsystemFilterCombo->findData(
-                  subsystemFilter
-                  )
-            : 0;
-
-    if (subsystemIndex < 0) {
-        subsystemIndex = 0;
-    }
-
-    subsystemFilterCombo->setCurrentIndex(
-        subsystemIndex
-        );
+    subsystemFilterCombo
+        ->setSelectedValues(
+            hasSubsystemData
+                ? subsystemFilters
+                : QStringList()
+            );
 
     eventCodeFilterCombo
         ->setSelectedValues(
