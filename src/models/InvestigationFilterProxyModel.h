@@ -29,6 +29,17 @@ public:
         const std::optional<QDateTime> &endTime
         );
 
+    void setEventCodeFilters(
+        const QStringList &eventCodes
+        );
+
+    void setEntityFilters(
+        const QStringList &entityIds
+        );
+
+    QStringList eventCodeFilters() const;
+    QStringList entityFilters() const;
+
     const std::optional<QDateTime> &
     timeRangeStart() const;
 
@@ -50,6 +61,8 @@ private:
     QStringList m_severityFilters;
     QString m_subsystemFilter;
     QString m_searchText;
+    QStringList m_eventCodeFilters;
+    QStringList m_entityFilters;
 
     std::optional<QDateTime> m_timeRangeStart;
     std::optional<QDateTime> m_timeRangeEnd;

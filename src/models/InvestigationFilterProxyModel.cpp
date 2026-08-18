@@ -2,6 +2,36 @@
 
 #include "../domain/RecordSeverity.h"
 
+namespace
+{
+QStringList normalizedExactFilterValues(
+    const QStringList &values
+    )
+{
+    QStringList normalized;
+
+    normalized.reserve(
+        values.size()
+        );
+
+    for (const QString &value : values) {
+        const QString candidate =
+            value.trimmed();
+
+        if (candidate.isEmpty()
+            || normalized.contains(candidate)) {
+            continue;
+        }
+
+        normalized.append(
+            candidate
+            );
+    }
+
+    return normalized;
+}
+}
+
 InvestigationFilterProxyModel::
     InvestigationFilterProxyModel(QObject *parent)
     : QSortFilterProxyModel(parent)
@@ -150,6 +180,54 @@ void InvestigationFilterProxyModel::
         );
 }
 
+void InvestigationFilterProxyModel::
+    setEventCodeFilters(
+        const QStringList &eventCodes
+        )
+{
+    const QStringList normalized =
+        normalizedExactFilterValues(
+            eventCodes
+            );
+
+    if (m_eventCodeFilters == normalized) {
+        return;
+    }
+
+    beginFilterChange();
+
+    m_eventCodeFilters =
+        normalized;
+
+    endFilterChange(
+        QSortFilterProxyModel::Direction::Rows
+        );
+}
+
+void InvestigationFilterProxyModel::
+    setEntityFilters(
+        const QStringList &entityIds
+        )
+{
+    const QStringList normalized =
+        normalizedExactFilterValues(
+            entityIds
+            );
+
+    if (m_entityFilters == normalized) {
+        return;
+    }
+
+    beginFilterChange();
+
+    m_entityFilters =
+        normalized;
+
+    endFilterChange(
+        QSortFilterProxyModel::Direction::Rows
+        );
+}
+
 QStringList
 InvestigationFilterProxyModel::severityFilters() const
 {
@@ -174,6 +252,20 @@ QString InvestigationFilterProxyModel::subsystemFilter() const
 QString InvestigationFilterProxyModel::searchText() const
 {
     return m_searchText;
+}
+
+QStringList
+    InvestigationFilterProxyModel::
+    eventCodeFilters() const
+{
+    return m_eventCodeFilters;
+}
+
+QStringList
+    InvestigationFilterProxyModel::
+    entityFilters() const
+{
+    return m_entityFilters;
 }
 
 const std::optional<QDateTime> &
@@ -226,6 +318,24 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
         if (!record->subsystem.has_value()
             || record->subsystem.value()
                    != m_subsystemFilter) {
+            return false;
+        }
+    }
+
+    if (!m_eventCodeFilters.isEmpty()) {
+        if (!record->eventCode.has_value()
+            || !m_eventCodeFilters.contains(
+                record->eventCode.value()
+                )) {
+            return false;
+        }
+    }
+
+    if (!m_entityFilters.isEmpty()) {
+        if (!record->entityId.has_value()
+            || !m_entityFilters.contains(
+                record->entityId.value()
+                )) {
             return false;
         }
     }

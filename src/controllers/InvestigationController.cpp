@@ -73,6 +73,26 @@ void InvestigationController::setFilters(
 }
 
 void InvestigationController::
+    setEventCodeFilters(
+        const QStringList &eventCodes
+        )
+{
+    m_proxyModel.setEventCodeFilters(
+        eventCodes
+        );
+}
+
+void InvestigationController::
+    setEntityFilters(
+        const QStringList &entityIds
+        )
+{
+    m_proxyModel.setEntityFilters(
+        entityIds
+        );
+}
+
+void InvestigationController::
     setTimeRangeFilter(
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime
@@ -195,6 +215,12 @@ InvestigationController::recordsForAnalysis() const
                 .isEmpty()
         || !m_proxyModel
                 .searchText()
+                .isEmpty()
+        || !m_proxyModel
+                .eventCodeFilters()
+                .isEmpty()
+        || !m_proxyModel
+                .entityFilters()
                 .isEmpty()
         || m_proxyModel
                .timeRangeStart()

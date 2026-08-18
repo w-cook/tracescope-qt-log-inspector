@@ -123,6 +123,32 @@ const QStringList &
     return m_availableSubsystems;
 }
 
+bool InvestigationSession::
+    hasEventCodeData() const
+{
+    return m_hasEventCodeData;
+}
+
+bool InvestigationSession::
+    hasEntityData() const
+{
+    return m_hasEntityData;
+}
+
+const QStringList &
+    InvestigationSession::
+    availableEventCodes() const
+{
+    return m_availableEventCodes;
+}
+
+const QStringList &
+    InvestigationSession::
+    availableEntities() const
+{
+    return m_availableEntities;
+}
+
 const std::optional<QDateTime> &
     InvestigationSession::
     firstTimestamp() const
@@ -213,6 +239,15 @@ void InvestigationSession::rebuildDerivedData(
 
     m_availableSubsystems.clear();
 
+    m_hasEventCodeData = false;
+    m_hasEntityData = false;
+
+    m_availableEventCodes.clear();
+    m_availableEntities.clear();
+
+    QSet<QString> eventCodes;
+    QSet<QString> entities;
+
     m_firstTimestamp.reset();
     m_lastTimestamp.reset();
 
@@ -230,6 +265,28 @@ void InvestigationSession::rebuildDerivedData(
 
             subsystems.insert(
                 record.subsystem.value()
+                );
+        }
+
+        if (record.eventCode.has_value()
+            && !record.eventCode
+                    ->trimmed()
+                    .isEmpty()) {
+            m_hasEventCodeData = true;
+
+            eventCodes.insert(
+                record.eventCode.value()
+                );
+        }
+
+        if (record.entityId.has_value()
+            && !record.entityId
+                    ->trimmed()
+                    .isEmpty()) {
+            m_hasEntityData = true;
+
+            entities.insert(
+                record.entityId.value()
                 );
         }
 
@@ -257,6 +314,12 @@ void InvestigationSession::rebuildDerivedData(
 
     m_availableSubsystems =
         subsystems.values();
+
+    m_availableEventCodes =
+        eventCodes.values();
+
+    m_availableEntities =
+        entities.values();
 
     std::sort(
         m_availableSubsystems.begin(),

@@ -11,6 +11,9 @@ private slots:
     void filtersVisibleRecords();
     void filtersMultipleSeverities();
     void filtersByInclusiveTimeRange();
+    void filtersMultipleEventCodes();
+    void filtersMultipleEntities();
+    void combinesEventCodeAndEntityFilters();
     void returnsSortedSubsystems();
     void mapsSortedProxyIndexToSourceRecord();
     void timeRangeExcludesRecordsWithoutTimestamp();
@@ -21,6 +24,7 @@ static QVector<InvestigationRecord> sampleRecords()
     InvestigationRecord startup;
     startup.recordId =
         QStringLiteral("record-startup");
+
     startup.timestamp =
         QDateTime::fromString(
             QStringLiteral(
@@ -28,18 +32,26 @@ static QVector<InvestigationRecord> sampleRecords()
                 ),
             Qt::ISODateWithMs
             );
+
     startup.severity =
         RecordSeverity::Info;
+
     startup.subsystem =
         QStringLiteral("Startup");
+
     startup.eventCode =
         QStringLiteral("SESSION_START");
+
+    startup.entityId =
+        QStringLiteral("node-a");
+
     startup.message =
         QStringLiteral("Started");
 
     InvestigationRecord tracking;
     tracking.recordId =
         QStringLiteral("record-tracking");
+
     tracking.timestamp =
         QDateTime::fromString(
             QStringLiteral(
@@ -47,18 +59,26 @@ static QVector<InvestigationRecord> sampleRecords()
                 ),
             Qt::ISODateWithMs
             );
+
     tracking.severity =
         RecordSeverity::Warning;
+
     tracking.subsystem =
         QStringLiteral("Tracking");
+
     tracking.eventCode =
         QStringLiteral("TRACK_LOST");
+
+    tracking.entityId =
+        QStringLiteral("target-42");
+
     tracking.message =
         QStringLiteral("Track lost");
 
     InvestigationRecord comms;
     comms.recordId =
         QStringLiteral("record-comms");
+
     comms.timestamp =
         QDateTime::fromString(
             QStringLiteral(
@@ -66,12 +86,19 @@ static QVector<InvestigationRecord> sampleRecords()
                 ),
             Qt::ISODateWithMs
             );
+
     comms.severity =
         RecordSeverity::Error;
+
     comms.subsystem =
         QStringLiteral("Comms");
+
     comms.eventCode =
         QStringLiteral("PACKET_DROP");
+
+    comms.entityId =
+        QStringLiteral("node-a");
+
     comms.message =
         QStringLiteral("Packet loss");
 
@@ -239,6 +266,112 @@ void InvestigationControllerTests::
             .recordsForAnalysis()
             .size(),
         3
+        );
+}
+
+void InvestigationControllerTests::
+    filtersMultipleEventCodes()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setEventCodeFilters(
+        QStringList {
+            QStringLiteral(" TRACK_LOST "),
+            QStringLiteral("PACKET_DROP"),
+            QStringLiteral("TRACK_LOST")
+        }
+        );
+
+    const QVector<InvestigationRecord> records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        controller
+            .proxyModel()
+            ->eventCodeFilters(),
+        QStringList({
+            QStringLiteral("TRACK_LOST"),
+            QStringLiteral("PACKET_DROP")
+        })
+        );
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+}
+
+void InvestigationControllerTests::
+    filtersMultipleEntities()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setEntityFilters(
+        QStringList {
+            QStringLiteral("node-a")
+        }
+        );
+
+    const QVector<InvestigationRecord> records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-startup")
+        );
+
+    QCOMPARE(
+        records[1].recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationControllerTests::
+    combinesEventCodeAndEntityFilters()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setEventCodeFilters(
+        QStringList {
+            QStringLiteral("TRACK_LOST"),
+            QStringLiteral("PACKET_DROP")
+        }
+        );
+
+    controller.setEntityFilters(
+        QStringList {
+            QStringLiteral("node-a")
+        }
+        );
+
+    const QVector<InvestigationRecord> records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        records.size(),
+        1
+        );
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-comms")
         );
 }
 

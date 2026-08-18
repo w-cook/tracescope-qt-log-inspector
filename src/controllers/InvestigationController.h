@@ -41,6 +41,14 @@ public:
         const QString &searchText
         );
 
+    void setEventCodeFilters(
+        const QStringList &eventCodes
+        );
+
+    void setEntityFilters(
+        const QStringList &entityIds
+        );
+
     void setTimeRangeFilter(
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime
