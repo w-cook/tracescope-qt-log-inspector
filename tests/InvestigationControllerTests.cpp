@@ -9,6 +9,7 @@ class InvestigationControllerTests : public QObject
 private slots:
     void setRecordsUpdatesModels();
     void filtersVisibleRecords();
+    void filtersMultipleSeverities();
     void returnsSortedSubsystems();
     void mapsSortedProxyIndexToSourceRecord();
 };
@@ -127,6 +128,54 @@ void InvestigationControllerTests::
     QCOMPARE(
         records[0].recordId,
         QStringLiteral("record-tracking")
+        );
+}
+
+void InvestigationControllerTests::
+    filtersMultipleSeverities()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setFilters(
+        QStringList {
+            QStringLiteral("warn"),
+            QStringLiteral(" ERROR "),
+            QStringLiteral("warn")
+        },
+        QString(),
+        QString()
+        );
+
+    const QVector<InvestigationRecord> records =
+        controller.visibleRecords();
+
+    QCOMPARE(
+        controller
+            .proxyModel()
+            ->severityFilters(),
+        QStringList({
+            QStringLiteral("WARN"),
+            QStringLiteral("ERROR")
+        })
+        );
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-tracking")
+        );
+
+    QCOMPARE(
+        records[1].recordId,
+        QStringLiteral("record-comms")
         );
 }
 

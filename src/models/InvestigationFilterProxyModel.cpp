@@ -15,23 +15,58 @@ InvestigationFilterProxyModel::
         );
 }
 
-void InvestigationFilterProxyModel::setSeverityFilter(
-    const QString &severity
+void InvestigationFilterProxyModel::setSeverityFilters(
+    const QStringList &severities
     )
 {
-    const QString normalized =
-        severity.trimmed().toUpper();
+    QStringList normalized;
 
-    if (m_severityFilter == normalized) {
+    normalized.reserve(
+        severities.size()
+        );
+
+    for (const QString &severity : severities) {
+        const QString value =
+            severity.trimmed().toUpper();
+
+        if (value.isEmpty()
+            || normalized.contains(value)) {
+            continue;
+        }
+
+        normalized.append(value);
+    }
+
+    if (m_severityFilters == normalized) {
         return;
     }
 
     beginFilterChange();
 
-    m_severityFilter = normalized;
+    m_severityFilters = normalized;
 
     endFilterChange(
         QSortFilterProxyModel::Direction::Rows
+        );
+}
+
+void InvestigationFilterProxyModel::setSeverityFilter(
+    const QString &severity
+    )
+{
+    const QString normalized =
+        severity.trimmed();
+
+    if (normalized.isEmpty()) {
+        setSeverityFilters(
+            QStringList()
+            );
+
+        return;
+    }
+
+    setSeverityFilters(
+        QStringList { normalized }
         );
 }
 
@@ -77,9 +112,20 @@ void InvestigationFilterProxyModel::setSearchText(
         );
 }
 
-QString InvestigationFilterProxyModel::severityFilter() const
+QStringList
+InvestigationFilterProxyModel::severityFilters() const
 {
-    return m_severityFilter;
+    return m_severityFilters;
+}
+
+QString
+InvestigationFilterProxyModel::severityFilter() const
+{
+    if (m_severityFilters.size() != 1) {
+        return QString();
+    }
+
+    return m_severityFilters.at(0);
 }
 
 QString InvestigationFilterProxyModel::subsystemFilter() const
@@ -113,11 +159,13 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
         return false;
     }
 
-    if (!m_severityFilter.isEmpty()) {
+    if (!m_severityFilters.isEmpty()) {
         if (!record->severity.has_value()
-            || recordSeverityToString(
-                   record->severity.value()
-                   ) != m_severityFilter) {
+            || !m_severityFilters.contains(
+                recordSeverityToString(
+                    record->severity.value()
+                    )
+                )) {
             return false;
         }
     }

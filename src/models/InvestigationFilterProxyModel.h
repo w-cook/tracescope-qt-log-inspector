@@ -3,6 +3,7 @@
 #include <QSortFilterProxyModel>
 #include <QString>
 #include <QStringMatcher>
+#include <QStringList>
 
 #include "InvestigationTableModel.h"
 
@@ -15,10 +16,12 @@ public:
         QObject *parent = nullptr
         );
 
+    void setSeverityFilters(const QStringList &severities);
     void setSeverityFilter(const QString &severity);
     void setSubsystemFilter(const QString &subsystem);
     void setSearchText(const QString &searchText);
 
+    QStringList severityFilters() const;
     QString severityFilter() const;
     QString subsystemFilter() const;
     QString searchText() const;
@@ -30,7 +33,7 @@ protected:
         ) const override;
 
 private:
-    QString m_severityFilter;
+    QStringList m_severityFilters;
     QString m_subsystemFilter;
     QString m_searchText;
 

@@ -32,6 +32,12 @@ public:
         const QString &searchText
         );
 
+    void setFilters(
+        const QStringList &severities,
+        const QString &subsystem,
+        const QString &searchText
+        );
+
     int totalRecordCount() const;
 
     QStringList availableSubsystems() const;
