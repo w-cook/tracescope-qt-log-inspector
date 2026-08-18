@@ -386,6 +386,8 @@ MainWindow::MainWindow(QWidget *parent)
             )
         ),
     subsystemFilterCombo(new QComboBox(this)),
+    eventCodeFilterCombo(new MultiSelectFilterComboBox(this)),
+    entityFilterCombo(new MultiSelectFilterComboBox(this)),
     searchInput(new QLineEdit(this)),
     searchDebounceTimer(new QTimer(this))
 {
@@ -1300,6 +1302,123 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     layout->addLayout(filterLayout);
 
+    canonicalFilterWidget =
+        new QWidget(this);
+
+    auto *canonicalFilterLayout =
+        new QHBoxLayout(
+            canonicalFilterWidget
+            );
+
+    canonicalFilterLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    eventCodeFilterWidget =
+        new QWidget(
+            canonicalFilterWidget
+            );
+
+    auto *eventCodeLayout =
+        new QHBoxLayout(
+            eventCodeFilterWidget
+            );
+
+    eventCodeLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    auto *eventCodeLabel =
+        new QLabel(
+            tr("Event code:"),
+            eventCodeFilterWidget
+            );
+
+    eventCodeFilterCombo
+        ->setEmptySelectionText(
+            tr("All event codes")
+            );
+
+    eventCodeFilterCombo->setMinimumWidth(
+        220
+        );
+
+    eventCodeLayout->addWidget(
+        eventCodeLabel
+        );
+
+    eventCodeLayout->addWidget(
+        eventCodeFilterCombo
+        );
+
+    entityFilterWidget =
+        new QWidget(
+            canonicalFilterWidget
+            );
+
+    auto *entityLayout =
+        new QHBoxLayout(
+            entityFilterWidget
+            );
+
+    entityLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    auto *entityLabel =
+        new QLabel(
+            tr("Entity:"),
+            entityFilterWidget
+            );
+
+    entityFilterCombo
+        ->setEmptySelectionText(
+            tr("All entities")
+            );
+
+    entityFilterCombo->setMinimumWidth(
+        220
+        );
+
+    entityLayout->addWidget(
+        entityLabel
+        );
+
+    entityLayout->addWidget(
+        entityFilterCombo
+        );
+
+    canonicalFilterLayout->addWidget(
+        eventCodeFilterWidget
+        );
+
+    canonicalFilterLayout->addSpacing(
+        12
+        );
+
+    canonicalFilterLayout->addWidget(
+        entityFilterWidget
+        );
+
+    canonicalFilterLayout->addStretch();
+
+    layout->addWidget(
+        canonicalFilterWidget
+        );
+
+    canonicalFilterWidget->setVisible(
+        false
+        );
+
     timeRangeFilterWidget =
         new QWidget(this);
 
@@ -1476,6 +1595,26 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
         );
 
     connect(
+        eventCodeFilterCombo,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
+        this,
+        [this]() {
+            applyFilters();
+        }
+        );
+
+    connect(
+        entityFilterCombo,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
+        this,
+        [this]() {
+            applyFilters();
+        }
+        );
+
+    connect(
         timeRangeStartCheckBox,
         &QCheckBox::toggled,
         this,
@@ -1641,6 +1780,18 @@ void MainWindow::applyFilters()
             timeRangeEnd
             );
 
+    investigationController
+        ->setEventCodeFilters(
+            eventCodeFilterCombo
+                ->selectedValues()
+            );
+
+    investigationController
+        ->setEntityFilters(
+            entityFilterCombo
+                ->selectedValues()
+            );
+
     eventTable->clearSelection();
     clearEventDetail();
 
@@ -1684,6 +1835,14 @@ void MainWindow::resetFilters()
             searchInput
             );
 
+        const QSignalBlocker eventCodeBlocker(
+            eventCodeFilterCombo
+            );
+
+        const QSignalBlocker entityBlocker(
+            entityFilterCombo
+            );
+
         const QSignalBlocker timeStartCheckBlocker(
             timeRangeStartCheckBox
             );
@@ -1707,6 +1866,10 @@ void MainWindow::resetFilters()
             );
 
         searchInput->clear();
+
+        eventCodeFilterCombo->clearSelection();
+
+        entityFilterCombo->clearSelection();
 
         timeRangeStartCheckBox->setChecked(
             false
@@ -1847,6 +2010,69 @@ void MainWindow::refreshSubsystemFilterOptions()
         );
 
     subsystemFilterCombo->blockSignals(false);
+}
+
+void MainWindow::refreshCanonicalFilterOptions()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    auto populateFilter =
+        [](
+            MultiSelectFilterComboBox *combo,
+            const QStringList &values
+            ) {
+            const QSignalBlocker blocker(
+                combo
+                );
+
+            combo->clear();
+
+            int widestTextWidth = 0;
+
+            for (const QString &value
+                 : values) {
+                combo->addFilterItem(
+                    value,
+                    value
+                    );
+
+                widestTextWidth =
+                    std::max(
+                        widestTextWidth,
+                        combo
+                            ->fontMetrics()
+                            .horizontalAdvance(
+                                value
+                                )
+                        );
+            }
+
+            combo->clearSelection();
+
+            combo->view()
+                ->setMinimumWidth(
+                    std::clamp(
+                        widestTextWidth + 50,
+                        220,
+                        700
+                        )
+                    );
+        };
+
+    populateFilter(
+        eventCodeFilterCombo,
+        session->availableEventCodes()
+        );
+
+    populateFilter(
+        entityFilterCombo,
+        session->availableEntities()
+        );
 }
 
 QGroupBox *MainWindow::buildDetailPanel()
@@ -3467,6 +3693,8 @@ void MainWindow::updateDataCapabilities()
 {
     hasSeverityData = false;
     hasSubsystemData = false;
+    hasEventCodeData = false;
+    hasEntityData = false;
 
     timelineFirstTimestamp.reset();
     timelineLastTimestamp.reset();
@@ -3483,6 +3711,12 @@ void MainWindow::updateDataCapabilities()
 
     hasSubsystemData =
         session->hasSubsystemData();
+
+    hasEventCodeData =
+        session->hasEventCodeData();
+
+    hasEntityData =
+        session->hasEntityData();
 
     timelineFirstTimestamp =
         session->firstTimestamp();
@@ -3540,12 +3774,43 @@ void MainWindow::updateDataCapabilities()
         subsystemFilterCombo->blockSignals(false);
     }
 
+    if (!hasEventCodeData) {
+        const QSignalBlocker blocker(
+            eventCodeFilterCombo
+            );
+
+        eventCodeFilterCombo
+            ->clearSelection();
+    }
+
+    if (!hasEntityData) {
+        const QSignalBlocker blocker(
+            entityFilterCombo
+            );
+
+        entityFilterCombo
+            ->clearSelection();
+    }
+
     levelFilterCombo->setVisible(
         hasSeverityData
         );
 
     subsystemFilterCombo->setVisible(
         hasSubsystemData
+        );
+
+    eventCodeFilterWidget->setVisible(
+        hasEventCodeData
+        );
+
+    entityFilterWidget->setVisible(
+        hasEntityData
+        );
+
+    canonicalFilterWidget->setVisible(
+        hasEventCodeData
+        || hasEntityData
         );
 
     /*
@@ -3614,6 +3879,8 @@ void MainWindow::bindActiveSession()
         levelFilterCombo->blockSignals(true);
         subsystemFilterCombo->blockSignals(true);
         searchInput->blockSignals(true);
+        eventCodeFilterCombo->blockSignals(true);
+        entityFilterCombo->blockSignals(true);
 
         resetFiltersButton->setEnabled(
             false
@@ -3622,10 +3889,14 @@ void MainWindow::bindActiveSession()
         levelFilterCombo->clearSelection();
         subsystemFilterCombo->setCurrentIndex(0);
         searchInput->clear();
+        eventCodeFilterCombo->clearSelection();
+        entityFilterCombo->clearSelection();
 
         levelFilterCombo->blockSignals(false);
         subsystemFilterCombo->blockSignals(false);
         searchInput->blockSignals(false);
+        eventCodeFilterCombo->blockSignals(false);
+        entityFilterCombo->blockSignals(false);
 
         resetFiltersButton->setEnabled(
             false
@@ -3634,6 +3905,8 @@ void MainWindow::bindActiveSession()
         hasSeverityData = false;
         hasSubsystemData = false;
         hasTimestampData = false;
+        hasEventCodeData = false;
+        hasEntityData = false;
 
         timeRangeStartCheckBox->setChecked(
             false
@@ -3659,6 +3932,7 @@ void MainWindow::bindActiveSession()
         subsystemFilterCombo->setVisible(false);
         searchInput->setVisible(false);
         resetFiltersButton->setVisible(false);
+        canonicalFilterWidget->setVisible(false);
 
         issueSummaryTable->setRowCount(0);
 
@@ -3713,6 +3987,12 @@ void MainWindow::bindActiveSession()
     const QString subsystemFilter =
         proxyModel->subsystemFilter();
 
+    const QStringList eventCodeFilters =
+        proxyModel->eventCodeFilters();
+
+    const QStringList entityFilters =
+        proxyModel->entityFilters();
+
     const QString searchText =
         proxyModel->searchText();
 
@@ -3730,10 +4010,21 @@ void MainWindow::bindActiveSession()
     updateDataCapabilities();
 
     refreshSubsystemFilterOptions();
+    refreshCanonicalFilterOptions();
 
     levelFilterCombo->blockSignals(true);
     subsystemFilterCombo->blockSignals(true);
     searchInput->blockSignals(true);
+
+    const QSignalBlocker
+        eventCodeFilterBlocker(
+            eventCodeFilterCombo
+            );
+
+    const QSignalBlocker
+        entityFilterBlocker(
+            entityFilterCombo
+            );
 
     const QSignalBlocker
         timeRangeStartCheckBlocker(
@@ -3807,6 +4098,20 @@ void MainWindow::bindActiveSession()
     subsystemFilterCombo->setCurrentIndex(
         subsystemIndex
         );
+
+    eventCodeFilterCombo
+        ->setSelectedValues(
+            hasEventCodeData
+                ? eventCodeFilters
+                : QStringList()
+            );
+
+    entityFilterCombo
+        ->setSelectedValues(
+            hasEntityData
+                ? entityFilters
+                : QStringList()
+            );
 
     searchInput->setText(
         searchText

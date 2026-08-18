@@ -84,6 +84,16 @@ private:
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
 
+    MultiSelectFilterComboBox *eventCodeFilterCombo;
+    MultiSelectFilterComboBox *entityFilterCombo;
+
+    QWidget *canonicalFilterWidget = nullptr;
+    QWidget *eventCodeFilterWidget = nullptr;
+    QWidget *entityFilterWidget = nullptr;
+
+    bool hasEventCodeData = false;
+    bool hasEntityData = false;
+
     QWidget *timeRangeFilterWidget = nullptr;
 
     QCheckBox *timeRangeStartCheckBox = nullptr;
@@ -158,6 +168,7 @@ private:
     void applyFilters();
     void resetFilters();
     void refreshSubsystemFilterOptions();
+    void refreshCanonicalFilterOptions();
 
     QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();

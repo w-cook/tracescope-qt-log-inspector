@@ -194,14 +194,24 @@ void InvestigationFilterProxyModel::
         return;
     }
 
-    beginFilterChange();
+    /*
+     * Event-code values can be distributed
+     * throughout very large investigations.
+     * Incremental row reconciliation can become
+     * substantially more expensive than
+     * repopulating the proxy in that case.
+     *
+     * Investigation selection is intentionally
+     * cleared whenever filters change, so the
+     * selection-invalidating semantics of a model
+     * reset are appropriate here.
+     */
+    beginResetModel();
 
     m_eventCodeFilters =
         normalized;
 
-    endFilterChange(
-        QSortFilterProxyModel::Direction::Rows
-        );
+    endResetModel();
 }
 
 void InvestigationFilterProxyModel::
