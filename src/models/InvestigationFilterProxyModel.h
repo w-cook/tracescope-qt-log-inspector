@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include <QDateTime>
 #include <QSortFilterProxyModel>
 #include <QString>
 #include <QStringMatcher>
@@ -21,6 +24,17 @@ public:
     void setSubsystemFilter(const QString &subsystem);
     void setSearchText(const QString &searchText);
 
+    void setTimeRangeFilter(
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime
+        );
+
+    const std::optional<QDateTime> &
+    timeRangeStart() const;
+
+    const std::optional<QDateTime> &
+    timeRangeEnd() const;
+
     QStringList severityFilters() const;
     QString severityFilter() const;
     QString subsystemFilter() const;
@@ -36,6 +50,9 @@ private:
     QStringList m_severityFilters;
     QString m_subsystemFilter;
     QString m_searchText;
+
+    std::optional<QDateTime> m_timeRangeStart;
+    std::optional<QDateTime> m_timeRangeEnd;
 
     QStringMatcher m_searchMatcher;
 

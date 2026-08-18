@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include <QDateTime>
 #include <QObject>
 #include <QModelIndex>
 #include <QString>
@@ -36,6 +39,11 @@ public:
         const QStringList &severities,
         const QString &subsystem,
         const QString &searchText
+        );
+
+    void setTimeRangeFilter(
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime
         );
 
     int totalRecordCount() const;

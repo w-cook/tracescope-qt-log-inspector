@@ -10,8 +10,10 @@ private slots:
     void setRecordsUpdatesModels();
     void filtersVisibleRecords();
     void filtersMultipleSeverities();
+    void filtersByInclusiveTimeRange();
     void returnsSortedSubsystems();
     void mapsSortedProxyIndexToSourceRecord();
+    void timeRangeExcludesRecordsWithoutTimestamp();
 };
 
 static QVector<InvestigationRecord> sampleRecords()
@@ -180,6 +182,67 @@ void InvestigationControllerTests::
 }
 
 void InvestigationControllerTests::
+    filtersByInclusiveTimeRange()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    const QDateTime startTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:01:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const QDateTime endTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:02:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    controller.setTimeRangeFilter(
+        startTime,
+        endTime
+        );
+
+    const QVector<InvestigationRecord> records =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records[0].recordId,
+        QStringLiteral("record-tracking")
+        );
+
+    QCOMPARE(
+        records[1].recordId,
+        QStringLiteral("record-comms")
+        );
+
+    controller.setTimeRangeFilter(
+        std::nullopt,
+        std::nullopt
+        );
+
+    QCOMPARE(
+        controller
+            .recordsForAnalysis()
+            .size(),
+        3
+        );
+}
+
+void InvestigationControllerTests::
     returnsSortedSubsystems()
 {
     InvestigationController controller;
@@ -232,6 +295,57 @@ void InvestigationControllerTests::
         record->recordId,
         QStringLiteral("record-tracking")
         );
+}
+
+void InvestigationControllerTests::
+    timeRangeExcludesRecordsWithoutTimestamp()
+{
+    InvestigationController controller;
+
+    QVector<InvestigationRecord> records =
+        sampleRecords();
+
+    InvestigationRecord untimed;
+    untimed.recordId =
+        QStringLiteral("record-untimed");
+    untimed.message =
+        QStringLiteral("No timestamp");
+
+    records.append(
+        untimed
+        );
+
+    controller.setRecords(
+        records
+        );
+
+    const QDateTime startTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    controller.setTimeRangeFilter(
+        startTime,
+        std::nullopt
+        );
+
+    const QVector<InvestigationRecord> filtered =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        filtered.size(),
+        3
+        );
+
+    for (const InvestigationRecord &record
+         : filtered) {
+        QVERIFY(
+            record.timestamp.has_value()
+            );
+    }
 }
 
 QTEST_MAIN(InvestigationControllerTests)

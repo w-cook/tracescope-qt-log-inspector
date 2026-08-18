@@ -72,6 +72,18 @@ void InvestigationController::setFilters(
         );
 }
 
+void InvestigationController::
+    setTimeRangeFilter(
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime
+        )
+{
+    m_proxyModel.setTimeRangeFilter(
+        startTime,
+        endTime
+        );
+}
+
 int InvestigationController::totalRecordCount() const
 {
     return m_sourceModel.rowCount();
@@ -183,7 +195,13 @@ InvestigationController::recordsForAnalysis() const
                 .isEmpty()
         || !m_proxyModel
                 .searchText()
-                .isEmpty();
+                .isEmpty()
+        || m_proxyModel
+               .timeRangeStart()
+               .has_value()
+        || m_proxyModel
+               .timeRangeEnd()
+               .has_value();
 
     if (!filtersActive) {
         return m_sourceModel.records();

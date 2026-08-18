@@ -112,6 +112,44 @@ void InvestigationFilterProxyModel::setSearchText(
         );
 }
 
+void InvestigationFilterProxyModel::
+    setTimeRangeFilter(
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime
+        )
+{
+    const std::optional<QDateTime>
+        normalizedStart =
+        startTime.has_value()
+                && startTime->isValid()
+            ? startTime
+            : std::nullopt;
+
+    const std::optional<QDateTime>
+        normalizedEnd =
+        endTime.has_value()
+                && endTime->isValid()
+            ? endTime
+            : std::nullopt;
+
+    if (m_timeRangeStart == normalizedStart
+        && m_timeRangeEnd == normalizedEnd) {
+        return;
+    }
+
+    beginFilterChange();
+
+    m_timeRangeStart =
+        normalizedStart;
+
+    m_timeRangeEnd =
+        normalizedEnd;
+
+    endFilterChange(
+        QSortFilterProxyModel::Direction::Rows
+        );
+}
+
 QStringList
 InvestigationFilterProxyModel::severityFilters() const
 {
@@ -136,6 +174,20 @@ QString InvestigationFilterProxyModel::subsystemFilter() const
 QString InvestigationFilterProxyModel::searchText() const
 {
     return m_searchText;
+}
+
+const std::optional<QDateTime> &
+    InvestigationFilterProxyModel::
+    timeRangeStart() const
+{
+    return m_timeRangeStart;
+}
+
+const std::optional<QDateTime> &
+    InvestigationFilterProxyModel::
+    timeRangeEnd() const
+{
+    return m_timeRangeEnd;
 }
 
 bool InvestigationFilterProxyModel::filterAcceptsRow(
@@ -174,6 +226,25 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
         if (!record->subsystem.has_value()
             || record->subsystem.value()
                    != m_subsystemFilter) {
+            return false;
+        }
+    }
+
+    if (m_timeRangeStart.has_value()
+        || m_timeRangeEnd.has_value()) {
+        if (!record->timestamp.has_value()) {
+            return false;
+        }
+
+        if (m_timeRangeStart.has_value()
+            && record->timestamp.value()
+                   < m_timeRangeStart.value()) {
+            return false;
+        }
+
+        if (m_timeRangeEnd.has_value()
+            && record->timestamp.value()
+                   > m_timeRangeEnd.value()) {
             return false;
         }
     }
