@@ -34,6 +34,7 @@ class QAction;
 class QScrollBar;
 class QTabBar;
 class QMenu;
+class MultiSelectFilterComboBox;
 
 class MainWindow : public QMainWindow
 {
@@ -74,7 +75,7 @@ private:
 
     QMetaObject::Connection eventSelectionConnection;
 
-    QComboBox *levelFilterCombo;
+    MultiSelectFilterComboBox *levelFilterCombo;
     QComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
 

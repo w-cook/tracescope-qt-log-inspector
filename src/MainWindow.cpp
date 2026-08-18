@@ -55,6 +55,7 @@
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
+#include "ui/MultiSelectFilterComboBox.h"
 
 namespace
 {
@@ -374,7 +375,7 @@ MainWindow::MainWindow(QWidget *parent)
     workspace(new InvestigationWorkspace(this)),
     investigationController(nullptr),
     timelineChartView(new QChartView(this)),
-    levelFilterCombo(new QComboBox(this)),
+    levelFilterCombo(new MultiSelectFilterComboBox(this)),
     subsystemFilterCombo(new QComboBox(this)),
     searchInput(new QLineEdit(this)),
     searchDebounceTimer(new QTimer(this))
@@ -1223,13 +1224,43 @@ void MainWindow::updateSummary(
 
 void MainWindow::buildFilterControls(QVBoxLayout *layout)
 {
-    levelFilterCombo->addItem("All levels", "");
-    levelFilterCombo->addItem("TRACE", "TRACE");
-    levelFilterCombo->addItem("DEBUG", "DEBUG");
-    levelFilterCombo->addItem("INFO", "INFO");
-    levelFilterCombo->addItem("WARN", "WARN");
-    levelFilterCombo->addItem("ERROR", "ERROR");
-    levelFilterCombo->addItem("CRITICAL", "CRITICAL");
+    levelFilterCombo->setEmptySelectionText(
+        tr("All severities")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("TRACE"),
+        QStringLiteral("TRACE")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("DEBUG"),
+        QStringLiteral("DEBUG")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("INFO"),
+        QStringLiteral("INFO")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("WARN"),
+        QStringLiteral("WARN")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("ERROR"),
+        QStringLiteral("ERROR")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("CRITICAL"),
+        QStringLiteral("CRITICAL")
+        );
+
+    levelFilterCombo->setMinimumWidth(
+        170
+        );
 
     subsystemFilterCombo->addItem("All subsystems", "");
 
@@ -1261,7 +1292,8 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
 
     connect(
         levelFilterCombo,
-        &QComboBox::currentIndexChanged,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
         this,
         [this]() {
             searchDebounceTimer->stop();
@@ -1323,8 +1355,10 @@ void MainWindow::applyFilters()
         false;
 
     investigationController->setFilters(
-        levelFilterCombo->currentData().toString(),
-        subsystemFilterCombo->currentData().toString(),
+        levelFilterCombo->selectedValues(),
+        subsystemFilterCombo
+            ->currentData()
+            .toString(),
         searchInput->text()
         );
 
@@ -3023,7 +3057,7 @@ void MainWindow::updateDataCapabilities()
      */
     if (!hasSeverityData) {
         levelFilterCombo->blockSignals(true);
-        levelFilterCombo->setCurrentIndex(0);
+        levelFilterCombo->clearSelection();
         levelFilterCombo->blockSignals(false);
     }
 
@@ -3108,7 +3142,7 @@ void MainWindow::bindActiveSession()
         subsystemFilterCombo->blockSignals(true);
         searchInput->blockSignals(true);
 
-        levelFilterCombo->setCurrentIndex(0);
+        levelFilterCombo->clearSelection();
         subsystemFilterCombo->setCurrentIndex(0);
         searchInput->clear();
 
@@ -3170,8 +3204,8 @@ void MainWindow::bindActiveSession()
         investigationController
             ->proxyModel();
 
-    const QString severityFilter =
-        proxyModel->severityFilter();
+    const QStringList severityFilters =
+        proxyModel->severityFilters();
 
     const QString subsystemFilter =
         proxyModel->subsystemFilter();
@@ -3189,19 +3223,10 @@ void MainWindow::bindActiveSession()
     subsystemFilterCombo->blockSignals(true);
     searchInput->blockSignals(true);
 
-    int severityIndex =
+    levelFilterCombo->setSelectedValues(
         hasSeverityData
-            ? levelFilterCombo->findData(
-                  severityFilter
-                  )
-            : 0;
-
-    if (severityIndex < 0) {
-        severityIndex = 0;
-    }
-
-    levelFilterCombo->setCurrentIndex(
-        severityIndex
+            ? severityFilters
+            : QStringList()
         );
 
     int subsystemIndex =

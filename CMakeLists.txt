@@ -99,6 +99,8 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationWorkspace.cpp
     src/preferences/RecentItemsStore.h
     src/preferences/RecentItemsStore.cpp
+    src/ui/MultiSelectFilterComboBox.h
+    src/ui/MultiSelectFilterComboBox.cpp
 
 )
 
