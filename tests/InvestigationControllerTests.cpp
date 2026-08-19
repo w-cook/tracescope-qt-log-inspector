@@ -21,6 +21,9 @@ private slots:
     void returnsSortedSubsystems();
     void mapsSortedProxyIndexToSourceRecord();
     void timeRangeExcludesRecordsWithoutTimestamp();
+    void navigatesVisibleIssuesInProxyOrder();
+    void navigatesAdjacentVisibleEvents();
+    void issueNavigationRespectsFiltering();
 };
 
 static QVector<InvestigationRecord> sampleRecords()
@@ -680,6 +683,344 @@ void InvestigationControllerTests::
             record.timestamp.has_value()
             );
     }
+}
+
+void InvestigationControllerTests::
+    navigatesVisibleIssuesInProxyOrder()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    /*
+     * Source/proxy order:
+     *
+     * 0 Startup   INFO
+     * 1 Tracking  WARN
+     * 2 Comms     ERROR
+     */
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            -1,
+            1
+            ),
+        1
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            -1,
+            -1
+            ),
+        2
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            1,
+            1
+            ),
+        2
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            2,
+            -1
+            ),
+        1
+        );
+
+    /*
+     * Navigation wraps in both directions.
+     */
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            2,
+            1
+            ),
+        1
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            1,
+            -1
+            ),
+        2
+        );
+
+    controller.proxyModel()->sort(
+        0,
+        Qt::DescendingOrder
+        );
+
+    /*
+     * Timestamp-descending proxy order:
+     *
+     * Tracking 10:02 WARN
+     * Comms    10:01 ERROR
+     * Startup  10:00 INFO
+     */
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            -1,
+            1
+            ),
+        0
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            0,
+            1
+            ),
+        1
+        );
+}
+
+void InvestigationControllerTests::
+    navigatesAdjacentVisibleEvents()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    /*
+     * Unfiltered proxy order:
+     *
+     * 0 Startup
+     * 1 Tracking
+     * 2 Comms
+     *
+     * With no current selection, forward
+     * navigation starts at the first visible
+     * event and backward navigation starts at
+     * the last visible event.
+     */
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            -1,
+            1
+            ),
+        0
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            -1,
+            -1
+            ),
+        2
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            1,
+            1
+            ),
+        2
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            1,
+            -1
+            ),
+        0
+        );
+
+    /*
+     * Ordinary adjacent-event navigation does
+     * not wrap at either end.
+     */
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            0,
+            -1
+            ),
+        -1
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            2,
+            1
+            ),
+        -1
+        );
+
+    /*
+     * Navigation operates on proxy rows, so
+     * active filters reduce the navigable range
+     * to only currently visible records.
+     */
+    controller.setFilters(
+        QStringList {
+            QStringLiteral("WARN"),
+            QStringLiteral("ERROR")
+        },
+        QStringList(),
+        QString()
+        );
+
+    QCOMPARE(
+        controller.proxyModel()->rowCount(),
+        2
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            -1,
+            1
+            ),
+        0
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            -1,
+            -1
+            ),
+        1
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            0,
+            1
+            ),
+        1
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            1,
+            -1
+            ),
+        0
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            0,
+            -1
+            ),
+        -1
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            1,
+            1
+            ),
+        -1
+        );
+
+    /*
+     * No visible records means there is nowhere
+     * to navigate in either direction.
+     */
+    controller.setFilters(
+        QStringList(),
+        QStringList(),
+        QStringLiteral(
+            "does-not-match-any-record"
+            )
+        );
+
+    QCOMPARE(
+        controller.proxyModel()->rowCount(),
+        0
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            -1,
+            1
+            ),
+        -1
+        );
+
+    QCOMPARE(
+        controller.adjacentVisibleProxyRow(
+            -1,
+            -1
+            ),
+        -1
+        );
+}
+
+void InvestigationControllerTests::
+    issueNavigationRespectsFiltering()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setFilters(
+        QStringList {
+            QStringLiteral("ERROR")
+        },
+        QStringList(),
+        QString()
+        );
+
+    QCOMPARE(
+        controller.proxyModel()->rowCount(),
+        1
+        );
+
+    /*
+     * Only the visible ERROR remains navigable.
+     */
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            -1,
+            1
+            ),
+        0
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            0,
+            1
+            ),
+        0
+        );
+
+    /*
+     * A filter containing no warning/error-class
+     * records leaves nothing to navigate.
+     */
+    controller.setFilters(
+        QStringList {
+            QStringLiteral("INFO")
+        },
+        QStringList(),
+        QString()
+        );
+
+    QCOMPARE(
+        controller.proxyModel()->rowCount(),
+        1
+        );
+
+    QCOMPARE(
+        controller.adjacentIssueProxyRow(
+            -1,
+            1
+            ),
+        -1
+        );
 }
 
 QTEST_MAIN(InvestigationControllerTests)

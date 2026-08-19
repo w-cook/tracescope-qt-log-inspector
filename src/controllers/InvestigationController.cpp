@@ -4,6 +4,28 @@
 
 #include <algorithm>
 
+namespace
+{
+bool isNavigableIssue(
+    const InvestigationRecord &record
+    )
+{
+    if (!record.severity.has_value()) {
+        return false;
+    }
+
+    switch (record.severity.value()) {
+    case RecordSeverity::Warning:
+    case RecordSeverity::Error:
+    case RecordSeverity::Critical:
+        return true;
+
+    default:
+        return false;
+    }
+}
+}
+
 InvestigationController::InvestigationController(
     QObject *parent
     )
@@ -252,6 +274,122 @@ InvestigationController::recordForProxyIndex(
     return m_sourceModel.recordAt(
         sourceIndex.row()
         );
+}
+
+int InvestigationController::
+    adjacentIssueProxyRow(
+        int currentProxyRow,
+        int direction
+        ) const
+{
+    const int rowCount =
+        m_proxyModel.rowCount();
+
+    if (rowCount <= 0
+        || direction == 0) {
+        return -1;
+    }
+
+    const int step =
+        direction > 0
+            ? 1
+            : -1;
+
+    int row = 0;
+
+    /*
+     * With no current selection, Next begins at
+     * the first visible row while Previous begins
+     * at the last visible row.
+     */
+    if (currentProxyRow < 0
+        || currentProxyRow >= rowCount) {
+        row =
+            step > 0
+                ? 0
+                : rowCount - 1;
+    } else {
+        row =
+            (
+                currentProxyRow
+                + step
+                + rowCount
+                )
+            % rowCount;
+    }
+
+    /*
+     * Scan the proxy rather than the source model
+     * so navigation respects both active filters
+     * and the table's current sort order.
+     *
+     * The modular row calculation intentionally
+     * wraps at either end of the investigation.
+     */
+    for (int inspected = 0;
+         inspected < rowCount;
+         ++inspected) {
+        const QModelIndex proxyIndex =
+            m_proxyModel.index(
+                row,
+                0
+                );
+
+        const InvestigationRecord *record =
+            recordForProxyIndex(
+                proxyIndex
+                );
+
+        if (record != nullptr
+            && isNavigableIssue(
+                *record
+                )) {
+            return row;
+        }
+
+        row =
+            (
+                row
+                + step
+                + rowCount
+                )
+            % rowCount;
+    }
+
+    return -1;
+}
+
+int InvestigationController::
+    adjacentVisibleProxyRow(
+        int currentProxyRow,
+        int direction
+        ) const
+{
+    const int rowCount =
+        m_proxyModel.rowCount();
+
+    if (rowCount <= 0
+        || direction == 0) {
+        return -1;
+    }
+
+    if (currentProxyRow < 0
+        || currentProxyRow >= rowCount) {
+        return direction > 0
+                   ? 0
+                   : rowCount - 1;
+    }
+
+    const int targetRow =
+        currentProxyRow
+        + (direction > 0 ? 1 : -1);
+
+    if (targetRow < 0
+        || targetRow >= rowCount) {
+        return -1;
+    }
+
+    return targetRow;
 }
 
 QVector<InvestigationRecord>

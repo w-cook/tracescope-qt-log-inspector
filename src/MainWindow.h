@@ -69,6 +69,11 @@ private:
     QTabBar *sessionTabBar;
     QLabel *summaryLabel;
     QTableView *eventTable;
+    QPushButton *previousEventButton;
+    QPushButton *nextEventButton;
+    QLabel *eventPositionLabel;
+    QPushButton *previousIssueButton;
+    QPushButton *nextIssueButton;
     QPlainTextEdit *eventDetailText;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
@@ -205,6 +210,19 @@ private:
         const InvestigationRecord &record
         );
     void clearEventDetail();
+
+    void navigateToAdjacentIssue(
+        int direction
+        );
+    void navigateToAdjacentEvent(
+        int direction
+        );
+
+    void selectProxyRow(
+        int proxyRow
+        );
+
+    void updateEventNavigationState();
 
     QGroupBox *buildIssueSummaryPanel();
     void updateIssueSummary(

@@ -379,6 +379,35 @@ MainWindow::MainWindow(QWidget *parent)
     sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
+    previousEventButton(
+        new QPushButton(
+            tr("Previous Event"),
+            this
+            )
+        ),
+    nextEventButton(
+        new QPushButton(
+            tr("Next Event"),
+            this
+            )
+        ),
+    eventPositionLabel(
+        new QLabel(
+            this
+            )
+        ),
+    previousIssueButton(
+        new QPushButton(
+            tr("Previous Issue"),
+            this
+            )
+        ),
+    nextIssueButton(
+        new QPushButton(
+            tr("Next Issue"),
+            this
+            )
+        ),
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
     issueSummaryGroup(nullptr),
@@ -664,6 +693,88 @@ void MainWindow::buildLayout()
     auto *eventsGroup = new QGroupBox("Telemetry Events", this);
     auto *eventsLayout = new QVBoxLayout(eventsGroup);
 
+    auto *eventNavigationLayout =
+        new QHBoxLayout();
+
+    eventNavigationLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    eventNavigationLayout->setSpacing(
+        6
+        );
+
+    previousEventButton->setToolTip(
+        tr(
+            "Select the previous visible event"
+            )
+        );
+
+    nextEventButton->setToolTip(
+        tr(
+            "Select the next visible event"
+            )
+        );
+
+    previousIssueButton->setToolTip(
+        tr(
+            "Select the previous visible WARN, "
+            "ERROR, or CRITICAL event"
+            )
+        );
+
+    nextIssueButton->setToolTip(
+        tr(
+            "Select the next visible WARN, "
+            "ERROR, or CRITICAL event"
+            )
+        );
+
+    eventNavigationLayout->addStretch();
+
+    eventNavigationLayout->addWidget(
+        previousEventButton
+        );
+
+    eventNavigationLayout->addWidget(
+        nextEventButton
+        );
+
+    eventNavigationLayout->addStretch(
+        1
+        );
+
+    eventPositionLabel->setAlignment(
+        Qt::AlignCenter
+        );
+
+    eventNavigationLayout->addWidget(
+        eventPositionLabel
+        );
+
+    eventNavigationLayout->addStretch(
+        1
+        );
+
+    eventNavigationLayout->addWidget(
+        previousIssueButton
+        );
+
+    eventNavigationLayout->addWidget(
+        nextIssueButton
+        );
+
+    eventsLayout->addLayout(
+        eventNavigationLayout
+        );
+
+    eventsLayout->setSpacing(
+        4
+        );
+
     eventTable->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Expanding
@@ -809,6 +920,58 @@ void MainWindow::buildLayout()
             );
 
     eventTable->horizontalHeader()->setStretchLastSection(true);
+
+    connect(
+        previousEventButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentEvent(
+                -1
+                );
+        }
+        );
+
+    connect(
+        nextEventButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentEvent(
+                1
+                );
+        }
+        );
+
+    connect(
+        previousIssueButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentIssue(
+                -1
+                );
+        }
+        );
+
+    connect(
+        nextIssueButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentIssue(
+                1
+                );
+        }
+        );
+
+    previousIssueButton->setVisible(
+        false
+        );
+
+    nextIssueButton->setVisible(
+        false
+        );
 
     connect(
         eventTable->horizontalHeader(),
@@ -2285,6 +2448,8 @@ void MainWindow::applyFilters()
     updateTimelineChart(
         visibleRecords
         );
+
+    updateEventNavigationState();
 }
 
 void MainWindow::resetFilters()
@@ -3190,6 +3355,208 @@ void MainWindow::displayEventDetail(
 void MainWindow::clearEventDetail()
 {
     eventDetailText->clear();
+}
+
+void MainWindow::navigateToAdjacentIssue(
+    int direction
+    )
+{
+    if (investigationController == nullptr
+        || eventTable->model() == nullptr) {
+        return;
+    }
+
+    int currentProxyRow = -1;
+
+    const QModelIndex currentIndex =
+        eventTable->currentIndex();
+
+    if (currentIndex.isValid()) {
+        currentProxyRow =
+            currentIndex.row();
+    }
+
+    const int targetProxyRow =
+        investigationController
+            ->adjacentIssueProxyRow(
+                currentProxyRow,
+                direction
+                );
+
+    selectProxyRow(
+        targetProxyRow
+        );
+}
+
+void MainWindow::navigateToAdjacentEvent(
+    int direction
+    )
+{
+    if (investigationController == nullptr
+        || eventTable->model() == nullptr) {
+        return;
+    }
+
+    const QModelIndex currentIndex =
+        eventTable->currentIndex();
+
+    const int currentProxyRow =
+        currentIndex.isValid()
+            ? currentIndex.row()
+            : -1;
+
+    const int targetProxyRow =
+        investigationController
+            ->adjacentVisibleProxyRow(
+                currentProxyRow,
+                direction
+                );
+
+    selectProxyRow(
+        targetProxyRow
+        );
+}
+
+void MainWindow::selectProxyRow(
+    int proxyRow
+    )
+{
+    if (investigationController == nullptr
+        || proxyRow < 0) {
+        return;
+    }
+
+    const QModelIndex targetIndex =
+        investigationController
+            ->proxyModel()
+            ->index(
+                proxyRow,
+                0
+                );
+
+    if (!targetIndex.isValid()) {
+        return;
+    }
+
+    QItemSelectionModel *selectionModel =
+        eventTable->selectionModel();
+
+    if (selectionModel == nullptr) {
+        return;
+    }
+
+    selectionModel->setCurrentIndex(
+        targetIndex,
+        QItemSelectionModel::ClearAndSelect
+            | QItemSelectionModel::Rows
+        );
+
+    eventTable->scrollTo(
+        targetIndex,
+        QAbstractItemView::PositionAtCenter
+        );
+}
+
+void MainWindow::updateEventNavigationState()
+{
+    const bool hasInvestigation =
+        investigationController != nullptr
+        && eventTable->model() != nullptr;
+
+    previousEventButton->setVisible(
+        hasInvestigation
+        );
+
+    nextEventButton->setVisible(
+        hasInvestigation
+        );
+
+    eventPositionLabel->setVisible(
+        hasInvestigation
+        );
+
+    if (!hasInvestigation) {
+        previousEventButton->setEnabled(
+            false
+            );
+
+        nextEventButton->setEnabled(
+            false
+            );
+
+        eventPositionLabel->clear();
+
+        return;
+    }
+
+    const int visibleCount =
+        eventTable->model()->rowCount();
+
+    const QModelIndex currentIndex =
+        eventTable->currentIndex();
+
+    if (!currentIndex.isValid()) {
+        const bool hasVisibleEvents =
+            visibleCount > 0;
+
+        previousEventButton->setEnabled(
+            hasVisibleEvents
+            );
+
+        nextEventButton->setEnabled(
+            hasVisibleEvents
+            );
+
+        eventPositionLabel->setText(
+            tr("%1 visible events")
+                .arg(
+                    visibleCount
+                    )
+            );
+
+        return;
+    }
+
+    const int currentRow =
+        currentIndex.row();
+
+    previousEventButton->setEnabled(
+        currentRow > 0
+        );
+
+    nextEventButton->setEnabled(
+        currentRow
+        < visibleCount - 1
+        );
+
+    QString positionText =
+        tr("Event %1 of %2 visible")
+            .arg(
+                currentRow + 1
+                )
+            .arg(
+                visibleCount
+                );
+
+    const InvestigationRecord *record =
+        investigationController
+            ->recordForProxyIndex(
+                currentIndex
+                );
+
+    if (record != nullptr) {
+        positionText +=
+            tr(" • Source record %1")
+                .arg(
+                    record
+                        ->source
+                        .recordNumber
+                    );
+    }
+
+    eventPositionLabel->setText(
+        positionText
+        );
 }
 
 QGroupBox *MainWindow::buildIssueSummaryPanel()
@@ -4712,6 +5079,14 @@ void MainWindow::updateDataCapabilities()
             false
             );
 
+        previousIssueButton->setVisible(
+            false
+            );
+
+        nextIssueButton->setVisible(
+            false
+            );
+
         return;
     }
 
@@ -4893,6 +5268,14 @@ void MainWindow::updateDataCapabilities()
         hasCustomFieldData
         );
 
+    previousIssueButton->setVisible(
+        hasSeverityData
+        );
+
+    nextIssueButton->setVisible(
+        hasSeverityData
+        );
+
     /*
      * Warning/error grouping requires both
      * severity and subsystem information.
@@ -4931,6 +5314,8 @@ void MainWindow::connectEventTableSelectionModel()
                 const QItemSelection &
                 ) {
                 updateEventDetailFromSelection();
+
+                updateEventNavigationState();
             }
             );
 }
@@ -4964,6 +5349,8 @@ void MainWindow::bindActiveSession()
         connectEventTableSelectionModel();
 
         clearEventDetail();
+
+        updateEventNavigationState();
 
         searchDebounceTimer->stop();
 
@@ -5121,6 +5508,14 @@ void MainWindow::bindActiveSession()
             );
 
         filterPresetsButton->setVisible(
+            false
+            );
+
+        previousIssueButton->setVisible(
+            false
+            );
+
+        nextIssueButton->setVisible(
             false
             );
 
@@ -5474,6 +5869,8 @@ void MainWindow::bindActiveSession()
         ->setStretchLastSection(
             true
             );
+
+    updateEventNavigationState();
 }
 
 void MainWindow::reloadActiveSession()

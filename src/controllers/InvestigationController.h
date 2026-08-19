@@ -88,6 +88,16 @@ public:
         const QModelIndex &proxyIndex
         ) const;
 
+    int adjacentIssueProxyRow(
+        int currentProxyRow,
+        int direction
+        ) const;
+
+    int adjacentVisibleProxyRow(
+        int currentProxyRow,
+        int direction
+        ) const;
+
     QVector<InvestigationRecord>
     recordsForAnalysis() const;
 
