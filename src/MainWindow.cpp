@@ -3591,57 +3591,623 @@ QGroupBox *MainWindow::buildIssueSummaryPanel()
     issueSummaryTable->setMinimumWidth(requiredTableWidth);
     issueSummaryTable->setAlternatingRowColors(true);
 
+    issueSummaryTable->setSelectionBehavior(
+        QAbstractItemView::SelectItems
+        );
+
+    issueSummaryTable->setSelectionMode(
+        QAbstractItemView::SingleSelection
+        );
+
+    issueSummaryTable->setEditTriggers(
+        QAbstractItemView::NoEditTriggers
+        );
+
+    issueSummaryTable->setToolTip(
+        tr(
+            "Double-click a summary value to filter "
+            "the investigation to the represented issues."
+            )
+        );
+
+    connect(
+        issueSummaryTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int column
+            ) {
+            drillDownIssueSummary(
+                row,
+                column
+                );
+        },
+        Qt::QueuedConnection
+        );
+
     auto *issueLayout = new QVBoxLayout(issueSummaryGroup);
     issueLayout->addWidget(issueSummaryTable);
 
     return issueSummaryGroup;
 }
 
-void MainWindow::updateIssueSummary(const QVector<InvestigationRecord> &records)
+void MainWindow::updateIssueSummary(
+    const QVector<InvestigationRecord> &records
+    )
 {
     if (!hasSeverityData
         || !hasSubsystemData) {
-        issueSummaryTable->setRowCount(0);
+        issueSummaryTable->setRowCount(
+            0
+            );
+
         return;
     }
 
-    const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(records);
+    const QVector<TelemetryIssueGroup> groups =
+        issueAnalyzer
+            .groupWarningsAndErrorsBySubsystem(
+                records
+                );
 
-    issueSummaryTable->setRowCount(groups.size());
+    issueSummaryTable->setRowCount(
+        groups.size()
+        );
 
-    for (int row = 0; row < groups.size(); ++row) {
-        const TelemetryIssueGroup &group = groups[row];
+    for (int row = 0;
+         row < groups.size();
+         ++row) {
+        const TelemetryIssueGroup &group =
+            groups[row];
 
-        issueSummaryTable->setItem(row, 0, new QTableWidgetItem(group.subsystem));
+        auto *subsystemItem =
+            new QTableWidgetItem(
+                group.subsystem
+                );
+
+        auto *warningItem =
+            new QTableWidgetItem(
+                QString::number(
+                    group.warningCount
+                    )
+                );
+
+        auto *errorItem =
+            new QTableWidgetItem(
+                QString::number(
+                    group.errorCount
+                    )
+                );
+
+        auto *totalItem =
+            new QTableWidgetItem(
+                QString::number(
+                    group.totalCount()
+                    )
+                );
+
+        /*
+         * Records without a subsystem are grouped
+         * together by the analyzer for presentation,
+         * but the exact-value subsystem filter cannot
+         * currently express "missing subsystem".
+         *
+         * Do not advertise a drill-down interaction
+         * that cannot be reproduced by the active
+         * filter controls.
+         */
+        if (group.subsystem
+            == QStringLiteral("(No subsystem)")) {
+            const QString unavailableToolTip =
+                tr(
+                    "Drill-down is unavailable because "
+                    "these records do not contain a "
+                    "subsystem value."
+                    );
+
+            subsystemItem->setToolTip(
+                unavailableToolTip
+                );
+
+            warningItem->setToolTip(
+                unavailableToolTip
+                );
+
+            errorItem->setToolTip(
+                unavailableToolTip
+                );
+
+            totalItem->setToolTip(
+                unavailableToolTip
+                );
+        } else {
+            subsystemItem->setToolTip(
+                tr(
+                    "Double-click to show "
+                    "warning/error-class events "
+                    "for this subsystem."
+                    )
+                );
+
+            warningItem->setToolTip(
+                group.warningCount > 0
+                    ? tr(
+                          "Double-click to show "
+                          "warnings for this subsystem."
+                          )
+                    : tr(
+                          "No warnings are currently "
+                          "visible for this subsystem."
+                          )
+                );
+
+            errorItem->setToolTip(
+                group.errorCount > 0
+                    ? tr(
+                          "Double-click to show errors "
+                          "and critical events for this "
+                          "subsystem."
+                          )
+                    : tr(
+                          "No errors or critical events "
+                          "are currently visible for "
+                          "this subsystem."
+                          )
+                );
+
+            totalItem->setToolTip(
+                tr(
+                    "Double-click to show all "
+                    "warning/error-class events "
+                    "for this subsystem."
+                    )
+                );
+        }
+
+        issueSummaryTable->setItem(
+            row,
+            0,
+            subsystemItem
+            );
+
         issueSummaryTable->setItem(
             row,
             1,
-            new QTableWidgetItem(QString::number(group.warningCount))
+            warningItem
             );
+
         issueSummaryTable->setItem(
             row,
             2,
-            new QTableWidgetItem(QString::number(group.errorCount))
+            errorItem
             );
+
         issueSummaryTable->setItem(
             row,
             3,
-            new QTableWidgetItem(QString::number(group.totalCount()))
+            totalItem
             );
     }
 
-    issueSummaryTable->horizontalHeader()->resizeSections(
-        QHeaderView::ResizeToContents
-        );
+    issueSummaryTable
+        ->horizontalHeader()
+        ->resizeSections(
+            QHeaderView::ResizeToContents
+            );
 
     const int requiredTableWidth =
-        issueSummaryTable->verticalHeader()->width()
-        + issueSummaryTable->horizontalHeader()->length()
-        + issueSummaryTable->frameWidth() * 2
-        + issueSummaryTable->verticalScrollBar()->sizeHint().width()
+        issueSummaryTable
+            ->verticalHeader()
+            ->width()
+        + issueSummaryTable
+              ->horizontalHeader()
+              ->length()
+        + issueSummaryTable
+                  ->frameWidth()
+              * 2
+        + issueSummaryTable
+              ->verticalScrollBar()
+              ->sizeHint()
+              .width()
         + 8;
 
-    issueSummaryTable->setMinimumWidth(requiredTableWidth);
+    issueSummaryTable->setMinimumWidth(
+        requiredTableWidth
+        );
+}
+
+void MainWindow::drillDownIssueSummary(
+    int row,
+    int column
+    )
+{
+    if (investigationController == nullptr
+        || row < 0
+        || row >= issueSummaryTable->rowCount()
+        || column < 0
+        || column >= issueSummaryTable->columnCount()) {
+        return;
+    }
+
+    QTableWidgetItem *subsystemItem =
+        issueSummaryTable->item(
+            row,
+            0
+            );
+
+    if (subsystemItem == nullptr) {
+        return;
+    }
+
+    const QString subsystem =
+        subsystemItem->text();
+
+    /*
+     * The grouped analyzer uses this display label
+     * for records without a subsystem. The current
+     * exact-value subsystem filter cannot express
+     * "missing subsystem", so do not pretend this
+     * drill-down can reproduce that group.
+     */
+    if (subsystem
+        == QStringLiteral("(No subsystem)")) {
+        return;
+    }
+
+    QStringList targetSeverities;
+
+    switch (column) {
+    case 1:
+    {
+        QTableWidgetItem *warningItem =
+            issueSummaryTable->item(
+                row,
+                1
+                );
+
+        if (warningItem == nullptr
+            || warningItem
+                       ->text()
+                       .toInt() <= 0) {
+            return;
+        }
+
+        targetSeverities = {
+            QStringLiteral("WARN")
+    };
+
+        break;
+    }
+
+    case 2:
+    {
+        QTableWidgetItem *errorItem =
+            issueSummaryTable->item(
+                row,
+                2
+                );
+
+        if (errorItem == nullptr
+            || errorItem
+                   ->text()
+                   .toInt() <= 0) {
+            return;
+        }
+
+        /*
+         * Existing grouped analysis intentionally
+         * counts CRITICAL together with ERROR.
+         */
+        targetSeverities = {
+            QStringLiteral("ERROR"),
+            QStringLiteral("CRITICAL")
+        };
+
+        break;
+    }
+
+    case 0:
+    case 3:
+        targetSeverities = {
+            QStringLiteral("WARN"),
+            QStringLiteral("ERROR"),
+            QStringLiteral("CRITICAL")
+        };
+        break;
+
+    default:
+        return;
+    }
+
+    /*
+     * Drill-down must narrow the current result
+     * set rather than silently broaden an existing
+     * severity filter.
+     */
+    const QStringList currentSeverities =
+        levelFilterCombo
+            ->selectedValues();
+
+    if (!currentSeverities.isEmpty()) {
+        QStringList intersection;
+
+        for (
+            auto severityIterator =
+            targetSeverities.cbegin();
+            severityIterator
+            != targetSeverities.cend();
+            ++severityIterator
+            ) {
+            if (currentSeverities.contains(
+                    *severityIterator
+                    )) {
+                intersection.append(
+                    *severityIterator
+                    );
+            }
+        }
+
+        if (intersection.isEmpty()) {
+            return;
+        }
+
+        targetSeverities =
+            std::move(
+                intersection
+                );
+    }
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Synchronize both affected controls before
+     * applying the complete filter state once.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
+        levelFilterCombo->setSelectedValues(
+            targetSeverities
+            );
+
+        subsystemFilterCombo->setSelectedValues(
+            {
+                subsystem
+            }
+            );
+    }
+
+    applyFilters();
+}
+
+void MainWindow::drillDownTimelineBucket(
+    int visibleBucketIndex,
+    const QString &severity
+    )
+{
+    if (investigationController == nullptr
+        || !hasTimestampData
+        || visibleBucketIndex < 0) {
+        return;
+    }
+
+    const std::optional<QDateTime>
+        effectiveFirstTimestamp =
+        effectiveTimelineFirstTimestamp();
+
+    const std::optional<QDateTime>
+        effectiveLastTimestamp =
+        effectiveTimelineLastTimestamp();
+
+    if (!effectiveFirstTimestamp.has_value()
+        || !effectiveLastTimestamp.has_value()
+        || effectiveFirstTimestamp.value()
+               > effectiveLastTimestamp.value()) {
+        return;
+    }
+
+    const qint64 requestedIntervalMilliseconds =
+        timelineIntervalCombo != nullptr
+            ? timelineIntervalCombo
+                  ->currentData()
+                  .toLongLong()
+            : 0;
+
+    const bool automaticInterval =
+        requestedIntervalMilliseconds <= 0;
+
+    const qint64 intervalMilliseconds =
+        automaticInterval
+            ? automaticTimelineIntervalMilliseconds(
+                  *effectiveFirstTimestamp,
+                  *effectiveLastTimestamp
+                  )
+            : requestedIntervalMilliseconds;
+
+    if (intervalMilliseconds <= 0) {
+        return;
+    }
+
+    const qint64 totalBucketCount =
+        timelineAnalyzer
+            .intervalBucketCountMilliseconds(
+                *effectiveFirstTimestamp,
+                *effectiveLastTimestamp,
+                intervalMilliseconds
+                );
+
+    if (totalBucketCount <= 0) {
+        return;
+    }
+
+    qint64 startBucketIndex = 0;
+
+    if (!automaticInterval) {
+        const int scrollValue =
+            timelineScrollBar != nullptr
+                ? timelineScrollBar->value()
+                : 0;
+
+        startBucketIndex =
+            timelineStartBucketIndex(
+                totalBucketCount,
+                scrollValue
+                );
+    }
+
+    const qint64 absoluteBucketIndex =
+        startBucketIndex
+        + visibleBucketIndex;
+
+    if (absoluteBucketIndex < 0
+        || absoluteBucketIndex
+               >= totalBucketCount) {
+        return;
+    }
+
+    const qint64 firstBucketEpoch =
+        normalizedTimelineBucketEpoch(
+            *effectiveFirstTimestamp,
+            intervalMilliseconds
+            );
+
+    qint64 bucketStartEpoch =
+        firstBucketEpoch
+        + absoluteBucketIndex
+              * intervalMilliseconds;
+
+    qint64 bucketEndEpoch =
+        bucketStartEpoch
+        + intervalMilliseconds
+        - 1;
+
+    /*
+     * The first and last logical buckets can extend
+     * outside an already active investigation time
+     * range. Drill-down must only narrow the current
+     * result set, never broaden it.
+     */
+    bucketStartEpoch =
+        std::max(
+            bucketStartEpoch,
+            effectiveFirstTimestamp
+                ->toMSecsSinceEpoch()
+            );
+
+    bucketEndEpoch =
+        std::min(
+            bucketEndEpoch,
+            effectiveLastTimestamp
+                ->toMSecsSinceEpoch()
+            );
+
+    if (bucketStartEpoch
+        > bucketEndEpoch) {
+        return;
+    }
+
+    /*
+     * A severity-aware bar represents one specific
+     * severity. If an existing severity filter is
+     * active, only allow drill-down when the clicked
+     * severity is already included in that result.
+     */
+    if (!severity.isEmpty()) {
+        const QStringList currentSeverities =
+            levelFilterCombo
+                ->selectedValues();
+
+        if (!currentSeverities.isEmpty()
+            && !currentSeverities.contains(
+                severity
+                )) {
+            return;
+        }
+    }
+
+    const QDateTime bucketStart =
+        QDateTime::fromMSecsSinceEpoch(
+            bucketStartEpoch,
+            QTimeZone::UTC
+            );
+
+    const QDateTime bucketEnd =
+        QDateTime::fromMSecsSinceEpoch(
+            bucketEndEpoch,
+            QTimeZone::UTC
+            );
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Synchronize every affected control first so
+     * the drill-down becomes one logical filter
+     * application.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker startCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker startEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker endCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker endEditBlocker(
+            timeRangeEndEdit
+            );
+
+        if (!severity.isEmpty()) {
+            levelFilterCombo->setSelectedValues(
+                QStringList {
+                    severity
+                }
+                );
+        }
+
+        timeRangeStartEdit->setDateTime(
+            bucketStart
+            );
+
+        timeRangeEndEdit->setDateTime(
+            bucketEnd
+            );
+
+        timeRangeStartCheckBox->setChecked(
+            true
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            true
+            );
+
+        timeRangeStartEdit->setEnabled(
+            true
+            );
+
+        timeRangeEndEdit->setEnabled(
+            true
+            );
+    }
+
+    updateTimeRangeButton();
+
+    applyFilters();
 }
 
 void MainWindow::exportFilteredResults()
@@ -3973,6 +4539,15 @@ QGroupBox *MainWindow::buildTimelinePanel()
 
     timelineChartView->setAcceptDrops(
         false
+        );
+
+    timelineChartView->setToolTip(
+        tr(
+            "Double-click a bar to filter the "
+            "investigation to that time bucket. "
+            "Severity bars also filter to the "
+            "selected severity."
+            )
         );
 
     timelineChartView
@@ -4406,6 +4981,21 @@ void MainWindow::updateTimelineChart(
                 tr("TOTAL")
                 );
 
+        connect(
+            totalSet,
+            &QBarSet::doubleClicked,
+            this,
+            [this](
+                int index
+                ) {
+                drillDownTimelineBucket(
+                    index,
+                    QString()
+                    );
+            },
+            Qt::QueuedConnection
+            );
+
         QStringList categories;
 
         for (const EventCountBucket &bucket
@@ -4543,6 +5133,60 @@ void MainWindow::updateTimelineChart(
             tr("CRITICAL")
             );
 
+    auto connectTimelineDrillDown =
+        [this](
+            QBarSet *barSet,
+            const QString &severity
+            ) {
+            connect(
+                barSet,
+                &QBarSet::doubleClicked,
+                this,
+                [
+                    this,
+                    severity
+            ](
+                    int index
+                    ) {
+                    drillDownTimelineBucket(
+                        index,
+                        severity
+                        );
+                },
+                Qt::QueuedConnection
+                );
+        };
+
+    connectTimelineDrillDown(
+        traceSet,
+        QStringLiteral("TRACE")
+        );
+
+    connectTimelineDrillDown(
+        debugSet,
+        QStringLiteral("DEBUG")
+        );
+
+    connectTimelineDrillDown(
+        infoSet,
+        QStringLiteral("INFO")
+        );
+
+    connectTimelineDrillDown(
+        warnSet,
+        QStringLiteral("WARN")
+        );
+
+    connectTimelineDrillDown(
+        errorSet,
+        QStringLiteral("ERROR")
+        );
+
+    connectTimelineDrillDown(
+        criticalSet,
+        QStringLiteral("CRITICAL")
+        );
+
     bool hasUnspecifiedEvents =
         false;
 
@@ -4564,6 +5208,13 @@ void MainWindow::updateTimelineChart(
             new QBarSet(
                 tr("UNSPECIFIED")
                 );
+    }
+
+    if (unspecifiedSet != nullptr) {
+        connectTimelineDrillDown(
+            unspecifiedSet,
+            QString()
+            );
     }
 
     QStringList categories;

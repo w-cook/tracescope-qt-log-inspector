@@ -228,6 +228,14 @@ private:
     void updateIssueSummary(
         const QVector<InvestigationRecord> &records
         );
+    void drillDownIssueSummary(
+        int row,
+        int column
+        );
+    void drillDownTimelineBucket(
+        int visibleBucketIndex,
+        const QString &severity
+        );
 
     void exportFilteredResults();
 
