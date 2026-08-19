@@ -4,7 +4,7 @@
 
 TraceScope is a native C++/Qt desktop application for importing, normalizing, filtering, inspecting, visualizing, and exporting structured telemetry and diagnostic logs.
 
-It began as a focused JSON Lines inspector and has grown into a configurable offline workbench. The current `v0.9.0` release adds a multi-session investigation workspace so related logs can remain open together, retain independent investigation state, reload in place, and be reopened efficiently through persistent recent-file and recent-profile history. This builds on the responsive background import, cancellation, large-document preview safeguards, and scalable timeline work completed in `v0.8.0`.
+It began as a focused JSON Lines inspector and has grown into a configurable offline workbench. The current `v0.10.0` release adds advanced filtering and navigation so investigators can combine canonical and source-specific criteria, save reusable filter presets, move quickly through visible events and warning/error-class records, and drill down from grouped summaries and timeline buckets. This builds on the multi-session workspace, persistent recent history, responsive background import, cancellation, large-document preview safeguards, and scalable timeline behavior completed in earlier milestones.
 
 TraceScope is intended for file-based logs from applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. It does not claim to automatically understand every arbitrary log format or guarantee a fixed maximum file size. Import behavior stays explicit, testable, and reproducible.
 
@@ -16,7 +16,7 @@ TraceScope is intended for file-based logs from applications, services, simulate
 
 ## Screenshots
 
-The `v0.9.0` screenshots use the repository samples and reusable profiles to show the current import, multi-session investigation, filtering, timeline, recent-history, large-file, and export workflows. The structured XML engineering session remains the primary walkthrough source, while CSV and JSON Lines samples demonstrate related sessions coexisting in the same workspace.
+The `v0.10.0` screenshots use the repository samples and reusable profiles to show the current import, multi-session investigation, advanced filtering and navigation, timeline, recent-history, large-file, and export workflows. The structured XML engineering session remains the primary walkthrough source, while CSV and JSON Lines samples demonstrate related sessions coexisting in the same workspace.
 
 ### Import Configuration
 
@@ -26,7 +26,7 @@ Choose or drag in a source file, review the suggested format, load or edit a reu
 
 ### TraceScope Dashboard
 
-The main investigation view combines summary counts, filtering controls, selectable timeline resolution, dynamic source-specific columns, grouped issue counts, and selected-record details.
+The main investigation view combines summary counts, advanced filtering controls, selectable timeline resolution, dynamic source-specific columns, grouped issue counts, event/issue navigation, visible/source-record position context, and selected-record details.
 
 ![TraceScope Dashboard](docs/screenshots/tracescope-dashboard.png)
 
@@ -36,15 +36,15 @@ Multiple imported sources can remain open together as independent investigation 
 
 ![TraceScope Multi-Session Workspace](docs/screenshots/tracescope-multi-session-workspace.png)
 
-### Filtered Warnings
+### Advanced Filtering and Navigation
 
-Filtering updates the table, summaries, grouped issues, timeline, and visible custom fields together. Empty timeline intervals remain visible between the first and last matching records so gaps are not hidden by the filter.
+Canonical and source-specific filters can be combined across severity, subsystem, event code, entity, time range, search text, and dynamic custom fields. Named presets preserve reusable filter states, while adjacent-event and warning/error-class navigation move through the currently visible sorted investigation without losing source-record context.
 
-![TraceScope Filtered Warnings](docs/screenshots/tracescope-filtered-warnings.png)
+![TraceScope Advanced Filtering and Navigation](docs/screenshots/tracescope-filtered-warnings.png)
 
 ### Fine-Resolution Timeline Navigation
 
-Manual fine-resolution buckets use a bounded visible window with horizontal navigation instead of attempting to render an unbounded number of chart buckets at once. Timeline labels, legend placement, and vertical scaling remain usable while navigating.
+Manual fine-resolution buckets use a bounded visible window with horizontal navigation instead of attempting to render an unbounded number of chart buckets at once. Timeline labels, legend placement, and vertical scaling remain usable while navigating, and double-clicking a visible bar drills into its exact time bucket and represented severity when applicable.
 
 ![TraceScope Timeline Navigation](docs/screenshots/tracescope-timeline-navigation.png)
 
@@ -70,19 +70,19 @@ The export workflow writes the currently visible records to CSV using readable c
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The current `v0.9.0` package set uses:
+The current `v0.10.0` package set uses:
 
 ```text
-TraceScope-v0.9.0-windows-x64.zip
-TraceScope-v0.9.0-linux-x86_64.AppImage
-TraceScope-v0.9.0-samples.zip
+TraceScope-v0.10.0-windows-x64.zip
+TraceScope-v0.10.0-linux-x86_64.AppImage
+TraceScope-v0.10.0-samples.zip
 ```
 
-Historical `v0.1.0` through `v0.8.0` prereleases remain available as earlier development milestones.
+Historical `v0.1.0` through `v0.9.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.9.0-windows-x64.zip`.
+1. Download `TraceScope-v0.10.0-windows-x64.zip`.
 2. Extract the complete ZIP.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory.
@@ -91,22 +91,22 @@ The package includes the required Qt libraries, plugins, MinGW runtime dependenc
 
 ### Linux
 
-1. Download `TraceScope-v0.9.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.10.0-linux-x86_64.AppImage`.
 2. Make it executable:
 
 ```bash
-chmod +x TraceScope-v0.9.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.10.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.9.0-linux-x86_64.AppImage
+./TraceScope-v0.10.0-linux-x86_64.AppImage
 ```
 
 ### Sample Logs and Profiles
 
-`TraceScope-v0.9.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable profiles.
+`TraceScope-v0.10.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable profiles.
 
 Representative source/profile pairs include:
 
@@ -185,14 +185,27 @@ See [Performance Notes](docs/performance.md) for the measurement method, test en
 - Display investigation records in a sortable Qt model/view table
 - Show canonical fields only when they are present in the loaded dataset
 - Add discovered source-specific attributes as dynamic columns
-- Filter by severity and subsystem
+- Filter by multiple severities and by subsystem
+- Expose event-code and entity filters only when those canonical values are present
+- Filter by optional UTC time-range bounds when timestamps are available
+- Add multiple exact-value custom-field criteria, using OR semantics for multiple values of the same field and AND semantics across different fields and other filter categories
+- Add exact-value custom-field filters directly from visible table cells through the context menu
 - Search case-insensitively across canonical fields and custom attributes
+- Reset the complete active filter state
+- Save, overwrite, apply, and delete persistent named filter presets stored in local application settings
+- Restore reusable preset criteria safely across sessions while ignoring categorical or custom-field criteria unavailable in the active investigation
+- Apply complete filter-state changes as one model update to avoid repeated large-dataset proxy resets
 - Preserve correct selected-record mapping after sorting and filtering
 - Inspect canonical fields, custom attributes, and raw source for the selected record
+- Navigate to previous/next visible events in the current filtered and sorted order
+- Navigate cyclically between visible warning, error, and critical records
+- Show visible event position together with the preserved source-record number
 - View session-level event counts and grouped warning/error summaries
+- Double-click grouped issue-summary cells to narrow the investigation by subsystem and represented issue class without discarding unrelated active filters
 - Visualize filtered event counts with automatic or manually selected timeline resolutions from millisecond through day-scale intervals
 - Preserve empty timeline intervals within the displayed range so gaps remain visible
 - Use bounded windowed rendering and horizontal navigation when fine resolutions would otherwise produce too many timeline buckets
+- Double-click timeline bars to narrow the investigation to the exact represented time bucket and severity when applicable
 - Keep timeline range context, legend placement, and vertical scaling stable while navigating
 
 ### Export, Samples, and Verification
@@ -242,7 +255,7 @@ Different source formats need different amounts of configuration. TraceScope kee
 
 Import profiles map source-specific field names into the optional canonical fields and can also promote useful source values into readable custom columns. Values that are not explicitly mapped can still be preserved.
 
-Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.9.0`.
+Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.10.0`.
 
 ## Development Status
 
@@ -260,8 +273,9 @@ Implemented expansion milestones:
 | `v0.7.0` | Additional built-in formats, format detection/presets, and expanded cross-format samples |
 | `v0.8.0` | Responsive large-file import, progress/cancellation, scalable timeline resolution/navigation, and measured performance scenarios |
 | `v0.9.0` | Multi-session workspace, per-session context and reload, persistent recent files/profiles, and session-switching responsiveness |
+| `v0.10.0` | Advanced canonical/custom filtering, persistent filter presets, event/issue navigation, and summary/timeline drill-down |
 
-The current release is **`v0.9.0`**. **Phase 9 — Advanced Filtering and Navigation** is in progress for the next development milestone. Later phases add bookmarks and findings, deterministic analytics, session comparison, workspace persistence, live file following, and reporting.
+The current release is **`v0.10.0`**. **Phase 10 — Bookmarks, Notes, and Findings** is the next planned development phase. Later phases add deterministic analytics, session comparison, workspace persistence, live file following, reporting, responsive display hardening, and the stable `v1.0.0` release.
 
 Planned capabilities are not presented as implemented until their corresponding phases are completed and verified.
 
@@ -315,7 +329,7 @@ src/
 ├── importing/                    # Importers, profiles, validation, preview, results, and diagnostics
 ├── models/                       # Investigation table and filter proxy models
 ├── parsing/                      # JSON Lines compatibility facade
-├── preferences/                  # Persistent recent-file and recent-profile history
+├── preferences/                  # Persistent recent histories and filter presets
 ├── ui/                           # Import configuration interface
 ├── workspace/                    # Multi-session workspace and per-session context
 ├── MainWindow.cpp                # Qt Widgets presentation and workflow orchestration
@@ -360,7 +374,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-The current CTest suite contains 28 executables:
+The current CTest suite contains 29 executables:
 
 - `ParserTests`
 - `RecordSeverityTests`
@@ -390,8 +404,9 @@ The current CTest suite contains 28 executables:
 - `InvestigationSessionTests`
 - `InvestigationWorkspaceTests`
 - `RecentItemsStoreTests`
+- `FilterPresetStoreTests`
 
-Coverage includes the flexible record domain, import results and diagnostics, each built-in importer family, import execution progress/cancellation, profile validation and serialization, preview and format-suggestion behavior, filtering and analysis, dynamic CSV export, Qt model/view behavior, proxy/source mapping, controller coordination, per-session state, multi-session workspace behavior, reload semantics, and persistent recent-item history.
+Coverage includes the flexible record domain, import results and diagnostics, each built-in importer family, import execution progress/cancellation, profile validation and serialization, preview and format-suggestion behavior, advanced filtering and analysis, complete filter-state batching, filter-preset persistence, event/issue navigation, dynamic CSV export, Qt model/view behavior, proxy/source mapping, controller coordination, per-session state, multi-session workspace behavior, reload semantics, and persistent recent-item history.
 
 The same CTest suite runs in GitHub Actions on Windows and Linux.
 
@@ -399,9 +414,9 @@ The same CTest suite runs in GitHub Actions on Windows and Linux.
 
 The GitHub Actions workflow runs three parallel jobs with read-only repository permissions:
 
-- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.9.0-windows-x64.zip`
-- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.9.0-linux-x86_64.AppImage`
-- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.9.0-samples.zip`
+- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.10.0-windows-x64.zip`
+- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.10.0-linux-x86_64.AppImage`
+- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.10.0-samples.zip`
 
 Workflow artifacts validate candidate packages. Approved packages are attached permanently to GitHub Releases.
 
