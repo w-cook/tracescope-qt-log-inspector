@@ -38,6 +38,14 @@
 #include <QVariant>
 #include <QTimeZone>
 #include <QTabBar>
+#include <QPushButton>
+#include <QCheckBox>
+#include <QDateTimeEdit>
+#include <QDialog>
+#include <QApplication>
+#include <QClipboard>
+#include <QMenu>
+#include <QInputDialog>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -55,6 +63,8 @@
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
+#include "ui/CustomFieldFilterEditor.h"
+#include "ui/MultiSelectFilterComboBox.h"
 
 namespace
 {
@@ -365,17 +375,83 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     settings(),
     recentItemsStore(settings),
+    filterPresetStore(settings),
     sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
+    previousEventButton(
+        new QPushButton(
+            tr("Previous Event"),
+            this
+            )
+        ),
+    nextEventButton(
+        new QPushButton(
+            tr("Next Event"),
+            this
+            )
+        ),
+    eventPositionLabel(
+        new QLabel(
+            this
+            )
+        ),
+    previousIssueButton(
+        new QPushButton(
+            tr("Previous Issue"),
+            this
+            )
+        ),
+    nextIssueButton(
+        new QPushButton(
+            tr("Next Issue"),
+            this
+            )
+        ),
     eventDetailText(new QPlainTextEdit(this)),
     issueSummaryTable(new QTableWidget(0, 4)),
     issueSummaryGroup(nullptr),
     workspace(new InvestigationWorkspace(this)),
     investigationController(nullptr),
     timelineChartView(new QChartView(this)),
-    levelFilterCombo(new QComboBox(this)),
-    subsystemFilterCombo(new QComboBox(this)),
+    levelFilterCombo(new MultiSelectFilterComboBox(this)),
+    resetFiltersButton(
+        new QPushButton(
+            tr("Reset Filters"),
+            this
+            )
+        ),
+    filterPresetsButton(
+        new QPushButton(
+            tr("Presets"),
+            this
+            )
+        ),
+    filterPresetsMenu(
+        new QMenu(this)
+        ),
+    subsystemFilterCombo(new MultiSelectFilterComboBox(this)),
+    eventCodeFilterCombo(new MultiSelectFilterComboBox(this)),
+    entityFilterCombo(new MultiSelectFilterComboBox(this)),
+    customFieldFilterEditor(new CustomFieldFilterEditor(this)),
+    customFiltersButton(
+        new QPushButton(
+            tr("Custom Filters"),
+            this
+            )
+        ),
+    customFiltersDialog(
+        new QDialog(this)
+        ),
+    timeRangeButton(
+        new QPushButton(
+            tr("Time Range"),
+            this
+            )
+        ),
+    timeRangeDialog(
+        new QDialog(this)
+        ),
     searchInput(new QLineEdit(this)),
     searchDebounceTimer(new QTimer(this))
 {
@@ -617,6 +693,88 @@ void MainWindow::buildLayout()
     auto *eventsGroup = new QGroupBox("Telemetry Events", this);
     auto *eventsLayout = new QVBoxLayout(eventsGroup);
 
+    auto *eventNavigationLayout =
+        new QHBoxLayout();
+
+    eventNavigationLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    eventNavigationLayout->setSpacing(
+        6
+        );
+
+    previousEventButton->setToolTip(
+        tr(
+            "Select the previous visible event"
+            )
+        );
+
+    nextEventButton->setToolTip(
+        tr(
+            "Select the next visible event"
+            )
+        );
+
+    previousIssueButton->setToolTip(
+        tr(
+            "Select the previous visible WARN, "
+            "ERROR, or CRITICAL event"
+            )
+        );
+
+    nextIssueButton->setToolTip(
+        tr(
+            "Select the next visible WARN, "
+            "ERROR, or CRITICAL event"
+            )
+        );
+
+    eventNavigationLayout->addStretch();
+
+    eventNavigationLayout->addWidget(
+        previousEventButton
+        );
+
+    eventNavigationLayout->addWidget(
+        nextEventButton
+        );
+
+    eventNavigationLayout->addStretch(
+        1
+        );
+
+    eventPositionLabel->setAlignment(
+        Qt::AlignCenter
+        );
+
+    eventNavigationLayout->addWidget(
+        eventPositionLabel
+        );
+
+    eventNavigationLayout->addStretch(
+        1
+        );
+
+    eventNavigationLayout->addWidget(
+        previousIssueButton
+        );
+
+    eventNavigationLayout->addWidget(
+        nextIssueButton
+        );
+
+    eventsLayout->addLayout(
+        eventNavigationLayout
+        );
+
+    eventsLayout->setSpacing(
+        4
+        );
+
     eventTable->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Expanding
@@ -630,6 +788,122 @@ void MainWindow::buildLayout()
 
     eventTable->setSelectionMode(
         QAbstractItemView::SingleSelection
+        );
+
+    eventTable->setContextMenuPolicy(
+        Qt::CustomContextMenu
+        );
+
+    connect(
+        eventTable,
+        &QTableView::customContextMenuRequested,
+        this,
+        [this](
+            const QPoint &position
+            ) {
+            const QModelIndex proxyIndex =
+                eventTable->indexAt(
+                    position
+                    );
+
+            if (!proxyIndex.isValid()
+                || investigationController
+                       == nullptr) {
+                return;
+            }
+
+            const QString value =
+                proxyIndex
+                    .data(Qt::DisplayRole)
+                    .toString();
+
+            InvestigationFilterProxyModel
+                *proxyModel =
+                investigationController
+                    ->proxyModel();
+
+            InvestigationTableModel
+                *sourceModel =
+                investigationController
+                    ->sourceModel();
+
+            const QModelIndex sourceIndex =
+                proxyModel->mapToSource(
+                    proxyIndex
+                    );
+
+            const bool customColumn =
+                sourceIndex.isValid()
+                && sourceModel
+                       ->isCustomColumn(
+                           sourceIndex.column()
+                           );
+
+            const QString customField =
+                customColumn
+                    ? sourceModel
+                          ->columnKey(
+                              sourceIndex.column()
+                              )
+                    : QString();
+
+            QMenu menu(
+                eventTable
+                );
+
+            QAction *copyValueAction =
+                menu.addAction(
+                    tr("Copy Cell Value")
+                    );
+
+            QAction *filterValueAction =
+                nullptr;
+
+            /*
+             * Exact custom-field filtering only makes
+             * sense when both a custom field and a
+             * concrete displayed value are present.
+             */
+            if (customColumn
+                && !customField.isEmpty()
+                && !value.isEmpty()) {
+                menu.addSeparator();
+
+                filterValueAction =
+                    menu.addAction(
+                        tr("Filter by This Value")
+                        );
+            }
+
+            QAction *selectedAction =
+                menu.exec(
+                    eventTable
+                        ->viewport()
+                        ->mapToGlobal(
+                            position
+                            )
+                    );
+
+            if (selectedAction
+                == copyValueAction) {
+                QApplication::clipboard()
+                ->setText(
+                    value
+                    );
+
+                return;
+            }
+
+            if (filterValueAction != nullptr
+                && selectedAction
+                       == filterValueAction) {
+                customFieldFilterEditor
+                    ->addFilter(
+                        customField,
+                        value
+                        );
+            }
+        }
         );
 
     eventTable->setSortingEnabled(true);
@@ -646,6 +920,58 @@ void MainWindow::buildLayout()
             );
 
     eventTable->horizontalHeader()->setStretchLastSection(true);
+
+    connect(
+        previousEventButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentEvent(
+                -1
+                );
+        }
+        );
+
+    connect(
+        nextEventButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentEvent(
+                1
+                );
+        }
+        );
+
+    connect(
+        previousIssueButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentIssue(
+                -1
+                );
+        }
+        );
+
+    connect(
+        nextIssueButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            navigateToAdjacentIssue(
+                1
+                );
+        }
+        );
+
+    previousIssueButton->setVisible(
+        false
+        );
+
+    nextIssueButton->setVisible(
+        false
+        );
 
     connect(
         eventTable->horizontalHeader(),
@@ -1221,68 +1547,566 @@ void MainWindow::updateSummary(
         );
 }
 
-void MainWindow::buildFilterControls(QVBoxLayout *layout)
+void MainWindow::buildFilterControls(
+    QVBoxLayout *layout
+    )
 {
-    levelFilterCombo->addItem("All levels", "");
-    levelFilterCombo->addItem("TRACE", "TRACE");
-    levelFilterCombo->addItem("DEBUG", "DEBUG");
-    levelFilterCombo->addItem("INFO", "INFO");
-    levelFilterCombo->addItem("WARN", "WARN");
-    levelFilterCombo->addItem("ERROR", "ERROR");
-    levelFilterCombo->addItem("CRITICAL", "CRITICAL");
+    /*
+     * ---------------------------------------------------------
+     * Primary categorical filter controls
+     * ---------------------------------------------------------
+     */
 
-    subsystemFilterCombo->addItem("All subsystems", "");
+    levelFilterCombo->setEmptySelectionText(
+        tr("All severities")
+        );
 
-    subsystemFilterCombo->setMinimumWidth(240);
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("TRACE"),
+        QStringLiteral("TRACE")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("DEBUG"),
+        QStringLiteral("DEBUG")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("INFO"),
+        QStringLiteral("INFO")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("WARN"),
+        QStringLiteral("WARN")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("ERROR"),
+        QStringLiteral("ERROR")
+        );
+
+    levelFilterCombo->addFilterItem(
+        QStringLiteral("CRITICAL"),
+        QStringLiteral("CRITICAL")
+        );
+
+    levelFilterCombo->setMinimumWidth(
+        150
+        );
+
+    subsystemFilterCombo
+        ->setEmptySelectionText(
+            tr("All subsystems")
+            );
+
+    subsystemFilterCombo->setMinimumWidth(
+        190
+        );
 
     subsystemFilterCombo->setSizeAdjustPolicy(
-        QComboBox::AdjustToMinimumContentsLengthWithIcon
+        QComboBox::
+        AdjustToMinimumContentsLengthWithIcon
         );
 
-    subsystemFilterCombo->setMinimumContentsLength(24);
+    subsystemFilterCombo
+        ->setMinimumContentsLength(
+            18
+            );
+
+    /*
+     * Event-code filter.
+     */
+    eventCodeFilterWidget =
+        new QWidget(this);
+
+    auto *eventCodeLayout =
+        new QHBoxLayout(
+            eventCodeFilterWidget
+            );
+
+    eventCodeLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    eventCodeLayout->setSpacing(
+        4
+        );
+
+    auto *eventCodeLabel =
+        new QLabel(
+            tr("Event code:"),
+            eventCodeFilterWidget
+            );
+
+    eventCodeFilterCombo
+        ->setEmptySelectionText(
+            tr("All event codes")
+            );
+
+    eventCodeFilterCombo->setMinimumWidth(
+        170
+        );
+
+    eventCodeLayout->addWidget(
+        eventCodeLabel
+        );
+
+    eventCodeLayout->addWidget(
+        eventCodeFilterCombo
+        );
+
+    /*
+     * Entity filter.
+     */
+    entityFilterWidget =
+        new QWidget(this);
+
+    auto *entityLayout =
+        new QHBoxLayout(
+            entityFilterWidget
+            );
+
+    entityLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    entityLayout->setSpacing(
+        4
+        );
+
+    auto *entityLabel =
+        new QLabel(
+            tr("Entity:"),
+            entityFilterWidget
+            );
+
+    entityFilterCombo
+        ->setEmptySelectionText(
+            tr("All entities")
+            );
+
+    entityFilterCombo->setMinimumWidth(
+        170
+        );
+
+    entityLayout->addWidget(
+        entityLabel
+        );
+
+    entityLayout->addWidget(
+        entityFilterCombo
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Row 1
+     *
+     * Severity | Subsystem | Event Code | Entity
+     * ---------------------------------------------------------
+     */
+
+    auto *primaryFilterLayout =
+        new QHBoxLayout();
+
+    primaryFilterLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    primaryFilterLayout->setSpacing(
+        8
+        );
+
+    primaryFilterLayout->addWidget(
+        levelFilterCombo
+        );
+
+    primaryFilterLayout->addWidget(
+        subsystemFilterCombo
+        );
+
+    primaryFilterLayout->addWidget(
+        eventCodeFilterWidget
+        );
+
+    primaryFilterLayout->addWidget(
+        entityFilterWidget
+        );
+
+    primaryFilterLayout->addStretch();
+
+    layout->addLayout(
+        primaryFilterLayout
+        );
+
+    /*
+     * Event-code/entity controls are capability
+     * driven and begin hidden.
+     */
+    eventCodeFilterWidget->setVisible(
+        false
+        );
+
+    entityFilterWidget->setVisible(
+        false
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Search
+     * ---------------------------------------------------------
+     */
 
     searchInput->setPlaceholderText(
-        "Search canonical fields and custom attributes..."
+        tr(
+            "Search canonical fields and "
+            "custom attributes..."
+            )
         );
 
-    searchDebounceTimer->setSingleShot(true);
+    searchDebounceTimer->setSingleShot(
+        true
+        );
 
     searchDebounceTimer->setInterval(
         SearchDebounceIntervalMs
         );
 
-    auto *filterLayout = new QHBoxLayout();
+    /*
+     * ---------------------------------------------------------
+     * Time-range dialog
+     * ---------------------------------------------------------
+     */
 
-    filterLayout->addWidget(levelFilterCombo);
-    filterLayout->addWidget(subsystemFilterCombo);
-    filterLayout->addWidget(searchInput);
+    timeRangeFilterWidget =
+        new QWidget(
+            timeRangeDialog
+            );
 
-    layout->addLayout(filterLayout);
+    auto *timeRangeLayout =
+        new QHBoxLayout(
+            timeRangeFilterWidget
+            );
+
+    timeRangeLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    timeRangeLayout->setSpacing(
+        6
+        );
+
+    auto *timeRangeLabel =
+        new QLabel(
+            tr("Time range (UTC):"),
+            timeRangeFilterWidget
+            );
+
+    timeRangeStartCheckBox =
+        new QCheckBox(
+            tr("From"),
+            timeRangeFilterWidget
+            );
+
+    timeRangeStartEdit =
+        new QDateTimeEdit(
+            timeRangeFilterWidget
+            );
+
+    timeRangeEndCheckBox =
+        new QCheckBox(
+            tr("To"),
+            timeRangeFilterWidget
+            );
+
+    timeRangeEndEdit =
+        new QDateTimeEdit(
+            timeRangeFilterWidget
+            );
+
+    for (
+        QDateTimeEdit *edit
+        : {
+            timeRangeStartEdit,
+            timeRangeEndEdit
+        }
+        ) {
+        edit->setDisplayFormat(
+            QStringLiteral(
+                "yyyy-MM-dd HH:mm:ss.zzz"
+                )
+            );
+
+        edit->setTimeZone(
+            QTimeZone::UTC
+            );
+
+        edit->setKeyboardTracking(
+            true
+            );
+
+        edit->setEnabled(
+            false
+            );
+
+        edit->setMinimumWidth(
+            210
+            );
+    }
+
+    timeRangeLayout->addWidget(
+        timeRangeLabel
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeStartCheckBox
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeStartEdit
+        );
+
+    timeRangeLayout->addSpacing(
+        12
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeEndCheckBox
+        );
+
+    timeRangeLayout->addWidget(
+        timeRangeEndEdit
+        );
+
+    timeRangeLayout->addStretch();
+
+    timeRangeDialog->setWindowTitle(
+        tr("Time Range Filter")
+        );
+
+    timeRangeDialog->setModal(
+        false
+        );
+
+    timeRangeDialog->setWindowModality(
+        Qt::NonModal
+        );
+
+    auto *timeDialogLayout =
+        new QVBoxLayout(
+            timeRangeDialog
+            );
+
+    timeDialogLayout->addWidget(
+        timeRangeFilterWidget
+        );
+
+    auto *timeCloseButton =
+        new QPushButton(
+            tr("Close"),
+            timeRangeDialog
+            );
+
+    timeDialogLayout->addWidget(
+        timeCloseButton,
+        0,
+        Qt::AlignRight
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Custom-field filter dialog
+     * ---------------------------------------------------------
+     */
+
+    customFiltersDialog->setWindowTitle(
+        tr("Custom Field Filters")
+        );
+
+    customFiltersDialog->setModal(
+        false
+        );
+
+    customFiltersDialog->setWindowModality(
+        Qt::NonModal
+        );
+
+    customFiltersDialog->setMinimumWidth(
+        600
+        );
+
+    auto *customDialogLayout =
+        new QVBoxLayout(
+            customFiltersDialog
+            );
+
+    customDialogLayout->addWidget(
+        customFieldFilterEditor
+        );
+
+    auto *customCloseButton =
+        new QPushButton(
+            tr("Close"),
+            customFiltersDialog
+            );
+
+    customDialogLayout->addWidget(
+        customCloseButton,
+        0,
+        Qt::AlignRight
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Row 2
+     *
+     * Search | Time Range | Custom Filters | Reset
+     * ---------------------------------------------------------
+     */
+
+    auto *secondaryFilterLayout =
+        new QHBoxLayout();
+
+    secondaryFilterLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    secondaryFilterLayout->setSpacing(
+        8
+        );
+
+    secondaryFilterLayout->addWidget(
+        searchInput,
+        1
+        );
+
+    secondaryFilterLayout->addWidget(
+        timeRangeButton
+        );
+
+    secondaryFilterLayout->addWidget(
+        customFiltersButton
+        );
+
+    secondaryFilterLayout->addWidget(
+        filterPresetsButton
+        );
+
+    filterPresetsButton->setMenu(
+        filterPresetsMenu
+        );
+
+    secondaryFilterLayout->addWidget(
+        resetFiltersButton
+        );
+
+    layout->addLayout(
+        secondaryFilterLayout
+        );
+
+    /*
+     * These controls only become available when
+     * the active investigation supports them.
+     */
+    timeRangeButton->setVisible(
+        false
+        );
+
+    customFiltersButton->setVisible(
+        false
+        );
+
+    resetFiltersButton->setEnabled(
+        false
+        );
+
+    resetFiltersButton->setVisible(
+        false
+        );
+
+    filterPresetsButton->setVisible(
+        false
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Filter connections
+     * ---------------------------------------------------------
+     */
 
     connect(
         levelFilterCombo,
-        &QComboBox::currentIndexChanged,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
         this,
         [this]() {
             searchDebounceTimer->stop();
+
             applyFilters();
         }
         );
 
     connect(
         subsystemFilterCombo,
-        &QComboBox::currentIndexChanged,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
         this,
         [this]() {
-            subsystemFilterCombo->setToolTip(
-                subsystemFilterCombo
-                    ->currentData()
-                    .toString()
-                );
             searchDebounceTimer->stop();
+
             applyFilters();
         }
         );
+
+    connect(
+        eventCodeFilterCombo,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
+        this,
+        [this]() {
+            applyFilters();
+        }
+        );
+
+    connect(
+        entityFilterCombo,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
+        this,
+        [this]() {
+            applyFilters();
+        }
+        );
+
+    connect(
+        filterPresetsMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshFilterPresetsMenu();
+        }
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Search connections
+     * ---------------------------------------------------------
+     */
 
     connect(
         searchInput,
@@ -1299,6 +2123,7 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
         this,
         [this]() {
             searchDebounceTimer->stop();
+
             applyFilters();
         }
         );
@@ -1311,6 +2136,248 @@ void MainWindow::buildFilterControls(QVBoxLayout *layout)
             applyFilters();
         }
         );
+
+    /*
+     * ---------------------------------------------------------
+     * Reset
+     * ---------------------------------------------------------
+     */
+
+    connect(
+        resetFiltersButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            resetFilters();
+        }
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Time-range dialog
+     * ---------------------------------------------------------
+     */
+
+    connect(
+        timeRangeButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            timeRangeDialog->show();
+
+            timeRangeDialog->raise();
+
+            timeRangeDialog
+                ->activateWindow();
+        }
+        );
+
+    connect(
+        timeCloseButton,
+        &QPushButton::clicked,
+        timeRangeDialog,
+        &QDialog::close
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Custom-field dialog
+     * ---------------------------------------------------------
+     */
+
+    connect(
+        customFiltersButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            customFiltersDialog->show();
+
+            customFiltersDialog->raise();
+
+            customFiltersDialog
+                ->activateWindow();
+        }
+        );
+
+    connect(
+        customCloseButton,
+        &QPushButton::clicked,
+        customFiltersDialog,
+        &QDialog::close
+        );
+
+    /*
+     * Establish a compact initial size based on the
+     * editor's currently visible contents. Do not
+     * impose a fixed vertical size.
+     */
+    customFiltersDialog->adjustSize();
+
+    connect(
+        customFieldFilterEditor,
+        &CustomFieldFilterEditor::
+        filtersChanged,
+        this,
+        [this]() {
+            updateCustomFiltersButton();
+
+            resizeCustomFiltersDialogToContents();
+
+            applyFilters();
+        }
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Time-range filtering
+     * ---------------------------------------------------------
+     */
+
+    connect(
+        timeRangeStartCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this](bool checked) {
+            timeRangeStartEdit->setEnabled(
+                checked
+                );
+
+            if (
+                checked
+                && timeRangeEndCheckBox
+                       ->isChecked()
+                && timeRangeStartEdit
+                           ->dateTime()
+                       > timeRangeEndEdit
+                             ->dateTime()
+                ) {
+                const QSignalBlocker blocker(
+                    timeRangeEndEdit
+                    );
+
+                timeRangeEndEdit->setDateTime(
+                    timeRangeStartEdit
+                        ->dateTime()
+                    );
+            }
+
+            updateTimeRangeButton();
+
+            applyFilters();
+        }
+        );
+
+    connect(
+        timeRangeEndCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this](bool checked) {
+            timeRangeEndEdit->setEnabled(
+                checked
+                );
+
+            if (
+                checked
+                && timeRangeStartCheckBox
+                       ->isChecked()
+                && timeRangeEndEdit
+                           ->dateTime()
+                       < timeRangeStartEdit
+                             ->dateTime()
+                ) {
+                const QSignalBlocker blocker(
+                    timeRangeStartEdit
+                    );
+
+                timeRangeStartEdit->setDateTime(
+                    timeRangeEndEdit
+                        ->dateTime()
+                    );
+            }
+
+            updateTimeRangeButton();
+
+            applyFilters();
+        }
+        );
+
+    connect(
+        timeRangeStartEdit,
+        &QDateTimeEdit::dateTimeChanged,
+        this,
+        [this](
+            const QDateTime &dateTime
+            ) {
+            if (
+                !timeRangeStartCheckBox
+                     ->isChecked()
+                ) {
+                return;
+            }
+
+            if (
+                timeRangeEndCheckBox
+                    ->isChecked()
+                && dateTime
+                       > timeRangeEndEdit
+                             ->dateTime()
+                ) {
+                const QSignalBlocker blocker(
+                    timeRangeEndEdit
+                    );
+
+                timeRangeEndEdit->setDateTime(
+                    dateTime
+                    );
+            }
+
+            updateTimeRangeButton();
+
+            applyFilters();
+        }
+        );
+
+    connect(
+        timeRangeEndEdit,
+        &QDateTimeEdit::dateTimeChanged,
+        this,
+        [this](
+            const QDateTime &dateTime
+            ) {
+            if (
+                !timeRangeEndCheckBox
+                     ->isChecked()
+                ) {
+                return;
+            }
+
+            if (
+                timeRangeStartCheckBox
+                    ->isChecked()
+                && dateTime
+                       < timeRangeStartEdit
+                             ->dateTime()
+                ) {
+                const QSignalBlocker blocker(
+                    timeRangeStartEdit
+                    );
+
+                timeRangeStartEdit->setDateTime(
+                    dateTime
+                    );
+            }
+
+            updateTimeRangeButton();
+
+            applyFilters();
+        }
+        );
+
+    /*
+     * Establish the initial button summaries.
+     */
+    updateTimeRangeButton();
+    updateCustomFiltersButton();
 }
 
 void MainWindow::applyFilters()
@@ -1322,11 +2389,44 @@ void MainWindow::applyFilters()
     timelineScaleValid =
         false;
 
-    investigationController->setFilters(
-        levelFilterCombo->currentData().toString(),
-        subsystemFilterCombo->currentData().toString(),
-        searchInput->text()
-        );
+    const std::optional<QDateTime>
+        timeRangeStart =
+        timeRangeStartCheckBox != nullptr
+                && timeRangeStartCheckBox
+                       ->isChecked()
+            ? std::optional<QDateTime>(
+                  timeRangeStartEdit
+                      ->dateTime()
+                  )
+            : std::nullopt;
+
+    const std::optional<QDateTime>
+        timeRangeEnd =
+        timeRangeEndCheckBox != nullptr
+                && timeRangeEndCheckBox
+                       ->isChecked()
+            ? std::optional<QDateTime>(
+                  timeRangeEndEdit
+                      ->dateTime()
+                  )
+            : std::nullopt;
+
+    investigationController
+        ->setFilterState(
+            levelFilterCombo
+                ->selectedValues(),
+            subsystemFilterCombo
+                ->selectedValues(),
+            searchInput->text(),
+            eventCodeFilterCombo
+                ->selectedValues(),
+            entityFilterCombo
+                ->selectedValues(),
+            timeRangeStart,
+            timeRangeEnd,
+            customFieldFilterEditor
+                ->filters()
+            );
 
     eventTable->clearSelection();
     clearEventDetail();
@@ -1348,32 +2448,515 @@ void MainWindow::applyFilters()
     updateTimelineChart(
         visibleRecords
         );
+
+    updateEventNavigationState();
 }
 
-void MainWindow::refreshSubsystemFilterOptions()
+void MainWindow::resetFilters()
 {
     if (investigationController == nullptr) {
         return;
     }
 
-    const QString selectedSubsystem =
-        subsystemFilterCombo
-            ->currentData()
-            .toString();
+    searchDebounceTimer->stop();
 
-    subsystemFilterCombo->blockSignals(true);
-    subsystemFilterCombo->clear();
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
 
-    subsystemFilterCombo->addItem(
-        "All subsystems",
-        ""
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
+        const QSignalBlocker searchBlocker(
+            searchInput
+            );
+
+        const QSignalBlocker eventCodeBlocker(
+            eventCodeFilterCombo
+            );
+
+        const QSignalBlocker entityBlocker(
+            entityFilterCombo
+            );
+
+        const QSignalBlocker customFieldBlocker(
+            customFieldFilterEditor
+            );
+
+        const QSignalBlocker timeStartCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker timeStartEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker timeEndCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker timeEndEditBlocker(
+            timeRangeEndEdit
+            );
+
+        levelFilterCombo->clearSelection();
+
+        subsystemFilterCombo->clearSelection();
+
+        searchInput->clear();
+
+        eventCodeFilterCombo->clearSelection();
+
+        entityFilterCombo->clearSelection();
+
+        customFieldFilterEditor->clearFilters();
+
+        timeRangeStartCheckBox->setChecked(
+            false
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            false
+            );
+
+        timeRangeStartEdit->setEnabled(
+            false
+            );
+
+        timeRangeEndEdit->setEnabled(
+            false
+            );
+
+        if (timelineFirstTimestamp.has_value()) {
+            timeRangeStartEdit->setDateTime(
+                timelineFirstTimestamp.value()
+                );
+        }
+
+        if (timelineLastTimestamp.has_value()) {
+            timeRangeEndEdit->setDateTime(
+                timelineLastTimestamp.value()
+                );
+        }
+    }
+
+    updateTimeRangeButton();
+    updateCustomFiltersButton();
+
+    resizeCustomFiltersDialogToContents();
+
+    applyFilters();
+}
+
+InvestigationFilterPreset
+MainWindow::currentFilterPreset(
+    const QString &name
+    ) const
+{
+    InvestigationFilterPreset preset;
+
+    preset.name =
+        name.trimmed();
+
+    if (investigationController == nullptr) {
+        return preset;
+    }
+
+    InvestigationFilterProxyModel *proxyModel =
+        investigationController
+            ->proxyModel();
+
+    preset.severities =
+        proxyModel->severityFilters();
+
+    preset.subsystems =
+        proxyModel->subsystemFilters();
+
+    preset.searchText =
+        proxyModel->searchText();
+
+    preset.eventCodes =
+        proxyModel->eventCodeFilters();
+
+    preset.entityIds =
+        proxyModel->entityFilters();
+
+    preset.timeRangeStart =
+        proxyModel->timeRangeStart();
+
+    preset.timeRangeEnd =
+        proxyModel->timeRangeEnd();
+
+    preset.customFieldFilters =
+        proxyModel->customFieldFilters();
+
+    return preset;
+}
+
+void MainWindow::applyFilterPreset(
+    const InvestigationFilterPreset &preset
+    )
+{
+    if (investigationController == nullptr) {
+        return;
+    }
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Update every control as one transaction.
+     * Some preset criteria may not exist in the
+     * active investigation. Multi-select controls
+     * naturally ignore unavailable values, while
+     * CustomFieldFilterEditor removes unavailable
+     * custom-field criteria.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
+        const QSignalBlocker searchBlocker(
+            searchInput
+            );
+
+        const QSignalBlocker eventCodeBlocker(
+            eventCodeFilterCombo
+            );
+
+        const QSignalBlocker entityBlocker(
+            entityFilterCombo
+            );
+
+        const QSignalBlocker customFieldBlocker(
+            customFieldFilterEditor
+            );
+
+        const QSignalBlocker timeStartCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker timeStartEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker timeEndCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker timeEndEditBlocker(
+            timeRangeEndEdit
+            );
+
+        levelFilterCombo->setSelectedValues(
+            hasSeverityData
+                ? preset.severities
+                : QStringList()
+            );
+
+        subsystemFilterCombo->setSelectedValues(
+            hasSubsystemData
+                ? preset.subsystems
+                : QStringList()
+            );
+
+        eventCodeFilterCombo->setSelectedValues(
+            hasEventCodeData
+                ? preset.eventCodes
+                : QStringList()
+            );
+
+        entityFilterCombo->setSelectedValues(
+            hasEntityData
+                ? preset.entityIds
+                : QStringList()
+            );
+
+        customFieldFilterEditor->setFilters(
+            hasCustomFieldData
+                ? preset.customFieldFilters
+                : CustomFieldFilterMap()
+            );
+
+        searchInput->setText(
+            preset.searchText
+            );
+
+        if (hasTimestampData) {
+            const bool hasStart =
+                preset.timeRangeStart.has_value();
+
+            const bool hasEnd =
+                preset.timeRangeEnd.has_value();
+
+            timeRangeStartCheckBox->setChecked(
+                hasStart
+                );
+
+            timeRangeEndCheckBox->setChecked(
+                hasEnd
+                );
+
+            timeRangeStartEdit->setEnabled(
+                hasStart
+                );
+
+            timeRangeEndEdit->setEnabled(
+                hasEnd
+                );
+
+            timeRangeStartEdit->setDateTime(
+                hasStart
+                    ? preset
+                          .timeRangeStart
+                          .value()
+                    : timelineFirstTimestamp
+                          .value()
+                );
+
+            timeRangeEndEdit->setDateTime(
+                hasEnd
+                    ? preset
+                          .timeRangeEnd
+                          .value()
+                    : timelineLastTimestamp
+                          .value()
+                );
+        } else {
+            timeRangeStartCheckBox->setChecked(
+                false
+                );
+
+            timeRangeEndCheckBox->setChecked(
+                false
+                );
+
+            timeRangeStartEdit->setEnabled(
+                false
+                );
+
+            timeRangeEndEdit->setEnabled(
+                false
+                );
+        }
+    }
+
+    updateTimeRangeButton();
+    updateCustomFiltersButton();
+
+    resizeCustomFiltersDialogToContents();
+
+    /*
+     * Apply the fully restored preset once rather
+     * than producing intermediate filtered states.
+     */
+    applyFilters();
+}
+
+void MainWindow::refreshFilterPresetsMenu()
+{
+    if (filterPresetsMenu == nullptr) {
+        return;
+    }
+
+    filterPresetsMenu->clear();
+
+    QAction *saveAction =
+        filterPresetsMenu->addAction(
+            tr("Save Current Filters...")
+            );
+
+    saveAction->setEnabled(
+        investigationController != nullptr
         );
 
-    subsystemFilterCombo->setItemData(
-        0,
-        QStringLiteral("All subsystems"),
-        Qt::ToolTipRole
+    connect(
+        saveAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            bool accepted = false;
+
+            const QString name =
+                QInputDialog::getText(
+                    this,
+                    tr("Save Filter Preset"),
+                    tr("Preset name:"),
+                    QLineEdit::Normal,
+                    QString(),
+                    &accepted
+                    )
+                    .trimmed();
+
+            if (!accepted
+                || name.isEmpty()) {
+                return;
+            }
+
+            const QVector<
+                InvestigationFilterPreset>
+                existingPresets =
+                filterPresetStore.presets();
+
+            bool existingName = false;
+
+            for (
+                const InvestigationFilterPreset
+                    &existing
+                : existingPresets
+                ) {
+                if (existing.name.compare(
+                        name,
+                        Qt::CaseInsensitive
+                        )
+                    == 0) {
+                    existingName = true;
+                    break;
+                }
+            }
+
+            if (existingName) {
+                const QMessageBox::StandardButton
+                    overwrite =
+                    QMessageBox::question(
+                        this,
+                        tr(
+                            "Replace Filter Preset"
+                            ),
+                        tr(
+                            "A filter preset named "
+                            "\"%1\" already exists.\n\n"
+                            "Replace it with the "
+                            "current filters?"
+                            )
+                            .arg(name),
+                        QMessageBox::Yes
+                            | QMessageBox::No,
+                        QMessageBox::No
+                        );
+
+                if (overwrite
+                    != QMessageBox::Yes) {
+                    return;
+                }
+            }
+
+            filterPresetStore.savePreset(
+                currentFilterPreset(name)
+                );
+        }
         );
+
+    filterPresetsMenu->addSeparator();
+
+    const QVector<InvestigationFilterPreset>
+        presets =
+        filterPresetStore.presets();
+
+    if (presets.isEmpty()) {
+        QAction *emptyAction =
+            filterPresetsMenu->addAction(
+                tr("No Saved Presets")
+                );
+
+        emptyAction->setEnabled(
+            false
+            );
+
+        return;
+    }
+
+    /*
+     * Saved presets are reusable application-level
+     * investigation shortcuts.
+     */
+    for (const InvestigationFilterPreset &preset
+         : presets) {
+        QAction *presetAction =
+            filterPresetsMenu->addAction(
+                preset.name
+                );
+
+        presetAction->setEnabled(
+            investigationController != nullptr
+            );
+
+        connect(
+            presetAction,
+            &QAction::triggered,
+            this,
+            [this, preset]() {
+                applyFilterPreset(
+                    preset
+                    );
+            }
+            );
+    }
+
+    filterPresetsMenu->addSeparator();
+
+    QMenu *deleteMenu =
+        filterPresetsMenu->addMenu(
+            tr("Delete Preset")
+            );
+
+    for (const InvestigationFilterPreset &preset
+         : presets) {
+        QAction *deleteAction =
+            deleteMenu->addAction(
+                preset.name
+                );
+
+        connect(
+            deleteAction,
+            &QAction::triggered,
+            this,
+            [this, preset]() {
+                const QMessageBox::StandardButton
+                    confirmation =
+                    QMessageBox::question(
+                        this,
+                        tr(
+                            "Delete Filter Preset"
+                            ),
+                        tr(
+                            "Delete the filter preset "
+                            "\"%1\"?"
+                            )
+                            .arg(
+                                preset.name
+                                ),
+                        QMessageBox::Yes
+                            | QMessageBox::No,
+                        QMessageBox::No
+                        );
+
+                if (confirmation
+                    != QMessageBox::Yes) {
+                    return;
+                }
+
+                filterPresetStore.removePreset(
+                    preset.name
+                    );
+            }
+            );
+    }
+}
+
+void MainWindow::
+    refreshSubsystemFilterOptions()
+{
+    if (investigationController
+        == nullptr) {
+        return;
+    }
 
     InvestigationSession *session =
         workspace->activeSession();
@@ -1381,6 +2964,16 @@ void MainWindow::refreshSubsystemFilterOptions()
     if (session == nullptr) {
         return;
     }
+
+    const QStringList selectedSubsystems =
+        subsystemFilterCombo
+            ->selectedValues();
+
+    const QSignalBlocker blocker(
+        subsystemFilterCombo
+        );
+
+    subsystemFilterCombo->clear();
 
     const QStringList &subsystems =
         session->availableSubsystems();
@@ -1396,19 +2989,11 @@ void MainWindow::refreshSubsystemFilterOptions()
 
     for (const QString &subsystem
          : subsystems) {
-        subsystemFilterCombo->addItem(
-            subsystem,
-            subsystem
-            );
-
-        const int itemIndex =
-            subsystemFilterCombo->count() - 1;
-
-        subsystemFilterCombo->setItemData(
-            itemIndex,
-            subsystem,
-            Qt::ToolTipRole
-            );
+        subsystemFilterCombo
+            ->addFilterItem(
+                subsystem,
+                subsystem
+                );
 
         widestTextWidth =
             std::max(
@@ -1421,11 +3006,6 @@ void MainWindow::refreshSubsystemFilterOptions()
                 );
     }
 
-    /*
-     * Keep the filter control itself compact,
-     * but let its popup expand enough to show
-     * long subsystem/logger names clearly.
-     */
     const int popupWidth =
         std::clamp(
             widestTextWidth + 40,
@@ -1439,24 +3019,208 @@ void MainWindow::refreshSubsystemFilterOptions()
             popupWidth
             );
 
-    const int previousIndex =
-        subsystemFilterCombo->findData(
-            selectedSubsystem
+    subsystemFilterCombo
+        ->setSelectedValues(
+            selectedSubsystems
+            );
+}
+
+void MainWindow::refreshCanonicalFilterOptions()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    auto populateFilter =
+        [](
+            MultiSelectFilterComboBox *combo,
+            const QStringList &values
+            ) {
+            const QSignalBlocker blocker(
+                combo
+                );
+
+            combo->clear();
+
+            int widestTextWidth = 0;
+
+            for (const QString &value
+                 : values) {
+                combo->addFilterItem(
+                    value,
+                    value
+                    );
+
+                widestTextWidth =
+                    std::max(
+                        widestTextWidth,
+                        combo
+                            ->fontMetrics()
+                            .horizontalAdvance(
+                                value
+                                )
+                        );
+            }
+
+            combo->clearSelection();
+
+            combo->view()
+                ->setMinimumWidth(
+                    std::clamp(
+                        widestTextWidth + 50,
+                        220,
+                        700
+                        )
+                    );
+        };
+
+    populateFilter(
+        eventCodeFilterCombo,
+        session->availableEventCodes()
+        );
+
+    populateFilter(
+        entityFilterCombo,
+        session->availableEntities()
+        );
+}
+
+void MainWindow::
+    updateCustomFiltersButton()
+{
+    if (customFieldFilterEditor == nullptr) {
+        return;
+    }
+
+    const CustomFieldFilterMap &filters =
+        customFieldFilterEditor
+            ->filters();
+
+    int criterionCount = 0;
+
+    for (
+        auto iterator =
+        filters.constBegin();
+        iterator != filters.constEnd();
+        ++iterator
+        ) {
+        criterionCount +=
+            iterator.value().size();
+    }
+
+    if (criterionCount == 0) {
+        customFiltersButton->setText(
+            tr("Custom Filters")
             );
 
-    if (previousIndex >= 0) {
-        subsystemFilterCombo->setCurrentIndex(
-            previousIndex
+        customFiltersButton->setToolTip(
+            tr("No custom-field filters active")
+            );
+
+        return;
+    }
+
+    customFiltersButton->setText(
+        tr("Custom Filters (%1)")
+            .arg(criterionCount)
+        );
+
+    QStringList descriptions;
+
+    for (
+        auto iterator =
+        filters.constBegin();
+        iterator != filters.constEnd();
+        ++iterator
+        ) {
+        for (const QString &value
+             : iterator.value()) {
+            descriptions.append(
+                QStringLiteral("%1 = %2")
+                    .arg(
+                        iterator.key(),
+                        value
+                        )
+                );
+        }
+    }
+
+    customFiltersButton->setToolTip(
+        descriptions.join(
+            QStringLiteral("\n")
+            )
+        );
+}
+
+void MainWindow::
+    updateTimeRangeButton()
+{
+    const bool hasStart =
+        timeRangeStartCheckBox
+        && timeRangeStartCheckBox
+               ->isChecked();
+
+    const bool hasEnd =
+        timeRangeEndCheckBox
+        && timeRangeEndCheckBox
+               ->isChecked();
+
+    if (!hasStart && !hasEnd) {
+        timeRangeButton->setText(
+            tr("Time Range")
+            );
+
+        timeRangeButton->setToolTip(
+            tr("No time-range filter active")
+            );
+
+        return;
+    }
+
+    QStringList parts;
+
+    if (hasStart) {
+        parts.append(
+            tr("From %1")
+                .arg(
+                    timeRangeStartEdit
+                        ->dateTime()
+                        .toString(
+                            QStringLiteral(
+                                "yyyy-MM-dd HH:mm:ss.zzz"
+                                )
+                            )
+                    )
             );
     }
 
-    subsystemFilterCombo->setToolTip(
-        subsystemFilterCombo
-            ->currentData()
-            .toString()
+    if (hasEnd) {
+        parts.append(
+            tr("To %1")
+                .arg(
+                    timeRangeEndEdit
+                        ->dateTime()
+                        .toString(
+                            QStringLiteral(
+                                "yyyy-MM-dd HH:mm:ss.zzz"
+                                )
+                            )
+                    )
+            );
+    }
+
+    timeRangeButton->setText(
+        tr("Time Range (Active)")
         );
 
-    subsystemFilterCombo->blockSignals(false);
+    timeRangeButton->setToolTip(
+        parts.join(
+            QStringLiteral("\n")
+            )
+        );
 }
 
 QGroupBox *MainWindow::buildDetailPanel()
@@ -1593,6 +3357,208 @@ void MainWindow::clearEventDetail()
     eventDetailText->clear();
 }
 
+void MainWindow::navigateToAdjacentIssue(
+    int direction
+    )
+{
+    if (investigationController == nullptr
+        || eventTable->model() == nullptr) {
+        return;
+    }
+
+    int currentProxyRow = -1;
+
+    const QModelIndex currentIndex =
+        eventTable->currentIndex();
+
+    if (currentIndex.isValid()) {
+        currentProxyRow =
+            currentIndex.row();
+    }
+
+    const int targetProxyRow =
+        investigationController
+            ->adjacentIssueProxyRow(
+                currentProxyRow,
+                direction
+                );
+
+    selectProxyRow(
+        targetProxyRow
+        );
+}
+
+void MainWindow::navigateToAdjacentEvent(
+    int direction
+    )
+{
+    if (investigationController == nullptr
+        || eventTable->model() == nullptr) {
+        return;
+    }
+
+    const QModelIndex currentIndex =
+        eventTable->currentIndex();
+
+    const int currentProxyRow =
+        currentIndex.isValid()
+            ? currentIndex.row()
+            : -1;
+
+    const int targetProxyRow =
+        investigationController
+            ->adjacentVisibleProxyRow(
+                currentProxyRow,
+                direction
+                );
+
+    selectProxyRow(
+        targetProxyRow
+        );
+}
+
+void MainWindow::selectProxyRow(
+    int proxyRow
+    )
+{
+    if (investigationController == nullptr
+        || proxyRow < 0) {
+        return;
+    }
+
+    const QModelIndex targetIndex =
+        investigationController
+            ->proxyModel()
+            ->index(
+                proxyRow,
+                0
+                );
+
+    if (!targetIndex.isValid()) {
+        return;
+    }
+
+    QItemSelectionModel *selectionModel =
+        eventTable->selectionModel();
+
+    if (selectionModel == nullptr) {
+        return;
+    }
+
+    selectionModel->setCurrentIndex(
+        targetIndex,
+        QItemSelectionModel::ClearAndSelect
+            | QItemSelectionModel::Rows
+        );
+
+    eventTable->scrollTo(
+        targetIndex,
+        QAbstractItemView::PositionAtCenter
+        );
+}
+
+void MainWindow::updateEventNavigationState()
+{
+    const bool hasInvestigation =
+        investigationController != nullptr
+        && eventTable->model() != nullptr;
+
+    previousEventButton->setVisible(
+        hasInvestigation
+        );
+
+    nextEventButton->setVisible(
+        hasInvestigation
+        );
+
+    eventPositionLabel->setVisible(
+        hasInvestigation
+        );
+
+    if (!hasInvestigation) {
+        previousEventButton->setEnabled(
+            false
+            );
+
+        nextEventButton->setEnabled(
+            false
+            );
+
+        eventPositionLabel->clear();
+
+        return;
+    }
+
+    const int visibleCount =
+        eventTable->model()->rowCount();
+
+    const QModelIndex currentIndex =
+        eventTable->currentIndex();
+
+    if (!currentIndex.isValid()) {
+        const bool hasVisibleEvents =
+            visibleCount > 0;
+
+        previousEventButton->setEnabled(
+            hasVisibleEvents
+            );
+
+        nextEventButton->setEnabled(
+            hasVisibleEvents
+            );
+
+        eventPositionLabel->setText(
+            tr("%1 visible events")
+                .arg(
+                    visibleCount
+                    )
+            );
+
+        return;
+    }
+
+    const int currentRow =
+        currentIndex.row();
+
+    previousEventButton->setEnabled(
+        currentRow > 0
+        );
+
+    nextEventButton->setEnabled(
+        currentRow
+        < visibleCount - 1
+        );
+
+    QString positionText =
+        tr("Event %1 of %2 visible")
+            .arg(
+                currentRow + 1
+                )
+            .arg(
+                visibleCount
+                );
+
+    const InvestigationRecord *record =
+        investigationController
+            ->recordForProxyIndex(
+                currentIndex
+                );
+
+    if (record != nullptr) {
+        positionText +=
+            tr(" • Source record %1")
+                .arg(
+                    record
+                        ->source
+                        .recordNumber
+                    );
+    }
+
+    eventPositionLabel->setText(
+        positionText
+        );
+}
+
 QGroupBox *MainWindow::buildIssueSummaryPanel()
 {
     auto *issueSummaryGroup =
@@ -1625,57 +3591,623 @@ QGroupBox *MainWindow::buildIssueSummaryPanel()
     issueSummaryTable->setMinimumWidth(requiredTableWidth);
     issueSummaryTable->setAlternatingRowColors(true);
 
+    issueSummaryTable->setSelectionBehavior(
+        QAbstractItemView::SelectItems
+        );
+
+    issueSummaryTable->setSelectionMode(
+        QAbstractItemView::SingleSelection
+        );
+
+    issueSummaryTable->setEditTriggers(
+        QAbstractItemView::NoEditTriggers
+        );
+
+    issueSummaryTable->setToolTip(
+        tr(
+            "Double-click a summary value to filter "
+            "the investigation to the represented issues."
+            )
+        );
+
+    connect(
+        issueSummaryTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int column
+            ) {
+            drillDownIssueSummary(
+                row,
+                column
+                );
+        },
+        Qt::QueuedConnection
+        );
+
     auto *issueLayout = new QVBoxLayout(issueSummaryGroup);
     issueLayout->addWidget(issueSummaryTable);
 
     return issueSummaryGroup;
 }
 
-void MainWindow::updateIssueSummary(const QVector<InvestigationRecord> &records)
+void MainWindow::updateIssueSummary(
+    const QVector<InvestigationRecord> &records
+    )
 {
     if (!hasSeverityData
         || !hasSubsystemData) {
-        issueSummaryTable->setRowCount(0);
+        issueSummaryTable->setRowCount(
+            0
+            );
+
         return;
     }
 
-    const auto groups = issueAnalyzer.groupWarningsAndErrorsBySubsystem(records);
+    const QVector<TelemetryIssueGroup> groups =
+        issueAnalyzer
+            .groupWarningsAndErrorsBySubsystem(
+                records
+                );
 
-    issueSummaryTable->setRowCount(groups.size());
+    issueSummaryTable->setRowCount(
+        groups.size()
+        );
 
-    for (int row = 0; row < groups.size(); ++row) {
-        const TelemetryIssueGroup &group = groups[row];
+    for (int row = 0;
+         row < groups.size();
+         ++row) {
+        const TelemetryIssueGroup &group =
+            groups[row];
 
-        issueSummaryTable->setItem(row, 0, new QTableWidgetItem(group.subsystem));
+        auto *subsystemItem =
+            new QTableWidgetItem(
+                group.subsystem
+                );
+
+        auto *warningItem =
+            new QTableWidgetItem(
+                QString::number(
+                    group.warningCount
+                    )
+                );
+
+        auto *errorItem =
+            new QTableWidgetItem(
+                QString::number(
+                    group.errorCount
+                    )
+                );
+
+        auto *totalItem =
+            new QTableWidgetItem(
+                QString::number(
+                    group.totalCount()
+                    )
+                );
+
+        /*
+         * Records without a subsystem are grouped
+         * together by the analyzer for presentation,
+         * but the exact-value subsystem filter cannot
+         * currently express "missing subsystem".
+         *
+         * Do not advertise a drill-down interaction
+         * that cannot be reproduced by the active
+         * filter controls.
+         */
+        if (group.subsystem
+            == QStringLiteral("(No subsystem)")) {
+            const QString unavailableToolTip =
+                tr(
+                    "Drill-down is unavailable because "
+                    "these records do not contain a "
+                    "subsystem value."
+                    );
+
+            subsystemItem->setToolTip(
+                unavailableToolTip
+                );
+
+            warningItem->setToolTip(
+                unavailableToolTip
+                );
+
+            errorItem->setToolTip(
+                unavailableToolTip
+                );
+
+            totalItem->setToolTip(
+                unavailableToolTip
+                );
+        } else {
+            subsystemItem->setToolTip(
+                tr(
+                    "Double-click to show "
+                    "warning/error-class events "
+                    "for this subsystem."
+                    )
+                );
+
+            warningItem->setToolTip(
+                group.warningCount > 0
+                    ? tr(
+                          "Double-click to show "
+                          "warnings for this subsystem."
+                          )
+                    : tr(
+                          "No warnings are currently "
+                          "visible for this subsystem."
+                          )
+                );
+
+            errorItem->setToolTip(
+                group.errorCount > 0
+                    ? tr(
+                          "Double-click to show errors "
+                          "and critical events for this "
+                          "subsystem."
+                          )
+                    : tr(
+                          "No errors or critical events "
+                          "are currently visible for "
+                          "this subsystem."
+                          )
+                );
+
+            totalItem->setToolTip(
+                tr(
+                    "Double-click to show all "
+                    "warning/error-class events "
+                    "for this subsystem."
+                    )
+                );
+        }
+
+        issueSummaryTable->setItem(
+            row,
+            0,
+            subsystemItem
+            );
+
         issueSummaryTable->setItem(
             row,
             1,
-            new QTableWidgetItem(QString::number(group.warningCount))
+            warningItem
             );
+
         issueSummaryTable->setItem(
             row,
             2,
-            new QTableWidgetItem(QString::number(group.errorCount))
+            errorItem
             );
+
         issueSummaryTable->setItem(
             row,
             3,
-            new QTableWidgetItem(QString::number(group.totalCount()))
+            totalItem
             );
     }
 
-    issueSummaryTable->horizontalHeader()->resizeSections(
-        QHeaderView::ResizeToContents
-        );
+    issueSummaryTable
+        ->horizontalHeader()
+        ->resizeSections(
+            QHeaderView::ResizeToContents
+            );
 
     const int requiredTableWidth =
-        issueSummaryTable->verticalHeader()->width()
-        + issueSummaryTable->horizontalHeader()->length()
-        + issueSummaryTable->frameWidth() * 2
-        + issueSummaryTable->verticalScrollBar()->sizeHint().width()
+        issueSummaryTable
+            ->verticalHeader()
+            ->width()
+        + issueSummaryTable
+              ->horizontalHeader()
+              ->length()
+        + issueSummaryTable
+                  ->frameWidth()
+              * 2
+        + issueSummaryTable
+              ->verticalScrollBar()
+              ->sizeHint()
+              .width()
         + 8;
 
-    issueSummaryTable->setMinimumWidth(requiredTableWidth);
+    issueSummaryTable->setMinimumWidth(
+        requiredTableWidth
+        );
+}
+
+void MainWindow::drillDownIssueSummary(
+    int row,
+    int column
+    )
+{
+    if (investigationController == nullptr
+        || row < 0
+        || row >= issueSummaryTable->rowCount()
+        || column < 0
+        || column >= issueSummaryTable->columnCount()) {
+        return;
+    }
+
+    QTableWidgetItem *subsystemItem =
+        issueSummaryTable->item(
+            row,
+            0
+            );
+
+    if (subsystemItem == nullptr) {
+        return;
+    }
+
+    const QString subsystem =
+        subsystemItem->text();
+
+    /*
+     * The grouped analyzer uses this display label
+     * for records without a subsystem. The current
+     * exact-value subsystem filter cannot express
+     * "missing subsystem", so do not pretend this
+     * drill-down can reproduce that group.
+     */
+    if (subsystem
+        == QStringLiteral("(No subsystem)")) {
+        return;
+    }
+
+    QStringList targetSeverities;
+
+    switch (column) {
+    case 1:
+    {
+        QTableWidgetItem *warningItem =
+            issueSummaryTable->item(
+                row,
+                1
+                );
+
+        if (warningItem == nullptr
+            || warningItem
+                       ->text()
+                       .toInt() <= 0) {
+            return;
+        }
+
+        targetSeverities = {
+            QStringLiteral("WARN")
+    };
+
+        break;
+    }
+
+    case 2:
+    {
+        QTableWidgetItem *errorItem =
+            issueSummaryTable->item(
+                row,
+                2
+                );
+
+        if (errorItem == nullptr
+            || errorItem
+                   ->text()
+                   .toInt() <= 0) {
+            return;
+        }
+
+        /*
+         * Existing grouped analysis intentionally
+         * counts CRITICAL together with ERROR.
+         */
+        targetSeverities = {
+            QStringLiteral("ERROR"),
+            QStringLiteral("CRITICAL")
+        };
+
+        break;
+    }
+
+    case 0:
+    case 3:
+        targetSeverities = {
+            QStringLiteral("WARN"),
+            QStringLiteral("ERROR"),
+            QStringLiteral("CRITICAL")
+        };
+        break;
+
+    default:
+        return;
+    }
+
+    /*
+     * Drill-down must narrow the current result
+     * set rather than silently broaden an existing
+     * severity filter.
+     */
+    const QStringList currentSeverities =
+        levelFilterCombo
+            ->selectedValues();
+
+    if (!currentSeverities.isEmpty()) {
+        QStringList intersection;
+
+        for (
+            auto severityIterator =
+            targetSeverities.cbegin();
+            severityIterator
+            != targetSeverities.cend();
+            ++severityIterator
+            ) {
+            if (currentSeverities.contains(
+                    *severityIterator
+                    )) {
+                intersection.append(
+                    *severityIterator
+                    );
+            }
+        }
+
+        if (intersection.isEmpty()) {
+            return;
+        }
+
+        targetSeverities =
+            std::move(
+                intersection
+                );
+    }
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Synchronize both affected controls before
+     * applying the complete filter state once.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
+        levelFilterCombo->setSelectedValues(
+            targetSeverities
+            );
+
+        subsystemFilterCombo->setSelectedValues(
+            {
+                subsystem
+            }
+            );
+    }
+
+    applyFilters();
+}
+
+void MainWindow::drillDownTimelineBucket(
+    int visibleBucketIndex,
+    const QString &severity
+    )
+{
+    if (investigationController == nullptr
+        || !hasTimestampData
+        || visibleBucketIndex < 0) {
+        return;
+    }
+
+    const std::optional<QDateTime>
+        effectiveFirstTimestamp =
+        effectiveTimelineFirstTimestamp();
+
+    const std::optional<QDateTime>
+        effectiveLastTimestamp =
+        effectiveTimelineLastTimestamp();
+
+    if (!effectiveFirstTimestamp.has_value()
+        || !effectiveLastTimestamp.has_value()
+        || effectiveFirstTimestamp.value()
+               > effectiveLastTimestamp.value()) {
+        return;
+    }
+
+    const qint64 requestedIntervalMilliseconds =
+        timelineIntervalCombo != nullptr
+            ? timelineIntervalCombo
+                  ->currentData()
+                  .toLongLong()
+            : 0;
+
+    const bool automaticInterval =
+        requestedIntervalMilliseconds <= 0;
+
+    const qint64 intervalMilliseconds =
+        automaticInterval
+            ? automaticTimelineIntervalMilliseconds(
+                  *effectiveFirstTimestamp,
+                  *effectiveLastTimestamp
+                  )
+            : requestedIntervalMilliseconds;
+
+    if (intervalMilliseconds <= 0) {
+        return;
+    }
+
+    const qint64 totalBucketCount =
+        timelineAnalyzer
+            .intervalBucketCountMilliseconds(
+                *effectiveFirstTimestamp,
+                *effectiveLastTimestamp,
+                intervalMilliseconds
+                );
+
+    if (totalBucketCount <= 0) {
+        return;
+    }
+
+    qint64 startBucketIndex = 0;
+
+    if (!automaticInterval) {
+        const int scrollValue =
+            timelineScrollBar != nullptr
+                ? timelineScrollBar->value()
+                : 0;
+
+        startBucketIndex =
+            timelineStartBucketIndex(
+                totalBucketCount,
+                scrollValue
+                );
+    }
+
+    const qint64 absoluteBucketIndex =
+        startBucketIndex
+        + visibleBucketIndex;
+
+    if (absoluteBucketIndex < 0
+        || absoluteBucketIndex
+               >= totalBucketCount) {
+        return;
+    }
+
+    const qint64 firstBucketEpoch =
+        normalizedTimelineBucketEpoch(
+            *effectiveFirstTimestamp,
+            intervalMilliseconds
+            );
+
+    qint64 bucketStartEpoch =
+        firstBucketEpoch
+        + absoluteBucketIndex
+              * intervalMilliseconds;
+
+    qint64 bucketEndEpoch =
+        bucketStartEpoch
+        + intervalMilliseconds
+        - 1;
+
+    /*
+     * The first and last logical buckets can extend
+     * outside an already active investigation time
+     * range. Drill-down must only narrow the current
+     * result set, never broaden it.
+     */
+    bucketStartEpoch =
+        std::max(
+            bucketStartEpoch,
+            effectiveFirstTimestamp
+                ->toMSecsSinceEpoch()
+            );
+
+    bucketEndEpoch =
+        std::min(
+            bucketEndEpoch,
+            effectiveLastTimestamp
+                ->toMSecsSinceEpoch()
+            );
+
+    if (bucketStartEpoch
+        > bucketEndEpoch) {
+        return;
+    }
+
+    /*
+     * A severity-aware bar represents one specific
+     * severity. If an existing severity filter is
+     * active, only allow drill-down when the clicked
+     * severity is already included in that result.
+     */
+    if (!severity.isEmpty()) {
+        const QStringList currentSeverities =
+            levelFilterCombo
+                ->selectedValues();
+
+        if (!currentSeverities.isEmpty()
+            && !currentSeverities.contains(
+                severity
+                )) {
+            return;
+        }
+    }
+
+    const QDateTime bucketStart =
+        QDateTime::fromMSecsSinceEpoch(
+            bucketStartEpoch,
+            QTimeZone::UTC
+            );
+
+    const QDateTime bucketEnd =
+        QDateTime::fromMSecsSinceEpoch(
+            bucketEndEpoch,
+            QTimeZone::UTC
+            );
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Synchronize every affected control first so
+     * the drill-down becomes one logical filter
+     * application.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker startCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker startEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker endCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker endEditBlocker(
+            timeRangeEndEdit
+            );
+
+        if (!severity.isEmpty()) {
+            levelFilterCombo->setSelectedValues(
+                QStringList {
+                    severity
+                }
+                );
+        }
+
+        timeRangeStartEdit->setDateTime(
+            bucketStart
+            );
+
+        timeRangeEndEdit->setDateTime(
+            bucketEnd
+            );
+
+        timeRangeStartCheckBox->setChecked(
+            true
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            true
+            );
+
+        timeRangeStartEdit->setEnabled(
+            true
+            );
+
+        timeRangeEndEdit->setEnabled(
+            true
+            );
+    }
+
+    updateTimeRangeButton();
+
+    applyFilters();
 }
 
 void MainWindow::exportFilteredResults()
@@ -2009,6 +4541,15 @@ QGroupBox *MainWindow::buildTimelinePanel()
         false
         );
 
+    timelineChartView->setToolTip(
+        tr(
+            "Double-click a bar to filter the "
+            "investigation to that time bucket. "
+            "Severity bars also filter to the "
+            "selected severity."
+            )
+        );
+
     timelineChartView
         ->viewport()
         ->setAcceptDrops(
@@ -2164,8 +4705,18 @@ void MainWindow::updateTimelineChart(
      * complete investigation has valid temporal
      * boundaries.
      */
-    if (!timelineFirstTimestamp.has_value()
-        || !timelineLastTimestamp.has_value()) {
+    const std::optional<QDateTime>
+        effectiveFirstTimestamp =
+        effectiveTimelineFirstTimestamp();
+
+    const std::optional<QDateTime>
+        effectiveLastTimestamp =
+        effectiveTimelineLastTimestamp();
+
+    if (!effectiveFirstTimestamp.has_value()
+        || !effectiveLastTimestamp.has_value()
+        || effectiveFirstTimestamp.value()
+               > effectiveLastTimestamp.value()) {
         showEmptyTimeline();
         return;
     }
@@ -2187,8 +4738,8 @@ void MainWindow::updateTimelineChart(
     const qint64 intervalMilliseconds =
         automaticInterval
             ? automaticTimelineIntervalMilliseconds(
-                  *timelineFirstTimestamp,
-                  *timelineLastTimestamp
+                  *effectiveFirstTimestamp,
+                  *effectiveLastTimestamp
                   )
             : requestedIntervalMilliseconds;
 
@@ -2212,8 +4763,8 @@ void MainWindow::updateTimelineChart(
             timelineAnalyzer
                 .scaleForIntervalMilliseconds(
                     records,
-                    *timelineFirstTimestamp,
-                    *timelineLastTimestamp,
+                    *effectiveFirstTimestamp,
+                    *effectiveLastTimestamp,
                     intervalMilliseconds
                     );
 
@@ -2240,8 +4791,8 @@ void MainWindow::updateTimelineChart(
     const qint64 totalBucketCount =
         timelineAnalyzer
             .intervalBucketCountMilliseconds(
-                *timelineFirstTimestamp,
-                *timelineLastTimestamp,
+                *effectiveFirstTimestamp,
+                *effectiveLastTimestamp,
                 intervalMilliseconds
                 );
 
@@ -2263,8 +4814,8 @@ void MainWindow::updateTimelineChart(
             timelineAnalyzer
                 .groupRecordsByIntervalMilliseconds(
                     records,
-                    *timelineFirstTimestamp,
-                    *timelineLastTimestamp,
+                    *effectiveFirstTimestamp,
+                    *effectiveLastTimestamp,
                     intervalMilliseconds
                     );
 
@@ -2407,8 +4958,8 @@ void MainWindow::updateTimelineChart(
             timelineAnalyzer
                 .groupRecordsByIntervalWindowMilliseconds(
                     records,
-                    *timelineFirstTimestamp,
-                    *timelineLastTimestamp,
+                    *effectiveFirstTimestamp,
+                    *effectiveLastTimestamp,
                     intervalMilliseconds,
                     startBucketIndex,
                     TimelineVisibleBucketCount
@@ -2429,6 +4980,21 @@ void MainWindow::updateTimelineChart(
             new QBarSet(
                 tr("TOTAL")
                 );
+
+        connect(
+            totalSet,
+            &QBarSet::doubleClicked,
+            this,
+            [this](
+                int index
+                ) {
+                drillDownTimelineBucket(
+                    index,
+                    QString()
+                    );
+            },
+            Qt::QueuedConnection
+            );
 
         QStringList categories;
 
@@ -2567,6 +5133,60 @@ void MainWindow::updateTimelineChart(
             tr("CRITICAL")
             );
 
+    auto connectTimelineDrillDown =
+        [this](
+            QBarSet *barSet,
+            const QString &severity
+            ) {
+            connect(
+                barSet,
+                &QBarSet::doubleClicked,
+                this,
+                [
+                    this,
+                    severity
+            ](
+                    int index
+                    ) {
+                    drillDownTimelineBucket(
+                        index,
+                        severity
+                        );
+                },
+                Qt::QueuedConnection
+                );
+        };
+
+    connectTimelineDrillDown(
+        traceSet,
+        QStringLiteral("TRACE")
+        );
+
+    connectTimelineDrillDown(
+        debugSet,
+        QStringLiteral("DEBUG")
+        );
+
+    connectTimelineDrillDown(
+        infoSet,
+        QStringLiteral("INFO")
+        );
+
+    connectTimelineDrillDown(
+        warnSet,
+        QStringLiteral("WARN")
+        );
+
+    connectTimelineDrillDown(
+        errorSet,
+        QStringLiteral("ERROR")
+        );
+
+    connectTimelineDrillDown(
+        criticalSet,
+        QStringLiteral("CRITICAL")
+        );
+
     bool hasUnspecifiedEvents =
         false;
 
@@ -2588,6 +5208,13 @@ void MainWindow::updateTimelineChart(
             new QBarSet(
                 tr("UNSPECIFIED")
                 );
+    }
+
+    if (unspecifiedSet != nullptr) {
+        connectTimelineDrillDown(
+            unspecifiedSet,
+            QString()
+            );
     }
 
     QStringList categories;
@@ -2813,8 +5440,18 @@ void MainWindow::updateTimelineRangeLabel(
         return;
     }
 
-    if (!timelineFirstTimestamp.has_value()
-        || !timelineLastTimestamp.has_value()) {
+    const std::optional<QDateTime>
+        effectiveFirstTimestamp =
+        effectiveTimelineFirstTimestamp();
+
+    const std::optional<QDateTime>
+        effectiveLastTimestamp =
+        effectiveTimelineLastTimestamp();
+
+    if (!effectiveFirstTimestamp.has_value()
+        || !effectiveLastTimestamp.has_value()
+        || effectiveFirstTimestamp.value()
+               > effectiveLastTimestamp.value()) {
         timelineRangeLabel->setText(
             tr("Visible: —")
             );
@@ -2835,8 +5472,8 @@ void MainWindow::updateTimelineRangeLabel(
     const qint64 intervalMilliseconds =
         automaticInterval
             ? automaticTimelineIntervalMilliseconds(
-                  *timelineFirstTimestamp,
-                  *timelineLastTimestamp
+                  *effectiveFirstTimestamp,
+                  *effectiveLastTimestamp
                   )
             : requestedIntervalMilliseconds;
 
@@ -2851,8 +5488,8 @@ void MainWindow::updateTimelineRangeLabel(
     const qint64 totalBucketCount =
         timelineAnalyzer
             .intervalBucketCountMilliseconds(
-                *timelineFirstTimestamp,
-                *timelineLastTimestamp,
+                *effectiveFirstTimestamp,
+                *effectiveLastTimestamp,
                 intervalMilliseconds
                 );
 
@@ -2885,14 +5522,21 @@ void MainWindow::updateTimelineRangeLabel(
 
     const qint64 firstBucketEpoch =
         normalizedTimelineBucketEpoch(
-            *timelineFirstTimestamp,
+            *effectiveFirstTimestamp,
             intervalMilliseconds
             );
 
-    const qint64 visibleFirstEpoch =
+    qint64 visibleFirstEpoch =
         firstBucketEpoch
         + startBucketIndex
               * intervalMilliseconds;
+
+    visibleFirstEpoch =
+        std::max(
+            visibleFirstEpoch,
+            effectiveFirstTimestamp
+                ->toMSecsSinceEpoch()
+            );
 
     qint64 visibleLastEpoch =
         visibleFirstEpoch
@@ -2903,7 +5547,7 @@ void MainWindow::updateTimelineRangeLabel(
     visibleLastEpoch =
         std::min(
             visibleLastEpoch,
-            timelineLastTimestamp
+            effectiveLastTimestamp
                 ->toMSecsSinceEpoch()
             );
 
@@ -2990,10 +5634,70 @@ void MainWindow::updateTimelineRangeLabel(
     }
 }
 
+std::optional<QDateTime>
+MainWindow::effectiveTimelineFirstTimestamp() const
+{
+    if (!timelineFirstTimestamp.has_value()) {
+        return std::nullopt;
+    }
+
+    QDateTime effective =
+        timelineFirstTimestamp.value();
+
+    if (investigationController == nullptr) {
+        return effective;
+    }
+
+    const std::optional<QDateTime> &filterStart =
+        investigationController
+            ->proxyModel()
+            ->timeRangeStart();
+
+    if (filterStart.has_value()
+        && filterStart.value() > effective) {
+        effective =
+            filterStart.value();
+    }
+
+    return effective;
+}
+
+std::optional<QDateTime>
+MainWindow::effectiveTimelineLastTimestamp() const
+{
+    if (!timelineLastTimestamp.has_value()) {
+        return std::nullopt;
+    }
+
+    QDateTime effective =
+        timelineLastTimestamp.value();
+
+    if (investigationController == nullptr) {
+        return effective;
+    }
+
+    const std::optional<QDateTime> &filterEnd =
+        investigationController
+            ->proxyModel()
+            ->timeRangeEnd();
+
+    if (filterEnd.has_value()
+        && filterEnd.value() < effective) {
+        effective =
+            filterEnd.value();
+    }
+
+    return effective;
+}
+
 void MainWindow::updateDataCapabilities()
 {
     hasSeverityData = false;
     hasSubsystemData = false;
+    hasTimestampData = false;
+    hasEventCodeData = false;
+    hasEntityData = false;
+    hasCustomFieldData = false;
 
     timelineFirstTimestamp.reset();
     timelineLastTimestamp.reset();
@@ -3002,14 +5706,60 @@ void MainWindow::updateDataCapabilities()
         workspace->activeSession();
 
     if (session == nullptr) {
+        levelFilterCombo->setVisible(
+            false
+            );
+
+        subsystemFilterCombo->setVisible(
+            false
+            );
+
+        eventCodeFilterWidget->setVisible(
+            false
+            );
+
+        entityFilterWidget->setVisible(
+            false
+            );
+
+        timeRangeButton->setVisible(
+            false
+            );
+
+        customFiltersButton->setVisible(
+            false
+            );
+
+        previousIssueButton->setVisible(
+            false
+            );
+
+        nextIssueButton->setVisible(
+            false
+            );
+
         return;
     }
 
+    /*
+     * Determine which canonical and dynamic
+     * investigation capabilities actually exist
+     * in the active session.
+     */
     hasSeverityData =
         session->hasSeverityData();
 
     hasSubsystemData =
         session->hasSubsystemData();
+
+    hasEventCodeData =
+        session->hasEventCodeData();
+
+    hasEntityData =
+        session->hasEntityData();
+
+    hasCustomFieldData =
+        session->hasCustomFieldData();
 
     timelineFirstTimestamp =
         session->firstTimestamp();
@@ -3017,22 +5767,134 @@ void MainWindow::updateDataCapabilities()
     timelineLastTimestamp =
         session->lastTimestamp();
 
+    hasTimestampData =
+        timelineFirstTimestamp.has_value()
+        && timelineLastTimestamp.has_value();
+
     /*
-     * Clear filters that no longer apply before
-     * hiding their controls.
+     * The custom editor only needs the names of
+     * fields available in this investigation.
+     * Individual values remain user-supplied and
+     * are not enumerated eagerly.
+     */
+    customFieldFilterEditor
+        ->setAvailableFields(
+            hasCustomFieldData
+                ? session
+                      ->availableCustomFields()
+                : QStringList()
+            );
+
+    /*
+     * Clear filter controls that are no longer
+     * meaningful for the active investigation.
+     *
+     * These operations are UI synchronization,
+     * not user filter changes, so suppress their
+     * signals. bindActiveSession()/applyFilters()
+     * will perform one coherent refresh afterward.
      */
     if (!hasSeverityData) {
-        levelFilterCombo->blockSignals(true);
-        levelFilterCombo->setCurrentIndex(0);
-        levelFilterCombo->blockSignals(false);
+        const QSignalBlocker blocker(
+            levelFilterCombo
+            );
+
+        levelFilterCombo
+            ->clearSelection();
     }
 
     if (!hasSubsystemData) {
-        subsystemFilterCombo->blockSignals(true);
-        subsystemFilterCombo->setCurrentIndex(0);
-        subsystemFilterCombo->blockSignals(false);
+        const QSignalBlocker blocker(
+            subsystemFilterCombo
+            );
+
+        subsystemFilterCombo
+            ->clearSelection();
     }
 
+    if (!hasEventCodeData) {
+        const QSignalBlocker blocker(
+            eventCodeFilterCombo
+            );
+
+        eventCodeFilterCombo
+            ->clearSelection();
+    }
+
+    if (!hasEntityData) {
+        const QSignalBlocker blocker(
+            entityFilterCombo
+            );
+
+        entityFilterCombo
+            ->clearSelection();
+    }
+
+    if (!hasCustomFieldData) {
+        const QSignalBlocker blocker(
+            customFieldFilterEditor
+            );
+
+        customFieldFilterEditor
+            ->clearFilters();
+
+        updateCustomFiltersButton();
+    }
+
+    /*
+     * A time-range filter cannot remain active
+     * when the investigation has no usable
+     * timestamp domain.
+     */
+    if (!hasTimestampData) {
+        const QSignalBlocker
+            startCheckBlocker(
+                timeRangeStartCheckBox
+                );
+
+        const QSignalBlocker
+            startEditBlocker(
+                timeRangeStartEdit
+                );
+
+        const QSignalBlocker
+            endCheckBlocker(
+                timeRangeEndCheckBox
+                );
+
+        const QSignalBlocker
+            endEditBlocker(
+                timeRangeEndEdit
+                );
+
+        timeRangeStartCheckBox
+            ->setChecked(
+                false
+                );
+
+        timeRangeEndCheckBox
+            ->setChecked(
+                false
+                );
+
+        timeRangeStartEdit
+            ->setEnabled(
+                false
+                );
+
+        timeRangeEndEdit
+            ->setEnabled(
+                false
+                );
+
+        updateTimeRangeButton();
+    }
+
+    /*
+     * The compact two-row filter bar exposes only
+     * controls that are meaningful for the active
+     * investigation.
+     */
     levelFilterCombo->setVisible(
         hasSeverityData
         );
@@ -3041,9 +5903,33 @@ void MainWindow::updateDataCapabilities()
         hasSubsystemData
         );
 
+    eventCodeFilterWidget->setVisible(
+        hasEventCodeData
+        );
+
+    entityFilterWidget->setVisible(
+        hasEntityData
+        );
+
+    timeRangeButton->setVisible(
+        hasTimestampData
+        );
+
+    customFiltersButton->setVisible(
+        hasCustomFieldData
+        );
+
+    previousIssueButton->setVisible(
+        hasSeverityData
+        );
+
+    nextIssueButton->setVisible(
+        hasSeverityData
+        );
+
     /*
-     * Warning/error grouping only has useful
-     * meaning when both concepts are available.
+     * Warning/error grouping requires both
+     * severity and subsystem information.
      */
     if (issueSummaryGroup != nullptr) {
         issueSummaryGroup->setVisible(
@@ -3079,6 +5965,8 @@ void MainWindow::connectEventTableSelectionModel()
                 const QItemSelection &
                 ) {
                 updateEventDetailFromSelection();
+
+                updateEventNavigationState();
             }
             );
 }
@@ -3088,9 +5976,16 @@ void MainWindow::bindActiveSession()
     InvestigationSession *session =
         workspace->activeSession();
 
+    /*
+     * ---------------------------------------------------------
+     * No active investigation
+     * ---------------------------------------------------------
+     */
     if (session == nullptr) {
         if (reloadAction != nullptr) {
-            reloadAction->setEnabled(false);
+            reloadAction->setEnabled(
+                false
+                );
         }
 
         investigationController =
@@ -3098,41 +5993,195 @@ void MainWindow::bindActiveSession()
 
         currentFilePath.clear();
 
-        eventTable->setModel(nullptr);
+        eventTable->setModel(
+            nullptr
+            );
 
         connectEventTableSelectionModel();
 
         clearEventDetail();
 
-        levelFilterCombo->blockSignals(true);
-        subsystemFilterCombo->blockSignals(true);
-        searchInput->blockSignals(true);
+        updateEventNavigationState();
 
-        levelFilterCombo->setCurrentIndex(0);
-        subsystemFilterCombo->setCurrentIndex(0);
-        searchInput->clear();
+        searchDebounceTimer->stop();
 
-        levelFilterCombo->blockSignals(false);
-        subsystemFilterCombo->blockSignals(false);
-        searchInput->blockSignals(false);
+        /*
+         * Clear all filter controls without
+         * triggering individual filter refreshes.
+         */
+        {
+            const QSignalBlocker
+                severityBlocker(
+                    levelFilterCombo
+                    );
+
+            const QSignalBlocker
+                subsystemBlocker(
+                    subsystemFilterCombo
+                    );
+
+            const QSignalBlocker
+                searchBlocker(
+                    searchInput
+                    );
+
+            const QSignalBlocker
+                eventCodeBlocker(
+                    eventCodeFilterCombo
+                    );
+
+            const QSignalBlocker
+                entityBlocker(
+                    entityFilterCombo
+                    );
+
+            const QSignalBlocker
+                customFieldBlocker(
+                    customFieldFilterEditor
+                    );
+
+            const QSignalBlocker
+                timeStartCheckBlocker(
+                    timeRangeStartCheckBox
+                    );
+
+            const QSignalBlocker
+                timeStartEditBlocker(
+                    timeRangeStartEdit
+                    );
+
+            const QSignalBlocker
+                timeEndCheckBlocker(
+                    timeRangeEndCheckBox
+                    );
+
+            const QSignalBlocker
+                timeEndEditBlocker(
+                    timeRangeEndEdit
+                    );
+
+            levelFilterCombo
+                ->clearSelection();
+
+            subsystemFilterCombo
+                ->clearSelection();
+
+            searchInput->clear();
+
+            eventCodeFilterCombo
+                ->clearSelection();
+
+            entityFilterCombo
+                ->clearSelection();
+
+            customFieldFilterEditor
+                ->clearFilters();
+
+            customFieldFilterEditor
+                ->setAvailableFields(
+                    QStringList()
+                    );
+
+            timeRangeStartCheckBox
+                ->setChecked(
+                    false
+                    );
+
+            timeRangeEndCheckBox
+                ->setChecked(
+                    false
+                    );
+
+            timeRangeStartEdit
+                ->setEnabled(
+                    false
+                    );
+
+            timeRangeEndEdit
+                ->setEnabled(
+                    false
+                    );
+        }
+
+        updateCustomFiltersButton();
+        updateTimeRangeButton();
+
+        resizeCustomFiltersDialogToContents();
+
+        resetFiltersButton->setEnabled(
+            false
+            );
 
         hasSeverityData = false;
         hasSubsystemData = false;
-
-        levelFilterCombo->setVisible(false);
-        subsystemFilterCombo->setVisible(false);
-        searchInput->setVisible(false);
-
-        issueSummaryTable->setRowCount(0);
-
-        if (issueSummaryGroup != nullptr) {
-            issueSummaryGroup->setVisible(false);
-        }
+        hasTimestampData = false;
+        hasEventCodeData = false;
+        hasEntityData = false;
+        hasCustomFieldData = false;
 
         timelineFirstTimestamp.reset();
         timelineLastTimestamp.reset();
 
-        timelineScaleValid = false;
+        /*
+         * Hide the complete two-row filter bar
+         * controls when nothing is loaded.
+         */
+        levelFilterCombo->setVisible(
+            false
+            );
+
+        subsystemFilterCombo->setVisible(
+            false
+            );
+
+        searchInput->setVisible(
+            false
+            );
+
+        eventCodeFilterWidget->setVisible(
+            false
+            );
+
+        entityFilterWidget->setVisible(
+            false
+            );
+
+        timeRangeButton->setVisible(
+            false
+            );
+
+        customFiltersButton->setVisible(
+            false
+            );
+
+        resetFiltersButton->setVisible(
+            false
+            );
+
+        filterPresetsButton->setVisible(
+            false
+            );
+
+        previousIssueButton->setVisible(
+            false
+            );
+
+        nextIssueButton->setVisible(
+            false
+            );
+
+        issueSummaryTable->setRowCount(
+            0
+            );
+
+        if (issueSummaryGroup != nullptr) {
+            issueSummaryGroup->setVisible(
+                false
+                );
+        }
+
+        timelineScaleValid =
+            false;
 
         updateTimelineChart(
             QVector<InvestigationRecord>()
@@ -3144,6 +6193,12 @@ void MainWindow::bindActiveSession()
 
         return;
     }
+
+    /*
+     * ---------------------------------------------------------
+     * Active investigation
+     * ---------------------------------------------------------
+     */
 
     if (reloadAction != nullptr) {
         reloadAction->setEnabled(
@@ -3166,68 +6221,251 @@ void MainWindow::bindActiveSession()
 
     connectEventTableSelectionModel();
 
-    InvestigationFilterProxyModel *proxyModel =
+    InvestigationFilterProxyModel
+        *proxyModel =
         investigationController
             ->proxyModel();
 
-    const QString severityFilter =
-        proxyModel->severityFilter();
+    /*
+     * Capture the active session's filter state
+     * before rebuilding/populating any controls.
+     */
+    const QStringList severityFilters =
+        proxyModel->severityFilters();
 
-    const QString subsystemFilter =
-        proxyModel->subsystemFilter();
+    const QStringList subsystemFilters =
+        proxyModel->subsystemFilters();
+
+    const QStringList eventCodeFilters =
+        proxyModel->eventCodeFilters();
+
+    const QStringList entityFilters =
+        proxyModel->entityFilters();
+
+    const CustomFieldFilterMap
+        customFieldFilters =
+        proxyModel->customFieldFilters();
 
     const QString searchText =
         proxyModel->searchText();
 
-    searchInput->setVisible(true);
+    const std::optional<QDateTime>
+        timeRangeStart =
+        proxyModel->timeRangeStart();
 
+    const std::optional<QDateTime>
+        timeRangeEnd =
+        proxyModel->timeRangeEnd();
+
+    /*
+     * Search and Reset are meaningful whenever
+     * an investigation is active.
+     */
+    searchInput->setVisible(
+        true
+        );
+
+    resetFiltersButton->setVisible(
+        true
+        );
+
+    resetFiltersButton->setEnabled(
+        true
+        );
+
+    filterPresetsButton->setVisible(
+        true
+        );
+
+    /*
+     * Detect active-session capabilities and
+     * repopulate the dynamic categorical controls.
+     */
     updateDataCapabilities();
 
     refreshSubsystemFilterOptions();
+    refreshCanonicalFilterOptions();
 
-    levelFilterCombo->blockSignals(true);
-    subsystemFilterCombo->blockSignals(true);
-    searchInput->blockSignals(true);
+    /*
+     * Restore this investigation's independent
+     * filter state without causing a cascade of
+     * intermediate applyFilters() calls.
+     */
+    {
+        const QSignalBlocker
+            severityBlocker(
+                levelFilterCombo
+                );
 
-    int severityIndex =
-        hasSeverityData
-            ? levelFilterCombo->findData(
-                  severityFilter
-                  )
-            : 0;
+        const QSignalBlocker
+            subsystemBlocker(
+                subsystemFilterCombo
+                );
 
-    if (severityIndex < 0) {
-        severityIndex = 0;
+        const QSignalBlocker
+            searchBlocker(
+                searchInput
+                );
+
+        const QSignalBlocker
+            eventCodeBlocker(
+                eventCodeFilterCombo
+                );
+
+        const QSignalBlocker
+            entityBlocker(
+                entityFilterCombo
+                );
+
+        const QSignalBlocker
+            customFieldBlocker(
+                customFieldFilterEditor
+                );
+
+        const QSignalBlocker
+            timeStartCheckBlocker(
+                timeRangeStartCheckBox
+                );
+
+        const QSignalBlocker
+            timeStartEditBlocker(
+                timeRangeStartEdit
+                );
+
+        const QSignalBlocker
+            timeEndCheckBlocker(
+                timeRangeEndCheckBox
+                );
+
+        const QSignalBlocker
+            timeEndEditBlocker(
+                timeRangeEndEdit
+                );
+
+        levelFilterCombo
+            ->setSelectedValues(
+                hasSeverityData
+                    ? severityFilters
+                    : QStringList()
+                );
+
+        subsystemFilterCombo
+            ->setSelectedValues(
+                hasSubsystemData
+                    ? subsystemFilters
+                    : QStringList()
+                );
+
+        eventCodeFilterCombo
+            ->setSelectedValues(
+                hasEventCodeData
+                    ? eventCodeFilters
+                    : QStringList()
+                );
+
+        entityFilterCombo
+            ->setSelectedValues(
+                hasEntityData
+                    ? entityFilters
+                    : QStringList()
+                );
+
+        customFieldFilterEditor
+            ->setFilters(
+                hasCustomFieldData
+                    ? customFieldFilters
+                    : CustomFieldFilterMap()
+                );
+
+        searchInput->setText(
+            searchText
+            );
+
+        /*
+         * Restore the time range against the
+         * complete session bounds. Inactive ends
+         * display the investigation boundary but
+         * remain disabled.
+         */
+        if (hasTimestampData) {
+            timeRangeStartEdit
+                ->setDateTime(
+                    timeRangeStart.has_value()
+                        ? timeRangeStart.value()
+                        : timelineFirstTimestamp
+                              .value()
+                    );
+
+            timeRangeEndEdit
+                ->setDateTime(
+                    timeRangeEnd.has_value()
+                        ? timeRangeEnd.value()
+                        : timelineLastTimestamp
+                              .value()
+                    );
+
+            timeRangeStartCheckBox
+                ->setChecked(
+                    timeRangeStart.has_value()
+                    );
+
+            timeRangeEndCheckBox
+                ->setChecked(
+                    timeRangeEnd.has_value()
+                    );
+
+            timeRangeStartEdit
+                ->setEnabled(
+                    timeRangeStart.has_value()
+                    );
+
+            timeRangeEndEdit
+                ->setEnabled(
+                    timeRangeEnd.has_value()
+                    );
+        } else {
+            timeRangeStartCheckBox
+                ->setChecked(
+                    false
+                    );
+
+            timeRangeEndCheckBox
+                ->setChecked(
+                    false
+                    );
+
+            timeRangeStartEdit
+                ->setEnabled(
+                    false
+                    );
+
+            timeRangeEndEdit
+                ->setEnabled(
+                    false
+                    );
+        }
     }
 
-    levelFilterCombo->setCurrentIndex(
-        severityIndex
-        );
+    /*
+     * Programmatic restoration does not emit the
+     * editor/control signals used to maintain
+     * these compact summaries.
+     */
+    updateCustomFiltersButton();
+    updateTimeRangeButton();
 
-    int subsystemIndex =
-        hasSubsystemData
-            ? subsystemFilterCombo->findData(
-                  subsystemFilter
-                  )
-            : 0;
+    resizeCustomFiltersDialogToContents();
 
-    if (subsystemIndex < 0) {
-        subsystemIndex = 0;
-    }
-
-    subsystemFilterCombo->setCurrentIndex(
-        subsystemIndex
-        );
-
-    searchInput->setText(
-        searchText
-        );
-
-    levelFilterCombo->blockSignals(false);
-    subsystemFilterCombo->blockSignals(false);
-    searchInput->blockSignals(false);
-
+    /*
+     * Apply the complete restored state once.
+     */
     applyFilters();
+
+    /*
+     * ---------------------------------------------------------
+     * Restore per-session column widths
+     * ---------------------------------------------------------
+     */
 
     const QVector<int> &columnWidths =
         session->columnWidths();
@@ -3271,13 +6509,19 @@ void MainWindow::bindActiveSession()
         }
 
         session->setColumnWidths(
-            std::move(measuredWidths)
+            std::move(
+                measuredWidths
+                )
             );
     }
 
     eventTable
         ->horizontalHeader()
-        ->setStretchLastSection(true);
+        ->setStretchLastSection(
+            true
+            );
+
+    updateEventNavigationState();
 }
 
 void MainWindow::reloadActiveSession()
@@ -3383,5 +6627,27 @@ void MainWindow::openRecentFile(
 
     openLogFile(
         filePath
+        );
+}
+
+void MainWindow::
+    resizeCustomFiltersDialogToContents()
+{
+    if (customFiltersDialog == nullptr) {
+        return;
+    }
+
+    /*
+     * Defer until Qt has processed the editor's
+     * visibility/layout changes. This is especially
+     * important when the last active criterion is
+     * removed and the active-filter container hides.
+     */
+    QTimer::singleShot(
+        0,
+        customFiltersDialog,
+        [this]() {
+            customFiltersDialog->adjustSize();
+        }
         );
 }

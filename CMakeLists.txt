@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.9.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.10.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -99,6 +99,13 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationWorkspace.cpp
     src/preferences/RecentItemsStore.h
     src/preferences/RecentItemsStore.cpp
+    src/ui/MultiSelectFilterComboBox.h
+    src/ui/MultiSelectFilterComboBox.cpp
+    src/ui/CustomFieldFilterEditor.h
+    src/ui/CustomFieldFilterEditor.cpp
+    src/filtering/InvestigationFilterPreset.h
+    src/preferences/FilterPresetStore.h
+    src/preferences/FilterPresetStore.cpp
 
 )
 

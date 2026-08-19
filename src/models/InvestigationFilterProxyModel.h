@@ -1,10 +1,18 @@
 #pragma once
 
+#include <optional>
+
+#include <QDateTime>
 #include <QSortFilterProxyModel>
 #include <QString>
 #include <QStringMatcher>
+#include <QStringList>
+#include <QMap>
 
 #include "InvestigationTableModel.h"
+
+using CustomFieldFilterMap =
+    QMap<QString, QStringList>;
 
 class InvestigationFilterProxyModel : public QSortFilterProxyModel
 {
@@ -15,13 +23,62 @@ public:
         QObject *parent = nullptr
         );
 
+    void setFilterState(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText,
+        const QStringList &eventCodes,
+        const QStringList &entityIds,
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime,
+        const CustomFieldFilterMap &customFieldFilters
+        );
+
+    void setSeverityFilters(const QStringList &severities);
     void setSeverityFilter(const QString &severity);
-    void setSubsystemFilter(const QString &subsystem);
+    void setSubsystemFilters(
+        const QStringList &subsystems
+        );
+
+    void setSubsystemFilter(
+        const QString &subsystem
+        );
     void setSearchText(const QString &searchText);
 
+    void setTimeRangeFilter(
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime
+        );
+
+    void setEventCodeFilters(
+        const QStringList &eventCodes
+        );
+
+    void setEntityFilters(
+        const QStringList &entityIds
+        );
+
+    void setCustomFieldFilters(
+        const CustomFieldFilterMap &filters
+        );
+
+    QStringList eventCodeFilters() const;
+    QStringList entityFilters() const;
+
+    const std::optional<QDateTime> &
+    timeRangeStart() const;
+
+    const std::optional<QDateTime> &
+    timeRangeEnd() const;
+
+    QStringList severityFilters() const;
     QString severityFilter() const;
+    QStringList subsystemFilters() const;
     QString subsystemFilter() const;
     QString searchText() const;
+
+    const CustomFieldFilterMap &
+    customFieldFilters() const;
 
 protected:
     bool filterAcceptsRow(
@@ -30,9 +87,16 @@ protected:
         ) const override;
 
 private:
-    QString m_severityFilter;
-    QString m_subsystemFilter;
+    QStringList m_severityFilters;
+    QStringList m_subsystemFilters;
     QString m_searchText;
+    QStringList m_eventCodeFilters;
+    QStringList m_entityFilters;
+
+    CustomFieldFilterMap m_customFieldFilters;
+
+    std::optional<QDateTime> m_timeRangeStart;
+    std::optional<QDateTime> m_timeRangeEnd;
 
     QStringMatcher m_searchMatcher;
 

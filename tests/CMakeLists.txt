@@ -836,3 +836,26 @@ add_test(
     NAME RecentItemsStoreTests
     COMMAND RecentItemsStoreTests
 )
+
+qt_add_executable(
+    FilterPresetStoreTests
+
+    FilterPresetStoreTests.cpp
+
+    ../src/filtering/InvestigationFilterPreset.h
+
+    ../src/preferences/FilterPresetStore.h
+    ../src/preferences/FilterPresetStore.cpp
+)
+
+target_link_libraries(
+    FilterPresetStoreTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME FilterPresetStoreTests
+    COMMAND FilterPresetStoreTests
+)

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include <QDateTime>
 #include <QObject>
 #include <QModelIndex>
 #include <QString>
@@ -26,10 +29,50 @@ public:
         const QVector<InvestigationRecord> &records
         );
 
+    void setFilterState(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText,
+        const QStringList &eventCodes,
+        const QStringList &entityIds,
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime,
+        const CustomFieldFilterMap &customFieldFilters
+        );
+
     void setFilters(
         const QString &severity,
         const QString &subsystem,
         const QString &searchText
+        );
+
+    void setFilters(
+        const QStringList &severities,
+        const QString &subsystem,
+        const QString &searchText
+        );
+
+    void setFilters(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText
+        );
+
+    void setEventCodeFilters(
+        const QStringList &eventCodes
+        );
+
+    void setEntityFilters(
+        const QStringList &entityIds
+        );
+
+    void setTimeRangeFilter(
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime
+        );
+
+    void setCustomFieldFilters(
+        const CustomFieldFilterMap &filters
         );
 
     int totalRecordCount() const;
@@ -43,6 +86,16 @@ public:
 
     const InvestigationRecord *recordForProxyIndex(
         const QModelIndex &proxyIndex
+        ) const;
+
+    int adjacentIssueProxyRow(
+        int currentProxyRow,
+        int direction
+        ) const;
+
+    int adjacentVisibleProxyRow(
+        int currentProxyRow,
+        int direction
         ) const;
 
     QVector<InvestigationRecord>

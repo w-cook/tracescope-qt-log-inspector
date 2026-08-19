@@ -61,6 +61,20 @@ public:
     const QStringList &
     availableSubsystems() const;
 
+    bool hasEventCodeData() const;
+    bool hasEntityData() const;
+
+    const QStringList &
+    availableEventCodes() const;
+
+    bool hasCustomFieldData() const;
+
+    const QStringList &
+    availableCustomFields() const;
+
+    const QStringList &
+    availableEntities() const;
+
     const std::optional<QDateTime> &
     firstTimestamp() const;
 
@@ -96,6 +110,16 @@ private:
     bool m_hasSubsystemData = false;
 
     QStringList m_availableSubsystems;
+
+    bool m_hasCustomFieldData = false;
+
+    QStringList m_availableCustomFields;
+
+    bool m_hasEventCodeData = false;
+    bool m_hasEntityData = false;
+
+    QStringList m_availableEventCodes;
+    QStringList m_availableEntities;
 
     std::optional<QDateTime>
         m_firstTimestamp;

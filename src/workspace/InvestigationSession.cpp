@@ -123,6 +123,45 @@ const QStringList &
     return m_availableSubsystems;
 }
 
+bool InvestigationSession::
+    hasCustomFieldData() const
+{
+    return m_hasCustomFieldData;
+}
+
+const QStringList &
+    InvestigationSession::
+    availableCustomFields() const
+{
+    return m_availableCustomFields;
+}
+
+bool InvestigationSession::
+    hasEventCodeData() const
+{
+    return m_hasEventCodeData;
+}
+
+bool InvestigationSession::
+    hasEntityData() const
+{
+    return m_hasEntityData;
+}
+
+const QStringList &
+    InvestigationSession::
+    availableEventCodes() const
+{
+    return m_availableEventCodes;
+}
+
+const QStringList &
+    InvestigationSession::
+    availableEntities() const
+{
+    return m_availableEntities;
+}
+
 const std::optional<QDateTime> &
     InvestigationSession::
     firstTimestamp() const
@@ -213,10 +252,23 @@ void InvestigationSession::rebuildDerivedData(
 
     m_availableSubsystems.clear();
 
+    m_hasEventCodeData = false;
+    m_hasEntityData = false;
+
+    m_hasCustomFieldData = false;
+    m_availableCustomFields.clear();
+
+    m_availableEventCodes.clear();
+    m_availableEntities.clear();
+
+    QSet<QString> eventCodes;
+    QSet<QString> entities;
+
     m_firstTimestamp.reset();
     m_lastTimestamp.reset();
 
     QSet<QString> subsystems;
+    QSet<QString> customFields;
 
     for (const InvestigationRecord &record
          : records) {
@@ -230,6 +282,46 @@ void InvestigationSession::rebuildDerivedData(
 
             subsystems.insert(
                 record.subsystem.value()
+                );
+        }
+
+        if (record.eventCode.has_value()
+            && !record.eventCode
+                    ->trimmed()
+                    .isEmpty()) {
+            m_hasEventCodeData = true;
+
+            eventCodes.insert(
+                record.eventCode.value()
+                );
+        }
+
+        if (record.entityId.has_value()
+            && !record.entityId
+                    ->trimmed()
+                    .isEmpty()) {
+            m_hasEntityData = true;
+
+            entities.insert(
+                record.entityId.value()
+                );
+        }
+
+        for (
+            auto iterator =
+            record.customAttributes.constBegin();
+            iterator !=
+            record.customAttributes.constEnd();
+            ++iterator
+            ) {
+            if (iterator.key().isEmpty()) {
+                continue;
+            }
+
+            m_hasCustomFieldData = true;
+
+            customFields.insert(
+                iterator.key()
                 );
         }
 
@@ -257,6 +349,29 @@ void InvestigationSession::rebuildDerivedData(
 
     m_availableSubsystems =
         subsystems.values();
+
+    m_availableEventCodes =
+        eventCodes.values();
+
+    m_availableCustomFields =
+        customFields.values();
+
+    std::sort(
+        m_availableCustomFields.begin(),
+        m_availableCustomFields.end(),
+        [](
+            const QString &left,
+            const QString &right
+            ) {
+            return left.compare(
+                       right,
+                       Qt::CaseInsensitive
+                       ) < 0;
+        }
+        );
+
+    m_availableEntities =
+        entities.values();
 
     std::sort(
         m_availableSubsystems.begin(),

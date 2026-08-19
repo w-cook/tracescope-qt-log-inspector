@@ -119,12 +119,7 @@ Completed release milestones:
 | `v0.7.0` | Additional Built-In Formats | prerelease |
 | `v0.8.0` | Responsive Large-File Import | prerelease |
 | `v0.9.0` | Multi-Session Investigation Workspace | prerelease |
-
-Current development target:
-
-| Version | Milestone | Status |
-| --- | --- | --- |
-| `v0.10.0` | Advanced Filtering and Navigation | in progress |
+| `v0.10.0` | Advanced Filtering and Navigation | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -161,7 +156,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.9.0`:
+Implemented foundations through `v0.10.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -186,12 +181,16 @@ Implemented foundations through `v0.9.0`:
 * multi-session workspace ownership with independent per-session investigation controllers and retained import context
 * session switching, closing, and in-place reload using stable session identities
 * persistent recent-file and recent-profile history backed by local application settings
+* advanced canonical and source-specific filtering with multi-severity, time-range, event-code, entity, and dynamic custom-field criteria
+* persistent named filter presets backed by local application settings
+* adjacent-event and warning/error-class navigation over the current sorted and filtered investigation
+* grouped issue-summary and timeline-bucket drill-down that narrows the active filter state without discarding unrelated criteria
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 is now in progress and focuses on advanced filtering and navigation before later phases add findings, deterministic analytics, comparison, persistence, live following, and reporting rather than returning to open-ended format expansion.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Later phases add findings, deterministic analytics, comparison, persistence, live following, reporting, and final display hardening rather than returning to open-ended format expansion.
 
 ## Development Phases
 
@@ -482,24 +481,38 @@ Completed deliverables:
 
 ### Phase 9 — Advanced Filtering and Navigation
 
-**Status: In progress; targeted for `v0.10.0`.**
+**Status: Completed in `v0.10.0`.**
 
-Expand investigation controls beyond the prototype filters so users can move efficiently from a large normalized record set to the small portion relevant to a failure, warning pattern, subsystem, entity, time window, or source-specific field.
+Expanded investigation controls beyond the prototype filters so users can move efficiently from a large normalized record set to the portion relevant to a failure, warning pattern, subsystem, entity, time window, or source-specific field.
 
-Canonical fields remain optional. Filters that depend on event code, entity ID, severity, or other canonical values should be available when those values exist without preventing investigation of sources that rely primarily on dynamic custom attributes.
+Canonical fields remain optional. Controls that depend on event code, entity ID, severity, timestamp, or another canonical value appear only when the active investigation provides the required data, while search and source-specific custom-field filtering remain useful for less standardized sources.
 
-Planned deliverables:
+Completed deliverables:
 
-* multiple severity selection
-* time-range filtering
-* event-code filtering when present
-* entity filtering when present
-* dynamic custom-field filtering
-* filter reset
-* saved filter presets
-* next and previous warning/error navigation
-* surrounding-event navigation
-* drill-down from charts and summaries
+* multi-severity filtering through a compact multi-select control
+* time-range filtering with optional UTC start and end bounds
+* event-code filtering when event-code data is present
+* entity filtering when entity data is present
+* dynamic exact-value custom-field filtering when custom attributes are present
+* multiple values for the same custom field using OR semantics, combined with AND semantics across different custom fields and canonical filter categories
+* exclusion of records missing a custom field that is actively filtered
+* cached custom-field capability discovery without eagerly enumerating high-cardinality custom values
+* modeless time-range and custom-field filter interfaces with compact active-state summaries
+* custom-field table-cell context actions for copying values and adding exact-value filters directly from visible records
+* filter reset across canonical, text, time-range, and custom-field criteria
+* persistent named filter presets stored in local application settings
+* complete preset restoration across severity, subsystem, search, event code, entity, time range, and custom-field filters, with unavailable criteria ignored safely in different sessions
+* batched complete-filter-state application so one logical filter or preset change does not cause repeated large proxy-model resets
+* previous/next navigation across visible events in the current filtered and sorted table order
+* previous/next navigation across visible warning, error, and critical records, including wraparound behavior
+* compact navigation context showing visible position and preserved source-record number
+* grouped warning/error summary drill-down by subsystem and issue class while preserving unrelated active filters
+* timeline bucket drill-down to exact time ranges, with severity-aware bars narrowing to the represented severity while preserving unrelated active filters
+* drill-down behavior for automatic and manually selected timeline resolutions, including horizontally windowed fine-resolution timelines
+* automated coverage for preset persistence, complete filter-state batching, and controller navigation behavior
+* manual regression verification across representative and large-scale samples
+* Windows and Linux CI verification
+* refreshed release screenshots covering the advanced filtering and navigation workflow
 
 ### Phase 10 — Bookmarks, Notes, and Findings
 
@@ -520,7 +533,7 @@ Planned deliverables:
 
 Add deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
 
-The scalable timeline foundation originally planned in this phase was pulled forward and completed during Phase 7 because large-file verification showed that timeline resolution, bucket sizing, and navigation were necessary to keep large investigations usable. Phase 11 should build new analysis on that existing timeline behavior rather than reimplement it.
+The scalable timeline foundation originally planned in this phase was pulled forward and completed during Phase 7 because large-file verification showed that timeline resolution, bucket sizing, and navigation were necessary to keep large investigations usable. Timeline and grouped-summary drill-down were then completed during Phase 9. Phase 11 should build new analysis on those existing behaviors rather than reimplement them.
 
 Analytics should degrade gracefully when a source does not provide a particular canonical field. A missing severity, event code, subsystem, or entity ID should disable or reduce only the analysis that depends on that field rather than reducing the usefulness of unrelated records.
 
@@ -531,7 +544,6 @@ Planned deliverables:
 * subsystem trends when subsystem data is present
 * severity trends when severity data is present
 * deterministic warning and error burst detection
-* timeline/summary drill-down to underlying records where it materially improves investigation flow
 
 Deterministic burst detection will not be described as AI anomaly detection.
 
@@ -564,7 +576,7 @@ Planned deliverables:
 * loaded-session persistence
 * bookmark persistence
 * note persistence
-* filter persistence
+* active per-session filter-state persistence within saved workspaces
 * comparison-selection persistence
 * versioned workspace schemas
 * missing-source handling
@@ -602,14 +614,22 @@ Planned deliverables:
 * selected-record copy as formatted text
 * offline HTML investigation reports
 
-### Phase 16 — Documentation and 1.0 Release
+### Phase 16 — Responsive Display Hardening, Documentation, and 1.0 Release
 
-Complete the expansion with polished documentation and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
+Complete the expansion with display hardening, polished documentation, and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
+
+Before `v1.0.0`, the desktop interface must remain practical in constrained layouts that are common during development and engineering investigation, including portrait-oriented monitors and horizontally split workspaces. Long source paths, large summary counts, session switching, and dense timelines must not force the application wider than the available workspace or make important controls inaccessible.
 
 Final documentation should make the supported-format boundary, optional canonical-field model, profile-driven import architecture, large-file behavior, investigation workflow, and scope exclusions clear enough that both prospective users and employers can understand what the application does without overstating its capabilities.
 
 Planned deliverables:
 
+* summary-text elision or equivalent truncation that preserves complete context through a tooltip or other explicit affordance without forcing the main window wider
+* practical narrow-window minimum sizing that does not derive from long summary text or other incidental content
+* responsive layout behavior for portrait monitors and horizontally split desktop workspaces
+* preservation of access to important controls and panels when switching between sessions with materially different summary lengths or presentation state
+* adaptive timeline label density or equivalent axis presentation that prevents bucket-label overlap at constrained widths
+* regression verification at representative portrait and split-screen window dimensions
 * final Windows distributable
 * automated release packaging
 * architecture documentation
