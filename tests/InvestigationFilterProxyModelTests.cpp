@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QSignalSpy>
 
 #include "../src/models/InvestigationFilterProxyModel.h"
 #include "../src/models/InvestigationTableModel.h"
@@ -17,6 +18,7 @@ private slots:
     void searchesNormalizedTimestampWithRawSource();
     void sortsUsingTypedTimestampValues();
     void mapsProxyRowsBackToSourceRecords();
+    void completeFilterStateUsesSingleModelReset();
 };
 
 static QVector<InvestigationRecord> sampleRecords()
@@ -353,6 +355,145 @@ void InvestigationFilterProxyModelTests::
     QCOMPARE(
         record->recordId,
         QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    completeFilterStateUsesSingleModelReset()
+{
+    InvestigationTableModel sourceModel;
+
+    sourceModel.setRecords(
+        sampleRecords()
+        );
+
+    InvestigationFilterProxyModel proxyModel;
+
+    proxyModel.setSourceModel(
+        &sourceModel
+        );
+
+    /*
+     * Materialize the initial unfiltered proxy
+     * before observing the filter-state change.
+     */
+    QCOMPARE(
+        proxyModel.rowCount(),
+        3
+        );
+
+    QSignalSpy resetSpy(
+        &proxyModel,
+        &QAbstractItemModel::modelReset
+        );
+
+    CustomFieldFilterMap customFilters;
+
+    customFilters.insert(
+        QStringLiteral("host"),
+        {
+            QStringLiteral("server-02")
+        }
+        );
+
+    const std::optional<QDateTime> start =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:01:30.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const std::optional<QDateTime> end =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:02:30.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    proxyModel.setFilterState(
+        {
+            QStringLiteral(" WARN ")
+        },
+        {
+            QStringLiteral("Tracking")
+        },
+        QStringLiteral(" lost "),
+        {
+            QStringLiteral("TRACK_LOST")
+        },
+        {
+            QStringLiteral("TRK-402")
+        },
+        start,
+        end,
+        customFilters
+        );
+
+    QCOMPARE(
+        resetSpy.count(),
+        1
+        );
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        1
+        );
+
+    const QModelIndex proxyIndex =
+        proxyModel.index(
+            0,
+            0
+            );
+
+    const QModelIndex sourceIndex =
+        proxyModel.mapToSource(
+            proxyIndex
+            );
+
+    const InvestigationRecord *record =
+        sourceModel.recordAt(
+            sourceIndex.row()
+            );
+
+    QVERIFY(
+        record != nullptr
+        );
+
+    QCOMPARE(
+        record->recordId,
+        QStringLiteral(
+            "record-tracking"
+            )
+        );
+
+    /*
+     * Reapplying an equivalent normalized state
+     * must not reset the model again.
+     */
+    proxyModel.setFilterState(
+        {
+            QStringLiteral("WARN")
+        },
+        {
+            QStringLiteral("Tracking")
+        },
+        QStringLiteral("lost"),
+        {
+            QStringLiteral("TRACK_LOST")
+        },
+        {
+            QStringLiteral("TRK-402")
+        },
+        start,
+        end,
+        customFilters
+        );
+
+    QCOMPARE(
+        resetSpy.count(),
+        1
         );
 }
 

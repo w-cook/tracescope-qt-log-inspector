@@ -45,6 +45,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QMenu>
+#include <QInputDialog>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -374,6 +375,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     settings(),
     recentItemsStore(settings),
+    filterPresetStore(settings),
     sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
@@ -389,6 +391,15 @@ MainWindow::MainWindow(QWidget *parent)
             tr("Reset Filters"),
             this
             )
+        ),
+    filterPresetsButton(
+        new QPushButton(
+            tr("Presets"),
+            this
+            )
+        ),
+    filterPresetsMenu(
+        new QMenu(this)
         ),
     subsystemFilterCombo(new MultiSelectFilterComboBox(this)),
     eventCodeFilterCombo(new MultiSelectFilterComboBox(this)),
@@ -1830,6 +1841,14 @@ void MainWindow::buildFilterControls(
         );
 
     secondaryFilterLayout->addWidget(
+        filterPresetsButton
+        );
+
+    filterPresetsButton->setMenu(
+        filterPresetsMenu
+        );
+
+    secondaryFilterLayout->addWidget(
         resetFiltersButton
         );
 
@@ -1854,6 +1873,10 @@ void MainWindow::buildFilterControls(
         );
 
     resetFiltersButton->setVisible(
+        false
+        );
+
+    filterPresetsButton->setVisible(
         false
         );
 
@@ -1904,6 +1927,15 @@ void MainWindow::buildFilterControls(
         this,
         [this]() {
             applyFilters();
+        }
+        );
+
+    connect(
+        filterPresetsMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshFilterPresetsMenu();
         }
         );
 
@@ -2194,13 +2226,6 @@ void MainWindow::applyFilters()
     timelineScaleValid =
         false;
 
-    investigationController->setFilters(
-        levelFilterCombo->selectedValues(),
-        subsystemFilterCombo
-            ->selectedValues(),
-        searchInput->text()
-        );
-
     const std::optional<QDateTime>
         timeRangeStart =
         timeRangeStartCheckBox != nullptr
@@ -2224,25 +2249,18 @@ void MainWindow::applyFilters()
             : std::nullopt;
 
     investigationController
-        ->setTimeRangeFilter(
-            timeRangeStart,
-            timeRangeEnd
-            );
-
-    investigationController
-        ->setEventCodeFilters(
+        ->setFilterState(
+            levelFilterCombo
+                ->selectedValues(),
+            subsystemFilterCombo
+                ->selectedValues(),
+            searchInput->text(),
             eventCodeFilterCombo
-                ->selectedValues()
-            );
-
-    investigationController
-        ->setEntityFilters(
+                ->selectedValues(),
             entityFilterCombo
-                ->selectedValues()
-            );
-
-    investigationController
-        ->setCustomFieldFilters(
+                ->selectedValues(),
+            timeRangeStart,
+            timeRangeEnd,
             customFieldFilterEditor
                 ->filters()
             );
@@ -2365,6 +2383,406 @@ void MainWindow::resetFilters()
     resizeCustomFiltersDialogToContents();
 
     applyFilters();
+}
+
+InvestigationFilterPreset
+MainWindow::currentFilterPreset(
+    const QString &name
+    ) const
+{
+    InvestigationFilterPreset preset;
+
+    preset.name =
+        name.trimmed();
+
+    if (investigationController == nullptr) {
+        return preset;
+    }
+
+    InvestigationFilterProxyModel *proxyModel =
+        investigationController
+            ->proxyModel();
+
+    preset.severities =
+        proxyModel->severityFilters();
+
+    preset.subsystems =
+        proxyModel->subsystemFilters();
+
+    preset.searchText =
+        proxyModel->searchText();
+
+    preset.eventCodes =
+        proxyModel->eventCodeFilters();
+
+    preset.entityIds =
+        proxyModel->entityFilters();
+
+    preset.timeRangeStart =
+        proxyModel->timeRangeStart();
+
+    preset.timeRangeEnd =
+        proxyModel->timeRangeEnd();
+
+    preset.customFieldFilters =
+        proxyModel->customFieldFilters();
+
+    return preset;
+}
+
+void MainWindow::applyFilterPreset(
+    const InvestigationFilterPreset &preset
+    )
+{
+    if (investigationController == nullptr) {
+        return;
+    }
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Update every control as one transaction.
+     * Some preset criteria may not exist in the
+     * active investigation. Multi-select controls
+     * naturally ignore unavailable values, while
+     * CustomFieldFilterEditor removes unavailable
+     * custom-field criteria.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
+        const QSignalBlocker searchBlocker(
+            searchInput
+            );
+
+        const QSignalBlocker eventCodeBlocker(
+            eventCodeFilterCombo
+            );
+
+        const QSignalBlocker entityBlocker(
+            entityFilterCombo
+            );
+
+        const QSignalBlocker customFieldBlocker(
+            customFieldFilterEditor
+            );
+
+        const QSignalBlocker timeStartCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker timeStartEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker timeEndCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker timeEndEditBlocker(
+            timeRangeEndEdit
+            );
+
+        levelFilterCombo->setSelectedValues(
+            hasSeverityData
+                ? preset.severities
+                : QStringList()
+            );
+
+        subsystemFilterCombo->setSelectedValues(
+            hasSubsystemData
+                ? preset.subsystems
+                : QStringList()
+            );
+
+        eventCodeFilterCombo->setSelectedValues(
+            hasEventCodeData
+                ? preset.eventCodes
+                : QStringList()
+            );
+
+        entityFilterCombo->setSelectedValues(
+            hasEntityData
+                ? preset.entityIds
+                : QStringList()
+            );
+
+        customFieldFilterEditor->setFilters(
+            hasCustomFieldData
+                ? preset.customFieldFilters
+                : CustomFieldFilterMap()
+            );
+
+        searchInput->setText(
+            preset.searchText
+            );
+
+        if (hasTimestampData) {
+            const bool hasStart =
+                preset.timeRangeStart.has_value();
+
+            const bool hasEnd =
+                preset.timeRangeEnd.has_value();
+
+            timeRangeStartCheckBox->setChecked(
+                hasStart
+                );
+
+            timeRangeEndCheckBox->setChecked(
+                hasEnd
+                );
+
+            timeRangeStartEdit->setEnabled(
+                hasStart
+                );
+
+            timeRangeEndEdit->setEnabled(
+                hasEnd
+                );
+
+            timeRangeStartEdit->setDateTime(
+                hasStart
+                    ? preset
+                          .timeRangeStart
+                          .value()
+                    : timelineFirstTimestamp
+                          .value()
+                );
+
+            timeRangeEndEdit->setDateTime(
+                hasEnd
+                    ? preset
+                          .timeRangeEnd
+                          .value()
+                    : timelineLastTimestamp
+                          .value()
+                );
+        } else {
+            timeRangeStartCheckBox->setChecked(
+                false
+                );
+
+            timeRangeEndCheckBox->setChecked(
+                false
+                );
+
+            timeRangeStartEdit->setEnabled(
+                false
+                );
+
+            timeRangeEndEdit->setEnabled(
+                false
+                );
+        }
+    }
+
+    updateTimeRangeButton();
+    updateCustomFiltersButton();
+
+    resizeCustomFiltersDialogToContents();
+
+    /*
+     * Apply the fully restored preset once rather
+     * than producing intermediate filtered states.
+     */
+    applyFilters();
+}
+
+void MainWindow::refreshFilterPresetsMenu()
+{
+    if (filterPresetsMenu == nullptr) {
+        return;
+    }
+
+    filterPresetsMenu->clear();
+
+    QAction *saveAction =
+        filterPresetsMenu->addAction(
+            tr("Save Current Filters...")
+            );
+
+    saveAction->setEnabled(
+        investigationController != nullptr
+        );
+
+    connect(
+        saveAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            bool accepted = false;
+
+            const QString name =
+                QInputDialog::getText(
+                    this,
+                    tr("Save Filter Preset"),
+                    tr("Preset name:"),
+                    QLineEdit::Normal,
+                    QString(),
+                    &accepted
+                    )
+                    .trimmed();
+
+            if (!accepted
+                || name.isEmpty()) {
+                return;
+            }
+
+            const QVector<
+                InvestigationFilterPreset>
+                existingPresets =
+                filterPresetStore.presets();
+
+            bool existingName = false;
+
+            for (
+                const InvestigationFilterPreset
+                    &existing
+                : existingPresets
+                ) {
+                if (existing.name.compare(
+                        name,
+                        Qt::CaseInsensitive
+                        )
+                    == 0) {
+                    existingName = true;
+                    break;
+                }
+            }
+
+            if (existingName) {
+                const QMessageBox::StandardButton
+                    overwrite =
+                    QMessageBox::question(
+                        this,
+                        tr(
+                            "Replace Filter Preset"
+                            ),
+                        tr(
+                            "A filter preset named "
+                            "\"%1\" already exists.\n\n"
+                            "Replace it with the "
+                            "current filters?"
+                            )
+                            .arg(name),
+                        QMessageBox::Yes
+                            | QMessageBox::No,
+                        QMessageBox::No
+                        );
+
+                if (overwrite
+                    != QMessageBox::Yes) {
+                    return;
+                }
+            }
+
+            filterPresetStore.savePreset(
+                currentFilterPreset(name)
+                );
+        }
+        );
+
+    filterPresetsMenu->addSeparator();
+
+    const QVector<InvestigationFilterPreset>
+        presets =
+        filterPresetStore.presets();
+
+    if (presets.isEmpty()) {
+        QAction *emptyAction =
+            filterPresetsMenu->addAction(
+                tr("No Saved Presets")
+                );
+
+        emptyAction->setEnabled(
+            false
+            );
+
+        return;
+    }
+
+    /*
+     * Saved presets are reusable application-level
+     * investigation shortcuts.
+     */
+    for (const InvestigationFilterPreset &preset
+         : presets) {
+        QAction *presetAction =
+            filterPresetsMenu->addAction(
+                preset.name
+                );
+
+        presetAction->setEnabled(
+            investigationController != nullptr
+            );
+
+        connect(
+            presetAction,
+            &QAction::triggered,
+            this,
+            [this, preset]() {
+                applyFilterPreset(
+                    preset
+                    );
+            }
+            );
+    }
+
+    filterPresetsMenu->addSeparator();
+
+    QMenu *deleteMenu =
+        filterPresetsMenu->addMenu(
+            tr("Delete Preset")
+            );
+
+    for (const InvestigationFilterPreset &preset
+         : presets) {
+        QAction *deleteAction =
+            deleteMenu->addAction(
+                preset.name
+                );
+
+        connect(
+            deleteAction,
+            &QAction::triggered,
+            this,
+            [this, preset]() {
+                const QMessageBox::StandardButton
+                    confirmation =
+                    QMessageBox::question(
+                        this,
+                        tr(
+                            "Delete Filter Preset"
+                            ),
+                        tr(
+                            "Delete the filter preset "
+                            "\"%1\"?"
+                            )
+                            .arg(
+                                preset.name
+                                ),
+                        QMessageBox::Yes
+                            | QMessageBox::No,
+                        QMessageBox::No
+                        );
+
+                if (confirmation
+                    != QMessageBox::Yes) {
+                    return;
+                }
+
+                filterPresetStore.removePreset(
+                    preset.name
+                    );
+            }
+            );
+    }
 }
 
 void MainWindow::
@@ -4702,6 +5120,10 @@ void MainWindow::bindActiveSession()
             false
             );
 
+        filterPresetsButton->setVisible(
+            false
+            );
+
         issueSummaryTable->setRowCount(
             0
             );
@@ -4802,6 +5224,10 @@ void MainWindow::bindActiveSession()
         );
 
     resetFiltersButton->setEnabled(
+        true
+        );
+
+    filterPresetsButton->setVisible(
         true
         );
 

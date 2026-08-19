@@ -30,6 +30,74 @@ QStringList normalizedExactFilterValues(
 
     return normalized;
 }
+
+QStringList normalizedSeverityFilterValues(
+    const QStringList &values
+    )
+{
+    QStringList normalized;
+
+    normalized.reserve(
+        values.size()
+        );
+
+    for (const QString &value : values) {
+        const QString candidate =
+            value.trimmed().toUpper();
+
+        if (candidate.isEmpty()
+            || normalized.contains(candidate)) {
+            continue;
+        }
+
+        normalized.append(
+            candidate
+            );
+    }
+
+    return normalized;
+}
+
+CustomFieldFilterMap normalizedCustomFieldFilters(
+    const CustomFieldFilterMap &filters
+    )
+{
+    CustomFieldFilterMap normalized;
+
+    for (
+        auto filterIterator =
+        filters.constBegin();
+        filterIterator != filters.constEnd();
+        ++filterIterator
+        ) {
+        if (filterIterator
+                .key()
+                .isEmpty()
+            || filterIterator
+                   .value()
+                   .isEmpty()) {
+            continue;
+        }
+
+        QStringList values;
+
+        for (const QString &value
+             : filterIterator.value()) {
+            if (!values.contains(value)) {
+                values.append(value);
+            }
+        }
+
+        if (!values.isEmpty()) {
+            normalized.insert(
+                filterIterator.key(),
+                values
+                );
+        }
+    }
+
+    return normalized;
+}
 }
 
 InvestigationFilterProxyModel::
@@ -43,6 +111,130 @@ InvestigationFilterProxyModel::
     m_searchMatcher.setCaseSensitivity(
         Qt::CaseInsensitive
         );
+}
+
+void InvestigationFilterProxyModel::
+    setFilterState(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText,
+        const QStringList &eventCodes,
+        const QStringList &entityIds,
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime,
+        const CustomFieldFilterMap
+            &customFieldFilters
+        )
+{
+    const QStringList normalizedSeverities =
+        normalizedSeverityFilterValues(
+            severities
+            );
+
+    const QStringList normalizedSubsystems =
+        normalizedExactFilterValues(
+            subsystems
+            );
+
+    const QString normalizedSearchText =
+        searchText.trimmed();
+
+    const QStringList normalizedEventCodes =
+        normalizedExactFilterValues(
+            eventCodes
+            );
+
+    const QStringList normalizedEntityIds =
+        normalizedExactFilterValues(
+            entityIds
+            );
+
+    const std::optional<QDateTime>
+        normalizedStart =
+        startTime.has_value()
+                && startTime->isValid()
+            ? startTime
+            : std::nullopt;
+
+    const std::optional<QDateTime>
+        normalizedEnd =
+        endTime.has_value()
+                && endTime->isValid()
+            ? endTime
+            : std::nullopt;
+
+    const CustomFieldFilterMap
+        normalizedCustomFilters =
+        normalizedCustomFieldFilters(
+            customFieldFilters
+            );
+
+    /*
+     * Avoid resetting the proxy when the complete
+     * requested state already matches the active
+     * state.
+     */
+    if (m_severityFilters
+            == normalizedSeverities
+        && m_subsystemFilters
+               == normalizedSubsystems
+        && m_searchText
+               == normalizedSearchText
+        && m_eventCodeFilters
+               == normalizedEventCodes
+        && m_entityFilters
+               == normalizedEntityIds
+        && m_timeRangeStart
+               == normalizedStart
+        && m_timeRangeEnd
+               == normalizedEnd
+        && m_customFieldFilters
+               == normalizedCustomFilters) {
+        return;
+    }
+
+    /*
+     * A complete filter state represents one
+     * logical investigation change. Update every
+     * criterion under one model reset so large
+     * investigations are evaluated once instead
+     * of repeatedly for each category.
+     *
+     * Selection is intentionally cleared by the
+     * investigation UI whenever filters change,
+     * so reset semantics are appropriate here.
+     */
+    beginResetModel();
+
+    m_severityFilters =
+        normalizedSeverities;
+
+    m_subsystemFilters =
+        normalizedSubsystems;
+
+    m_searchText =
+        normalizedSearchText;
+
+    m_eventCodeFilters =
+        normalizedEventCodes;
+
+    m_entityFilters =
+        normalizedEntityIds;
+
+    m_timeRangeStart =
+        normalizedStart;
+
+    m_timeRangeEnd =
+        normalizedEnd;
+
+    m_customFieldFilters =
+        normalizedCustomFilters;
+
+    m_searchMatcher.setPattern(
+        m_searchText
+        );
+
+    endResetModel();
 }
 
 void InvestigationFilterProxyModel::setSeverityFilters(

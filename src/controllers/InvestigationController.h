@@ -29,6 +29,17 @@ public:
         const QVector<InvestigationRecord> &records
         );
 
+    void setFilterState(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText,
+        const QStringList &eventCodes,
+        const QStringList &entityIds,
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime,
+        const CustomFieldFilterMap &customFieldFilters
+        );
+
     void setFilters(
         const QString &severity,
         const QString &subsystem,

@@ -103,6 +103,9 @@ qt_add_executable(TraceScope
     src/ui/MultiSelectFilterComboBox.cpp
     src/ui/CustomFieldFilterEditor.h
     src/ui/CustomFieldFilterEditor.cpp
+    src/filtering/InvestigationFilterPreset.h
+    src/preferences/FilterPresetStore.h
+    src/preferences/FilterPresetStore.cpp
 
 )
 

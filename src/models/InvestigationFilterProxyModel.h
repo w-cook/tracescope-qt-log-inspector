@@ -23,6 +23,17 @@ public:
         QObject *parent = nullptr
         );
 
+    void setFilterState(
+        const QStringList &severities,
+        const QStringList &subsystems,
+        const QString &searchText,
+        const QStringList &eventCodes,
+        const QStringList &entityIds,
+        const std::optional<QDateTime> &startTime,
+        const std::optional<QDateTime> &endTime,
+        const CustomFieldFilterMap &customFieldFilters
+        );
+
     void setSeverityFilters(const QStringList &severities);
     void setSeverityFilter(const QString &severity);
     void setSubsystemFilters(

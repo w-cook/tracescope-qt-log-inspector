@@ -33,6 +33,29 @@ void InvestigationController::setRecords(
     m_sourceModel.setRecords(records);
 }
 
+void InvestigationController::setFilterState(
+    const QStringList &severities,
+    const QStringList &subsystems,
+    const QString &searchText,
+    const QStringList &eventCodes,
+    const QStringList &entityIds,
+    const std::optional<QDateTime> &startTime,
+    const std::optional<QDateTime> &endTime,
+    const CustomFieldFilterMap &customFieldFilters
+    )
+{
+    m_proxyModel.setFilterState(
+        severities,
+        subsystems,
+        searchText,
+        eventCodes,
+        entityIds,
+        startTime,
+        endTime,
+        customFieldFilters
+        );
+}
+
 void InvestigationController::setFilters(
     const QString &severity,
     const QString &subsystem,

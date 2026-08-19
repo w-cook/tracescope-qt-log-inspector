@@ -15,6 +15,7 @@
 #include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
+#include "preferences/FilterPresetStore.h"
 #include "preferences/RecentItemsStore.h"
 #include "workspace/InvestigationWorkspace.h"
 
@@ -61,6 +62,7 @@ protected:
 private:
     QSettings settings;
     RecentItemsStore recentItemsStore;
+    FilterPresetStore filterPresetStore;
 
     QMenu *recentFilesMenu = nullptr;
 
@@ -85,6 +87,9 @@ private:
     MultiSelectFilterComboBox *subsystemFilterCombo;
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
+
+    QPushButton *filterPresetsButton;
+    QMenu *filterPresetsMenu;
 
     QPushButton *customFiltersButton;
     QDialog *customFiltersDialog;
@@ -179,6 +184,16 @@ private:
     void resetFilters();
     void refreshSubsystemFilterOptions();
     void refreshCanonicalFilterOptions();
+
+    InvestigationFilterPreset currentFilterPreset(
+        const QString &name
+        ) const;
+
+    void applyFilterPreset(
+        const InvestigationFilterPreset &preset
+        );
+
+    void refreshFilterPresetsMenu();
 
     void updateCustomFiltersButton();
 
