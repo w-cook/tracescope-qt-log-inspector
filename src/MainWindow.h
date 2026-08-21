@@ -75,6 +75,8 @@ private:
     QPushButton *previousIssueButton;
     QPushButton *nextIssueButton;
     QPlainTextEdit *eventDetailText;
+    QComboBox *findingStatusCombo;
+    QPushButton *noteButton;
     QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
@@ -107,6 +109,7 @@ private:
 
     MultiSelectFilterComboBox *eventCodeFilterCombo;
     MultiSelectFilterComboBox *entityFilterCombo;
+    MultiSelectFilterComboBox *findingStatusFilterCombo;
 
     CustomFieldFilterEditor *customFieldFilterEditor;
 
@@ -219,9 +222,11 @@ private:
 
     void toggleSelectedEventBookmark();
 
-    void updateBookmarkButton();
+    void updateInvestigationStateControls();
+    void updateSelectedEventFindingStatus();
+    void editSelectedEventNote();
 
-    void syncBookmarkPresentation();
+    void syncInvestigationStatePresentation();
 
     void navigateToAdjacentIssue(
         int direction

@@ -58,6 +58,37 @@ QStringList normalizedSeverityFilterValues(
     return normalized;
 }
 
+QStringList normalizedFindingStatusFilterValues(
+    const QStringList &values
+    )
+{
+    QStringList normalized;
+
+    normalized.reserve(
+        values.size()
+        );
+
+    for (const QString &value : values) {
+        const QString candidate =
+            value
+                .trimmed()
+                .toUpper();
+
+        if (candidate.isEmpty()
+            || normalized.contains(
+                candidate
+                )) {
+            continue;
+        }
+
+        normalized.append(
+            candidate
+            );
+    }
+
+    return normalized;
+}
+
 CustomFieldFilterMap normalizedCustomFieldFilters(
     const CustomFieldFilterMap &filters
     )
@@ -98,6 +129,27 @@ CustomFieldFilterMap normalizedCustomFieldFilters(
 
     return normalized;
 }
+
+QString findingStatusFilterValue(
+    FindingStatus status
+    )
+{
+    switch (status) {
+    case FindingStatus::Open:
+        return QStringLiteral("OPEN");
+
+    case FindingStatus::Resolved:
+        return QStringLiteral("RESOLVED");
+
+    case FindingStatus::Dismissed:
+        return QStringLiteral("DISMISSED");
+
+    case FindingStatus::None:
+        return QString();
+    }
+
+    return QString();
+}
 }
 
 InvestigationFilterProxyModel::
@@ -124,6 +176,7 @@ void InvestigationFilterProxyModel::
         const std::optional<QDateTime> &endTime,
         const CustomFieldFilterMap
             &customFieldFilters,
+        const QStringList &findingStatuses,
         bool bookmarkedOnly
         )
 {
@@ -170,6 +223,12 @@ void InvestigationFilterProxyModel::
             customFieldFilters
             );
 
+    const QStringList
+        normalizedFindingStatuses =
+        normalizedFindingStatusFilterValues(
+            findingStatuses
+            );
+
     /*
      * Avoid resetting the proxy when the complete
      * requested state already matches the active
@@ -191,6 +250,8 @@ void InvestigationFilterProxyModel::
                == normalizedEnd
         && m_customFieldFilters
                == normalizedCustomFilters
+        && m_findingStatusFilters
+               == normalizedFindingStatuses
         && m_bookmarkedOnly
                == bookmarkedOnly) {
         return;
@@ -217,6 +278,9 @@ void InvestigationFilterProxyModel::
 
     m_searchText =
         normalizedSearchText;
+
+    m_findingStatusFilters =
+        normalizedFindingStatuses;
 
     m_bookmarkedOnly =
         bookmarkedOnly;
@@ -546,20 +610,94 @@ void InvestigationFilterProxyModel::
 }
 
 void InvestigationFilterProxyModel::
+    setFindingStatusFilters(
+        const QStringList &statuses
+        )
+{
+    const QStringList normalized =
+        normalizedFindingStatusFilterValues(
+            statuses
+            );
+
+    if (m_findingStatusFilters
+        == normalized) {
+        return;
+    }
+
+    beginResetModel();
+
+    m_findingStatusFilters =
+        normalized;
+
+    endResetModel();
+}
+
+QStringList InvestigationFilterProxyModel::
+    findingStatusFilters() const
+{
+    return m_findingStatusFilters;
+}
+
+void InvestigationFilterProxyModel::
     setBookmarkedRecordIds(
         const QSet<QString> &recordIds
         )
 {
+    setInvestigationStateIndicators(
+        recordIds,
+        m_notedRecordIds,
+        m_findingStatuses
+        );
+}
+
+void InvestigationFilterProxyModel::
+    setInvestigationStateIndicators(
+        const QSet<QString>
+            &bookmarkedRecordIds,
+        const QSet<QString>
+            &notedRecordIds,
+        const QHash<QString, FindingStatus>
+            &findingStatuses
+        )
+{
+    const bool bookmarkMembershipChanged =
+        m_bookmarkedRecordIds
+        != bookmarkedRecordIds;
+
+    const bool findingStatusesChanged =
+        m_findingStatuses
+        != findingStatuses;
+
+    const bool filteringAffected =
+        (
+            m_bookmarkedOnly
+            && bookmarkMembershipChanged
+            )
+        || (
+            !m_findingStatusFilters.isEmpty()
+            && findingStatusesChanged
+            );
+
     if (m_bookmarkedRecordIds
-        == recordIds) {
+            == bookmarkedRecordIds
+        && m_notedRecordIds
+               == notedRecordIds
+        && m_findingStatuses
+               == findingStatuses) {
         return;
     }
 
-    if (m_bookmarkedOnly) {
+    if (filteringAffected) {
         beginResetModel();
 
         m_bookmarkedRecordIds =
-            recordIds;
+            bookmarkedRecordIds;
+
+        m_notedRecordIds =
+            notedRecordIds;
+
+        m_findingStatuses =
+            findingStatuses;
 
         endResetModel();
 
@@ -567,7 +705,13 @@ void InvestigationFilterProxyModel::
     }
 
     m_bookmarkedRecordIds =
-        recordIds;
+        bookmarkedRecordIds;
+
+    m_notedRecordIds =
+        notedRecordIds;
+
+    m_findingStatuses =
+        findingStatuses;
 
     if (rowCount() > 0) {
         emit headerDataChanged(
@@ -592,7 +736,6 @@ QVariant InvestigationFilterProxyModel::headerData(
             );
 
     if (orientation != Qt::Vertical
-        || role != Qt::DisplayRole
         || section < 0
         || section >= rowCount()) {
         return defaultValue;
@@ -625,17 +768,126 @@ QVariant InvestigationFilterProxyModel::headerData(
             sourceIndex.row()
             );
 
-    if (record == nullptr
-        || !m_bookmarkedRecordIds.contains(
-            record->recordId
-            )) {
+    if (record == nullptr) {
         return defaultValue;
     }
 
-    return QStringLiteral("%1 ★")
-        .arg(
-            defaultValue.toString()
+    const QString &recordId =
+        record->recordId;
+
+    const bool bookmarked =
+        m_bookmarkedRecordIds.contains(
+            recordId
             );
+
+    const bool hasNote =
+        m_notedRecordIds.contains(
+            recordId
+            );
+
+    const FindingStatus findingStatus =
+        m_findingStatuses.value(
+            recordId,
+            FindingStatus::None
+            );
+
+    if (role == Qt::DisplayRole) {
+        QStringList markers;
+
+        if (bookmarked) {
+            markers.append(
+                QStringLiteral("★")
+                );
+        }
+
+        if (hasNote) {
+            markers.append(
+                QStringLiteral("▤")
+                );
+        }
+
+        switch (findingStatus) {
+            case FindingStatus::Open:
+                markers.append(
+                    QStringLiteral("Ⓞ")
+                    );
+                break;
+
+            case FindingStatus::Resolved:
+                markers.append(
+                    QStringLiteral("Ⓡ")
+                    );
+                break;
+
+            case FindingStatus::Dismissed:
+                markers.append(
+                    QStringLiteral("Ⓓ")
+                    );
+                break;
+
+            case FindingStatus::None:
+                break;
+        }
+
+        if (markers.isEmpty()) {
+            return defaultValue;
+        }
+
+        return QStringLiteral("%1 %2")
+            .arg(
+                defaultValue.toString(),
+                markers.join(
+                    QStringLiteral(" ")
+                    )
+                );
+    }
+
+    if (role == Qt::ToolTipRole) {
+        QStringList descriptions;
+
+        if (bookmarked) {
+            descriptions.append(
+                tr("Bookmarked")
+                );
+        }
+
+        if (hasNote) {
+            descriptions.append(
+                tr("Analyst note")
+                );
+        }
+
+        switch (findingStatus) {
+        case FindingStatus::Open:
+            descriptions.append(
+                tr("Finding status: Open")
+                );
+            break;
+
+        case FindingStatus::Resolved:
+            descriptions.append(
+                tr("Finding status: Resolved")
+                );
+            break;
+
+        case FindingStatus::Dismissed:
+            descriptions.append(
+                tr("Finding status: Dismissed")
+                );
+            break;
+
+        case FindingStatus::None:
+            break;
+        }
+
+        if (!descriptions.isEmpty()) {
+            return descriptions.join(
+                QStringLiteral("\n")
+                );
+        }
+    }
+
+    return defaultValue;
 }
 
 QStringList
@@ -727,6 +979,25 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
 
     if (record == nullptr) {
         return false;
+    }
+
+    if (!m_findingStatusFilters.isEmpty()) {
+        const FindingStatus status =
+            m_findingStatuses.value(
+                record->recordId,
+                FindingStatus::None
+                );
+
+        const QString statusValue =
+            findingStatusFilterValue(
+                status
+                );
+
+        if (!m_findingStatusFilters.contains(
+                statusValue
+                )) {
+            return false;
+        }
     }
 
     if (m_bookmarkedOnly

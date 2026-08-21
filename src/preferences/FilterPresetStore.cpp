@@ -23,6 +23,9 @@ const QString SubsystemsKey =
 const QString SearchTextKey =
     QStringLiteral("searchText");
 
+const QString FindingStatusesKey =
+    QStringLiteral("findingStatuses");
+
 const QString BookmarkedOnlyKey =
     QStringLiteral("bookmarkedOnly");
 
@@ -143,6 +146,11 @@ FilterPresetStore::presets() const
             m_settings
                 .value(SearchTextKey)
                 .toString();
+
+        preset.findingStatuses =
+            m_settings
+                .value(FindingStatusesKey)
+                .toStringList();
 
         preset.bookmarkedOnly =
             m_settings
@@ -337,6 +345,11 @@ void FilterPresetStore::writePresets(
         m_settings.setValue(
             SearchTextKey,
             preset.searchText
+            );
+
+        m_settings.setValue(
+            FindingStatusesKey,
+            preset.findingStatuses
             );
 
         m_settings.setValue(

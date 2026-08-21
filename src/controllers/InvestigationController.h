@@ -38,6 +38,7 @@ public:
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
         const CustomFieldFilterMap &customFieldFilters,
+        const QStringList &findingStatuses,
         bool bookmarkedOnly
         );
 

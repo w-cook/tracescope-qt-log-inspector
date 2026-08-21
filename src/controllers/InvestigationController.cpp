@@ -64,6 +64,7 @@ void InvestigationController::setFilterState(
     const std::optional<QDateTime> &startTime,
     const std::optional<QDateTime> &endTime,
     const CustomFieldFilterMap &customFieldFilters,
+    const QStringList &findingStatuses,
     bool bookmarkedOnly
     )
 {
@@ -76,6 +77,7 @@ void InvestigationController::setFilterState(
         startTime,
         endTime,
         customFieldFilters,
+        findingStatuses,
         bookmarkedOnly
         );
 }

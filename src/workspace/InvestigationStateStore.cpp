@@ -94,6 +94,58 @@ InvestigationStateStore::bookmarkedRecordIds() const
     return recordIds;
 }
 
+QSet<QString>
+InvestigationStateStore::notedRecordIds() const
+{
+    QSet<QString> recordIds;
+
+    for (
+        auto iterator = m_states.constBegin();
+        iterator != m_states.constEnd();
+        ++iterator
+        ) {
+        if (!iterator
+                 .value()
+                 .note
+                 .trimmed()
+                 .isEmpty()) {
+            recordIds.insert(
+                iterator.key()
+                );
+        }
+    }
+
+    return recordIds;
+}
+
+QHash<QString, FindingStatus>
+InvestigationStateStore::findingStatuses() const
+{
+    QHash<QString, FindingStatus> statuses;
+
+    for (
+        auto iterator = m_states.constBegin();
+        iterator != m_states.constEnd();
+        ++iterator
+        ) {
+        if (iterator
+                .value()
+                .findingStatus
+            == FindingStatus::None) {
+            continue;
+        }
+
+        statuses.insert(
+            iterator.key(),
+            iterator
+                .value()
+                .findingStatus
+            );
+    }
+
+    return statuses;
+}
+
 void InvestigationStateStore::updateState(
     const QString &recordId,
     const InvestigationRecordState &state

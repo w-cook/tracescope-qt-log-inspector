@@ -9,6 +9,9 @@
 #include <QStringList>
 #include <QMap>
 #include <QSet>
+#include <QHash>
+
+#include "../domain/InvestigationRecordState.h"
 
 #include "InvestigationTableModel.h"
 
@@ -33,6 +36,7 @@ public:
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
         const CustomFieldFilterMap &customFieldFilters,
+        const QStringList &findingStatuses,
         bool bookmarkedOnly
         );
 
@@ -70,8 +74,21 @@ public:
         const CustomFieldFilterMap &filters
         );
 
+    void setFindingStatusFilters(
+        const QStringList &statuses
+        );
+
+    QStringList findingStatusFilters() const;
+
     void setBookmarkedRecordIds(
         const QSet<QString> &recordIds
+        );
+
+    void setInvestigationStateIndicators(
+        const QSet<QString> &bookmarkedRecordIds,
+        const QSet<QString> &notedRecordIds,
+        const QHash<QString, FindingStatus>
+            &findingStatuses
         );
 
     QVariant headerData(
@@ -115,12 +132,19 @@ private:
 
     CustomFieldFilterMap m_customFieldFilters;
 
+    QStringList m_findingStatusFilters;
+
     std::optional<QDateTime> m_timeRangeStart;
     std::optional<QDateTime> m_timeRangeEnd;
 
     QStringMatcher m_searchMatcher;
 
     QSet<QString> m_bookmarkedRecordIds;
+
+    QSet<QString> m_notedRecordIds;
+
+    QHash<QString, FindingStatus>
+        m_findingStatuses;
 
     const InvestigationTableModel *
     investigationModel() const;

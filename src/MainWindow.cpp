@@ -409,6 +409,15 @@ MainWindow::MainWindow(QWidget *parent)
             )
         ),
     eventDetailText(new QPlainTextEdit(this)),
+    findingStatusCombo(
+        new QComboBox(this)
+        ),
+    noteButton(
+        new QPushButton(
+            tr("Add Note"),
+            this
+            )
+        ),
     bookmarkButton(
         new QPushButton(
             tr("Bookmark Event"),
@@ -439,6 +448,7 @@ MainWindow::MainWindow(QWidget *parent)
     subsystemFilterCombo(new MultiSelectFilterComboBox(this)),
     eventCodeFilterCombo(new MultiSelectFilterComboBox(this)),
     entityFilterCombo(new MultiSelectFilterComboBox(this)),
+    findingStatusFilterCombo(new MultiSelectFilterComboBox(this)),
     customFieldFilterEditor(new CustomFieldFilterEditor(this)),
     customFiltersButton(
         new QPushButton(
@@ -1785,12 +1795,74 @@ void MainWindow::buildFilterControls(
             )
         );
 
+    searchInput->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Fixed
+        );
+
     searchDebounceTimer->setSingleShot(
         true
         );
 
     searchDebounceTimer->setInterval(
         SearchDebounceIntervalMs
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Finding-status filter
+     * ---------------------------------------------------------
+     */
+
+    findingStatusFilterCombo
+        ->setEmptySelectionText(
+            tr("All statuses")
+            );
+
+    findingStatusFilterCombo->addFilterItem(
+        tr("Open"),
+        QStringLiteral("OPEN")
+        );
+
+    findingStatusFilterCombo->addFilterItem(
+        tr("Resolved"),
+        QStringLiteral("RESOLVED")
+        );
+
+    findingStatusFilterCombo->addFilterItem(
+        tr("Dismissed"),
+        QStringLiteral("DISMISSED")
+        );
+
+    findingStatusFilterCombo->setMinimumWidth(
+        130
+        );
+
+    findingStatusFilterCombo->setSizePolicy(
+        QSizePolicy::Fixed,
+        QSizePolicy::Fixed
+        );
+
+    findingStatusFilterCombo->setToolTip(
+        tr(
+            "Filter events by investigation "
+            "finding status"
+            )
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Bookmark filter
+     * ---------------------------------------------------------
+     */
+
+    bookmarksOnlyCheckBox->setToolTip(
+        tr("Show only bookmarked events")
+        );
+
+    bookmarksOnlyCheckBox->setSizePolicy(
+        QSizePolicy::Fixed,
+        QSizePolicy::Fixed
         );
 
     /*
@@ -1984,7 +2056,12 @@ void MainWindow::buildFilterControls(
      * ---------------------------------------------------------
      * Row 2
      *
-     * Search | Bookmarks Only | Time Range | Custom Filters | Reset
+     * Search | Finding Status | Bookmarks Only |
+     * Time Range | Custom Filters | Presets | Reset
+     *
+     * Search receives all remaining width. The
+     * investigation-state and action controls retain
+     * their natural fixed widths and stay grouped.
      * ---------------------------------------------------------
      */
 
@@ -2008,23 +2085,23 @@ void MainWindow::buildFilterControls(
         );
 
     secondaryFilterLayout->addWidget(
-        bookmarksOnlyCheckBox
-        );
-
-    bookmarksOnlyCheckBox->setToolTip(
-        tr("Show only bookmarked events")
+        findingStatusFilterCombo,
+        0
         );
 
     secondaryFilterLayout->addWidget(
-        timeRangeButton
+        bookmarksOnlyCheckBox,
+        0
         );
 
     secondaryFilterLayout->addWidget(
-        customFiltersButton
+        timeRangeButton,
+        0
         );
 
     secondaryFilterLayout->addWidget(
-        filterPresetsButton
+        customFiltersButton,
+        0
         );
 
     filterPresetsButton->setMenu(
@@ -2032,7 +2109,13 @@ void MainWindow::buildFilterControls(
         );
 
     secondaryFilterLayout->addWidget(
-        resetFiltersButton
+        filterPresetsButton,
+        0
+        );
+
+    secondaryFilterLayout->addWidget(
+        resetFiltersButton,
+        0
         );
 
     layout->addLayout(
@@ -2041,17 +2124,22 @@ void MainWindow::buildFilterControls(
 
     /*
      * These controls only become available when
-     * the active investigation supports them.
+     * an investigation is active or supports the
+     * corresponding capability.
      */
-    bookmarksOnlyCheckBox->setVisible(
-        false
-        );
-
     timeRangeButton->setVisible(
         false
         );
 
     customFiltersButton->setVisible(
+        false
+        );
+
+    findingStatusFilterCombo->setVisible(
+        false
+        );
+
+    bookmarksOnlyCheckBox->setVisible(
         false
         );
 
@@ -2069,7 +2157,7 @@ void MainWindow::buildFilterControls(
 
     /*
      * ---------------------------------------------------------
-     * Filter connections
+     * Primary categorical filter connections
      * ---------------------------------------------------------
      */
 
@@ -2103,6 +2191,8 @@ void MainWindow::buildFilterControls(
         selectionChanged,
         this,
         [this]() {
+            searchDebounceTimer->stop();
+
             applyFilters();
         }
         );
@@ -2113,16 +2203,27 @@ void MainWindow::buildFilterControls(
         selectionChanged,
         this,
         [this]() {
+            searchDebounceTimer->stop();
+
             applyFilters();
         }
         );
 
+    /*
+     * ---------------------------------------------------------
+     * Investigation-state filter connections
+     * ---------------------------------------------------------
+     */
+
     connect(
-        filterPresetsMenu,
-        &QMenu::aboutToShow,
+        findingStatusFilterCombo,
+        &MultiSelectFilterComboBox::
+        selectionChanged,
         this,
         [this]() {
-            refreshFilterPresetsMenu();
+            searchDebounceTimer->stop();
+
+            applyFilters();
         }
         );
 
@@ -2134,6 +2235,21 @@ void MainWindow::buildFilterControls(
             searchDebounceTimer->stop();
 
             applyFilters();
+        }
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Filter presets
+     * ---------------------------------------------------------
+     */
+
+    connect(
+        filterPresetsMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshFilterPresetsMenu();
         }
         );
 
@@ -2461,6 +2577,8 @@ void MainWindow::applyFilters()
             timeRangeEnd,
             customFieldFilterEditor
                 ->filters(),
+            findingStatusFilterCombo
+                ->selectedValues(),
             bookmarksOnlyCheckBox
                 ->isChecked()
             );
@@ -2510,6 +2628,11 @@ void MainWindow::resetFilters()
             searchInput
             );
 
+        const QSignalBlocker
+            findingStatusBlocker(
+                findingStatusFilterCombo
+                );
+
         const QSignalBlocker bookmarksOnlyBlocker(
             bookmarksOnlyCheckBox
             );
@@ -2547,6 +2670,9 @@ void MainWindow::resetFilters()
         subsystemFilterCombo->clearSelection();
 
         searchInput->clear();
+
+        findingStatusFilterCombo
+            ->clearSelection();
 
         bookmarksOnlyCheckBox->setChecked(
             false
@@ -2622,6 +2748,9 @@ MainWindow::currentFilterPreset(
     preset.searchText =
         proxyModel->searchText();
 
+    preset.findingStatuses =
+        proxyModel->findingStatusFilters();
+
     preset.bookmarkedOnly =
         proxyModel->bookmarkedOnly();
 
@@ -2672,6 +2801,10 @@ void MainWindow::applyFilterPreset(
 
         const QSignalBlocker searchBlocker(
             searchInput
+            );
+
+        const QSignalBlocker findingsStatusBlocker(
+            findingStatusFilterCombo
             );
 
         const QSignalBlocker bookmarksOnlyBlocker(
@@ -2739,6 +2872,11 @@ void MainWindow::applyFilterPreset(
         searchInput->setText(
             preset.searchText
             );
+
+        findingStatusFilterCombo
+            ->setSelectedValues(
+                preset.findingStatuses
+                );
 
         bookmarksOnlyCheckBox->setChecked(
             preset.bookmarkedOnly
@@ -3282,28 +3420,171 @@ void MainWindow::
 QGroupBox *MainWindow::buildDetailPanel()
 {
     auto *detailGroup =
-        new QGroupBox("Selected Event Details", this);
+        new QGroupBox(
+            tr("Selected Event Details"),
+            this
+            );
 
-    eventDetailText->setReadOnly(true);
-    eventDetailText->setPlaceholderText(
-        "Select a telemetry event to view its details."
+    eventDetailText->setReadOnly(
+        true
         );
 
-    auto *detailLayout = new QVBoxLayout(detailGroup);
+    eventDetailText->setPlaceholderText(
+        tr(
+            "Select a telemetry event to "
+            "view its details."
+            )
+        );
 
-    auto *bookmarkLayout =
+    auto *detailLayout =
+        new QVBoxLayout(
+            detailGroup
+            );
+
+    detailLayout->setSpacing(
+        4
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Per-event investigation state
+     *
+     * Keep bookmarks, notes, and finding status
+     * together on one compact row so investigation
+     * controls do not consume additional vertical
+     * space from the event-detail view.
+     * ---------------------------------------------------------
+     */
+
+    auto *stateLayout =
         new QHBoxLayout();
 
-    bookmarkLayout->addStretch();
+    stateLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
 
-    bookmarkButton->setEnabled(false);
+    stateLayout->setSpacing(
+        6
+        );
 
-    bookmarkLayout->addWidget(
+    auto *findingStatusLabel =
+        new QLabel(
+            tr("Finding status:"),
+            detailGroup
+            );
+
+    findingStatusCombo->addItem(
+        tr("None"),
+        static_cast<int>(
+            FindingStatus::None
+            )
+        );
+
+    findingStatusCombo->addItem(
+        tr("Open"),
+        static_cast<int>(
+            FindingStatus::Open
+            )
+        );
+
+    findingStatusCombo->addItem(
+        tr("Resolved"),
+        static_cast<int>(
+            FindingStatus::Resolved
+            )
+        );
+
+    findingStatusCombo->addItem(
+        tr("Dismissed"),
+        static_cast<int>(
+            FindingStatus::Dismissed
+            )
+        );
+
+    findingStatusCombo->setToolTip(
+        tr(
+            "Set the investigation finding status "
+            "for the selected event"
+            )
+        );
+
+    findingStatusCombo->setEnabled(
+        false
+        );
+
+    noteButton->setEnabled(
+        false
+        );
+
+    noteButton->setToolTip(
+        tr(
+            "Add an analyst note to "
+            "the selected event"
+            )
+        );
+
+    bookmarkButton->setEnabled(
+        false
+        );
+
+    bookmarkButton->setToolTip(
+        tr(
+            "Bookmark the selected event "
+            "for later investigation"
+            )
+        );
+
+    stateLayout->addWidget(
+        findingStatusLabel
+        );
+
+    stateLayout->addWidget(
+        findingStatusCombo
+        );
+
+    stateLayout->addStretch();
+
+    stateLayout->addWidget(
+        noteButton
+        );
+
+    stateLayout->addWidget(
         bookmarkButton
         );
 
     detailLayout->addLayout(
-        bookmarkLayout
+        stateLayout
+        );
+
+    detailLayout->addWidget(
+        eventDetailText
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Investigation-state interactions
+     * ---------------------------------------------------------
+     */
+
+    connect(
+        findingStatusCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int) {
+            updateSelectedEventFindingStatus();
+        }
+        );
+
+    connect(
+        noteButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            editSelectedEventNote();
+        }
         );
 
     connect(
@@ -3314,8 +3595,6 @@ QGroupBox *MainWindow::buildDetailPanel()
             toggleSelectedEventBookmark();
         }
         );
-
-    detailLayout->addWidget(eventDetailText);
 
     return detailGroup;
 }
@@ -3334,7 +3613,7 @@ void MainWindow::updateEventDetailFromSelection()
         *record
         );
 
-    updateBookmarkButton();
+    updateInvestigationStateControls();
 }
 
 void MainWindow::displayEventDetail(
@@ -3423,11 +3702,7 @@ void MainWindow::clearEventDetail()
 {
     eventDetailText->clear();
 
-    bookmarkButton->setEnabled(false);
-
-    bookmarkButton->setText(
-        tr("Bookmark Event")
-        );
+    updateInvestigationStateControls();
 }
 
 const InvestigationRecord *
@@ -3454,7 +3729,8 @@ MainWindow::selectedEventRecord() const
             );
 }
 
-void MainWindow::updateBookmarkButton()
+void MainWindow::
+    updateInvestigationStateControls()
 {
     InvestigationSession *session =
         workspace->activeSession();
@@ -3465,7 +3741,45 @@ void MainWindow::updateBookmarkButton()
     if (session == nullptr
         || record == nullptr
         || record->recordId.isEmpty()) {
-        bookmarkButton->setEnabled(false);
+        {
+            const QSignalBlocker blocker(
+                findingStatusCombo
+                );
+
+            const int noneIndex =
+                findingStatusCombo->findData(
+                    static_cast<int>(
+                        FindingStatus::None
+                        )
+                    );
+
+            findingStatusCombo->setCurrentIndex(
+                noneIndex
+                );
+        }
+
+        findingStatusCombo->setEnabled(
+            false
+            );
+
+        noteButton->setEnabled(
+            false
+            );
+
+        noteButton->setText(
+            tr("Add Note")
+            );
+
+        noteButton->setToolTip(
+            tr(
+                "Add an analyst note to "
+                "the selected event"
+                )
+            );
+
+        bookmarkButton->setEnabled(
+            false
+            );
 
         bookmarkButton->setText(
             tr("Bookmark Event")
@@ -3481,7 +3795,52 @@ void MainWindow::updateBookmarkButton()
                 record->recordId
                 );
 
-    bookmarkButton->setEnabled(true);
+    {
+        const QSignalBlocker blocker(
+            findingStatusCombo
+            );
+
+        const int statusIndex =
+            findingStatusCombo->findData(
+                static_cast<int>(
+                    state.findingStatus
+                    )
+                );
+
+        findingStatusCombo->setCurrentIndex(
+            statusIndex
+            );
+    }
+
+    findingStatusCombo->setEnabled(
+        true
+        );
+
+    const bool hasNote =
+        !state.note.trimmed().isEmpty();
+
+    noteButton->setEnabled(
+        true
+        );
+
+    noteButton->setText(
+        hasNote
+            ? tr("View/Edit Note")
+            : tr("Add Note")
+        );
+
+    noteButton->setToolTip(
+        hasNote
+            ? state.note
+            : tr(
+                  "Add an analyst note to "
+                  "the selected event"
+                  )
+        );
+
+    bookmarkButton->setEnabled(
+        true
+        );
 
     bookmarkButton->setText(
         state.bookmarked
@@ -3490,7 +3849,104 @@ void MainWindow::updateBookmarkButton()
         );
 }
 
-void MainWindow::syncBookmarkPresentation()
+void MainWindow::
+    updateSelectedEventFindingStatus()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (session == nullptr
+        || record == nullptr
+        || record->recordId.isEmpty()
+        || !findingStatusCombo
+                ->currentData()
+                .isValid()) {
+        return;
+    }
+
+    const FindingStatus status =
+        static_cast<FindingStatus>(
+            findingStatusCombo
+                ->currentData()
+                .toInt()
+            );
+
+    session
+        ->investigationStateStore()
+        ->setFindingStatus(
+            record->recordId,
+            status
+            );
+
+    syncInvestigationStatePresentation();
+
+    if (!findingStatusFilterCombo
+             ->selectedValues()
+             .isEmpty()) {
+        applyFilters();
+    } else {
+        updateInvestigationStateControls();
+    }
+}
+
+void MainWindow::editSelectedEventNote()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (session == nullptr
+        || record == nullptr
+        || record->recordId.isEmpty()) {
+        return;
+    }
+
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    const InvestigationRecordState state =
+        stateStore->stateForRecord(
+            record->recordId
+            );
+
+    bool accepted = false;
+
+    const QString note =
+        QInputDialog::getMultiLineText(
+            this,
+            tr("Analyst Note"),
+            tr("Note for source record %1:")
+                .arg(
+                    record
+                        ->source
+                        .recordNumber
+                    ),
+            state.note,
+            &accepted
+            );
+
+    if (!accepted) {
+        return;
+    }
+
+    stateStore->setNote(
+        record->recordId,
+        note.trimmed().isEmpty()
+            ? QString()
+            : note
+        );
+
+    syncInvestigationStatePresentation();
+    updateInvestigationStateControls();
+}
+
+void MainWindow::
+    syncInvestigationStatePresentation()
 {
     InvestigationSession *session =
         workspace->activeSession();
@@ -3501,12 +3957,18 @@ void MainWindow::syncBookmarkPresentation()
         return;
     }
 
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
     investigationController
         ->proxyModel()
-        ->setBookmarkedRecordIds(
-            session
-                ->investigationStateStore()
-                ->bookmarkedRecordIds()
+        ->setInvestigationStateIndicators(
+            stateStore
+                ->bookmarkedRecordIds(),
+            stateStore
+                ->notedRecordIds(),
+            stateStore
+                ->findingStatuses()
             );
 }
 
@@ -3539,13 +4001,13 @@ void MainWindow::toggleSelectedEventBookmark()
         !currentlyBookmarked
         );
 
-    syncBookmarkPresentation();
+    syncInvestigationStatePresentation();
 
     if (bookmarksOnlyCheckBox
             ->isChecked()) {
         applyFilters();
     } else {
-        updateBookmarkButton();
+        updateInvestigationStateControls();
     }
 }
 
@@ -6218,6 +6680,11 @@ void MainWindow::bindActiveSession()
                     );
 
             const QSignalBlocker
+                findingStatusBlocker(
+                    findingStatusFilterCombo
+                    );
+
+            const QSignalBlocker
                 bookmarksOnlyBlocker(
                     bookmarksOnlyCheckBox
                     );
@@ -6264,6 +6731,9 @@ void MainWindow::bindActiveSession()
                 ->clearSelection();
 
             searchInput->clear();
+
+            findingStatusFilterCombo
+                ->clearSelection();
 
             bookmarksOnlyCheckBox->setChecked(
                 false
@@ -6338,6 +6808,8 @@ void MainWindow::bindActiveSession()
         searchInput->setVisible(
             false
             );
+
+        findingStatusFilterCombo->setVisible(false);
 
         bookmarksOnlyCheckBox->setVisible(
             false
@@ -6431,7 +6903,7 @@ void MainWindow::bindActiveSession()
         investigationController
             ->proxyModel();
 
-    syncBookmarkPresentation();
+    syncInvestigationStatePresentation();
 
     /*
      * Capture the active session's filter state
@@ -6456,6 +6928,9 @@ void MainWindow::bindActiveSession()
     const QString searchText =
         proxyModel->searchText();
 
+    const QStringList findingStatusFilters =
+        proxyModel->findingStatusFilters();
+
     const bool bookmarkedOnly =
         proxyModel->bookmarkedOnly();
 
@@ -6472,6 +6947,10 @@ void MainWindow::bindActiveSession()
      * an investigation is active.
      */
     searchInput->setVisible(
+        true
+        );
+
+    findingStatusFilterCombo->setVisible(
         true
         );
 
@@ -6519,6 +6998,11 @@ void MainWindow::bindActiveSession()
         const QSignalBlocker
             searchBlocker(
                 searchInput
+                );
+
+        const QSignalBlocker
+            findingStatusBlocker(
+                findingStatusFilterCombo
                 );
 
         const QSignalBlocker
@@ -6599,6 +7083,11 @@ void MainWindow::bindActiveSession()
         searchInput->setText(
             searchText
             );
+
+        findingStatusFilterCombo
+            ->setSelectedValues(
+                findingStatusFilters
+                );
 
         bookmarksOnlyCheckBox->setChecked(
             bookmarkedOnly
