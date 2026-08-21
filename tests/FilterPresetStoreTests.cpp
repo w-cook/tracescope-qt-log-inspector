@@ -50,6 +50,8 @@ void FilterPresetStoreTests::roundTripsCompletePreset()
     preset.searchText =
         QStringLiteral("timeout");
 
+    preset.bookmarkedOnly = true;
+
     preset.eventCodes = {
         QStringLiteral("DB-100"),
         QStringLiteral("DB-200")
@@ -124,6 +126,11 @@ QCOMPARE(
 QCOMPARE(
     loaded.searchText,
     preset.searchText
+    );
+
+QCOMPARE(
+    loaded.bookmarkedOnly,
+    preset.bookmarkedOnly
     );
 
 QCOMPARE(

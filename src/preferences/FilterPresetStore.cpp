@@ -23,6 +23,9 @@ const QString SubsystemsKey =
 const QString SearchTextKey =
     QStringLiteral("searchText");
 
+const QString BookmarkedOnlyKey =
+    QStringLiteral("bookmarkedOnly");
+
 const QString EventCodesKey =
     QStringLiteral("eventCodes");
 
@@ -140,6 +143,14 @@ FilterPresetStore::presets() const
             m_settings
                 .value(SearchTextKey)
                 .toString();
+
+        preset.bookmarkedOnly =
+            m_settings
+                .value(
+                    BookmarkedOnlyKey,
+                    false
+                    )
+                .toBool();
 
         preset.eventCodes =
             m_settings
@@ -326,6 +337,11 @@ void FilterPresetStore::writePresets(
         m_settings.setValue(
             SearchTextKey,
             preset.searchText
+            );
+
+        m_settings.setValue(
+            BookmarkedOnlyKey,
+            preset.bookmarkedOnly
             );
 
         m_settings.setValue(

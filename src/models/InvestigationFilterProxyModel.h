@@ -32,8 +32,15 @@ public:
         const QStringList &entityIds,
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
-        const CustomFieldFilterMap &customFieldFilters
+        const CustomFieldFilterMap &customFieldFilters,
+        bool bookmarkedOnly
         );
+
+    void setBookmarkedOnly(
+        bool bookmarkedOnly
+        );
+
+    bool bookmarkedOnly() const;
 
     void setSeverityFilters(const QStringList &severities);
     void setSeverityFilter(const QString &severity);
@@ -98,6 +105,8 @@ protected:
         ) const override;
 
 private:
+    bool m_bookmarkedOnly = false;
+
     QStringList m_severityFilters;
     QStringList m_subsystemFilters;
     QString m_searchText;

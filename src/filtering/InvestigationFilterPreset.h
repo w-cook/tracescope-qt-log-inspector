@@ -16,6 +16,8 @@ struct InvestigationFilterPreset
 
     QString searchText;
 
+    bool bookmarkedOnly = false;
+
     QStringList eventCodes;
     QStringList entityIds;
 

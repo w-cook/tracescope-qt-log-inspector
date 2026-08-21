@@ -12,6 +12,8 @@ private slots:
     void emptyFiltersExposeAllRecords();
     void filtersBySeverity();
     void filtersBySubsystem();
+    void filtersByBookmark();
+    void updatesBookmarkFilterWhenBookmarksChange();
     void searchesCanonicalFieldsCaseInsensitively();
     void searchesCustomAttributes();
     void searchesNormalizedSeverityWithRawSource();
@@ -136,6 +138,71 @@ void InvestigationFilterProxyModelTests::
                       proxyModel.index(0, 1)
                       ).toString(),
         QStringLiteral("ERROR")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    filtersByBookmark()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setBookmarkedRecordIds({
+        QStringLiteral("record-tracking"),
+        QStringLiteral("record-comms")
+    });
+
+    proxyModel.setBookmarkedOnly(true);
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        2
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    updatesBookmarkFilterWhenBookmarksChange()
+{
+    InvestigationTableModel sourceModel;
+    sourceModel.setRecords(sampleRecords());
+
+    InvestigationFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.setBookmarkedRecordIds({
+        QStringLiteral("record-startup"),
+        QStringLiteral("record-tracking")
+    });
+
+    proxyModel.setBookmarkedOnly(true);
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        2
+        );
+
+    proxyModel.setBookmarkedRecordIds({
+        QStringLiteral("record-comms")
+    });
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        1
+        );
+
+    const QModelIndex sourceIndex =
+        proxyModel.mapToSource(
+            proxyModel.index(0, 0)
+            );
+
+    QCOMPARE(
+        sourceModel
+            .recordAt(sourceIndex.row())
+            ->recordId,
+        QStringLiteral("record-comms")
         );
 }
 
@@ -428,7 +495,8 @@ void InvestigationFilterProxyModelTests::
         },
         start,
         end,
-        customFilters
+        customFilters,
+        false
         );
 
     QCOMPARE(
@@ -488,7 +556,8 @@ void InvestigationFilterProxyModelTests::
         },
         start,
         end,
-        customFilters
+        customFilters,
+        false
         );
 
     QCOMPARE(

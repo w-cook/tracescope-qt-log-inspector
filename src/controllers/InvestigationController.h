@@ -37,7 +37,8 @@ public:
         const QStringList &entityIds,
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
-        const CustomFieldFilterMap &customFieldFilters
+        const CustomFieldFilterMap &customFieldFilters,
+        bool bookmarkedOnly
         );
 
     void setFilters(

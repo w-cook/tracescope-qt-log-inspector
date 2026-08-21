@@ -63,7 +63,8 @@ void InvestigationController::setFilterState(
     const QStringList &entityIds,
     const std::optional<QDateTime> &startTime,
     const std::optional<QDateTime> &endTime,
-    const CustomFieldFilterMap &customFieldFilters
+    const CustomFieldFilterMap &customFieldFilters,
+    bool bookmarkedOnly
     )
 {
     m_proxyModel.setFilterState(
@@ -74,7 +75,8 @@ void InvestigationController::setFilterState(
         entityIds,
         startTime,
         endTime,
-        customFieldFilters
+        customFieldFilters,
+        bookmarkedOnly
         );
 }
 

@@ -94,6 +94,8 @@ private:
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
 
+    QCheckBox *bookmarksOnlyCheckBox;
+
     QPushButton *filterPresetsButton;
     QMenu *filterPresetsMenu;
 

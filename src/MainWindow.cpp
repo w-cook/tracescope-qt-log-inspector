@@ -459,6 +459,12 @@ MainWindow::MainWindow(QWidget *parent)
         new QDialog(this)
         ),
     searchInput(new QLineEdit(this)),
+    bookmarksOnlyCheckBox(
+        new QCheckBox(
+            tr("Bookmarks only"),
+            this
+            )
+        ),
     searchDebounceTimer(new QTimer(this))
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
@@ -1978,7 +1984,7 @@ void MainWindow::buildFilterControls(
      * ---------------------------------------------------------
      * Row 2
      *
-     * Search | Time Range | Custom Filters | Reset
+     * Search | Bookmarks Only | Time Range | Custom Filters | Reset
      * ---------------------------------------------------------
      */
 
@@ -1999,6 +2005,14 @@ void MainWindow::buildFilterControls(
     secondaryFilterLayout->addWidget(
         searchInput,
         1
+        );
+
+    secondaryFilterLayout->addWidget(
+        bookmarksOnlyCheckBox
+        );
+
+    bookmarksOnlyCheckBox->setToolTip(
+        tr("Show only bookmarked events")
         );
 
     secondaryFilterLayout->addWidget(
@@ -2029,6 +2043,10 @@ void MainWindow::buildFilterControls(
      * These controls only become available when
      * the active investigation supports them.
      */
+    bookmarksOnlyCheckBox->setVisible(
+        false
+        );
+
     timeRangeButton->setVisible(
         false
         );
@@ -2105,6 +2123,17 @@ void MainWindow::buildFilterControls(
         this,
         [this]() {
             refreshFilterPresetsMenu();
+        }
+        );
+
+    connect(
+        bookmarksOnlyCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this]() {
+            searchDebounceTimer->stop();
+
+            applyFilters();
         }
         );
 
@@ -2431,7 +2460,9 @@ void MainWindow::applyFilters()
             timeRangeStart,
             timeRangeEnd,
             customFieldFilterEditor
-                ->filters()
+                ->filters(),
+            bookmarksOnlyCheckBox
+                ->isChecked()
             );
 
     eventTable->clearSelection();
@@ -2479,6 +2510,10 @@ void MainWindow::resetFilters()
             searchInput
             );
 
+        const QSignalBlocker bookmarksOnlyBlocker(
+            bookmarksOnlyCheckBox
+            );
+
         const QSignalBlocker eventCodeBlocker(
             eventCodeFilterCombo
             );
@@ -2512,6 +2547,10 @@ void MainWindow::resetFilters()
         subsystemFilterCombo->clearSelection();
 
         searchInput->clear();
+
+        bookmarksOnlyCheckBox->setChecked(
+            false
+            );
 
         eventCodeFilterCombo->clearSelection();
 
@@ -2583,6 +2622,9 @@ MainWindow::currentFilterPreset(
     preset.searchText =
         proxyModel->searchText();
 
+    preset.bookmarkedOnly =
+        proxyModel->bookmarkedOnly();
+
     preset.eventCodes =
         proxyModel->eventCodeFilters();
 
@@ -2630,6 +2672,10 @@ void MainWindow::applyFilterPreset(
 
         const QSignalBlocker searchBlocker(
             searchInput
+            );
+
+        const QSignalBlocker bookmarksOnlyBlocker(
+            bookmarksOnlyCheckBox
             );
 
         const QSignalBlocker eventCodeBlocker(
@@ -2692,6 +2738,10 @@ void MainWindow::applyFilterPreset(
 
         searchInput->setText(
             preset.searchText
+            );
+
+        bookmarksOnlyCheckBox->setChecked(
+            preset.bookmarkedOnly
             );
 
         if (hasTimestampData) {
@@ -3490,7 +3540,13 @@ void MainWindow::toggleSelectedEventBookmark()
         );
 
     syncBookmarkPresentation();
-    updateBookmarkButton();
+
+    if (bookmarksOnlyCheckBox
+            ->isChecked()) {
+        applyFilters();
+    } else {
+        updateBookmarkButton();
+    }
 }
 
 void MainWindow::navigateToAdjacentIssue(
@@ -6162,6 +6218,11 @@ void MainWindow::bindActiveSession()
                     );
 
             const QSignalBlocker
+                bookmarksOnlyBlocker(
+                    bookmarksOnlyCheckBox
+                    );
+
+            const QSignalBlocker
                 eventCodeBlocker(
                     eventCodeFilterCombo
                     );
@@ -6203,6 +6264,10 @@ void MainWindow::bindActiveSession()
                 ->clearSelection();
 
             searchInput->clear();
+
+            bookmarksOnlyCheckBox->setChecked(
+                false
+                );
 
             eventCodeFilterCombo
                 ->clearSelection();
@@ -6271,6 +6336,10 @@ void MainWindow::bindActiveSession()
             );
 
         searchInput->setVisible(
+            false
+            );
+
+        bookmarksOnlyCheckBox->setVisible(
             false
             );
 
@@ -6387,6 +6456,9 @@ void MainWindow::bindActiveSession()
     const QString searchText =
         proxyModel->searchText();
 
+    const bool bookmarkedOnly =
+        proxyModel->bookmarkedOnly();
+
     const std::optional<QDateTime>
         timeRangeStart =
         proxyModel->timeRangeStart();
@@ -6396,10 +6468,14 @@ void MainWindow::bindActiveSession()
         proxyModel->timeRangeEnd();
 
     /*
-     * Search and Reset are meaningful whenever
+     * Search, Bookmarks, and Reset are meaningful whenever
      * an investigation is active.
      */
     searchInput->setVisible(
+        true
+        );
+
+    bookmarksOnlyCheckBox->setVisible(
         true
         );
 
@@ -6443,6 +6519,11 @@ void MainWindow::bindActiveSession()
         const QSignalBlocker
             searchBlocker(
                 searchInput
+                );
+
+        const QSignalBlocker
+            bookmarksOnlyBlocker(
+                bookmarksOnlyCheckBox
                 );
 
         const QSignalBlocker
@@ -6517,6 +6598,10 @@ void MainWindow::bindActiveSession()
 
         searchInput->setText(
             searchText
+            );
+
+        bookmarksOnlyCheckBox->setChecked(
+            bookmarkedOnly
             );
 
         /*

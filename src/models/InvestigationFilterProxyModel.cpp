@@ -123,7 +123,8 @@ void InvestigationFilterProxyModel::
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
         const CustomFieldFilterMap
-            &customFieldFilters
+            &customFieldFilters,
+        bool bookmarkedOnly
         )
 {
     const QStringList normalizedSeverities =
@@ -189,7 +190,9 @@ void InvestigationFilterProxyModel::
         && m_timeRangeEnd
                == normalizedEnd
         && m_customFieldFilters
-               == normalizedCustomFilters) {
+               == normalizedCustomFilters
+        && m_bookmarkedOnly
+               == bookmarkedOnly) {
         return;
     }
 
@@ -214,6 +217,9 @@ void InvestigationFilterProxyModel::
 
     m_searchText =
         normalizedSearchText;
+
+    m_bookmarkedOnly =
+        bookmarkedOnly;
 
     m_eventCodeFilters =
         normalizedEventCodes;
@@ -549,6 +555,17 @@ void InvestigationFilterProxyModel::
         return;
     }
 
+    if (m_bookmarkedOnly) {
+        beginResetModel();
+
+        m_bookmarkedRecordIds =
+            recordIds;
+
+        endResetModel();
+
+        return;
+    }
+
     m_bookmarkedRecordIds =
         recordIds;
 
@@ -712,6 +729,13 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
         return false;
     }
 
+    if (m_bookmarkedOnly
+        && !m_bookmarkedRecordIds.contains(
+            record->recordId
+            )) {
+        return false;
+    }
+
     if (!m_severityFilters.isEmpty()) {
         if (!record->severity.has_value()
             || !m_severityFilters.contains(
@@ -808,6 +832,30 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
     }
 
     return true;
+}
+
+void InvestigationFilterProxyModel::
+    setBookmarkedOnly(
+        bool bookmarkedOnly
+        )
+{
+    if (m_bookmarkedOnly
+        == bookmarkedOnly) {
+        return;
+    }
+
+    beginResetModel();
+
+    m_bookmarkedOnly =
+        bookmarkedOnly;
+
+    endResetModel();
+}
+
+bool InvestigationFilterProxyModel::
+    bookmarkedOnly() const
+{
+    return m_bookmarkedOnly;
 }
 
 const InvestigationTableModel *
