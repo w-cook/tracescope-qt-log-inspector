@@ -47,6 +47,11 @@
 #include <QMenu>
 #include <QInputDialog>
 #include <QTabWidget>
+#include <QDialogButtonBox>
+#include <QTextOption>
+#include <QPainter>
+#include <QStyledItemDelegate>
+#include <QTextDocument>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -391,6 +396,179 @@ QString findingStatusDisplayText(
 
     return QString();
 }
+
+class FindingTextDelegate
+    : public QStyledItemDelegate
+{
+public:
+    explicit FindingTextDelegate(
+        QObject *parent = nullptr
+        )
+        : QStyledItemDelegate(parent)
+    {
+    }
+
+    void paint(
+        QPainter *painter,
+        const QStyleOptionViewItem &option,
+        const QModelIndex &index
+        ) const override
+    {
+        QStyleOptionViewItem itemOption(
+            option
+            );
+
+        initStyleOption(
+            &itemOption,
+            index
+            );
+
+        QStyle *style =
+            itemOption.widget != nullptr
+                ? itemOption.widget->style()
+                : QApplication::style();
+
+        /*
+         * Draw the normal cell background,
+         * selection state, focus, etc., but not
+         * the default single-line text.
+         */
+        const QString text =
+            itemOption.text;
+
+        itemOption.text.clear();
+
+        style->drawControl(
+            QStyle::CE_ItemViewItem,
+            &itemOption,
+            painter,
+            itemOption.widget
+            );
+
+        QTextDocument document;
+
+        document.setDocumentMargin(
+            0.0
+            );
+
+        document.setDefaultFont(
+            option.font
+            );
+
+        QTextOption textOption;
+
+        textOption.setWrapMode(
+            QTextOption::
+            WrapAtWordBoundaryOrAnywhere
+            );
+
+        document.setDefaultTextOption(
+            textOption
+            );
+
+        document.setPlainText(
+            text
+            );
+
+        const int horizontalPadding = 8;
+
+        document.setTextWidth(
+            std::max(
+                1,
+                option.rect.width()
+                    - horizontalPadding
+                )
+            );
+
+        QAbstractTextDocumentLayout::PaintContext
+            context;
+
+        context.palette =
+            option.palette;
+
+        if (
+            option.state
+            & QStyle::State_Selected
+            ) {
+            context.palette.setColor(
+                QPalette::Text,
+                option.palette.color(
+                    QPalette::HighlightedText
+                    )
+                );
+        }
+
+        painter->save();
+
+        painter->translate(
+            option.rect.left() + 4,
+            option.rect.top() + 2
+            );
+
+        document
+            .documentLayout()
+            ->draw(
+                painter,
+                context
+                );
+
+        painter->restore();
+    }
+
+    QSize sizeHint(
+        const QStyleOptionViewItem &option,
+        const QModelIndex &index
+        ) const override
+    {
+        QStyleOptionViewItem itemOption(
+            option
+            );
+
+        initStyleOption(
+            &itemOption,
+            index
+            );
+
+        QTextDocument document;
+
+        document.setDocumentMargin(
+            0.0
+            );
+
+        document.setDefaultFont(
+            itemOption.font
+            );
+
+        QTextOption textOption;
+
+        textOption.setWrapMode(
+            QTextOption::
+            WrapAtWordBoundaryOrAnywhere
+            );
+
+        document.setDefaultTextOption(
+            textOption
+            );
+
+        document.setPlainText(
+            itemOption.text
+            );
+
+        document.setTextWidth(
+            std::max(
+                1,
+                itemOption.rect.width() - 8
+                )
+            );
+
+        return QSize(
+            itemOption.rect.width(),
+            static_cast<int>(
+                document.size().height()
+                ) + 6
+            );
+    }
+};
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -3646,6 +3824,13 @@ QGroupBox *MainWindow::buildDetailPanel()
             )
         );
 
+    findingStatusCombo->setMinimumWidth(
+        findingStatusCombo
+            ->sizeHint()
+            .width()
+        + 8
+        );
+
     findingStatusCombo->setToolTip(
         tr(
             "Set the investigation finding status "
@@ -4038,58 +4223,206 @@ void MainWindow::
 
 void MainWindow::editSelectedEventNote()
 {
-    InvestigationSession *session =
-        workspace->activeSession();
-
     const InvestigationRecord *record =
         selectedEventRecord();
 
-    if (session == nullptr
-        || record == nullptr
-        || record->recordId.isEmpty()) {
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (record == nullptr
+        || session == nullptr) {
         return;
     }
 
-    InvestigationStateStore *stateStore =
-        session->investigationStateStore();
+    const QString recordId =
+        record->recordId;
+
+    const QString sessionId =
+        session->id();
 
     const InvestigationRecordState state =
-        stateStore->stateForRecord(
-            record->recordId
-            );
+        session
+            ->investigationStateStore()
+            ->stateForRecord(
+                recordId
+                );
 
-    bool accepted = false;
+    auto *dialog =
+        new QDialog(this);
 
-    const QString note =
-        QInputDialog::getMultiLineText(
-            this,
-            tr("Analyst Note"),
-            tr("Note for source record %1:")
-                .arg(
-                    record
-                        ->source
-                        .recordNumber
-                    ),
-            state.note,
-            &accepted
-            );
-
-    if (!accepted) {
-        return;
-    }
-
-    stateStore->setNote(
-        record->recordId,
-        note.trimmed().isEmpty()
-            ? QString()
-            : note
+    dialog->setAttribute(
+        Qt::WA_DeleteOnClose
         );
 
-    syncInvestigationStatePresentation();
+    dialog->setWindowModality(
+        Qt::NonModal
+        );
 
-    updateFindingsPanel();
+    dialog->setModal(
+        false
+        );
 
-    updateInvestigationStateControls();
+    dialog->setWindowTitle(
+        tr("Analyst Note")
+        );
+
+    dialog->resize(
+        520,
+        300
+        );
+
+    auto *layout =
+        new QVBoxLayout(dialog);
+
+    /*
+     * Make it clear which record this modeless
+     * editor belongs to, since the analyst is free
+     * to select other records while it is open.
+     */
+    QString recordDescription =
+        tr("Source record #%1")
+            .arg(
+                record->source.recordNumber
+                );
+
+    if (record->eventCode.has_value()) {
+        recordDescription +=
+            tr(" — %1")
+                .arg(
+                    record->eventCode.value()
+                    );
+    }
+
+    auto *recordLabel =
+        new QLabel(
+            recordDescription,
+            dialog
+            );
+
+    layout->addWidget(
+        recordLabel
+        );
+
+    auto *noteEdit =
+        new QPlainTextEdit(
+            dialog
+            );
+
+    noteEdit->setPlainText(
+        state.note
+        );
+
+    /*
+     * Wrap only the visual presentation.
+     *
+     * QPlainTextEdit does not insert newline
+     * characters when a line wraps, so resizing
+     * the editor simply reflows the text.
+     */
+    noteEdit->setLineWrapMode(
+        QPlainTextEdit::WidgetWidth
+        );
+
+    noteEdit->setWordWrapMode(
+        QTextOption::WrapAtWordBoundaryOrAnywhere
+        );
+
+    noteEdit->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOff
+        );
+
+    layout->addWidget(
+        noteEdit,
+        1
+        );
+
+    auto *buttonBox =
+        new QDialogButtonBox(
+            QDialogButtonBox::Save
+                | QDialogButtonBox::Cancel,
+            dialog
+            );
+
+    layout->addWidget(
+        buttonBox
+        );
+
+    connect(
+        buttonBox,
+        &QDialogButtonBox::rejected,
+        dialog,
+        &QDialog::close
+        );
+
+    connect(
+        buttonBox,
+        &QDialogButtonBox::accepted,
+        this,
+        [
+            this,
+            dialog,
+            noteEdit,
+            sessionId,
+            recordId
+    ]() {
+            const int sessionIndex =
+                workspace->indexOfSession(
+                    sessionId
+                    );
+
+            if (sessionIndex < 0) {
+                /*
+                 * The source investigation was
+                 * closed while this modeless editor
+                 * was open.
+                 */
+                dialog->close();
+
+                return;
+            }
+
+            InvestigationSession *targetSession =
+                workspace->sessionAt(
+                    sessionIndex
+                    );
+
+            if (targetSession == nullptr) {
+                dialog->close();
+
+                return;
+            }
+
+            const QString note =
+                noteEdit->toPlainText();
+
+            targetSession
+                ->investigationStateStore()
+                ->setNote(
+                    recordId,
+                    note.trimmed().isEmpty()
+                        ? QString()
+                        : note
+                    );
+
+            /*
+             * Only the active session can currently
+             * affect the visible investigation UI.
+             */
+            if (
+                workspace->activeSession()
+                == targetSession
+                ) {
+                updateInvestigationStateControls();
+                updateFindingsPanel();
+            }
+
+            dialog->close();
+        }
+        );
+
+    dialog->show();
+
+    noteEdit->setFocus();
 }
 
 void MainWindow::
@@ -4526,6 +4859,13 @@ QWidget *MainWindow::buildFindingsPanel()
 
     findingsTable->setSortingEnabled(
         false
+        );
+
+    findingsTable->setItemDelegateForColumn(
+        3,
+        new FindingTextDelegate(
+            findingsTable
+            )
         );
 
     findingsTable->setWordWrap(
