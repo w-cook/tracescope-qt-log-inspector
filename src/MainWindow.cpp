@@ -428,14 +428,14 @@ public:
                 ? itemOption.widget->style()
                 : QApplication::style();
 
-        /*
-         * Draw the normal cell background,
-         * selection state, focus, etc., but not
-         * the default single-line text.
-         */
         const QString text =
             itemOption.text;
 
+        /*
+     * Let Qt paint the normal cell background,
+     * selection, focus state, etc., but suppress
+     * its single-line text painting.
+     */
         itemOption.text.clear();
 
         style->drawControl(
@@ -470,7 +470,8 @@ public:
             text
             );
 
-        const int horizontalPadding = 8;
+        constexpr int horizontalPadding = 8;
+        constexpr int verticalPadding = 4;
 
         document.setTextWidth(
             std::max(
@@ -480,23 +481,75 @@ public:
                 )
             );
 
+        /*
+     * Choose the text color explicitly rather than
+     * relying on QTextDocument to infer it from the
+     * view's changing active/inactive palette.
+     */
+        QPalette::ColorGroup colorGroup;
+
+        if (!(itemOption.state
+              & QStyle::State_Enabled)) {
+            colorGroup =
+                QPalette::Disabled;
+        } else if (
+            itemOption.state
+            & QStyle::State_Active
+            ) {
+            colorGroup =
+                QPalette::Active;
+        } else {
+            colorGroup =
+                QPalette::Inactive;
+        }
+
+        const bool selected =
+            itemOption.state
+            & QStyle::State_Selected;
+
+        const QColor textColor =
+            selected
+                ? itemOption.palette.color(
+                      colorGroup,
+                      QPalette::HighlightedText
+                      )
+                : itemOption.palette.color(
+                      colorGroup,
+                      QPalette::Text
+                      );
+
         QAbstractTextDocumentLayout::PaintContext
             context;
 
         context.palette =
-            option.palette;
+            itemOption.palette;
 
-        if (
-            option.state
-            & QStyle::State_Selected
-            ) {
-            context.palette.setColor(
-                QPalette::Text,
-                option.palette.color(
-                    QPalette::HighlightedText
+        /*
+     * QTextDocument normally uses Text, but setting
+     * both roles makes the intended foreground
+     * unambiguous across platform styles.
+     */
+        context.palette.setColor(
+            QPalette::Text,
+            textColor
+            );
+
+        context.palette.setColor(
+            QPalette::WindowText,
+            textColor
+            );
+
+        context.clip =
+            QRectF(
+                0,
+                0,
+                document.textWidth(),
+                std::max(
+                    1,
+                    option.rect.height()
+                        - verticalPadding
                     )
                 );
-        }
 
         painter->save();
 
