@@ -74,6 +74,26 @@ void InvestigationStateStore::retainOnly(
     }
 }
 
+QSet<QString>
+InvestigationStateStore::bookmarkedRecordIds() const
+{
+    QSet<QString> recordIds;
+
+    for (
+        auto iterator = m_states.constBegin();
+        iterator != m_states.constEnd();
+        ++iterator
+        ) {
+        if (iterator.value().bookmarked) {
+            recordIds.insert(
+                iterator.key()
+                );
+        }
+    }
+
+    return recordIds;
+}
+
 void InvestigationStateStore::updateState(
     const QString &recordId,
     const InvestigationRecordState &state

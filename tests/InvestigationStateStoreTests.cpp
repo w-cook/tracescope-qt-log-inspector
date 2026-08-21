@@ -16,6 +16,7 @@ private slots:
     void storesFindingStatus();
     void preservesIndependentStateProperties();
     void retainOnlyRemovesMissingRecords();
+    void reportsBookmarkedRecordIds();
 };
 
 void InvestigationStateStoreTests::
@@ -236,6 +237,53 @@ void InvestigationStateStoreTests::
 
     QVERIFY(
         store.hasStateForRecord(
+            QStringLiteral("record-3")
+            )
+        );
+}
+
+void InvestigationStateStoreTests::
+    reportsBookmarkedRecordIds()
+{
+    InvestigationStateStore store;
+
+    store.setBookmarked(
+        QStringLiteral("record-1"),
+        true
+        );
+
+    store.setNote(
+        QStringLiteral("record-2"),
+        QStringLiteral("Not bookmarked")
+        );
+
+    store.setBookmarked(
+        QStringLiteral("record-3"),
+        true
+        );
+
+    const QSet<QString> recordIds =
+        store.bookmarkedRecordIds();
+
+    QCOMPARE(
+        recordIds.size(),
+        2
+        );
+
+    QVERIFY(
+        recordIds.contains(
+            QStringLiteral("record-1")
+            )
+        );
+
+    QVERIFY(
+        !recordIds.contains(
+            QStringLiteral("record-2")
+            )
+        );
+
+    QVERIFY(
+        recordIds.contains(
             QStringLiteral("record-3")
             )
         );

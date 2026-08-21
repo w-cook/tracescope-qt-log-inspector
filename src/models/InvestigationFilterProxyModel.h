@@ -8,6 +8,7 @@
 #include <QStringMatcher>
 #include <QStringList>
 #include <QMap>
+#include <QSet>
 
 #include "InvestigationTableModel.h"
 
@@ -62,6 +63,16 @@ public:
         const CustomFieldFilterMap &filters
         );
 
+    void setBookmarkedRecordIds(
+        const QSet<QString> &recordIds
+        );
+
+    QVariant headerData(
+        int section,
+        Qt::Orientation orientation,
+        int role = Qt::DisplayRole
+        ) const override;
+
     QStringList eventCodeFilters() const;
     QStringList entityFilters() const;
 
@@ -99,6 +110,8 @@ private:
     std::optional<QDateTime> m_timeRangeEnd;
 
     QStringMatcher m_searchMatcher;
+
+    QSet<QString> m_bookmarkedRecordIds;
 
     const InvestigationTableModel *
     investigationModel() const;

@@ -409,6 +409,12 @@ MainWindow::MainWindow(QWidget *parent)
             )
         ),
     eventDetailText(new QPlainTextEdit(this)),
+    bookmarkButton(
+        new QPushButton(
+            tr("Bookmark Event"),
+            this
+            )
+        ),
     issueSummaryTable(new QTableWidget(0, 4)),
     issueSummaryGroup(nullptr),
     workspace(new InvestigationWorkspace(this)),
@@ -3234,6 +3240,31 @@ QGroupBox *MainWindow::buildDetailPanel()
         );
 
     auto *detailLayout = new QVBoxLayout(detailGroup);
+
+    auto *bookmarkLayout =
+        new QHBoxLayout();
+
+    bookmarkLayout->addStretch();
+
+    bookmarkButton->setEnabled(false);
+
+    bookmarkLayout->addWidget(
+        bookmarkButton
+        );
+
+    detailLayout->addLayout(
+        bookmarkLayout
+        );
+
+    connect(
+        bookmarkButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            toggleSelectedEventBookmark();
+        }
+        );
+
     detailLayout->addWidget(eventDetailText);
 
     return detailGroup;
@@ -3241,33 +3272,19 @@ QGroupBox *MainWindow::buildDetailPanel()
 
 void MainWindow::updateEventDetailFromSelection()
 {
-    if (investigationController == nullptr
-        || eventTable->selectionModel() == nullptr) {
-        clearEventDetail();
-        return;
-    }
-
-    const QModelIndexList selectedRows =
-        eventTable->selectionModel()
-            ->selectedRows();
-
-    if (selectedRows.isEmpty()) {
-        clearEventDetail();
-        return;
-    }
-
     const InvestigationRecord *record =
-        investigationController
-            ->recordForProxyIndex(
-                selectedRows.first()
-                );
+        selectedEventRecord();
 
     if (record == nullptr) {
         clearEventDetail();
         return;
     }
 
-    displayEventDetail(*record);
+    displayEventDetail(
+        *record
+        );
+
+    updateBookmarkButton();
 }
 
 void MainWindow::displayEventDetail(
@@ -3355,6 +3372,125 @@ void MainWindow::displayEventDetail(
 void MainWindow::clearEventDetail()
 {
     eventDetailText->clear();
+
+    bookmarkButton->setEnabled(false);
+
+    bookmarkButton->setText(
+        tr("Bookmark Event")
+        );
+}
+
+const InvestigationRecord *
+MainWindow::selectedEventRecord() const
+{
+    if (investigationController == nullptr
+        || eventTable->selectionModel()
+               == nullptr) {
+        return nullptr;
+    }
+
+    const QModelIndexList selectedRows =
+        eventTable
+            ->selectionModel()
+            ->selectedRows();
+
+    if (selectedRows.isEmpty()) {
+        return nullptr;
+    }
+
+    return investigationController
+        ->recordForProxyIndex(
+            selectedRows.first()
+            );
+}
+
+void MainWindow::updateBookmarkButton()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (session == nullptr
+        || record == nullptr
+        || record->recordId.isEmpty()) {
+        bookmarkButton->setEnabled(false);
+
+        bookmarkButton->setText(
+            tr("Bookmark Event")
+            );
+
+        return;
+    }
+
+    const InvestigationRecordState state =
+        session
+            ->investigationStateStore()
+            ->stateForRecord(
+                record->recordId
+                );
+
+    bookmarkButton->setEnabled(true);
+
+    bookmarkButton->setText(
+        state.bookmarked
+            ? tr("Remove Bookmark")
+            : tr("Bookmark Event")
+        );
+}
+
+void MainWindow::syncBookmarkPresentation()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr
+        || investigationController
+               == nullptr) {
+        return;
+    }
+
+    investigationController
+        ->proxyModel()
+        ->setBookmarkedRecordIds(
+            session
+                ->investigationStateStore()
+                ->bookmarkedRecordIds()
+            );
+}
+
+void MainWindow::toggleSelectedEventBookmark()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (session == nullptr
+        || record == nullptr
+        || record->recordId.isEmpty()) {
+        return;
+    }
+
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    const bool currentlyBookmarked =
+        stateStore
+            ->stateForRecord(
+                record->recordId
+                )
+            .bookmarked;
+
+    stateStore->setBookmarked(
+        record->recordId,
+        !currentlyBookmarked
+        );
+
+    syncBookmarkPresentation();
+    updateBookmarkButton();
 }
 
 void MainWindow::navigateToAdjacentIssue(
@@ -6225,6 +6361,8 @@ void MainWindow::bindActiveSession()
         *proxyModel =
         investigationController
             ->proxyModel();
+
+    syncBookmarkPresentation();
 
     /*
      * Capture the active session's filter state

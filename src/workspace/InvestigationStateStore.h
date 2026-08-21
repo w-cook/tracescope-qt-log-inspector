@@ -39,6 +39,8 @@ public:
         const QSet<QString> &recordIds
         );
 
+    QSet<QString> bookmarkedRecordIds() const;
+
 private:
     QHash<QString, InvestigationRecordState>
         m_states;

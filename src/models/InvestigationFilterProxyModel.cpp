@@ -539,6 +539,88 @@ void InvestigationFilterProxyModel::
     endResetModel();
 }
 
+void InvestigationFilterProxyModel::
+    setBookmarkedRecordIds(
+        const QSet<QString> &recordIds
+        )
+{
+    if (m_bookmarkedRecordIds
+        == recordIds) {
+        return;
+    }
+
+    m_bookmarkedRecordIds =
+        recordIds;
+
+    if (rowCount() > 0) {
+        emit headerDataChanged(
+            Qt::Vertical,
+            0,
+            rowCount() - 1
+            );
+    }
+}
+
+QVariant InvestigationFilterProxyModel::headerData(
+    int section,
+    Qt::Orientation orientation,
+    int role
+    ) const
+{
+    const QVariant defaultValue =
+        QSortFilterProxyModel::headerData(
+            section,
+            orientation,
+            role
+            );
+
+    if (orientation != Qt::Vertical
+        || role != Qt::DisplayRole
+        || section < 0
+        || section >= rowCount()) {
+        return defaultValue;
+    }
+
+    const InvestigationTableModel *model =
+        investigationModel();
+
+    if (model == nullptr) {
+        return defaultValue;
+    }
+
+    const QModelIndex proxyIndex =
+        index(
+            section,
+            0
+            );
+
+    if (!proxyIndex.isValid()) {
+        return defaultValue;
+    }
+
+    const QModelIndex sourceIndex =
+        mapToSource(
+            proxyIndex
+            );
+
+    const InvestigationRecord *record =
+        model->recordAt(
+            sourceIndex.row()
+            );
+
+    if (record == nullptr
+        || !m_bookmarkedRecordIds.contains(
+            record->recordId
+            )) {
+        return defaultValue;
+    }
+
+    return QStringLiteral("%1 ★")
+        .arg(
+            defaultValue.toString()
+            );
+}
+
 QStringList
 InvestigationFilterProxyModel::severityFilters() const
 {

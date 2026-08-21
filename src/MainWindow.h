@@ -75,6 +75,7 @@ private:
     QPushButton *previousIssueButton;
     QPushButton *nextIssueButton;
     QPlainTextEdit *eventDetailText;
+    QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
 
@@ -210,6 +211,15 @@ private:
         const InvestigationRecord &record
         );
     void clearEventDetail();
+
+    const InvestigationRecord *
+    selectedEventRecord() const;
+
+    void toggleSelectedEventBookmark();
+
+    void updateBookmarkButton();
+
+    void syncBookmarkPresentation();
 
     void navigateToAdjacentIssue(
         int direction
