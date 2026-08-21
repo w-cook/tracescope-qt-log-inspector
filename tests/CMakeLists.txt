@@ -734,12 +734,40 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationStateStoreTests
+
+    InvestigationStateStoreTests.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+)
+
+target_link_libraries(
+    InvestigationStateStoreTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationStateStoreTests
+    COMMAND InvestigationStateStoreTests
+)
+
+qt_add_executable(
     InvestigationSessionTests
 
     InvestigationSessionTests.cpp
 
     ../src/workspace/InvestigationSession.h
     ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
 
     ../src/controllers/InvestigationController.h
     ../src/controllers/InvestigationController.cpp
@@ -782,6 +810,11 @@ qt_add_executable(
 
     ../src/workspace/InvestigationSession.h
     ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
 
     ../src/controllers/InvestigationController.h
     ../src/controllers/InvestigationController.cpp

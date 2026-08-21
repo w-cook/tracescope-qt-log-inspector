@@ -37,7 +37,9 @@ public:
         const QStringList &entityIds,
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
-        const CustomFieldFilterMap &customFieldFilters
+        const CustomFieldFilterMap &customFieldFilters,
+        const QStringList &findingStatuses,
+        bool bookmarkedOnly
         );
 
     void setFilters(
@@ -86,6 +88,10 @@ public:
 
     const InvestigationRecord *recordForProxyIndex(
         const QModelIndex &proxyIndex
+        ) const;
+
+    int proxyRowForRecordId(
+        const QString &recordId
         ) const;
 
     int adjacentIssueProxyRow(

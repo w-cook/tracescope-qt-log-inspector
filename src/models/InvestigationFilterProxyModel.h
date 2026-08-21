@@ -8,11 +8,41 @@
 #include <QStringMatcher>
 #include <QStringList>
 #include <QMap>
+#include <QSet>
+#include <QHash>
+
+#include "../domain/InvestigationRecordState.h"
 
 #include "InvestigationTableModel.h"
 
 using CustomFieldFilterMap =
     QMap<QString, QStringList>;
+
+struct InvestigationFilterMatch
+{
+    bool severity = true;
+    bool subsystem = true;
+    bool eventCode = true;
+    bool entity = true;
+    bool timeRange = true;
+    bool customFields = true;
+    bool search = true;
+    bool findingStatus = true;
+    bool bookmark = true;
+
+    bool allMatch() const
+    {
+        return severity
+               && subsystem
+               && eventCode
+               && entity
+               && timeRange
+               && customFields
+               && search
+               && findingStatus
+               && bookmark;
+    }
+};
 
 class InvestigationFilterProxyModel : public QSortFilterProxyModel
 {
@@ -31,8 +61,16 @@ public:
         const QStringList &entityIds,
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
-        const CustomFieldFilterMap &customFieldFilters
+        const CustomFieldFilterMap &customFieldFilters,
+        const QStringList &findingStatuses,
+        bool bookmarkedOnly
         );
+
+    void setBookmarkedOnly(
+        bool bookmarkedOnly
+        );
+
+    bool bookmarkedOnly() const;
 
     void setSeverityFilters(const QStringList &severities);
     void setSeverityFilter(const QString &severity);
@@ -62,6 +100,33 @@ public:
         const CustomFieldFilterMap &filters
         );
 
+    void setFindingStatusFilters(
+        const QStringList &statuses
+        );
+
+    QStringList findingStatusFilters() const;
+
+    void setBookmarkedRecordIds(
+        const QSet<QString> &recordIds
+        );
+
+    void setInvestigationStateIndicators(
+        const QSet<QString> &bookmarkedRecordIds,
+        const QSet<QString> &notedRecordIds,
+        const QHash<QString, FindingStatus>
+            &findingStatuses
+        );
+
+    InvestigationFilterMatch filterMatchForRecord(
+        const InvestigationRecord &record
+        ) const;
+
+    QVariant headerData(
+        int section,
+        Qt::Orientation orientation,
+        int role = Qt::DisplayRole
+        ) const override;
+
     QStringList eventCodeFilters() const;
     QStringList entityFilters() const;
 
@@ -87,6 +152,8 @@ protected:
         ) const override;
 
 private:
+    bool m_bookmarkedOnly = false;
+
     QStringList m_severityFilters;
     QStringList m_subsystemFilters;
     QString m_searchText;
@@ -95,10 +162,19 @@ private:
 
     CustomFieldFilterMap m_customFieldFilters;
 
+    QStringList m_findingStatusFilters;
+
     std::optional<QDateTime> m_timeRangeStart;
     std::optional<QDateTime> m_timeRangeEnd;
 
     QStringMatcher m_searchMatcher;
+
+    QSet<QString> m_bookmarkedRecordIds;
+
+    QSet<QString> m_notedRecordIds;
+
+    QHash<QString, FindingStatus>
+        m_findingStatuses;
 
     const InvestigationTableModel *
     investigationModel() const;

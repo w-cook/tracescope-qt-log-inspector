@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.10.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.11.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -106,6 +106,9 @@ qt_add_executable(TraceScope
     src/filtering/InvestigationFilterPreset.h
     src/preferences/FilterPresetStore.h
     src/preferences/FilterPresetStore.cpp
+    src/domain/InvestigationRecordState.h
+    src/workspace/InvestigationStateStore.h
+    src/workspace/InvestigationStateStore.cpp
 
 )
 

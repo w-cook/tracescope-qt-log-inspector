@@ -63,7 +63,9 @@ void InvestigationController::setFilterState(
     const QStringList &entityIds,
     const std::optional<QDateTime> &startTime,
     const std::optional<QDateTime> &endTime,
-    const CustomFieldFilterMap &customFieldFilters
+    const CustomFieldFilterMap &customFieldFilters,
+    const QStringList &findingStatuses,
+    bool bookmarkedOnly
     )
 {
     m_proxyModel.setFilterState(
@@ -74,7 +76,9 @@ void InvestigationController::setFilterState(
         entityIds,
         startTime,
         endTime,
-        customFieldFilters
+        customFieldFilters,
+        findingStatuses,
+        bookmarkedOnly
         );
 }
 
@@ -274,6 +278,51 @@ InvestigationController::recordForProxyIndex(
     return m_sourceModel.recordAt(
         sourceIndex.row()
         );
+}
+
+int InvestigationController::
+    proxyRowForRecordId(
+        const QString &recordId
+        ) const
+{
+    if (recordId.isEmpty()) {
+        return -1;
+    }
+
+    for (
+        int sourceRow = 0;
+        sourceRow
+        < m_sourceModel.rowCount();
+        ++sourceRow
+        ) {
+        const InvestigationRecord *record =
+            m_sourceModel.recordAt(
+                sourceRow
+                );
+
+        if (record == nullptr
+            || record->recordId
+                   != recordId) {
+            continue;
+        }
+
+        const QModelIndex sourceIndex =
+            m_sourceModel.index(
+                sourceRow,
+                0
+                );
+
+        const QModelIndex proxyIndex =
+            m_proxyModel.mapFromSource(
+                sourceIndex
+                );
+
+        return proxyIndex.isValid()
+                   ? proxyIndex.row()
+                   : -1;
+    }
+
+    return -1;
 }
 
 int InvestigationController::

@@ -58,6 +58,37 @@ QStringList normalizedSeverityFilterValues(
     return normalized;
 }
 
+QStringList normalizedFindingStatusFilterValues(
+    const QStringList &values
+    )
+{
+    QStringList normalized;
+
+    normalized.reserve(
+        values.size()
+        );
+
+    for (const QString &value : values) {
+        const QString candidate =
+            value
+                .trimmed()
+                .toUpper();
+
+        if (candidate.isEmpty()
+            || normalized.contains(
+                candidate
+                )) {
+            continue;
+        }
+
+        normalized.append(
+            candidate
+            );
+    }
+
+    return normalized;
+}
+
 CustomFieldFilterMap normalizedCustomFieldFilters(
     const CustomFieldFilterMap &filters
     )
@@ -98,6 +129,27 @@ CustomFieldFilterMap normalizedCustomFieldFilters(
 
     return normalized;
 }
+
+QString findingStatusFilterValue(
+    FindingStatus status
+    )
+{
+    switch (status) {
+    case FindingStatus::Open:
+        return QStringLiteral("OPEN");
+
+    case FindingStatus::Resolved:
+        return QStringLiteral("RESOLVED");
+
+    case FindingStatus::Dismissed:
+        return QStringLiteral("DISMISSED");
+
+    case FindingStatus::None:
+        return QString();
+    }
+
+    return QString();
+}
 }
 
 InvestigationFilterProxyModel::
@@ -123,7 +175,9 @@ void InvestigationFilterProxyModel::
         const std::optional<QDateTime> &startTime,
         const std::optional<QDateTime> &endTime,
         const CustomFieldFilterMap
-            &customFieldFilters
+            &customFieldFilters,
+        const QStringList &findingStatuses,
+        bool bookmarkedOnly
         )
 {
     const QStringList normalizedSeverities =
@@ -169,6 +223,12 @@ void InvestigationFilterProxyModel::
             customFieldFilters
             );
 
+    const QStringList
+        normalizedFindingStatuses =
+        normalizedFindingStatusFilterValues(
+            findingStatuses
+            );
+
     /*
      * Avoid resetting the proxy when the complete
      * requested state already matches the active
@@ -189,7 +249,11 @@ void InvestigationFilterProxyModel::
         && m_timeRangeEnd
                == normalizedEnd
         && m_customFieldFilters
-               == normalizedCustomFilters) {
+               == normalizedCustomFilters
+        && m_findingStatusFilters
+               == normalizedFindingStatuses
+        && m_bookmarkedOnly
+               == bookmarkedOnly) {
         return;
     }
 
@@ -214,6 +278,12 @@ void InvestigationFilterProxyModel::
 
     m_searchText =
         normalizedSearchText;
+
+    m_findingStatusFilters =
+        normalizedFindingStatuses;
+
+    m_bookmarkedOnly =
+        bookmarkedOnly;
 
     m_eventCodeFilters =
         normalizedEventCodes;
@@ -539,6 +609,342 @@ void InvestigationFilterProxyModel::
     endResetModel();
 }
 
+void InvestigationFilterProxyModel::
+    setFindingStatusFilters(
+        const QStringList &statuses
+        )
+{
+    const QStringList normalized =
+        normalizedFindingStatusFilterValues(
+            statuses
+            );
+
+    if (m_findingStatusFilters
+        == normalized) {
+        return;
+    }
+
+    beginResetModel();
+
+    m_findingStatusFilters =
+        normalized;
+
+    endResetModel();
+}
+
+QStringList InvestigationFilterProxyModel::
+    findingStatusFilters() const
+{
+    return m_findingStatusFilters;
+}
+
+void InvestigationFilterProxyModel::
+    setBookmarkedRecordIds(
+        const QSet<QString> &recordIds
+        )
+{
+    setInvestigationStateIndicators(
+        recordIds,
+        m_notedRecordIds,
+        m_findingStatuses
+        );
+}
+
+void InvestigationFilterProxyModel::
+    setInvestigationStateIndicators(
+        const QSet<QString>
+            &bookmarkedRecordIds,
+        const QSet<QString>
+            &notedRecordIds,
+        const QHash<QString, FindingStatus>
+            &findingStatuses
+        )
+{
+    const bool bookmarkMembershipChanged =
+        m_bookmarkedRecordIds
+        != bookmarkedRecordIds;
+
+    const bool findingStatusesChanged =
+        m_findingStatuses
+        != findingStatuses;
+
+    const bool filteringAffected =
+        (
+            m_bookmarkedOnly
+            && bookmarkMembershipChanged
+            )
+        || (
+            !m_findingStatusFilters.isEmpty()
+            && findingStatusesChanged
+            );
+
+    if (m_bookmarkedRecordIds
+            == bookmarkedRecordIds
+        && m_notedRecordIds
+               == notedRecordIds
+        && m_findingStatuses
+               == findingStatuses) {
+        return;
+    }
+
+    if (filteringAffected) {
+        beginResetModel();
+
+        m_bookmarkedRecordIds =
+            bookmarkedRecordIds;
+
+        m_notedRecordIds =
+            notedRecordIds;
+
+        m_findingStatuses =
+            findingStatuses;
+
+        endResetModel();
+
+        return;
+    }
+
+    m_bookmarkedRecordIds =
+        bookmarkedRecordIds;
+
+    m_notedRecordIds =
+        notedRecordIds;
+
+    m_findingStatuses =
+        findingStatuses;
+
+    if (rowCount() > 0) {
+        emit headerDataChanged(
+            Qt::Vertical,
+            0,
+            rowCount() - 1
+            );
+    }
+}
+
+InvestigationFilterMatch
+    InvestigationFilterProxyModel::
+    filterMatchForRecord(
+        const InvestigationRecord &record
+        ) const
+{
+    InvestigationFilterMatch match;
+
+    if (!m_severityFilters.isEmpty()) {
+        match.severity =
+            record.severity.has_value()
+            && m_severityFilters.contains(
+                recordSeverityToString(
+                    record.severity.value()
+                    )
+                );
+    }
+
+    if (!m_subsystemFilters.isEmpty()) {
+        match.subsystem =
+            record.subsystem.has_value()
+            && m_subsystemFilters.contains(
+                record.subsystem.value()
+                );
+    }
+
+    if (!m_eventCodeFilters.isEmpty()) {
+        match.eventCode =
+            record.eventCode.has_value()
+            && m_eventCodeFilters.contains(
+                record.eventCode.value()
+                );
+    }
+
+    if (!m_entityFilters.isEmpty()) {
+        match.entity =
+            record.entityId.has_value()
+            && m_entityFilters.contains(
+                record.entityId.value()
+                );
+    }
+
+    if (m_timeRangeStart.has_value()
+        || m_timeRangeEnd.has_value()) {
+        if (!record.timestamp.has_value()) {
+            match.timeRange =
+                false;
+        } else {
+            if (
+                m_timeRangeStart.has_value()
+                && record.timestamp.value()
+                       < m_timeRangeStart.value()
+                ) {
+                match.timeRange =
+                    false;
+            }
+
+            if (
+                m_timeRangeEnd.has_value()
+                && record.timestamp.value()
+                       > m_timeRangeEnd.value()
+                ) {
+                match.timeRange =
+                    false;
+            }
+        }
+    }
+
+    for (
+        auto filterIterator =
+        m_customFieldFilters.constBegin();
+        filterIterator !=
+        m_customFieldFilters.constEnd();
+        ++filterIterator
+        ) {
+        const auto attributeIterator =
+            record.customAttributes.constFind(
+                filterIterator.key()
+                );
+
+        if (
+            attributeIterator
+            == record
+                   .customAttributes
+                   .constEnd()
+            ) {
+            match.customFields =
+                false;
+
+            break;
+        }
+
+        const QString attributeValue =
+            attributeIterator
+                .value()
+                .toString();
+
+        if (!filterIterator
+                 .value()
+                 .contains(
+                     attributeValue
+                     )) {
+            match.customFields =
+                false;
+
+            break;
+        }
+    }
+
+    if (!m_searchText.isEmpty()) {
+        match.search =
+            matchesSearchText(
+                record
+                );
+    }
+
+    if (!m_findingStatusFilters.isEmpty()) {
+        const FindingStatus status =
+            m_findingStatuses.value(
+                record.recordId,
+                FindingStatus::None
+                );
+
+        match.findingStatus =
+            m_findingStatusFilters.contains(
+                findingStatusFilterValue(
+                    status
+                    )
+                );
+    }
+
+    if (m_bookmarkedOnly) {
+        match.bookmark =
+            m_bookmarkedRecordIds.contains(
+                record.recordId
+                );
+    }
+
+    return match;
+}
+
+QVariant InvestigationFilterProxyModel::
+    headerData(
+        int section,
+        Qt::Orientation orientation,
+        int role
+        ) const
+{
+    const QVariant defaultValue =
+        QSortFilterProxyModel::headerData(
+            section,
+            orientation,
+            role
+            );
+
+    if (orientation != Qt::Vertical
+        || section < 0
+        || section >= rowCount()) {
+        return defaultValue;
+    }
+
+    const InvestigationTableModel *model =
+        investigationModel();
+
+    if (model == nullptr) {
+        return defaultValue;
+    }
+
+    const QModelIndex proxyIndex =
+        index(
+            section,
+            0
+            );
+
+    if (!proxyIndex.isValid()) {
+        return defaultValue;
+    }
+
+    const QModelIndex sourceIndex =
+        mapToSource(
+            proxyIndex
+            );
+
+    const InvestigationRecord *record =
+        model->recordAt(
+            sourceIndex.row()
+            );
+
+    if (record == nullptr) {
+        return defaultValue;
+    }
+
+    const bool bookmarked =
+        m_bookmarkedRecordIds.contains(
+            record->recordId
+            );
+
+    if (role == Qt::TextAlignmentRole) {
+        return static_cast<int>(
+            Qt::AlignRight
+            | Qt::AlignVCenter
+            );
+    }
+
+    if (role == Qt::DisplayRole) {
+        if (!bookmarked) {
+            return defaultValue;
+        }
+
+        return QStringLiteral("★ %1")
+            .arg(
+                defaultValue.toString()
+                );
+    }
+
+    if (role == Qt::ToolTipRole
+        && bookmarked) {
+        return tr("Bookmarked");
+    }
+
+    return defaultValue;
+}
+
 QStringList
 InvestigationFilterProxyModel::severityFilters() const
 {
@@ -624,121 +1030,38 @@ bool InvestigationFilterProxyModel::filterAcceptsRow(
     }
 
     const InvestigationRecord *record =
-        model->recordAt(sourceRow);
+        model->recordAt(
+            sourceRow
+            );
 
     if (record == nullptr) {
         return false;
     }
 
-    if (!m_severityFilters.isEmpty()) {
-        if (!record->severity.has_value()
-            || !m_severityFilters.contains(
-                recordSeverityToString(
-                    record->severity.value()
-                    )
-                )) {
-            return false;
-        }
-    }
+    return filterMatchForRecord(
+               *record
+               ).allMatch();
+}
 
-    if (!m_subsystemFilters.isEmpty()) {
-        if (!record->subsystem.has_value()
-            || !m_subsystemFilters.contains(
-                record->subsystem.value()
-                )) {
-            return false;
-        }
-    }
-
-    if (!m_eventCodeFilters.isEmpty()) {
-        if (!record->eventCode.has_value()
-            || !m_eventCodeFilters.contains(
-                record->eventCode.value()
-                )) {
-            return false;
-        }
-    }
-
-    if (!m_entityFilters.isEmpty()) {
-        if (!record->entityId.has_value()
-            || !m_entityFilters.contains(
-                record->entityId.value()
-                )) {
-            return false;
-        }
-    }
-
-    if (m_timeRangeStart.has_value()
-        || m_timeRangeEnd.has_value()) {
-        if (!record->timestamp.has_value()) {
-            return false;
-        }
-
-        if (m_timeRangeStart.has_value()
-            && record->timestamp.value()
-                   < m_timeRangeStart.value()) {
-            return false;
-        }
-
-        if (m_timeRangeEnd.has_value()
-            && record->timestamp.value()
-                   > m_timeRangeEnd.value()) {
-            return false;
-        }
-    }
-
-    for (
-        auto filterIterator =
-        m_customFieldFilters.constBegin();
-        filterIterator !=
-        m_customFieldFilters.constEnd();
-        ++filterIterator
-        ) {
-        const auto attributeIterator =
-            record->customAttributes.constFind(
-                filterIterator.key()
-                );
-
-        if (attributeIterator
-            == record
-                   ->customAttributes
-                   .constEnd()) {
-            return false;
-        }
-
-        const QString attributeValue =
-            attributeIterator
-                .value()
-                .toString();
-
-        if (!filterIterator
-                 .value()
-                 .contains(
-                     attributeValue
-                     )) {
-            return false;
-        }
-    }
-
-    if (!m_searchText.isEmpty()
-        && !matchesSearchText(*record)) {
-        return false;
-    }
-
-    return true;
+bool InvestigationFilterProxyModel::
+    bookmarkedOnly() const
+{
+    return m_bookmarkedOnly;
 }
 
 const InvestigationTableModel *
-InvestigationFilterProxyModel::investigationModel() const
+    InvestigationFilterProxyModel::
+    investigationModel() const
 {
     return qobject_cast<
         const InvestigationTableModel *
         >(sourceModel());
 }
 
-bool InvestigationFilterProxyModel::matchesSearchText(
-    const InvestigationRecord &record
-    ) const
+bool InvestigationFilterProxyModel::
+    matchesSearchText(
+        const InvestigationRecord &record
+        ) const
 {
     const auto matches =
         [this](const QString &value) {
@@ -760,22 +1083,30 @@ bool InvestigationFilterProxyModel::matchesSearchText(
     }
 
     if (record.message.has_value()
-        && matches(record.message.value())) {
+        && matches(
+            record.message.value()
+            )) {
         return true;
     }
 
     if (record.subsystem.has_value()
-        && matches(record.subsystem.value())) {
+        && matches(
+            record.subsystem.value()
+            )) {
         return true;
     }
 
     if (record.eventCode.has_value()
-        && matches(record.eventCode.value())) {
+        && matches(
+            record.eventCode.value()
+            )) {
         return true;
     }
 
     if (record.entityId.has_value()
-        && matches(record.entityId.value())) {
+        && matches(
+            record.entityId.value()
+            )) {
         return true;
     }
 
@@ -800,16 +1131,36 @@ bool InvestigationFilterProxyModel::matchesSearchText(
     for (
         auto iterator =
         record.customAttributes.constBegin();
-        iterator !=
-        record.customAttributes.constEnd();
+        iterator
+        != record.customAttributes.constEnd();
         ++iterator
         ) {
         if (matches(
-                iterator.value().toString()
+                iterator
+                    .value()
+                    .toString()
                 )) {
             return true;
         }
     }
 
     return false;
+}
+
+void InvestigationFilterProxyModel::
+    setBookmarkedOnly(
+        bool bookmarkedOnly
+        )
+{
+    if (m_bookmarkedOnly
+        == bookmarkedOnly) {
+        return;
+    }
+
+    beginResetModel();
+
+    m_bookmarkedOnly =
+        bookmarkedOnly;
+
+    endResetModel();
 }

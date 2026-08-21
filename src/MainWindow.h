@@ -75,8 +75,13 @@ private:
     QPushButton *previousIssueButton;
     QPushButton *nextIssueButton;
     QPlainTextEdit *eventDetailText;
+    QComboBox *findingStatusCombo;
+    QPushButton *noteButton;
+    QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
+    QLabel *findingsSummaryLabel = nullptr;
+    QTableWidget *findingsTable = nullptr;
 
     InvestigationWorkspace *workspace;
     InvestigationController *investigationController =
@@ -93,6 +98,8 @@ private:
     QLineEdit *searchInput;
     QPushButton *resetFiltersButton;
 
+    QCheckBox *bookmarksOnlyCheckBox;
+
     QPushButton *filterPresetsButton;
     QMenu *filterPresetsMenu;
 
@@ -104,6 +111,7 @@ private:
 
     MultiSelectFilterComboBox *eventCodeFilterCombo;
     MultiSelectFilterComboBox *entityFilterCombo;
+    MultiSelectFilterComboBox *findingStatusFilterCombo;
 
     CustomFieldFilterEditor *customFieldFilterEditor;
 
@@ -211,6 +219,17 @@ private:
         );
     void clearEventDetail();
 
+    const InvestigationRecord *
+    selectedEventRecord() const;
+
+    void toggleSelectedEventBookmark();
+
+    void updateInvestigationStateControls();
+    void updateSelectedEventFindingStatus();
+    void editSelectedEventNote();
+
+    void syncInvestigationStatePresentation();
+
     void navigateToAdjacentIssue(
         int direction
         );
@@ -235,6 +254,18 @@ private:
     void drillDownTimelineBucket(
         int visibleBucketIndex,
         const QString &severity
+        );
+
+    QWidget *buildFindingsPanel();
+
+    void updateFindingsPanel();
+
+    void navigateToFinding(
+        int row
+        );
+
+    void revealFindingRecord(
+        const InvestigationRecord &record
         );
 
     void exportFilteredResults();
@@ -267,4 +298,6 @@ private:
         );
 
     void resizeCustomFiltersDialogToContents();
+
+    void updateEventRowHeaderWidth();
 };
