@@ -46,6 +46,7 @@
 #include <QClipboard>
 #include <QMenu>
 #include <QInputDialog>
+#include <QTabWidget>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -368,6 +369,27 @@ QString timelineDisplayLabel(
      * is useful context.
      */
     return canonicalLabel;
+}
+
+QString findingStatusDisplayText(
+    FindingStatus status
+    )
+{
+    switch (status) {
+    case FindingStatus::Open:
+        return QObject::tr("Open");
+
+    case FindingStatus::Resolved:
+        return QObject::tr("Resolved");
+
+    case FindingStatus::Dismissed:
+        return QObject::tr("Dismissed");
+
+    case FindingStatus::None:
+        return QString();
+    }
+
+    return QString();
 }
 }
 
@@ -1045,12 +1067,68 @@ void MainWindow::buildLayout()
 
     issueSummaryGroup =
         buildIssueSummaryPanel();
-    auto *detailGroup = buildDetailPanel();
 
-    auto *bottomSplitter = new QSplitter(Qt::Horizontal, this);
+    auto *findingsPanel =
+        buildFindingsPanel();
 
-    bottomSplitter->addWidget(issueSummaryGroup);
-    bottomSplitter->addWidget(detailGroup);
+    auto *investigationReviewTabs =
+        new QTabWidget(this);
+
+    investigationReviewTabs->setDocumentMode(
+        true
+        );
+
+    investigationReviewTabs->addTab(
+        issueSummaryGroup,
+        tr("Issue Summary")
+        );
+
+    investigationReviewTabs->addTab(
+        findingsPanel,
+        tr("Findings")
+        );
+
+    auto *detailGroup =
+        buildDetailPanel();
+
+    auto *bottomSplitter =
+        new QSplitter(
+            Qt::Horizontal,
+            this
+            );
+
+    bottomSplitter->addWidget(
+        investigationReviewTabs
+        );
+
+    bottomSplitter->addWidget(
+        detailGroup
+        );
+
+    bottomSplitter->setStretchFactor(
+        0,
+        0
+        );
+
+    bottomSplitter->setStretchFactor(
+        1,
+        1
+        );
+
+    bottomSplitter->setCollapsible(
+        0,
+        false
+        );
+
+    bottomSplitter->setCollapsible(
+        1,
+        false
+        );
+
+    bottomSplitter->setSizes({
+        350,
+        750
+    });
 
     bottomSplitter->setStretchFactor(0, 0);
     bottomSplitter->setStretchFactor(1, 1);
@@ -1067,6 +1145,70 @@ void MainWindow::buildLayout()
     mainSplitter->addWidget(timelineGroup);
     mainSplitter->addWidget(eventsGroup);
     mainSplitter->addWidget(bottomSplitter);
+
+    connect(
+        investigationReviewTabs,
+        &QTabWidget::currentChanged,
+        this,
+        [
+            this,
+            bottomSplitter,
+            investigationReviewTabs
+        ](int index) {
+            const int totalWidth =
+                std::max(
+                    1,
+                    bottomSplitter->width()
+                    );
+
+            const bool findingsSelected =
+                investigationReviewTabs
+                    ->tabText(index)
+                == QObject::tr("Findings");
+
+            if (findingsSelected) {
+                /*
+                 * Findings is a genuine review surface
+                 * and benefits from more horizontal space.
+                 * Selected Event Details remains usable
+                 * at roughly forty percent.
+                 */
+                const int findingsWidth =
+                    static_cast<int>(
+                        totalWidth * 0.60
+                        );
+
+                bottomSplitter->setSizes({
+                    findingsWidth,
+                    totalWidth - findingsWidth
+                });
+
+                return;
+            }
+
+            /*
+             * Issue Summary is naturally compact, so
+             * return most of the space to event details.
+             */
+            const int issueWidth =
+                std::max(
+                    issueSummaryTable
+                        ->minimumWidth()
+                    + 30,
+                    static_cast<int>(
+                        totalWidth * 0.35
+                        )
+                    );
+
+            bottomSplitter->setSizes({
+                issueWidth,
+                std::max(
+                    1,
+                    totalWidth - issueWidth
+                    )
+            });
+        }
+        );
 
     mainSplitter->setStretchFactor(0, 2);
     mainSplitter->setStretchFactor(1, 5);
@@ -3883,6 +4025,8 @@ void MainWindow::
 
     syncInvestigationStatePresentation();
 
+    updateFindingsPanel();
+
     if (!findingStatusFilterCombo
              ->selectedValues()
              .isEmpty()) {
@@ -3942,6 +4086,9 @@ void MainWindow::editSelectedEventNote()
         );
 
     syncInvestigationStatePresentation();
+
+    updateFindingsPanel();
+
     updateInvestigationStateControls();
 }
 
@@ -3956,6 +4103,8 @@ void MainWindow::
                == nullptr) {
         return;
     }
+
+    updateFindingsPanel();
 
     InvestigationStateStore *stateStore =
         session->investigationStateStore();
@@ -4286,6 +4435,198 @@ QGroupBox *MainWindow::buildIssueSummaryPanel()
     return issueSummaryGroup;
 }
 
+QWidget *MainWindow::buildFindingsPanel()
+{
+    auto *panel =
+        new QWidget(this);
+
+    auto *layout =
+        new QVBoxLayout(panel);
+
+    layout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    layout->setSpacing(
+        4
+        );
+
+    findingsSummaryLabel =
+        new QLabel(
+            tr(
+                "Open: 0    Resolved: 0    "
+                "Dismissed: 0"
+                ),
+            panel
+            );
+
+    findingsSummaryLabel->setToolTip(
+        tr(
+            "Summary of explicitly classified "
+            "investigation findings"
+            )
+        );
+
+    layout->addWidget(
+        findingsSummaryLabel
+        );
+
+    findingsTable =
+        new QTableWidget(
+            0,
+            4,
+            panel
+            );
+
+    findingsTable->setHorizontalHeaderLabels({
+        tr("Status"),
+        tr("#"),
+        tr("Time"),
+        tr("Finding")
+    });
+
+    /*
+     * The "#" column is the source-record number.
+     * Keep the visible heading tiny while making
+     * its meaning explicit on hover.
+     */
+    findingsTable
+        ->horizontalHeaderItem(1)
+        ->setToolTip(
+            tr("Source record number")
+            );
+
+    findingsTable
+        ->horizontalHeaderItem(2)
+        ->setToolTip(
+            tr(
+                "Event time. Hover a value to see "
+                "the complete timestamp."
+                )
+            );
+
+    findingsTable->setAlternatingRowColors(
+        true
+        );
+
+    findingsTable->setSelectionBehavior(
+        QAbstractItemView::SelectRows
+        );
+
+    findingsTable->setSelectionMode(
+        QAbstractItemView::SingleSelection
+        );
+
+    findingsTable->setEditTriggers(
+        QAbstractItemView::NoEditTriggers
+        );
+
+    findingsTable->setSortingEnabled(
+        false
+        );
+
+    findingsTable->setWordWrap(
+        true
+        );
+
+    findingsTable->setTextElideMode(
+        Qt::ElideNone
+        );
+
+    findingsTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    findingsTable
+        ->verticalHeader()
+        ->setSectionResizeMode(
+            QHeaderView::ResizeToContents
+            );
+
+    findingsTable
+        ->verticalHeader()
+        ->setMinimumSectionSize(
+            findingsTable
+                ->fontMetrics()
+                .height()
+            + 8
+            );
+
+    /*
+     * Status and time size to their contents.
+     *
+     * The source-record column is deliberately
+     * fixed and compact.
+     *
+     * Finding receives all remaining width.
+     */
+    findingsTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            0,
+            QHeaderView::ResizeToContents
+            );
+
+    findingsTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            1,
+            QHeaderView::Fixed
+            );
+
+    findingsTable->setColumnWidth(
+        1,
+        58
+        );
+
+    findingsTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            2,
+            QHeaderView::ResizeToContents
+            );
+
+    findingsTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            3,
+            QHeaderView::Stretch
+            );
+
+    findingsTable->setToolTip(
+        tr(
+            "Review conclusions recorded during "
+            "this investigation"
+            )
+        );
+
+    connect(
+        findingsTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            navigateToFinding(
+                row
+                );
+        }
+        );
+
+    layout->addWidget(
+        findingsTable,
+        1
+        );
+
+    return panel;
+}
+
 void MainWindow::updateIssueSummary(
     const QVector<InvestigationRecord> &records
     )
@@ -4468,6 +4809,312 @@ void MainWindow::updateIssueSummary(
 
     issueSummaryTable->setMinimumWidth(
         requiredTableWidth
+        );
+}
+
+void MainWindow::updateFindingsPanel()
+{
+    if (findingsTable == nullptr
+        || findingsSummaryLabel == nullptr) {
+        return;
+    }
+
+    findingsTable->setRowCount(
+        0
+        );
+
+    int openCount = 0;
+    int resolvedCount = 0;
+    int dismissedCount = 0;
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr
+        || investigationController
+               == nullptr) {
+        findingsSummaryLabel->setText(
+            tr(
+                "Open: 0    Resolved: 0    "
+                "Dismissed: 0"
+                )
+            );
+
+        return;
+    }
+
+    const InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    const QVector<InvestigationRecord> &records =
+        investigationController
+            ->allRecords();
+
+    for (
+        const InvestigationRecord &record
+        : records
+        ) {
+        if (record.recordId.isEmpty()) {
+            continue;
+        }
+
+        const InvestigationRecordState state =
+            stateStore->stateForRecord(
+                record.recordId
+                );
+
+        /*
+         * A bookmark or note alone is not a finding.
+         *
+         * The Findings view contains only records
+         * the analyst has explicitly classified.
+         */
+        if (state.findingStatus
+            == FindingStatus::None) {
+            continue;
+        }
+
+        switch (state.findingStatus) {
+        case FindingStatus::Open:
+            ++openCount;
+            break;
+
+        case FindingStatus::Resolved:
+            ++resolvedCount;
+            break;
+
+        case FindingStatus::Dismissed:
+            ++dismissedCount;
+            break;
+
+        case FindingStatus::None:
+            break;
+        }
+
+        const int row =
+            findingsTable->rowCount();
+
+        findingsTable->insertRow(
+            row
+            );
+
+        /*
+         * -----------------------------------------------------
+         * Status
+         * -----------------------------------------------------
+         */
+
+        auto *statusItem =
+            new QTableWidgetItem(
+                findingStatusDisplayText(
+                    state.findingStatus
+                    )
+                );
+
+        /*
+         * -----------------------------------------------------
+         * Source provenance
+         * -----------------------------------------------------
+         */
+
+        auto *sourceRecordItem =
+            new QTableWidgetItem(
+                QString::number(
+                    record
+                        .source
+                        .recordNumber
+                    )
+                );
+
+        /*
+         * -----------------------------------------------------
+         * Timestamp
+         * -----------------------------------------------------
+         */
+
+        QString timestampText;
+        QString fullTimestampText;
+
+        if (record.timestamp.has_value()) {
+            timestampText =
+                record.timestamp
+                    ->toString(
+                        QStringLiteral(
+                            "HH:mm:ss.zzz"
+                            )
+                        );
+
+            fullTimestampText =
+                record.timestamp
+                    ->toString(
+                        Qt::ISODateWithMs
+                        );
+        }
+
+        auto *timestampItem =
+            new QTableWidgetItem(
+                timestampText
+                );
+
+        if (!fullTimestampText.isEmpty()) {
+            timestampItem->setToolTip(
+                fullTimestampText
+                );
+        }
+
+        /*
+         * -----------------------------------------------------
+         * Finding text
+         *
+         * Analyst notes are the preferred description because
+         * this is a conclusions-oriented view.
+         *
+         * A finding does not require a note. When one is absent,
+         * make that fact visible while still supplying enough
+         * source-event context for the row to be useful.
+         * -----------------------------------------------------
+         */
+
+        QString findingText;
+
+        const QString trimmedNote =
+            state.note.trimmed();
+
+        if (!trimmedNote.isEmpty()) {
+            findingText =
+                state.note.trimmed();
+        } else {
+            QString eventDescription;
+
+            const QString eventCode =
+                record.eventCode.value_or(
+                    QString()
+                    );
+
+            const QString message =
+                record.message.value_or(
+                    QString()
+                    );
+
+            if (!eventCode.isEmpty()
+                && !message.isEmpty()) {
+                eventDescription =
+                    QStringLiteral("%1 — %2")
+                        .arg(
+                            eventCode,
+                            message
+                            );
+            } else if (!eventCode.isEmpty()) {
+                eventDescription =
+                    eventCode;
+            } else if (!message.isEmpty()) {
+                eventDescription =
+                    message;
+            } else {
+                eventDescription =
+                    tr(
+                        "No event description"
+                        );
+            }
+
+            findingText =
+                tr("(No analyst note) — %1")
+                    .arg(
+                        eventDescription
+                        );
+        }
+
+        auto *findingItem =
+            new QTableWidgetItem(
+                findingText
+                );
+
+        /*
+         * Store the stable event identity now even
+         * though navigation is the next slice.
+         *
+         * This ensures navigation will be based on
+         * the actual investigation record rather
+         * than display text or source-record numbers.
+         */
+        statusItem->setData(
+            Qt::UserRole,
+            record.recordId
+            );
+
+        sourceRecordItem->setData(
+            Qt::UserRole,
+            record.recordId
+            );
+
+        timestampItem->setData(
+            Qt::UserRole,
+            record.recordId
+            );
+
+        findingItem->setData(
+            Qt::UserRole,
+            record.recordId
+            );
+
+        if (!trimmedNote.isEmpty()) {
+            findingItem->setToolTip(
+                state.note
+                );
+        } else {
+            findingItem->setToolTip(
+                tr(
+                    "This finding has no analyst "
+                    "note yet."
+                    )
+                );
+        }
+
+        findingsTable->setItem(
+            row,
+            0,
+            statusItem
+            );
+
+        findingsTable->setItem(
+            row,
+            1,
+            sourceRecordItem
+            );
+
+        findingsTable->setItem(
+            row,
+            2,
+            timestampItem
+            );
+
+        findingsTable->setItem(
+            row,
+            3,
+            findingItem
+            );
+    }
+
+    findingsSummaryLabel->setText(
+        tr(
+            "Open: %1    Resolved: %2    "
+            "Dismissed: %3"
+            )
+            .arg(
+                openCount
+                )
+            .arg(
+                resolvedCount
+                )
+            .arg(
+                dismissedCount
+                )
+        );
+
+    findingsTable->resizeRowsToContents();
+
+    findingsTable->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOff
         );
 }
 
@@ -4860,6 +5507,554 @@ void MainWindow::drillDownTimelineBucket(
     }
 
     updateTimeRangeButton();
+
+    applyFilters();
+}
+
+void MainWindow::navigateToFinding(
+    int row
+    )
+{
+    if (investigationController == nullptr
+        || row < 0
+        || row >= findingsTable->rowCount()) {
+        return;
+    }
+
+    QTableWidgetItem *item =
+        findingsTable->item(
+            row,
+            0
+            );
+
+    if (item == nullptr) {
+        return;
+    }
+
+    const QString recordId =
+        item
+            ->data(
+                Qt::UserRole
+                )
+            .toString();
+
+    if (recordId.isEmpty()) {
+        return;
+    }
+
+    const QVector<InvestigationRecord> &records =
+        investigationController
+            ->allRecords();
+
+    const InvestigationRecord *targetRecord =
+        nullptr;
+
+    for (
+        const InvestigationRecord &record
+        : records
+        ) {
+        if (record.recordId
+            == recordId) {
+            targetRecord =
+                &record;
+
+            break;
+        }
+    }
+
+    if (targetRecord == nullptr) {
+        return;
+    }
+
+    int proxyRow =
+        investigationController
+            ->proxyRowForRecordId(
+                recordId
+                );
+
+    /*
+     * If the record is already visible, navigation
+     * should not disturb the analyst's filters.
+     */
+    if (proxyRow >= 0) {
+        selectProxyRow(
+            proxyRow
+            );
+
+        eventTable->setFocus();
+
+        return;
+    }
+
+    /*
+     * Otherwise relax only the criteria preventing
+     * this finding's source record from appearing.
+     */
+    revealFindingRecord(
+        *targetRecord
+        );
+
+    proxyRow =
+        investigationController
+            ->proxyRowForRecordId(
+                recordId
+                );
+
+    if (proxyRow < 0) {
+        return;
+    }
+
+    selectProxyRow(
+        proxyRow
+        );
+
+    eventTable->setFocus();
+}
+
+void MainWindow::revealFindingRecord(
+    const InvestigationRecord &record
+    )
+{
+    if (investigationController == nullptr) {
+        return;
+    }
+
+    InvestigationFilterProxyModel *proxyModel =
+        investigationController
+            ->proxyModel();
+
+    const InvestigationFilterMatch match =
+        proxyModel->filterMatchForRecord(
+            record
+            );
+
+    if (match.allMatch()) {
+        return;
+    }
+
+    searchDebounceTimer->stop();
+
+    /*
+     * Block UI signals while changing all required
+     * controls. applyFilters() will perform one
+     * coordinated filter update afterward.
+     */
+    const QSignalBlocker severityBlocker(
+        levelFilterCombo
+        );
+
+    const QSignalBlocker subsystemBlocker(
+        subsystemFilterCombo
+        );
+
+    const QSignalBlocker eventCodeBlocker(
+        eventCodeFilterCombo
+        );
+
+    const QSignalBlocker entityBlocker(
+        entityFilterCombo
+        );
+
+    const QSignalBlocker searchBlocker(
+        searchInput
+        );
+
+    const QSignalBlocker startCheckBlocker(
+        timeRangeStartCheckBox
+        );
+
+    const QSignalBlocker startEditBlocker(
+        timeRangeStartEdit
+        );
+
+    const QSignalBlocker endCheckBlocker(
+        timeRangeEndCheckBox
+        );
+
+    const QSignalBlocker endEditBlocker(
+        timeRangeEndEdit
+        );
+
+    const QSignalBlocker customBlocker(
+        customFieldFilterEditor
+        );
+
+    const QSignalBlocker findingBlocker(
+        findingStatusFilterCombo
+        );
+
+    const QSignalBlocker bookmarkBlocker(
+        bookmarksOnlyCheckBox
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Severity
+     *
+     * Preserve existing choices and add the target
+     * severity when possible.
+     * ---------------------------------------------------------
+     */
+
+    if (!match.severity) {
+        if (record.severity.has_value()) {
+            QStringList selected =
+                levelFilterCombo
+                    ->selectedValues();
+
+            const QString value =
+                recordSeverityToString(
+                    record.severity.value()
+                    );
+
+            if (!selected.contains(
+                    value
+                    )) {
+                selected.append(
+                    value
+                    );
+            }
+
+            levelFilterCombo
+                ->setSelectedValues(
+                    selected
+                    );
+        } else {
+            levelFilterCombo
+                ->clearSelection();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Subsystem
+     * ---------------------------------------------------------
+     */
+
+    if (!match.subsystem) {
+        if (record.subsystem.has_value()) {
+            QStringList selected =
+                subsystemFilterCombo
+                    ->selectedValues();
+
+            const QString value =
+                record.subsystem.value();
+
+            if (!selected.contains(
+                    value
+                    )) {
+                selected.append(
+                    value
+                    );
+            }
+
+            subsystemFilterCombo
+                ->setSelectedValues(
+                    selected
+                    );
+        } else {
+            subsystemFilterCombo
+                ->clearSelection();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Event code
+     * ---------------------------------------------------------
+     */
+
+    if (!match.eventCode) {
+        if (record.eventCode.has_value()) {
+            QStringList selected =
+                eventCodeFilterCombo
+                    ->selectedValues();
+
+            const QString value =
+                record.eventCode.value();
+
+            if (!selected.contains(
+                    value
+                    )) {
+                selected.append(
+                    value
+                    );
+            }
+
+            eventCodeFilterCombo
+                ->setSelectedValues(
+                    selected
+                    );
+        } else {
+            eventCodeFilterCombo
+                ->clearSelection();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Entity
+     * ---------------------------------------------------------
+     */
+
+    if (!match.entity) {
+        if (record.entityId.has_value()) {
+            QStringList selected =
+                entityFilterCombo
+                    ->selectedValues();
+
+            const QString value =
+                record.entityId.value();
+
+            if (!selected.contains(
+                    value
+                    )) {
+                selected.append(
+                    value
+                    );
+            }
+
+            entityFilterCombo
+                ->setSelectedValues(
+                    selected
+                    );
+        } else {
+            entityFilterCombo
+                ->clearSelection();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Search
+     *
+     * A free-text search cannot be widened in a
+     * meaningful deterministic way, so clear it
+     * only when it excludes the target.
+     * ---------------------------------------------------------
+     */
+
+    if (!match.search) {
+        searchInput->clear();
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Time range
+     *
+     * Expand the active boundary just enough to
+     * include the finding rather than disabling
+     * time filtering completely.
+     * ---------------------------------------------------------
+     */
+
+    if (!match.timeRange) {
+        if (!record.timestamp.has_value()) {
+            timeRangeStartCheckBox
+                ->setChecked(
+                    false
+                    );
+
+            timeRangeEndCheckBox
+                ->setChecked(
+                    false
+                    );
+        } else {
+            const QDateTime timestamp =
+                record.timestamp
+                    ->toTimeZone(
+                        QTimeZone::UTC
+                        );
+
+            if (
+                timeRangeStartCheckBox
+                    ->isChecked()
+                && timestamp
+                       < timeRangeStartEdit
+                             ->dateTime()
+                ) {
+                timeRangeStartEdit
+                    ->setDateTime(
+                        timestamp
+                        );
+            }
+
+            if (
+                timeRangeEndCheckBox
+                    ->isChecked()
+                && timestamp
+                       > timeRangeEndEdit
+                             ->dateTime()
+                ) {
+                timeRangeEndEdit
+                    ->setDateTime(
+                        timestamp
+                        );
+            }
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Custom fields
+     *
+     * Each field criterion is ANDed with the other
+     * fields, while values within one field are ORed.
+     *
+     * If the target has the field, add its value.
+     * If the target lacks the field entirely, that
+     * individual field criterion must be removed.
+     * ---------------------------------------------------------
+     */
+
+    if (!match.customFields) {
+        CustomFieldFilterMap filters =
+            customFieldFilterEditor
+                ->filters();
+
+        for (
+            auto iterator =
+            filters.begin();
+            iterator != filters.end();
+            ) {
+            const auto attributeIterator =
+                record
+                    .customAttributes
+                    .constFind(
+                        iterator.key()
+                        );
+
+            if (
+                attributeIterator
+                == record
+                       .customAttributes
+                       .constEnd()
+                ) {
+                iterator =
+                    filters.erase(
+                        iterator
+                        );
+
+                continue;
+            }
+
+            const QString value =
+                attributeIterator
+                    .value()
+                    .toString();
+
+            if (!iterator
+                     .value()
+                     .contains(
+                         value
+                         )) {
+                iterator
+                    .value()
+                    .append(
+                        value
+                        );
+            }
+
+            ++iterator;
+        }
+
+        customFieldFilterEditor
+            ->setFilters(
+                filters
+                );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Finding status
+     *
+     * Preserve the statuses already being reviewed
+     * and add this finding's status.
+     * ---------------------------------------------------------
+     */
+
+    if (!match.findingStatus) {
+        InvestigationSession *session =
+            workspace->activeSession();
+
+        if (session != nullptr) {
+            const InvestigationRecordState state =
+                session
+                    ->investigationStateStore()
+                    ->stateForRecord(
+                        record.recordId
+                        );
+
+            QString statusValue;
+
+            switch (state.findingStatus) {
+            case FindingStatus::Open:
+                statusValue =
+                    QStringLiteral(
+                        "OPEN"
+                        );
+                break;
+
+            case FindingStatus::Resolved:
+                statusValue =
+                    QStringLiteral(
+                        "RESOLVED"
+                        );
+                break;
+
+            case FindingStatus::Dismissed:
+                statusValue =
+                    QStringLiteral(
+                        "DISMISSED"
+                        );
+                break;
+
+            case FindingStatus::None:
+                break;
+            }
+
+            if (!statusValue.isEmpty()) {
+                QStringList selected =
+                    findingStatusFilterCombo
+                        ->selectedValues();
+
+                if (!selected.contains(
+                        statusValue
+                        )) {
+                    selected.append(
+                        statusValue
+                        );
+                }
+
+                findingStatusFilterCombo
+                    ->setSelectedValues(
+                        selected
+                        );
+            } else {
+                findingStatusFilterCombo
+                    ->clearSelection();
+            }
+        }
+    }
+
+    /*
+     * Bookmark-only cannot be widened to include an
+     * unbookmarked record without changing the record
+     * itself, so disable that lens when necessary.
+     */
+    if (!match.bookmark) {
+        bookmarksOnlyCheckBox
+            ->setChecked(
+                false
+                );
+    }
+
+    /*
+     * Signal blockers prevented the normal UI update
+     * handlers from running.
+     */
+    updateTimeRangeButton();
+    updateCustomFiltersButton();
 
     applyFilters();
 }
@@ -6653,6 +7848,8 @@ void MainWindow::bindActiveSession()
 
         connectEventTableSelectionModel();
 
+        updateEventRowHeaderWidth();
+
         clearEventDetail();
 
         updateEventNavigationState();
@@ -6897,6 +8094,8 @@ void MainWindow::bindActiveSession()
         );
 
     connectEventTableSelectionModel();
+
+    updateEventRowHeaderWidth();
 
     InvestigationFilterProxyModel
         *proxyModel =
@@ -7361,5 +8560,58 @@ void MainWindow::
         [this]() {
             customFiltersDialog->adjustSize();
         }
+        );
+}
+
+void MainWindow::updateEventRowHeaderWidth()
+{
+    QHeaderView *header =
+        eventTable->verticalHeader();
+
+    if (header == nullptr) {
+        return;
+    }
+
+    int maximumRowNumber = 1;
+
+    if (investigationController != nullptr) {
+        maximumRowNumber =
+            std::max(
+                1,
+                investigationController
+                    ->totalRecordCount()
+                );
+    }
+
+    /*
+     * Always reserve space for the bookmark star,
+     * even when no records are currently bookmarked.
+     *
+     * Use the total investigation record count rather
+     * than the currently visible row count so filtering
+     * cannot make the header jump between widths either.
+     */
+    const QString widestExpectedText =
+        QStringLiteral("★ %1")
+            .arg(
+                maximumRowNumber
+                );
+
+    const int textWidth =
+        header
+            ->fontMetrics()
+            .horizontalAdvance(
+                widestExpectedText
+                );
+
+    /*
+     * Reserve a modest amount of padding for the
+     * header's frame/margins around the text.
+     */
+    const int headerWidth =
+        textWidth + 8;
+
+    header->setFixedWidth(
+        headerWidth
         );
 }

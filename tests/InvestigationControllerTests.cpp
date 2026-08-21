@@ -24,6 +24,7 @@ private slots:
     void navigatesVisibleIssuesInProxyOrder();
     void navigatesAdjacentVisibleEvents();
     void issueNavigationRespectsFiltering();
+    void findsProxyRowByStableRecordId();
 };
 
 static QVector<InvestigationRecord> sampleRecords()
@@ -1018,6 +1019,87 @@ void InvestigationControllerTests::
         controller.adjacentIssueProxyRow(
             -1,
             1
+            ),
+        -1
+        );
+}
+
+void InvestigationControllerTests::
+    findsProxyRowByStableRecordId()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "record-tracking"
+                )
+            ),
+        1
+        );
+
+    /*
+     * The lookup must follow proxy order rather
+     * than assuming source-model row numbers.
+     */
+    controller.proxyModel()->sort(
+        0,
+        Qt::DescendingOrder
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "record-tracking"
+                )
+            ),
+        0
+        );
+
+    /*
+     * A source record that exists but is hidden
+     * by the current filters has no proxy row.
+     */
+    controller.setFilters(
+        QStringLiteral("ERROR"),
+        QString(),
+        QString()
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "record-tracking"
+                )
+            ),
+        -1
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "record-comms"
+                )
+            ),
+        0
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "missing-record"
+                )
+            ),
+        -1
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QString()
             ),
         -1
         );

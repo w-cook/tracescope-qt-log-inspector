@@ -18,6 +18,32 @@
 using CustomFieldFilterMap =
     QMap<QString, QStringList>;
 
+struct InvestigationFilterMatch
+{
+    bool severity = true;
+    bool subsystem = true;
+    bool eventCode = true;
+    bool entity = true;
+    bool timeRange = true;
+    bool customFields = true;
+    bool search = true;
+    bool findingStatus = true;
+    bool bookmark = true;
+
+    bool allMatch() const
+    {
+        return severity
+               && subsystem
+               && eventCode
+               && entity
+               && timeRange
+               && customFields
+               && search
+               && findingStatus
+               && bookmark;
+    }
+};
+
 class InvestigationFilterProxyModel : public QSortFilterProxyModel
 {
     Q_OBJECT
@@ -90,6 +116,10 @@ public:
         const QHash<QString, FindingStatus>
             &findingStatuses
         );
+
+    InvestigationFilterMatch filterMatchForRecord(
+        const InvestigationRecord &record
+        ) const;
 
     QVariant headerData(
         int section,

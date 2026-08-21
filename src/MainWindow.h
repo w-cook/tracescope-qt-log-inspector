@@ -80,6 +80,8 @@ private:
     QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
+    QLabel *findingsSummaryLabel = nullptr;
+    QTableWidget *findingsTable = nullptr;
 
     InvestigationWorkspace *workspace;
     InvestigationController *investigationController =
@@ -254,6 +256,18 @@ private:
         const QString &severity
         );
 
+    QWidget *buildFindingsPanel();
+
+    void updateFindingsPanel();
+
+    void navigateToFinding(
+        int row
+        );
+
+    void revealFindingRecord(
+        const InvestigationRecord &record
+        );
+
     void exportFilteredResults();
 
     QGroupBox *buildTimelinePanel();
@@ -284,4 +298,6 @@ private:
         );
 
     void resizeCustomFiltersDialogToContents();
+
+    void updateEventRowHeaderWidth();
 };

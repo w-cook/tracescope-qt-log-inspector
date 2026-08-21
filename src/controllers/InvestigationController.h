@@ -90,6 +90,10 @@ public:
         const QModelIndex &proxyIndex
         ) const;
 
+    int proxyRowForRecordId(
+        const QString &recordId
+        ) const;
+
     int adjacentIssueProxyRow(
         int currentProxyRow,
         int direction
