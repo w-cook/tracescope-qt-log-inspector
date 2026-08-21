@@ -106,6 +106,9 @@ qt_add_executable(TraceScope
     src/filtering/InvestigationFilterPreset.h
     src/preferences/FilterPresetStore.h
     src/preferences/FilterPresetStore.cpp
+    src/domain/InvestigationRecordState.h
+    src/workspace/InvestigationStateStore.h
+    src/workspace/InvestigationStateStore.cpp
 
 )
 

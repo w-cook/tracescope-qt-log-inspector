@@ -7,6 +7,8 @@
 #include <QString>
 #include <QVector>
 
+#include "InvestigationStateStore.h"
+
 #include "../controllers/InvestigationController.h"
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
@@ -50,6 +52,12 @@ public:
 
     InvestigationController *
     investigationController();
+
+    InvestigationStateStore *
+    investigationStateStore();
+
+    const InvestigationStateStore *
+    investigationStateStore() const;
 
     void reload(
         ImportResult result
@@ -105,6 +113,9 @@ private:
 
     InvestigationController
         m_investigationController;
+
+    InvestigationStateStore
+        m_investigationStateStore;
 
     bool m_hasSeverityData = false;
     bool m_hasSubsystemData = false;

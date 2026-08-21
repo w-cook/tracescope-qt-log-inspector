@@ -93,6 +93,20 @@ InvestigationController *
     return &m_investigationController;
 }
 
+InvestigationStateStore *
+    InvestigationSession::
+    investigationStateStore()
+{
+    return &m_investigationStateStore;
+}
+
+const InvestigationStateStore *
+    InvestigationSession::
+    investigationStateStore() const
+{
+    return &m_investigationStateStore;
+}
+
 void InvestigationSession::reload(
     ImportResult result
     )
@@ -230,6 +244,19 @@ void InvestigationSession::installImportResult(
 
     rebuildDerivedData(
         result.records
+        );
+
+    QSet<QString> recordIds;
+
+    for (const InvestigationRecord &record
+         : std::as_const(result.records)) {
+        if (!record.recordId.isEmpty()) {
+            recordIds.insert(record.recordId);
+        }
+    }
+
+    m_investigationStateStore.retainOnly(
+        recordIds
         );
 
     m_investigationController.setRecords(

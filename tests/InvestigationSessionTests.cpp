@@ -16,6 +16,7 @@ private slots:
     void preservesImportedSessionContext();
     void assignsDistinctSessionIds();
     void reloadsContentWithoutChangingSessionIdentity();
+    void retainsInvestigationStateForRecordsThatSurviveReload();
 };
 
 void InvestigationSessionTests::
@@ -264,6 +265,113 @@ void InvestigationSessionTests::
             ->proxyModel()
             ->searchText(),
         QStringLiteral("failure")
+        );
+}
+
+void InvestigationSessionTests::
+    retainsInvestigationStateForRecordsThatSurviveReload()
+{
+    ImportProfile profile;
+
+    ImportResult initialResult;
+
+    InvestigationRecord retainedRecord;
+
+    retainedRecord.recordId =
+        QStringLiteral("retained");
+
+    InvestigationRecord removedRecord;
+
+    removedRecord.recordId =
+        QStringLiteral("removed");
+
+    initialResult.records.append(
+        retainedRecord
+        );
+
+    initialResult.records.append(
+        removedRecord
+        );
+
+    InvestigationSession session(
+        QStringLiteral("session.jsonl"),
+        profile,
+        std::move(initialResult)
+        );
+
+    InvestigationStateStore *stateStore =
+        session.investigationStateStore();
+
+    stateStore->setBookmarked(
+        QStringLiteral("retained"),
+        true
+        );
+
+    stateStore->setNote(
+        QStringLiteral("removed"),
+        QStringLiteral("Old finding")
+        );
+
+    QVERIFY(
+        stateStore->hasStateForRecord(
+            QStringLiteral("retained")
+            )
+        );
+
+    QVERIFY(
+        stateStore->hasStateForRecord(
+            QStringLiteral("removed")
+            )
+        );
+
+    ImportResult reloadedResult;
+
+    InvestigationRecord retainedReloadedRecord;
+
+    retainedReloadedRecord.recordId =
+        QStringLiteral("retained");
+
+    InvestigationRecord newRecord;
+
+    newRecord.recordId =
+        QStringLiteral("new");
+
+    reloadedResult.records.append(
+        retainedReloadedRecord
+        );
+
+    reloadedResult.records.append(
+        newRecord
+        );
+
+    session.reload(
+        std::move(reloadedResult)
+        );
+
+    QVERIFY(
+        stateStore->hasStateForRecord(
+            QStringLiteral("retained")
+            )
+        );
+
+    QVERIFY(
+        stateStore
+            ->stateForRecord(
+                QStringLiteral("retained")
+                )
+            .bookmarked
+        );
+
+    QVERIFY(
+        !stateStore->hasStateForRecord(
+            QStringLiteral("removed")
+            )
+        );
+
+    QVERIFY(
+        !stateStore->hasStateForRecord(
+            QStringLiteral("new")
+            )
         );
 }
 
