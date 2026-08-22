@@ -109,6 +109,9 @@ qt_add_executable(TraceScope
     src/domain/InvestigationRecordState.h
     src/workspace/InvestigationStateStore.h
     src/workspace/InvestigationStateStore.cpp
+    src/analysis/InvestigationValueFrequency.h
+    src/analysis/InvestigationAnalyticsAnalyzer.h
+    src/analysis/InvestigationAnalyticsAnalyzer.cpp
 
 )
 
