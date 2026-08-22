@@ -120,6 +120,7 @@ Completed release milestones:
 | `v0.8.0` | Responsive Large-File Import | prerelease |
 | `v0.9.0` | Multi-Session Investigation Workspace | prerelease |
 | `v0.10.0` | Advanced Filtering and Navigation | prerelease |
+| `v0.11.0` | Bookmarks, Notes, and Findings | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -156,7 +157,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.10.0`:
+Implemented foundations through `v0.11.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -185,12 +186,16 @@ Implemented foundations through `v0.10.0`:
 * persistent named filter presets backed by local application settings
 * adjacent-event and warning/error-class navigation over the current sorted and filtered investigation
 * grouped issue-summary and timeline-bucket drill-down that narrows the active filter state without discarding unrelated criteria
+* session-local investigation state keyed by stable record identities for bookmarks, analyst notes, and finding status
+* bookmark-only and finding-status filtering integrated with the existing filter model and reusable presets
+* a dedicated findings review panel with finding counts, source-record context, timestamps, and multiline analyst notes
+* direct navigation from findings back to source records with targeted filter relaxation when the record is hidden
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Later phases add findings, deterministic analytics, comparison, persistence, live following, reporting, and final display hardening rather than returning to open-ended format expansion.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 is now active and shifts the next increment toward deterministic analytics and burst detection; later phases continue with comparison, persistence, live following, reporting, and final display hardening rather than returning to open-ended format expansion.
 
 ## Development Phases
 
@@ -516,20 +521,34 @@ Completed deliverables:
 
 ### Phase 10 — Bookmarks, Notes, and Findings
 
-Add local investigation state tied to stable event identities so engineers can preserve what they discovered while working through QA failures, field-support packages, engineering test results, and other diagnostic sessions.
+**Status: Completed in `v0.11.0`.**
 
-This phase should turn transient navigation into a lightweight investigation record without introducing a collaborative backend, ticketing system, or account model.
+Added local investigation state tied to stable record identities so engineers can preserve what they discovered while working through QA failures, field-support packages, engineering test results, and other diagnostic sessions.
 
-Planned deliverables:
+The completed workflow turns transient navigation into a lightweight in-session investigation record without introducing a collaborative backend, ticketing system, or account model. Disk-backed persistence remains intentionally deferred to Phase 13.
 
-* event bookmarks
-* analyst notes
-* finding status
-* findings panel
-* bookmark filtering
-* navigation from findings back to source records
+Completed deliverables:
+
+* session-local event bookmarks keyed by stable record identity
+* compact bookmark indicators in the source-record gutter without consuming a data column
+* bookmark-only filtering integrated with complete filter state and reusable filter presets
+* multiline analyst notes edited through a modeless, wrapping note editor so source records remain inspectable while notes are open
+* independent Open, Resolved, and Dismissed finding statuses
+* multi-select finding-status filtering integrated with complete filter state and reusable filter presets
+* dedicated Findings review panel with Open, Resolved, and Dismissed counts, compact source-record/time context, preserved multiline notes, and explicit no-note summaries
+* findings review layout that adapts available space without crowding selected-record details
+* direct double-click navigation from findings back to their exact source records using stable record IDs
+* targeted filter adaptation when a finding's source record is hidden, preserving unrelated active criteria instead of resetting the investigation
+* retention of applicable bookmark, note, and finding state across in-place reloads when stable record identities survive, with stale state pruned for removed records
+* automated coverage for investigation-state storage, bookmark/finding filtering, preset round trips, reload retention, and stable-record proxy lookup
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+* refreshed release screenshots including the dedicated Findings workflow
+* `v0.11.0` prerelease and downloadable package verification
 
 ### Phase 11 — Analytics and Burst Detection
+
+**Status: In progress; targeted for `v0.12.0`.**
 
 Add deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
 
@@ -576,6 +595,7 @@ Planned deliverables:
 * loaded-session persistence
 * bookmark persistence
 * note persistence
+* finding-status persistence
 * active per-session filter-state persistence within saved workspaces
 * comparison-selection persistence
 * versioned workspace schemas
