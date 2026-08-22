@@ -170,6 +170,28 @@ add_test(
     COMMAND InvestigationCadenceAnalyzerTests
 )
 
+qt_add_executable(InvestigationBurstAnalyzerTests
+    InvestigationBurstAnalyzerTests.cpp
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationBurstAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationBurstAnalyzerTests
+    COMMAND InvestigationBurstAnalyzerTests
+)
+
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
     ../src/exporting/InvestigationCsvExporter.h

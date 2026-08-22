@@ -118,6 +118,10 @@ qt_add_executable(TraceScope
     src/analysis/InvestigationCadence.h
     src/analysis/InvestigationCadenceAnalyzer.h
     src/analysis/InvestigationCadenceAnalyzer.cpp
+    src/analysis/BurstDetectionSettings.h
+    src/analysis/InvestigationBurst.h
+    src/analysis/InvestigationBurstAnalyzer.h
+    src/analysis/InvestigationBurstAnalyzer.cpp
 
 )
 
