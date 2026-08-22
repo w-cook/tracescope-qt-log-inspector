@@ -128,6 +128,11 @@ qt_add_executable(InvestigationAnalyticsAnalyzerTests
     ../src/analysis/InvestigationValueFrequency.h
     ../src/analysis/InvestigationAnalyticsAnalyzer.h
     ../src/analysis/InvestigationAnalyticsAnalyzer.cpp
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+    ../src/analysis/InvestigationValueTrendBucket.h
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSourceMetadata.h

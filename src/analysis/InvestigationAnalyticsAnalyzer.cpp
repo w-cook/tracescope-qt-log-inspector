@@ -3,6 +3,9 @@
 #include <QMap>
 
 #include <algorithm>
+#include <limits>
+
+#include "AnalysisTimeBucketRange.h"
 
 namespace
 {
@@ -97,4 +100,87 @@ QVector<InvestigationValueFrequency>
             return record.entityId;
         }
         );
+}
+
+QVector<InvestigationValueTrendBucket>
+    InvestigationAnalyticsAnalyzer::
+    subsystemTrends(
+        const QVector<InvestigationRecord> &records,
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp,
+        qint64 intervalMilliseconds
+        ) const
+{
+    const auto range =
+        AnalysisTimeBucketRange::create(
+            firstTimestamp,
+            lastTimestamp,
+            intervalMilliseconds
+            );
+
+    if (!range.has_value()
+        || range->bucketCount() >
+               std::numeric_limits<int>::max()) {
+        return {};
+    }
+
+    QVector<InvestigationValueTrendBucket>
+        buckets;
+
+    buckets.reserve(
+        static_cast<int>(
+            range->bucketCount()
+            )
+        );
+
+    for (qint64 bucketIndex = 0;
+         bucketIndex < range->bucketCount();
+         ++bucketIndex) {
+        InvestigationValueTrendBucket bucket;
+
+        bucket.startTimestamp =
+            range->bucketTimestamp(
+                bucketIndex
+                );
+
+        bucket.label =
+            range->bucketLabel(
+                bucketIndex
+                );
+
+        buckets.append(
+            bucket
+            );
+    }
+
+    for (const InvestigationRecord &record
+         : records) {
+        if (!record.timestamp.has_value()
+            || !record.timestamp->isValid()
+            || !record.subsystem.has_value()
+            || record.subsystem
+                   ->trimmed()
+                   .isEmpty()) {
+            continue;
+        }
+
+        const auto bucketIndex =
+            range->bucketIndexForTimestamp(
+                record.timestamp.value()
+                );
+
+        if (!bucketIndex.has_value()) {
+            continue;
+        }
+
+        ++buckets[
+              static_cast<int>(
+                  *bucketIndex
+                  )
+        ].countsByValue[
+                  record.subsystem.value()
+        ];
+    }
+
+    return buckets;
 }

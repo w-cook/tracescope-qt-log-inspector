@@ -14,6 +14,11 @@ private slots:
     void eventCodeFrequenciesUsesValueAsTieBreaker();
     void entityFrequenciesCountsValues();
     void entityFrequenciesIgnoresMissingAndBlankValues();
+    void subsystemTrendsCountsValuesByBucket();
+    void subsystemTrendsPreservesEmptyBuckets();
+    void subsystemTrendsIgnoresMissingSubsystems();
+    void subsystemTrendsSkipsInvalidTimestamps();
+    void subsystemTrendsRejectsInvalidRange();
 };
 
 static InvestigationRecord
@@ -34,6 +39,25 @@ makeEntityRecord(
 {
     InvestigationRecord record;
     record.entityId = entityId;
+
+    return record;
+}
+
+static InvestigationRecord
+makeSubsystemTrendRecord(
+    const QString &timestamp,
+    const std::optional<QString> &subsystem
+    )
+{
+    InvestigationRecord record;
+
+    record.timestamp =
+        QDateTime::fromString(
+            timestamp,
+            Qt::ISODateWithMs
+            );
+
+    record.subsystem = subsystem;
 
     return record;
 }
@@ -293,6 +317,393 @@ void InvestigationAnalyticsAnalyzerTests::
     QCOMPARE(
         frequencies.first().count,
         1
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendsCountsValuesByBucket()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:10.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:25.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:40.000Z"
+                ),
+            QStringLiteral("Tracking")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:01:10.000Z"
+                ),
+            QStringLiteral("Tracking")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto trends =
+        analyzer.subsystemTrends(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:01:59.999Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            60 * 1000
+            );
+
+    QCOMPARE(
+        trends.size(),
+        2
+        );
+
+    QCOMPARE(
+        trends.at(0).label,
+        QStringLiteral("10:00")
+        );
+
+    QCOMPARE(
+        trends.at(0).countFor(
+            QStringLiteral("Comms")
+            ),
+        2
+        );
+
+    QCOMPARE(
+        trends.at(0).countFor(
+            QStringLiteral("Tracking")
+            ),
+        1
+        );
+
+    QCOMPARE(
+        trends.at(0).totalCount(),
+        3
+        );
+
+    QCOMPARE(
+        trends.at(1).label,
+        QStringLiteral("10:01")
+        );
+
+    QCOMPARE(
+        trends.at(1).countFor(
+            QStringLiteral("Comms")
+            ),
+        0
+        );
+
+    QCOMPARE(
+        trends.at(1).countFor(
+            QStringLiteral("Tracking")
+            ),
+        1
+        );
+
+    QCOMPARE(
+        trends.at(1).totalCount(),
+        1
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendsPreservesEmptyBuckets()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:10.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:02:10.000Z"
+                ),
+            QStringLiteral("Tracking")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto trends =
+        analyzer.subsystemTrends(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:02:59.999Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            60 * 1000
+            );
+
+    QCOMPARE(
+        trends.size(),
+        3
+        );
+
+    QCOMPARE(
+        trends.at(0).label,
+        QStringLiteral("10:00")
+        );
+
+    QCOMPARE(
+        trends.at(1).label,
+        QStringLiteral("10:01")
+        );
+
+    QCOMPARE(
+        trends.at(2).label,
+        QStringLiteral("10:02")
+        );
+
+    QCOMPARE(
+        trends.at(0).totalCount(),
+        1
+        );
+
+    QCOMPARE(
+        trends.at(1).totalCount(),
+        0
+        );
+
+    QCOMPARE(
+        trends.at(2).totalCount(),
+        1
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendsIgnoresMissingSubsystems()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:10.000Z"
+                ),
+            std::nullopt
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:20.000Z"
+                ),
+            QStringLiteral("   ")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:30.000Z"
+                ),
+            QStringLiteral("Comms")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto trends =
+        analyzer.subsystemTrends(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:59.999Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            60 * 1000
+            );
+
+    QCOMPARE(
+        trends.size(),
+        1
+        );
+
+    QCOMPARE(
+        trends.first().totalCount(),
+        1
+        );
+
+    QCOMPARE(
+        trends.first().countFor(
+            QStringLiteral("Comms")
+            ),
+        1
+        );
+
+    QCOMPARE(
+        trends.first().countsByValue.size(),
+        1
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendsSkipsInvalidTimestamps()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "not-a-timestamp"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:30.000Z"
+                ),
+            QStringLiteral("Tracking")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto trends =
+        analyzer.subsystemTrends(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:59.999Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            60 * 1000
+            );
+
+    QCOMPARE(
+        trends.size(),
+        1
+        );
+
+    QCOMPARE(
+        trends.first().totalCount(),
+        1
+        );
+
+    QCOMPARE(
+        trends.first().countFor(
+            QStringLiteral("Tracking")
+            ),
+        1
+        );
+
+    QCOMPARE(
+        trends.first().countFor(
+            QStringLiteral("Comms")
+            ),
+        0
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendsRejectsInvalidRange()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:30.000Z"
+                ),
+            QStringLiteral("Comms")
+            )
+    };
+
+    const QDateTime validFirstTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-22T10:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const QDateTime validLastTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-22T10:05:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto zeroInterval =
+        analyzer.subsystemTrends(
+            records,
+            validFirstTimestamp,
+            validLastTimestamp,
+            0
+            );
+
+    QVERIFY(
+        zeroInterval.isEmpty()
+        );
+
+    const auto reversedRange =
+        analyzer.subsystemTrends(
+            records,
+            validLastTimestamp,
+            validFirstTimestamp,
+            60 * 1000
+            );
+
+    QVERIFY(
+        reversedRange.isEmpty()
+        );
+
+    const auto invalidFirstTimestamp =
+        analyzer.subsystemTrends(
+            records,
+            QDateTime(),
+            validLastTimestamp,
+            60 * 1000
+            );
+
+    QVERIFY(
+        invalidFirstTimestamp.isEmpty()
+        );
+
+    const auto invalidLastTimestamp =
+        analyzer.subsystemTrends(
+            records,
+            validFirstTimestamp,
+            QDateTime(),
+            60 * 1000
+            );
+
+    QVERIFY(
+        invalidLastTimestamp.isEmpty()
         );
 }
 
