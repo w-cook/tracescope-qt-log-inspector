@@ -149,6 +149,27 @@ add_test(
     COMMAND InvestigationAnalyticsAnalyzerTests
 )
 
+qt_add_executable(InvestigationCadenceAnalyzerTests
+    InvestigationCadenceAnalyzerTests.cpp
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationCadenceAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationCadenceAnalyzerTests
+    COMMAND InvestigationCadenceAnalyzerTests
+)
+
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
     ../src/exporting/InvestigationCsvExporter.h
