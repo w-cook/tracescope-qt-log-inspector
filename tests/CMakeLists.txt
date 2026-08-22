@@ -168,6 +168,9 @@ qt_add_executable(EventTimelineAnalyzerTests
     ../src/analysis/EventTimelineAnalyzer.h
     ../src/analysis/EventTimelineAnalyzer.cpp
     ../src/domain/TelemetryEvent.h
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
 )
 
 target_link_libraries(EventTimelineAnalyzerTests
@@ -177,6 +180,23 @@ target_link_libraries(EventTimelineAnalyzerTests
 )
 
 add_test(NAME EventTimelineAnalyzerTests COMMAND EventTimelineAnalyzerTests)
+
+qt_add_executable(AnalysisTimeBucketRangeTests
+    AnalysisTimeBucketRangeTests.cpp
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+)
+
+target_link_libraries(AnalysisTimeBucketRangeTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME AnalysisTimeBucketRangeTests
+    COMMAND AnalysisTimeBucketRangeTests
+)
 
 qt_add_executable(ImporterRegistryTests
     ImporterRegistryTests.cpp

@@ -112,6 +112,8 @@ qt_add_executable(TraceScope
     src/analysis/InvestigationValueFrequency.h
     src/analysis/InvestigationAnalyticsAnalyzer.h
     src/analysis/InvestigationAnalyticsAnalyzer.cpp
+    src/analysis/AnalysisTimeBucketRange.h
+    src/analysis/AnalysisTimeBucketRange.cpp
 
 )
 

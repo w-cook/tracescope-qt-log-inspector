@@ -8,42 +8,12 @@
 #include <QTimeZone>
 #include <QHash>
 
+#include "AnalysisTimeBucketRange.h"
+
 namespace
 {
 constexpr qint64 MillisecondsPerMinute =
     60 * 1000;
-
-std::optional<qint64>
-normalizedIntervalEpochMilliseconds(
-    const QDateTime &timestamp,
-    qint64 intervalMilliseconds
-    )
-{
-    if (!timestamp.isValid()
-        || intervalMilliseconds <= 0) {
-        return std::nullopt;
-    }
-
-    const qint64 epochMilliseconds =
-        timestamp.toMSecsSinceEpoch();
-
-    qint64 remainder =
-        epochMilliseconds
-        % intervalMilliseconds;
-
-    /*
-     * C++ remainder retains the sign of the
-     * dividend. Normalize timestamps before the
-     * Unix epoch to the same floor behavior.
-     */
-    if (remainder < 0) {
-        remainder +=
-            intervalMilliseconds;
-    }
-
-    return epochMilliseconds
-           - remainder;
-}
 
 std::optional<QDateTime>
 earliestTimestamp(
@@ -97,57 +67,6 @@ latestTimestamp(
     }
 
     return latest;
-}
-
-QString bucketLabel(
-    const QDateTime &timestamp,
-    qint64 intervalMilliseconds,
-    bool spansMultipleDates
-    )
-{
-    if (intervalMilliseconds < 1000) {
-        return timestamp.toString(
-            spansMultipleDates
-                ? QStringLiteral(
-                      "MM-dd HH:mm:ss.zzz"
-                      )
-                : QStringLiteral(
-                      "HH:mm:ss.zzz"
-                      )
-            );
-    }
-
-    if (intervalMilliseconds
-        < MillisecondsPerMinute) {
-        return timestamp.toString(
-            spansMultipleDates
-                ? QStringLiteral(
-                      "MM-dd HH:mm:ss"
-                      )
-                : QStringLiteral(
-                      "HH:mm:ss"
-                      )
-            );
-    }
-
-    if (intervalMilliseconds
-        < 24 * 60 * MillisecondsPerMinute) {
-        return timestamp.toString(
-            spansMultipleDates
-                ? QStringLiteral(
-                      "yyyy-MM-dd HH:mm"
-                      )
-                : QStringLiteral(
-                      "HH:mm"
-                      )
-            );
-    }
-
-    return timestamp.toString(
-        QStringLiteral(
-            "yyyy-MM-dd"
-            )
-        );
 }
 
 void incrementBucket(
@@ -262,38 +181,16 @@ qint64
         qint64 intervalMilliseconds
         ) const
 {
-    if (!firstTimestamp.isValid()
-        || !lastTimestamp.isValid()
-        || firstTimestamp > lastTimestamp
-        || intervalMilliseconds <= 0) {
-        return 0;
-    }
-
-    const auto firstBucketEpoch =
-        normalizedIntervalEpochMilliseconds(
+    const auto range =
+        AnalysisTimeBucketRange::create(
             firstTimestamp,
-            intervalMilliseconds
-            );
-
-    const auto lastBucketEpoch =
-        normalizedIntervalEpochMilliseconds(
             lastTimestamp,
             intervalMilliseconds
             );
 
-    if (!firstBucketEpoch.has_value()
-        || !lastBucketEpoch.has_value()
-        || *firstBucketEpoch
-               > *lastBucketEpoch) {
-        return 0;
-    }
-
-    return (
-               *lastBucketEpoch
-               - *firstBucketEpoch
-               )
-               / intervalMilliseconds
-           + 1;
+    return range.has_value()
+               ? range->bucketCount()
+               : 0;
 }
 
 QVector<EventCountBucket>
@@ -350,32 +247,19 @@ QVector<EventCountBucket>
         return {};
     }
 
-    const auto firstBucketEpoch =
-        normalizedIntervalEpochMilliseconds(
+    const auto range =
+        AnalysisTimeBucketRange::create(
             firstTimestamp,
-            intervalMilliseconds
-            );
-
-    const auto lastBucketEpoch =
-        normalizedIntervalEpochMilliseconds(
             lastTimestamp,
             intervalMilliseconds
             );
 
-    if (!firstBucketEpoch.has_value()
-        || !lastBucketEpoch.has_value()
-        || *firstBucketEpoch
-               > *lastBucketEpoch) {
+    if (!range.has_value()) {
         return {};
     }
 
     const qint64 totalBucketCount =
-        (
-            *lastBucketEpoch
-            - *firstBucketEpoch
-            )
-            / intervalMilliseconds
-        + 1;
+        range->bucketCount();
 
     if (startBucketIndex
         >= totalBucketCount) {
@@ -394,30 +278,6 @@ QVector<EventCountBucket>
                 )
             );
 
-    const qint64 windowFirstEpoch =
-        *firstBucketEpoch
-        + startBucketIndex
-              * intervalMilliseconds;
-
-    const qint64 windowLastEpoch =
-        windowFirstEpoch
-        + static_cast<qint64>(
-              actualBucketCount - 1
-              )
-              * intervalMilliseconds;
-
-    const bool spansMultipleDates =
-        QDateTime::fromMSecsSinceEpoch(
-            *firstBucketEpoch,
-            QTimeZone::UTC
-            )
-            .date()
-        != QDateTime::fromMSecsSinceEpoch(
-               *lastBucketEpoch,
-               QTimeZone::UTC
-               )
-               .date();
-
     QVector<EventCountBucket> buckets;
 
     buckets.reserve(
@@ -427,26 +287,12 @@ QVector<EventCountBucket>
     for (int index = 0;
          index < actualBucketCount;
          ++index) {
-        const qint64 bucketEpoch =
-            windowFirstEpoch
-            + static_cast<qint64>(
-                  index
-                  )
-                  * intervalMilliseconds;
-
-        const QDateTime bucketTimestamp =
-            QDateTime::fromMSecsSinceEpoch(
-                bucketEpoch,
-                QTimeZone::UTC
-                );
-
         EventCountBucket bucket;
 
         bucket.label =
-            bucketLabel(
-                bucketTimestamp,
-                intervalMilliseconds,
-                spansMultipleDates
+            range->bucketLabel(
+                startBucketIndex
+                + index
                 );
 
         buckets.append(
@@ -467,26 +313,18 @@ QVector<EventCountBucket>
             continue;
         }
 
-        const auto recordBucketEpoch =
-            normalizedIntervalEpochMilliseconds(
-                record.timestamp.value(),
-                intervalMilliseconds
+        const auto bucketIndex =
+            range->bucketIndexForTimestamp(
+                record.timestamp.value()
                 );
 
-        if (!recordBucketEpoch.has_value()
-            || *recordBucketEpoch
-                   < windowFirstEpoch
-            || *recordBucketEpoch
-                   > windowLastEpoch) {
+        if (!bucketIndex.has_value()) {
             continue;
         }
 
         const qint64 relativeBucketIndex =
-            (
-                *recordBucketEpoch
-                - windowFirstEpoch
-                )
-            / intervalMilliseconds;
+            *bucketIndex
+            - startBucketIndex;
 
         if (relativeBucketIndex < 0
             || relativeBucketIndex
@@ -506,6 +344,7 @@ QVector<EventCountBucket>
 
     return buckets;
 }
+
 EventTimelineScale
     EventTimelineAnalyzer::
     scaleForIntervalMilliseconds(
@@ -517,29 +356,14 @@ EventTimelineScale
 {
     EventTimelineScale scale;
 
-    if (!firstTimestamp.isValid()
-        || !lastTimestamp.isValid()
-        || firstTimestamp > lastTimestamp
-        || intervalMilliseconds <= 0) {
-        return scale;
-    }
-
-    const auto firstBucketEpoch =
-        normalizedIntervalEpochMilliseconds(
+    const auto range =
+        AnalysisTimeBucketRange::create(
             firstTimestamp,
-            intervalMilliseconds
-            );
-
-    const auto lastBucketEpoch =
-        normalizedIntervalEpochMilliseconds(
             lastTimestamp,
             intervalMilliseconds
             );
 
-    if (!firstBucketEpoch.has_value()
-        || !lastBucketEpoch.has_value()
-        || *firstBucketEpoch
-               > *lastBucketEpoch) {
+    if (!range.has_value()) {
         return scale;
     }
 
@@ -560,21 +384,18 @@ EventTimelineScale
             continue;
         }
 
-        const auto bucketEpoch =
-            normalizedIntervalEpochMilliseconds(
-                record.timestamp.value(),
-                intervalMilliseconds
+        const auto bucketIndex =
+            range->bucketIndexForTimestamp(
+                record.timestamp.value()
                 );
 
-        if (!bucketEpoch.has_value()
-            || *bucketEpoch < *firstBucketEpoch
-            || *bucketEpoch > *lastBucketEpoch) {
+        if (!bucketIndex.has_value()) {
             continue;
         }
 
         EventCountBucket &bucket =
             occupiedBuckets[
-                *bucketEpoch
+                *bucketIndex
         ];
 
         incrementBucket(
