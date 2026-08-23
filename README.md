@@ -2,253 +2,113 @@
 
 [![TraceScope CI](https://github.com/w-cook/tracescope-qt-log-inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/w-cook/tracescope-qt-log-inspector/actions/workflows/ci.yml)
 
-TraceScope is a native C++/Qt desktop application for importing, normalizing, filtering, inspecting, visualizing, and exporting structured telemetry and diagnostic logs.
+TraceScope is a native C++/Qt desktop application for investigating file-based telemetry and diagnostic logs. It helps developers, QA engineers, field-support teams, and other technical users move from unfamiliar source files to a structured, repeatable investigation without requiring a hosted backend, log-shipping infrastructure, user accounts, or an indexing service.
 
-It began as a focused JSON Lines inspector and has grown into a configurable offline workbench. The current `v0.11.0` release adds session-local bookmarks, analyst notes, finding statuses, and a dedicated findings review workflow tied to stable source-record identities. Investigators can mark records for follow-up, preserve conclusions while a session remains open, filter by bookmark or finding status, and navigate from a finding back to its source record without discarding unrelated investigation context. This builds on the advanced filtering and navigation, multi-session workspace, responsive background import, cancellation, large-document preview safeguards, and scalable timeline behavior completed in earlier milestones.
+TraceScope imports multiple structured and operational log formats and uses reusable import profiles to map source fields into a common investigation model. Timestamp, severity, subsystem, event code, entity ID, and message are optional canonical fields rather than a required fixed schema. Source-specific values and raw records remain available alongside normalized data.
 
-TraceScope is intended for file-based logs from applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. It does not claim to automatically understand every arbitrary log format or guarantee a fixed maximum file size. Import behavior stays explicit, testable, and reproducible.
+Once a source is loaded, investigators can combine canonical and custom-field filters, search and navigate records, inspect timeline and trend views, review deterministic event-code/entity analytics, detect explainable warning/error bursts, preserve bookmarks, notes, and finding states, keep multiple sessions open, and export the currently visible investigation to CSV.
 
-## Documentation
+TraceScope is intentionally file-oriented and offline. It does not claim to automatically understand every arbitrary log format, diagnose root cause, replace centralized observability systems, or guarantee a fixed maximum file size. Import and analysis behavior stays explicit, testable, and reproducible.
 
-- [Expansion Roadmap](docs/expansion-roadmap.md) — product direction, phased implementation plan, release discipline, and scope boundaries
-- [Performance Notes](docs/performance.md) — measured large-file scenarios, methodology, environment, and interpretation limits
-- [Original Prototype Plan](docs/original-prototype-plan.md) — historical plan for the initial focused JSON Lines inspector
+![TraceScope investigation workspace](docs/screenshots/tracescope-dashboard.png)
 
-## Screenshots
-
-The `v0.11.0` screenshots use the repository samples and reusable profiles to show the current import, multi-session investigation, advanced filtering and navigation, findings, timeline, recent-history, large-file, and export workflows. The structured XML engineering session remains the primary walkthrough source, while CSV and JSON Lines samples demonstrate related sessions and denser warning/error investigations.
-
-### Import Configuration
-
-Choose or drag in a source file, review the suggested format, load or edit a reusable profile, inspect mapped preview records and multiline raw source, and validate the configuration before importing.
-
-![TraceScope Import Configuration](docs/screenshots/tracescope-import-configuration.png)
-
-### TraceScope Dashboard
-
-The main investigation view combines summary counts, advanced filtering controls, selectable timeline resolution, dynamic source-specific columns, grouped issue counts, event/issue navigation, bookmark and finding controls, visible/source-record position context, and selected-record details.
-
-![TraceScope Dashboard](docs/screenshots/tracescope-dashboard.png)
-
-### Multi-Session Workspace
-
-Multiple imported sources can remain open together as independent investigation sessions. Switching tabs preserves each session's filters, model state, source context, import profile, diagnostics, presentation state, and session-local bookmarks, notes, and findings without re-importing the file.
-
-![TraceScope Multi-Session Workspace](docs/screenshots/tracescope-multi-session-workspace.png)
-
-### Advanced Filtering and Navigation
-
-Canonical and source-specific filters can be combined across severity, subsystem, event code, entity, time range, search text, dynamic custom fields, bookmark state, and finding status. Named presets preserve reusable filter states, while adjacent-event and warning/error-class navigation move through the currently visible sorted investigation without losing source-record context.
-
-![TraceScope Advanced Filtering and Navigation](docs/screenshots/tracescope-filtered-warnings.png)
-
-### Findings Review
-
-Bookmarks, analyst notes, and Open, Resolved, or Dismissed finding states create a lightweight investigation record within each open session. The Findings tab summarizes classified findings, preserves multiline analyst notes, and supports direct navigation back to the underlying source record while adapting only filters that would otherwise hide it.
-
-![TraceScope Findings Review](docs/screenshots/tracescope-findings.png)
-
-### Fine-Resolution Timeline Navigation
-
-Manual fine-resolution buckets use a bounded visible window with horizontal navigation instead of attempting to render an unbounded number of chart buckets at once. Timeline labels, legend placement, and vertical scaling remain usable while navigating, and double-clicking a visible bar drills into its exact time bucket and represented severity when applicable.
-
-![TraceScope Timeline Navigation](docs/screenshots/tracescope-timeline-navigation.png)
-
-### Responsive Large-File Import
-
-Large imports run outside the UI thread. Streamed importers can report determinate progress and support cancellation while the desktop interface remains responsive.
-
-![TraceScope Large-File Import](docs/screenshots/tracescope-large-file-import.png)
-
-### Recent Files
-
-Persistent recent-file history keeps frequently revisited sources easy to reopen through the normal Import Configuration workflow. Recent import profiles are available from the Import Configuration dialog through the same validated profile-loading path.
-
-![TraceScope Recent Files](docs/screenshots/tracescope-recent-files.png)
-
-### Exported CSV
-
-The export workflow writes the currently visible records to CSV using readable canonical headers and the configured names of mapped custom fields.
-
-![TraceScope Exported CSV](docs/screenshots/tracescope-exported-csv.png)
-
-## Downloads
+## Download TraceScope
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The current `v0.11.0` package set uses:
+The current release is **`v0.12.0`**:
 
 ```text
-TraceScope-v0.11.0-windows-x64.zip
-TraceScope-v0.11.0-linux-x86_64.AppImage
-TraceScope-v0.11.0-samples.zip
+TraceScope-v0.12.0-windows-x64.zip
+TraceScope-v0.12.0-linux-x86_64.AppImage
+TraceScope-v0.12.0-samples.zip
 ```
 
-Historical `v0.1.0` through `v0.10.0` prereleases remain available as earlier development milestones.
+Historical `v0.1.0` through `v0.11.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.11.0-windows-x64.zip`.
+1. Download `TraceScope-v0.12.0-windows-x64.zip`.
 2. Extract the complete ZIP.
 3. Launch `TraceScope.exe`.
-4. Open a file from the included `samples` directory.
+4. Open a file from the included `samples` directory or choose one of your own supported log files.
 
 The package includes the required Qt libraries, plugins, MinGW runtime dependencies, demonstration logs, and reusable sample import profiles.
 
 ### Linux
 
-1. Download `TraceScope-v0.11.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.12.0-linux-x86_64.AppImage`.
 2. Make it executable:
 
 ```bash
-chmod +x TraceScope-v0.11.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.12.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.11.0-linux-x86_64.AppImage
+./TraceScope-v0.12.0-linux-x86_64.AppImage
 ```
 
-### Sample Logs and Profiles
+### Samples Only
 
-`TraceScope-v0.11.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable profiles.
-
-Representative source/profile pairs include:
-
-- Structured XML: `structured-engineering-session.xml` with `structured-xml-engineering-session-profile.json`
-- Windows Event XML: `windows-event-engineering-session.xml` with `windows-event-engineering-session-profile.json`
-- CSV and TSV: `service-session.csv` / `telemetry-batch.tsv` with matching profiles
-- Structured JSON: array and nested-document samples with matching profiles
-- Syslog: RFC 3164 and RFC 5424 samples with matching profiles
-- Web access logs: Apache Common, Apache/Nginx Combined, and IIS W3C samples
-- Configurable text: regex-based application-log samples and a logfmt-style service session
-
-The samples are intentionally varied so format detection, profile reuse, canonical mappings, custom fields, severity aliases, timestamps, preview behavior, filtering, timeline analysis, and export can all be exercised without external services.
+`TraceScope-v0.12.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable import profiles.
 
 Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the packaged applications.
 
-## Current Capabilities
+## Core Investigation Workflow
 
-### Import and Normalization
+### Import and Normalize Logs
 
-- Import JSON Lines, structured JSON documents and arrays, CSV, TSV, key-value/logfmt records, Syslog RFC 3164 and RFC 5424, IIS W3C logs, and structured XML
-- Use reusable built-in profiles for Apache Common and Apache/Nginx Combined access logs
-- Recognize Windows Event XML and apply Windows-oriented XML presets for common system fields
-- Use regex-configurable profiles for line-oriented text logs that do not have a dedicated importer
-- Suggest likely formats from file extension and source content where practical
-- Normalize supported sources into a common `InvestigationRecord`
-- Treat timestamp, severity, subsystem, event code, entity ID, and message as optional canonical fields
-- Preserve raw source records, source file/record metadata, and stable record identities
-- Preserve source-specific values as dynamic custom attributes
-- Return structured import counts and diagnostics for malformed or partially mappable records
-- Keep source-specific mapping rules in reusable, human-readable import profiles
+Choose or drag in a source file, review TraceScope's likely-format suggestion, load or edit a reusable profile, inspect mapped preview records and raw source, and validate the configuration before importing.
 
-### Import Profiles and Configuration
+Profiles define how source-specific fields map into optional canonical fields and readable custom attributes. This makes mapping behavior reusable and inspectable instead of hiding it behind automatic interpretation.
 
-- Define versioned JSON import profiles
-- Configure canonical field paths, named custom-field mappings, severity aliases, timestamp rules, and unmapped-field preservation
-- Use record paths for structured JSON and XML documents that contain collections of records
-- Validate profile structure and mapping configuration before import
-- Select or drag-and-drop a source file and display a likely-format suggestion
-- Create a fresh source-derived profile with automatic custom-field detection
-- Preview a bounded set of mapped records without changing the active investigation session
-- Inspect the complete raw source for the selected preview record in a vertically resizable area
-- Keep the last valid preview visible while temporarily invalid edits are corrected
-- Resize preview columns to keep long values readable
-- Disable automatic preview for large structured documents so configuration remains responsive
-- Generate large structured-document previews in the background and cancel obsolete preview work when the source or configuration changes
-- Save reusable profiles and load them only after validation
-- Reopen recently used profiles through persistent recent-profile history while retaining the same validation path
-- Retain an intentional profile when switching sources so compatibility can be checked without silently resetting the configuration
+![TraceScope Import Configuration](docs/screenshots/tracescope-import-configuration.png)
 
-### Large-File Responsiveness
+Supported source families include JSON Lines, structured JSON, CSV/TSV, key-value/logfmt, Syslog, IIS W3C, structured XML, Windows Event XML, common Apache/Nginx access-log layouts, and regex-configurable line-oriented text. See [Supported Formats and Profiles](#supported-formats-and-profiles) for details.
 
-- Run file importing outside the UI thread so the desktop interface remains responsive during parsing and result preparation
-- Stream source reading for supported line-oriented and XML import paths instead of requiring the complete source byte stream in memory before parsing
-- Report determinate byte/record progress when an importer can provide meaningful incremental progress
-- Use indeterminate progress for complete-document processing such as structured JSON rather than presenting an artificial percentage
-- Support cooperative cancellation for streamed imports without replacing the current investigation with partial results
-- Keep normalized records, raw-source values, dynamic attributes, and investigation state resident for each open session rather than claiming constant-memory behavior
+### Filter, Search, and Navigate
 
-Measured Release-build scenarios cover representative JSON Lines, CSV, IIS W3C, Windows Event XML, and structured JSON investigations containing up to 220,000 records and approximately 109 MiB on the documented test system. These are measured observations rather than maximum supported file-size or throughput guarantees.
+Investigations can be narrowed using multiple severities, subsystem, event code, entity, UTC time range, full-record search, dynamic custom-field values, bookmark state, and finding status. Named filter presets preserve useful combinations for reuse.
 
-See [Performance Notes](docs/performance.md) for the measurement method, test environment, scenario results, cancellation checks, and interpretation boundaries.
+Previous/next event navigation, warning/error-class navigation, grouped issue drill-down, timeline drill-down, and direct finding navigation keep source-record context available while moving through a filtered investigation.
 
-### Multi-Session Workspace
+![TraceScope Advanced Filtering and Navigation](docs/screenshots/tracescope-advanced-filtering.png)
 
-- Keep multiple imported log sessions open within one application instance
-- Switch and close sessions through a tabbed workspace without replacing unrelated investigation state
-- Preserve an independent investigation controller, filters, source context, import profile, diagnostics, and cached presentation state for each session
-- Reload a session in place using its existing source and import profile without creating a duplicate tab
-- Refresh source metadata and investigation data on reload while retaining applicable filters and stable session identity
-- Preserve the existing session unchanged when a reload is cancelled
-- Maintain persistent, bounded, deduplicated recent-file and recent-profile history through local application settings
-- Reopen recent files through Import Configuration rather than silently importing them, and remove stale recent paths when their menus are opened
+### Analyze Frequencies, Trends, and Bursts
 
-### Investigation Workflow
+TraceScope provides deterministic analysis intended to help investigators recognize patterns without claiming automated diagnosis.
 
-- Display investigation records in a sortable Qt model/view table
-- Show canonical fields only when they are present in the loaded dataset
-- Add discovered source-specific attributes as dynamic columns
-- Filter by multiple severities and by subsystem
-- Expose event-code and entity filters only when those canonical values are present
-- Filter by optional UTC time-range bounds when timestamps are available
-- Add multiple exact-value custom-field criteria, using OR semantics for multiple values of the same field and AND semantics across different fields and other filter categories
-- Add exact-value custom-field filters directly from visible table cells through the context menu
-- Search case-insensitively across canonical fields and custom attributes
-- Reset the complete active filter state
-- Save, overwrite, apply, and delete persistent named filter presets stored in local application settings
-- Restore reusable preset criteria safely across sessions, including bookmark-only and finding-status filters, while ignoring criteria unavailable in the active investigation
-- Apply complete filter-state changes as one model update to avoid repeated large-dataset proxy resets
-- Preserve correct selected-record mapping after sorting and filtering
-- Inspect canonical fields, custom attributes, and raw source for the selected record
-- Bookmark source records through stable record identities and filter the active investigation to bookmarked records
-- Add multiline analyst notes without blocking inspection of other source records
-- Classify records as Open, Resolved, or Dismissed findings and filter by one or more finding statuses
-- Review classified findings in a dedicated panel with status counts, source-record context, timestamps, and preserved analyst notes
-- Navigate from a finding back to its exact source record, adapting only active filters that would otherwise hide the target
-- Retain applicable bookmark, note, and finding state through in-place reloads when stable record identities survive; disk-backed workspace persistence remains a later phase
-- Navigate to previous/next visible events in the current filtered and sorted order
-- Navigate cyclically between visible warning, error, and critical records
-- Show visible event position together with the preserved source-record number
-- View session-level event counts and grouped warning/error summaries
-- Double-click grouped issue-summary cells to narrow the investigation by subsystem and represented issue class without discarding unrelated active filters
-- Visualize filtered event counts with automatic or manually selected timeline resolutions from millisecond through day-scale intervals
-- Preserve empty timeline intervals within the displayed range so gaps remain visible
-- Use bounded windowed rendering and horizontal navigation when fine resolutions would otherwise produce too many timeline buckets
-- Double-click timeline bars to narrow the investigation to the exact represented time bucket and severity when applicable
-- Keep timeline range context, legend placement, and vertical scaling stable while navigating
+The Analytics overview shows event-code frequencies and top entities when those fields are available. The timeline can break activity down by severity or by the most frequent subsystems, with scalable windowed rendering for fine resolutions.
 
-### Export, Samples, and Verification
+![TraceScope Analytics Overview](docs/screenshots/tracescope-analytics-overview.png)
 
-- Export the currently visible investigation records to CSV
-- Use user-facing canonical column names and configured custom-field names in CSV output
-- Preserve deterministic custom-column ordering and blank cells for attributes absent from individual records
-- Retain CSV escaping and compact JSON serialization for structured custom values
-- Include demonstration logs and reusable profiles for every major supported source family
-- Build and test on Windows and Linux through GitHub Actions
-- Produce portable Windows x64, Linux AppImage, and platform-neutral sample packages
-- Verify representative packaged samples and smoke-test the packaged Windows and Linux applications in CI
+Warning, error, and critical events can also be grouped into deterministic bursts using explicit thresholds and time windows. Auto timing derives a human-readable investigation cadence from the current records while remaining bounded relative to the investigation span; Manual timing is also available. Every detected burst explains why it qualified and summarizes contributing severities, subsystems, event codes, entities, and source records.
 
-The desktop UI consumes `InvestigationRecord` data directly for the primary table, filtering, searching, selected-record inspection, and CSV export. Existing telemetry-oriented summary and timeline analysis remain connected through a compatibility adapter while later phases continue reducing legacy assumptions where useful.
+![TraceScope Burst Detection](docs/screenshots/tracescope-burst-detection.png)
 
-## Import Model
+Burst detection is deterministic and explainable. It is **not** presented as AI anomaly detection or root-cause diagnosis.
 
-### Canonical Investigation Fields
+### Preserve Findings While You Investigate
 
-TraceScope normalizes source data into six optional canonical fields:
+Records can be bookmarked, annotated with multiline analyst notes, and classified as Open, Resolved, or Dismissed findings. The Findings review panel summarizes the investigation record and supports direct navigation back to the exact preserved source record.
 
-- `timestamp`
-- `severity`
-- `subsystem`
-- `eventCode`
-- `entityId`
-- `message`
+Applicable bookmark, note, and finding state survives in-place reloads when stable record identities remain present. Disk-backed workspace persistence is planned for a later phase.
 
-A source record can remain useful when one or more canonical fields are missing. A feature that depends on a missing field may be unavailable, while unrelated inspection, search, and source-specific fields remain usable.
+![TraceScope Findings Review](docs/screenshots/tracescope-findings.png)
 
-### Supported Formats and Profiles
+### Work Across Related Sessions
+
+Multiple imported sources can remain open as independent investigation sessions. Each session retains its source/profile context, filters, controller state, timeline/analytics presentation state, bookmarks, notes, findings, and reload behavior.
+
+This is useful when reviewing related application logs, QA runs, field-support captures, or known-good/degraded sources side by side. Structured cross-session comparison is the active Phase 12 development focus.
+
+### Export the Current Investigation
+
+The CSV export workflow writes the currently visible records using readable canonical headers and configured custom-field names. Filtering before export makes it possible to hand off only the records relevant to a finding or investigation path.
+
+## Supported Formats and Profiles
 
 Different source formats need different amounts of configuration. TraceScope keeps that distinction visible rather than pretending every file can be interpreted automatically.
 
@@ -265,9 +125,146 @@ Different source formats need different amounts of configuration. TraceScope kee
 | Structured XML | Nested elements, attributes, repeated elements, record paths, and raw XML preservation |
 | Windows Event XML | Uses the XML importer with Windows Event detection, presets, severity aliases, and named `EventData` fields |
 
-Import profiles map source-specific field names into the optional canonical fields and can also promote useful source values into readable custom columns. Values that are not explicitly mapped can still be preserved.
+Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.12.0`.
 
-Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.11.0`.
+### Canonical Investigation Fields
+
+TraceScope normalizes source data into six optional canonical fields:
+
+- `timestamp`
+- `severity`
+- `subsystem`
+- `eventCode`
+- `entityId`
+- `message`
+
+A source record can remain useful when one or more canonical fields are missing. A feature that depends on a missing field may be unavailable, while unrelated inspection, search, custom attributes, and raw source remain usable.
+
+Import profiles map source-specific field names into those canonical fields and can promote other useful values into named custom columns. Unmapped source values can also be preserved.
+
+## Sample Investigations
+
+The repository includes both compact format examples and larger fictional investigation scenarios.
+
+The larger `v0.12.0` scenarios are designed to resemble files a prospective user might actually need to investigate:
+
+- **Order Fulfillment Incident** — JSON Lines business-application logs covering database degradation, retries, cascading payment/dependency failures, recovery periods, and a later messaging backlog.
+- **Environmental Chamber QA Run** — CSV engineering-test data covering a high-temperature soak, DUT-specific thermal instability, power/radio faults, recovery, and cooldown validation.
+- **Field Gateway Support Sessions** — matched known-good and degraded logfmt captures from a fictional industrial gateway, including cellular instability, Modbus timeouts, telemetry buffering, recovery, and residual backlog behavior.
+
+Additional repository samples exercise structured XML, Windows Event XML, CSV/TSV, structured JSON, Syslog, Apache/Nginx/IIS access logs, regex-configurable application logs, and other supported import paths.
+
+The samples are fictional and self-contained. They are intended to demonstrate import configuration, profile reuse, canonical mappings, custom fields, filtering, timeline behavior, analytics, findings, burst detection, export, and related-session workflows without external services.
+
+## Performance and Large-File Behavior
+
+Large imports run outside the UI thread. Streamed importers can report determinate progress and support cooperative cancellation without replacing the current investigation with partial results.
+
+TraceScope keeps normalized records, raw-source values, dynamic attributes, and per-session investigation state resident while sessions are open; it does not claim constant-memory behavior.
+
+Measured Release-build scenarios cover representative JSON Lines, CSV, IIS W3C, Windows Event XML, and structured JSON investigations containing up to 220,000 records and approximately 109 MiB on the documented test system. These are measured observations rather than maximum supported file-size or throughput guarantees.
+
+See [Performance Notes](docs/performance.md) for methodology, environment, scenario results, cancellation checks, and interpretation boundaries.
+
+## Current Capabilities
+
+### Import and Configuration
+
+- Import JSON Lines, structured JSON documents and arrays, CSV, TSV, key-value/logfmt records, Syslog RFC 3164 and RFC 5424, IIS W3C logs, and structured XML
+- Use reusable built-in profiles for Apache Common and Apache/Nginx Combined access logs
+- Recognize Windows Event XML and apply Windows-oriented XML presets for common system fields
+- Use regex-configurable profiles for line-oriented text logs without a dedicated importer
+- Suggest likely formats from extension and source content where practical
+- Define versioned JSON import profiles with canonical mappings, custom-field mappings, severity aliases, timestamp rules, record paths, and unmapped-field preservation
+- Validate mapping configuration before import
+- Select or drag-and-drop sources
+- Create fresh source-derived profiles with automatic custom-field discovery
+- Preview bounded mapped records without replacing the active investigation
+- Inspect complete raw source for the selected preview record
+- Keep the last valid preview visible while temporarily invalid edits are corrected
+- Disable automatic preview for large structured documents and generate explicit large-document previews in cancellable background work
+- Save reusable profiles and reopen recently used profiles through the same validated loading path
+- Retain an intentional profile when switching sources so compatibility can be checked without silently resetting configuration
+- Normalize supported sources into a common `InvestigationRecord`
+- Preserve raw records, source file/record metadata, stable identities, source-specific custom attributes, import counts, and diagnostics
+
+### Investigation and Navigation
+
+- Display records in a sortable Qt model/view table with preserved source-record numbers
+- Show canonical columns only when values are present in the loaded dataset
+- Add discovered source-specific attributes as dynamic columns
+- Filter by multiple severities, subsystem, event code, entity, UTC time range, dynamic custom-field values, bookmark state, and finding status
+- Use OR semantics for multiple values of the same custom field and AND semantics across different fields/filter categories
+- Add custom-field filters directly from visible table cells
+- Search case-insensitively across canonical fields and custom attributes
+- Reset the complete active filter state
+- Save, overwrite, apply, and delete persistent named filter presets in local application settings
+- Restore reusable preset criteria safely across sessions while ignoring unavailable criteria
+- Apply complete filter-state changes as one model update
+- Preserve correct selected-record mapping after sorting and filtering
+- Inspect canonical fields, custom attributes, raw source, visible event position, and preserved source-record position
+- Navigate to previous/next visible records and cyclically among visible warning/error/critical records
+- Drill from grouped warning/error summaries into represented subsystem/issue classes without discarding unrelated filters
+- Drill from timeline bars into represented time ranges and severity/subsystem series without broadening unrelated filters
+
+### Timeline and Analytics
+
+- Visualize event counts with automatic or manually selected resolutions from millisecond through day-scale intervals
+- Preserve empty timeline intervals so gaps remain visible
+- Use bounded windowed rendering and horizontal navigation for fine resolutions
+- Keep visible range context, legend placement, and Y-axis scaling stable while navigating
+- Use explicit semantic colors for severity series
+- Break timeline activity down by severity or by the most frequent subsystems
+- Show Top 5 or Top 10 subsystem series without truncating the underlying analysis data
+- Calculate deterministic event-code frequencies when event codes are available
+- Calculate deterministic entity frequencies and present Top Entities when entity IDs are available
+- Degrade analytics independently when a canonical dimension is missing
+- Derive adaptive investigation cadence statistics from valid timestamps, with a documented fallback for sparse data
+- Detect deterministic WARN/ERROR/CRITICAL bursts using configurable event thresholds, time windows, and merge gaps
+- Use cadence-derived Auto burst timing or analyst-controlled Manual timing
+- Explain why each burst qualified and summarize contributing severity counts, subsystems, event codes, entities, and record identities
+- Double-click a detected burst to narrow the investigation to its contributing elevated-event range while preserving unrelated filters
+
+### Bookmarks, Notes, and Findings
+
+- Bookmark records through stable record identities
+- Filter the active investigation to bookmarked records
+- Add multiline analyst notes without blocking inspection of other records
+- Classify records as Open, Resolved, or Dismissed findings
+- Filter by one or more finding statuses
+- Review findings with status counts, source-record context, timestamps, and preserved notes
+- Navigate directly from a finding to its exact source record
+- Relax only filters that would otherwise hide a finding target
+- Retain applicable bookmark, note, and finding state across in-place reloads when stable identities survive
+
+### Multi-Session Workspace
+
+- Keep multiple imported sessions open in one application instance
+- Switch and close sessions without replacing unrelated investigation state
+- Preserve independent controller/filter state, source context, import profile, diagnostics, presentation state, and investigation state per session
+- Reload a session in place using its existing source and import profile
+- Preserve the existing session unchanged when a reload is cancelled
+- Maintain bounded, deduplicated recent-file and recent-profile history in local application settings
+- Reopen recent files through Import Configuration rather than silently importing them
+
+### Export, Samples, and Verification
+
+- Export currently visible investigation records to CSV
+- Use user-facing canonical headers and configured custom-field names
+- Preserve deterministic custom-column ordering and blanks for attributes absent from individual records
+- Retain CSV escaping and compact JSON serialization for structured custom values
+- Include demonstration logs and reusable profiles across supported source families
+- Include larger realistic fictional investigation scenarios for product walkthroughs
+- Build and test on Windows and Linux through GitHub Actions
+- Produce portable Windows x64, Linux AppImage, and platform-neutral samples packages
+- Verify representative packaged samples and smoke-test packaged Windows and Linux applications in CI
+
+## Documentation
+
+- [Feature Screenshot Gallery](docs/feature-screenshot-gallery.md) — visual walkthrough of import, investigation, analytics, findings, multi-session, large-file, recent-file, and export workflows
+- [Expansion Roadmap](docs/expansion-roadmap.md) — product direction, completed milestones, active development, release discipline, and scope boundaries
+- [Performance Notes](docs/performance.md) — measured large-file scenarios, methodology, environment, and interpretation limits
+- [Original Prototype Plan](docs/original-prototype-plan.md) — historical plan for the initial focused JSON Lines inspector
 
 ## Development Status
 
@@ -284,11 +281,16 @@ Implemented expansion milestones:
 | `v0.6.0` | Desktop import configuration, mapping-aware preview, reusable profile save/load, and sample profiles |
 | `v0.7.0` | Additional built-in formats, format detection/presets, and expanded cross-format samples |
 | `v0.8.0` | Responsive large-file import, progress/cancellation, scalable timeline resolution/navigation, and measured performance scenarios |
-| `v0.9.0` | Multi-session workspace, per-session context and reload, persistent recent files/profiles, and session-switching responsiveness |
+| `v0.9.0` | Multi-session workspace, per-session context/reload, persistent recent files/profiles, and session-switching responsiveness |
 | `v0.10.0` | Advanced canonical/custom filtering, persistent filter presets, event/issue navigation, and summary/timeline drill-down |
 | `v0.11.0` | Session-local bookmarks, analyst notes, finding status, findings review, bookmark/finding filtering, and source-record navigation |
+| `v0.12.0` | Deterministic event-code/entity analytics, subsystem/severity trends, adaptive cadence, configurable burst detection, and analytics drill-down |
 
-The current release is **`v0.11.0`**. **Phase 11 — Analytics and Burst Detection** is now active. Later phases add session comparison, workspace persistence, live file following, reporting, responsive display hardening, and the stable `v1.0.0` release.
+The current release is **`v0.12.0`**.
+
+**Phase 12 — Session Comparison is in active development, targeted for `v0.13.0`.** It focuses on structured comparison of two imported sessions, including failed/degraded versus known-good engineering and diagnostic runs, without claiming causal diagnosis.
+
+Later phases cover workspace/profile persistence, live file following, reporting/export expansion, responsive display hardening, final documentation, and the stable `v1.0.0` release.
 
 Planned capabilities are not presented as implemented until their corresponding phases are completed and verified.
 
@@ -321,8 +323,9 @@ The trusted local Windows development baseline uses Qt 6.11.1 with MinGW 64-bit.
 docs/
 ├── original-prototype-plan.md    # Historical initial implementation plan
 ├── expansion-roadmap.md          # Expansion architecture and phased roadmap
+├── feature-screenshot-gallery.md # Visual feature walkthrough
 ├── performance.md                # Measured large-file scenarios and interpretation
-└── screenshots/                  # Portfolio screenshots
+└── screenshots/                  # Product screenshots
 
 packaging/
 └── linux/
@@ -333,17 +336,17 @@ samples/                           # Demonstration logs and reusable profiles
 └── profiles/                      # Versioned sample import profiles
 
 src/
-├── analysis/                      # Grouped issue and timeline analysis
+├── analysis/                      # Timeline, frequency, cadence, burst, and grouped issue analysis
 ├── compatibility/                # Flexible-record adapters for legacy telemetry components
 ├── controllers/                  # Investigation model/proxy coordination
-├── domain/                       # Telemetry and flexible investigation-record domain
+├── domain/                       # Flexible investigation-record and legacy telemetry domain
 ├── exporting/                    # Investigation-record CSV export
 ├── filtering/                    # Legacy telemetry filtering retained for compatibility/tests
 ├── importing/                    # Importers, profiles, validation, preview, results, and diagnostics
 ├── models/                       # Investigation table and filter proxy models
 ├── parsing/                      # JSON Lines compatibility facade
 ├── preferences/                  # Persistent recent histories and filter presets
-├── ui/                           # Import configuration interface
+├── ui/                           # Import configuration and reusable investigation controls
 ├── workspace/                    # Multi-session workspace, per-session context, and investigation state
 ├── MainWindow.cpp                # Qt Widgets presentation and workflow orchestration
 ├── MainWindow.h
@@ -387,40 +390,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-The current CTest suite contains 30 executables:
-
-- `ParserTests`
-- `RecordSeverityTests`
-- `InvestigationRecordTests`
-- `ImportResultTests`
-- `FilterTests`
-- `IssueAnalyzerTests`
-- `CsvExporterTests`
-- `EventTimelineAnalyzerTests`
-- `ImporterRegistryTests`
-- `JsonLinesImporterTests`
-- `DelimitedTextImporterTests`
-- `StructuredJsonImporterTests`
-- `RegexTextImporterTests`
-- `KeyValueTextImporterTests`
-- `SyslogImporterTests`
-- `IisW3cImporterTests`
-- `XmlImporterTests`
-- `InvestigationTableModelTests`
-- `InvestigationFilterProxyModelTests`
-- `InvestigationControllerTests`
-- `ImportProfileTests`
-- `ImportProfileValidatorTests`
-- `ImportProfileSerializationTests`
-- `ImportPreviewServiceTests`
-- `ImportFormatSuggestionServiceTests`
-- `InvestigationSessionTests`
-- `InvestigationWorkspaceTests`
-- `InvestigationStateStoreTests`
-- `RecentItemsStoreTests`
-- `FilterPresetStoreTests`
-
-Coverage includes the flexible record domain, import results and diagnostics, each built-in importer family, import execution progress/cancellation, profile validation and serialization, preview and format-suggestion behavior, advanced filtering and analysis, complete filter-state batching, filter-preset persistence, bookmark and finding filtering, stable-record investigation state, event/issue/finding navigation, dynamic CSV export, Qt model/view behavior, proxy/source mapping, controller coordination, per-session state, multi-session workspace behavior, reload semantics, and persistent recent-item history.
+The Qt Test suite covers the flexible record domain, import results and diagnostics, each built-in importer family, import execution progress/cancellation, profile validation and serialization, preview and format-suggestion behavior, table/model behavior, advanced filtering, complete filter-state batching, preset persistence, stable-record investigation state, bookmarks and findings, timeline analysis, shared time-bucket logic, event-code/entity frequencies, subsystem trends, adaptive cadence, deterministic burst detection, dynamic CSV export, controller coordination, per-session state, workspace/reload semantics, and recent-item history.
 
 The same CTest suite runs in GitHub Actions on Windows and Linux.
 
@@ -428,15 +398,15 @@ The same CTest suite runs in GitHub Actions on Windows and Linux.
 
 The GitHub Actions workflow runs three parallel jobs with read-only repository permissions:
 
-- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.11.0-windows-x64.zip`
-- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.11.0-linux-x86_64.AppImage`
-- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.11.0-samples.zip`
+- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.12.0-windows-x64.zip`
+- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.12.0-linux-x86_64.AppImage`
+- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.12.0-samples.zip`
 
 Workflow artifacts validate candidate packages. Approved packages are attached permanently to GitHub Releases.
 
 ## Design Goals
 
-TraceScope emphasizes practical native desktop development, clear separation between importing, investigation data, presentation, analysis, and export, testable non-UI logic, explicit source mapping, raw-source preservation, offline operation, conservative product claims, responsive investigation workflows, and repeatable cross-platform releases.
+TraceScope emphasizes practical native desktop investigation, explicit and reproducible source mapping, preservation of source-specific information, deterministic/explainable analysis, responsive file-oriented workflows, offline operation, clear separation between importing, investigation data, presentation, analysis, and export, testable non-UI logic, conservative product claims, and repeatable cross-platform releases.
 
 ## License
 
