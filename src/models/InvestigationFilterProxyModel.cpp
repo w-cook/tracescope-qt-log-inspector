@@ -927,13 +927,20 @@ QVariant InvestigationFilterProxyModel::
     }
 
     if (role == Qt::DisplayRole) {
+        const QString sourceRecordText =
+            record->source.recordNumber > 0
+                ? QString::number(
+                      record->source.recordNumber
+                      )
+                : defaultValue.toString();
+
         if (!bookmarked) {
-            return defaultValue;
+            return sourceRecordText;
         }
 
         return QStringLiteral("★ %1")
             .arg(
-                defaultValue.toString()
+                sourceRecordText
                 );
     }
 

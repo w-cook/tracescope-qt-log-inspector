@@ -34,6 +34,9 @@ private slots:
     void findingStatusFilterRespondsToStateChanges();
 
     void completeFilterStateUsesSingleModelReset();
+
+    void verticalHeadersUseSourceRecordNumbers();
+    void bookmarkedVerticalHeadersUseSourceRecordNumbers();
 };
 
 static QVector<InvestigationRecord>
@@ -76,6 +79,8 @@ sampleRecords()
         QStringLiteral(
             "Telemetry session initialized"
             );
+
+    startup.source.recordNumber = 2;
 
     startup.customAttributes.insert(
         QStringLiteral(
@@ -124,6 +129,8 @@ sampleRecords()
             "Track 402 lost"
             );
 
+    tracking.source.recordNumber = 7;
+
     tracking.customAttributes.insert(
         QStringLiteral(
             "host"
@@ -170,6 +177,8 @@ sampleRecords()
         QStringLiteral(
             "Packet loss exceeded threshold"
             );
+
+    comms.source.recordNumber = 11;
 
     comms.customAttributes.insert(
         QStringLiteral(
@@ -1224,6 +1233,114 @@ void InvestigationFilterProxyModelTests::
     QCOMPARE(
         resetSpy.count(),
         1
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    verticalHeadersUseSourceRecordNumbers()
+{
+    InvestigationTableModel sourceModel;
+
+    sourceModel.setRecords(
+        sampleRecords()
+        );
+
+    InvestigationFilterProxyModel proxyModel;
+
+    proxyModel.setSourceModel(
+        &sourceModel
+        );
+
+    proxyModel.sort(
+        0,
+        Qt::AscendingOrder
+        );
+
+    /*
+     * Timestamp order is startup, comms, tracking.
+     * The gutter must follow preserved source
+     * record numbers rather than proxy row numbers.
+     */
+    QCOMPARE(
+        proxyModel.headerData(
+                      0,
+                      Qt::Vertical,
+                      Qt::DisplayRole
+                      ).toString(),
+        QStringLiteral("2")
+        );
+
+    QCOMPARE(
+        proxyModel.headerData(
+                      1,
+                      Qt::Vertical,
+                      Qt::DisplayRole
+                      ).toString(),
+        QStringLiteral("11")
+        );
+
+    QCOMPARE(
+        proxyModel.headerData(
+                      2,
+                      Qt::Vertical,
+                      Qt::DisplayRole
+                      ).toString(),
+        QStringLiteral("7")
+        );
+
+    proxyModel.setSeverityFilter(
+        QStringLiteral("ERROR")
+        );
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        1
+        );
+
+    QCOMPARE(
+        proxyModel.headerData(
+                      0,
+                      Qt::Vertical,
+                      Qt::DisplayRole
+                      ).toString(),
+        QStringLiteral("11")
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    bookmarkedVerticalHeadersUseSourceRecordNumbers()
+{
+    InvestigationTableModel sourceModel;
+
+    sourceModel.setRecords(
+        sampleRecords()
+        );
+
+    InvestigationFilterProxyModel proxyModel;
+
+    proxyModel.setSourceModel(
+        &sourceModel
+        );
+
+    proxyModel.setBookmarkedRecordIds(
+        QSet<QString> {
+            QStringLiteral(
+                "record-comms"
+                )
+        }
+        );
+
+    proxyModel.setSeverityFilter(
+        QStringLiteral("ERROR")
+        );
+
+    QCOMPARE(
+        proxyModel.headerData(
+                      0,
+                      Qt::Vertical,
+                      Qt::DisplayRole
+                      ).toString(),
+        QStringLiteral("★ 11")
         );
 }
 
