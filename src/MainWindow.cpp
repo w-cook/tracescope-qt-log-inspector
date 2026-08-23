@@ -56,6 +56,7 @@
 #include <QFormLayout>
 #include <QRadioButton>
 #include <QSpinBox>
+#include <QColor>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -8685,6 +8686,42 @@ void MainWindow::updateTimelineChart(
             tr("CRITICAL")
             );
 
+    traceSet->setColor(
+        QColor(
+            QStringLiteral("#9E9E9E")
+            )
+        );
+
+    debugSet->setColor(
+        QColor(
+            QStringLiteral("#607D8B")
+            )
+        );
+
+    infoSet->setColor(
+        QColor(
+            QStringLiteral("#1976D2")
+            )
+        );
+
+    warnSet->setColor(
+        QColor(
+            QStringLiteral("#F9A825")
+            )
+        );
+
+    errorSet->setColor(
+        QColor(
+            QStringLiteral("#D32F2F")
+            )
+        );
+
+    criticalSet->setColor(
+        QColor(
+            QStringLiteral("#7A0019")
+            )
+        );
+
     auto connectTimelineDrillDown =
         [this](
             QBarSet *barSet,
@@ -8761,6 +8798,12 @@ void MainWindow::updateTimelineChart(
             new QBarSet(
                 tr("UNSPECIFIED")
                 );
+
+        unspecifiedSet->setColor(
+            QColor(
+                QStringLiteral("#BDBDBD")
+                )
+            );
     }
 
     if (unspecifiedSet != nullptr) {
