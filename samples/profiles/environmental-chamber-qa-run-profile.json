@@ -1,0 +1,58 @@
+{
+    "schemaVersion": 1,
+    "name": "Environmental Chamber QA Run",
+    "importerId": "csv",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "event_code",
+        "entityId": "entity_id",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Station",
+            "sourcePath": "station"
+        },
+        {
+            "name": "Firmware",
+            "sourcePath": "firmware"
+        },
+        {
+            "name": "Test Step",
+            "sourcePath": "test_step"
+        },
+        {
+            "name": "Chamber Temp (C)",
+            "sourcePath": "chamber_temp_c"
+        },
+        {
+            "name": "Board Temp (C)",
+            "sourcePath": "board_temp_c"
+        },
+        {
+            "name": "Supply (V)",
+            "sourcePath": "supply_v"
+        },
+        {
+            "name": "Current (A)",
+            "sourcePath": "current_a"
+        },
+        {
+            "name": "RSSI (dBm)",
+            "sourcePath": "rssi_dbm"
+        },
+        {
+            "name": "Packet Loss (%)",
+            "sourcePath": "packet_loss_pct"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

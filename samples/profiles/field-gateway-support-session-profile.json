@@ -1,0 +1,58 @@
+{
+    "schemaVersion": 1,
+    "name": "Field Gateway Support Session",
+    "importerId": "key-value",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Site",
+            "sourcePath": "site"
+        },
+        {
+            "name": "Gateway",
+            "sourcePath": "gateway"
+        },
+        {
+            "name": "Firmware",
+            "sourcePath": "firmware"
+        },
+        {
+            "name": "Interface",
+            "sourcePath": "interface"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "latencyMs"
+        },
+        {
+            "name": "Queue Depth",
+            "sourcePath": "queueDepth"
+        },
+        {
+            "name": "Reconnect Count",
+            "sourcePath": "reconnectCount"
+        },
+        {
+            "name": "RSSI (dBm)",
+            "sourcePath": "rssiDbm"
+        },
+        {
+            "name": "Disk Usage (%)",
+            "sourcePath": "diskUsagePct"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}
