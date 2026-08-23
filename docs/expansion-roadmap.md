@@ -24,7 +24,7 @@ The expansion will follow these principles:
 * Preserve raw source records and source-location metadata.
 * Limit missing-field effects to features that depend on those fields.
 * Keep analysis deterministic and explainable.
-* Keep employer-facing claims conservative and directly supported by the implementation.
+* Keep prospective-user and employer-facing claims conservative and directly supported by the implementation.
 * Avoid paid infrastructure and unnecessary external services.
 * Complete each phase with passing tests and downloadable Windows and Linux packages.
 
@@ -103,7 +103,7 @@ Each completed development phase should produce:
 * attached Windows, Linux, and samples assets
 * clean smoke tests of the downloaded release packages
 
-GitHub Actions artifacts are used for build verification. Approved packages are then attached to GitHub Releases as permanent employer-facing downloads.
+GitHub Actions artifacts are used for build verification. Approved packages are then attached to GitHub Releases as permanent public downloads for prospective users and as directly verifiable project artifacts for employers and reviewers.
 
 Completed release milestones:
 
@@ -121,6 +121,7 @@ Completed release milestones:
 | `v0.9.0` | Multi-Session Investigation Workspace | prerelease |
 | `v0.10.0` | Advanced Filtering and Navigation | prerelease |
 | `v0.11.0` | Bookmarks, Notes, and Findings | prerelease |
+| `v0.12.0` | Analytics and Burst Detection | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -157,7 +158,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.11.0`:
+Implemented foundations through `v0.12.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -190,12 +191,20 @@ Implemented foundations through `v0.11.0`:
 * bookmark-only and finding-status filtering integrated with the existing filter model and reusable presets
 * a dedicated findings review panel with finding counts, source-record context, timestamps, and multiline analyst notes
 * direct navigation from findings back to source records with targeted filter relaxation when the record is hidden
+* deterministic event-code, entity, subsystem-frequency, subsystem-trend, and severity-trend analysis that degrades independently when canonical fields are absent
+* reusable deterministic analysis time-bucket logic shared by timeline and trend analysis
+* severity/subsystem timeline breakdown selection with session-local presentation state and UI-only Top-N subsystem display
+* adaptive timestamp-cadence analysis with transparent statistics, sparse-data fallback behavior, and human-readable Auto burst timing
+* deterministic configurable WARN/ERROR/CRITICAL burst detection with inclusive windows, merged episodes, trigger explanations, and contributing record/subsystem/event-code/entity summaries
+* Auto and Manual burst timing modes with analyst-controlled thresholds
+* burst drill-down that narrows time/severity context without discarding unrelated active filters
+* realistic fictional investigation samples spanning business-application incidents, engineering QA runs, and known-good/degraded field-support captures
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 is now active and shifts the next increment toward deterministic analytics and burst detection; later phases continue with comparison, persistence, live following, reporting, and final display hardening rather than returning to open-ended format expansion.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 is now active and shifts the next increment toward structured comparison of related sessions; later phases continue with persistence, live following, reporting, and final display hardening rather than returning to open-ended format expansion.
 
 ## Development Phases
 
@@ -548,29 +557,59 @@ Completed deliverables:
 
 ### Phase 11 — Analytics and Burst Detection
 
-**Status: In progress; targeted for `v0.12.0`.**
+**Status: Completed in `v0.12.0`.**
 
-Add deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
+Added deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
 
-The scalable timeline foundation originally planned in this phase was pulled forward and completed during Phase 7 because large-file verification showed that timeline resolution, bucket sizing, and navigation were necessary to keep large investigations usable. Timeline and grouped-summary drill-down were then completed during Phase 9. Phase 11 should build new analysis on those existing behaviors rather than reimplement them.
+The scalable timeline foundation originally planned for this phase was pulled forward during Phase 7 because large-file verification showed that resolution selection, bounded bucket materialization, and horizontal navigation were required for practical investigations. Phase 11 builds on that foundation and on the grouped-summary/timeline drill-down completed in Phase 9 rather than reimplementing either workflow.
 
-Analytics should degrade gracefully when a source does not provide a particular canonical field. A missing severity, event code, subsystem, or entity ID should disable or reduce only the analysis that depends on that field rather than reducing the usefulness of unrelated records.
+Analytics degrade independently when canonical fields are missing. A source without severity, event code, subsystem, entity ID, or usable timestamps loses only the analysis that depends on that dimension while unrelated inspection and analysis remain available.
 
-Planned deliverables:
+Completed deliverables:
 
-* event-code frequencies when event codes are present
-* top entities when entity IDs are present
-* subsystem trends when subsystem data is present
-* severity trends when severity data is present
-* deterministic warning and error burst detection
+* deterministic event-code frequency analysis when event codes are present
+* deterministic entity frequency analysis when entity IDs are present, with Top-N selection kept in the UI rather than truncating analyzer output
+* deterministic subsystem-frequency analysis used to rank timeline trend series
+* severity trends presented through the existing scalable timeline
+* subsystem timeline trends with configurable interval size, preserved empty buckets, deterministic Top 5/Top 10 presentation, stable legend membership, and stable Y-axis scaling while navigating
+* reusable `AnalysisTimeBucketRange` logic shared by timeline and trend analyzers so bucket alignment and window semantics remain consistent
+* windowed subsystem-trend analysis that materializes only the requested visible bucket range for fine-resolution timelines
+* per-session persistence of Severity/Subsystem timeline breakdown and subsystem Top-N presentation choice
+* drill-down from subsystem timeline bars to the represented subsystem and time range without broadening unrelated filters
+* deterministic timestamp-cadence analysis using valid positive gaps, including minimum, median, mean, P90, maximum, zero-gap count, and positive-gap count
+* adaptive human-readable burst timing recommendations with an explicit sparse-data fallback
+* adaptive Auto burst-window recommendations constrained to at most one quarter of the current valid-timestamp investigation span and rounded down to the existing preferred-duration vocabulary
+* deterministic WARN/ERROR/CRITICAL burst detection using inclusive time windows, explicit elevated-event and ERROR/CRITICAL thresholds, deterministic ordering, and configurable merge gaps
+* merged burst episodes that retain exact first/last elevated-event boundaries, contributing stable record IDs, severity counts, subsystem/event-code/entity frequency maps, and trigger reasons
+* compact Burst Settings interface with Auto and Manual timing modes
+* analyst-controlled elevated-event and ERROR/CRITICAL thresholds in both timing modes
+* preservation of Manual window/merge settings while Auto timing is selected so switching modes does not discard analyst choices
+* transparent Auto timing details showing the recommended window/merge gap, cadence statistics, and whether adaptive or fallback timing is active
+* dedicated Analytics review tab with Overview and Bursts pages
+* capability-aware Event Code Frequencies and Top Entities presentation
+* burst list and explanation panel showing timing mode, boundaries, duration, severity mix, trigger reasons, merge behavior, contributing records, and dimension summaries
+* burst drill-down that narrows the current investigation to the burst time range and compatible elevated severities while preserving unrelated filters
+* explicit semantic colors for severity timeline series so informational, warning, error, and critical activity is visually distinguishable
+* consistent preserved source-record numbering in the Telemetry Events gutter, Findings table, and navigation context even after sorting or filtering
+* realistic fictional investigation samples for an order-fulfillment incident, an environmental-chamber QA run, and matched known-good/degraded field-gateway support sessions, with reusable profiles
+* automated coverage for event-code/entity frequencies, subsystem frequencies/trends, windowed trend materialization, trend scale calculation, shared time-bucket ranges, adaptive cadence, deterministic burst detection, and preserved source-record header behavior
+* local full-suite and UI regression verification
+* Windows and Linux CI verification
+* full `v0.12.0` screenshot refresh and Feature Screenshot Gallery covering the current product workflow
+* README and roadmap refresh centered on prospective-user understanding while retaining conservative, verifiable technical and employer-facing claims
+* `v0.12.0` prerelease and downloadable package verification
 
-Deterministic burst detection will not be described as AI anomaly detection.
+Deterministic burst detection is not described as AI anomaly detection, automated diagnosis, or root-cause analysis.
 
 ### Phase 12 — Session Comparison
+
+**Status: In progress; targeted for `v0.13.0`.**
 
 Provide structured comparisons between two imported sessions, with particular value for engineering workflows such as comparing a failed or degraded run against a known-good run.
 
 Comparison should use shared canonical dimensions where they are available while remaining useful when one or both sessions omit particular canonical fields. The feature should surface meaningful differences without claiming causal diagnosis.
+
+The matched known-good and degraded field-gateway samples added in `v0.12.0` provide a reusable representative scenario for developing and validating this workflow.
 
 Planned deliverables:
 
@@ -660,7 +699,7 @@ Planned deliverables:
 * sample investigations
 * polished screenshots
 * final README
-* portfolio-claims review
+* product and portfolio claims review
 * stable `v1.0.0` release
 
 ## Scope Exclusions

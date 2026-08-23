@@ -205,6 +205,59 @@ void InvestigationSession::setColumnWidths(
         std::move(widths);
 }
 
+InvestigationReviewTab
+InvestigationSession::reviewTab() const
+{
+    return m_reviewTab;
+}
+
+void InvestigationSession::setReviewTab(
+    InvestigationReviewTab tab
+    )
+{
+    m_reviewTab = tab;
+}
+
+InvestigationAnalyticsTab
+InvestigationSession::analyticsTab() const
+{
+    return m_analyticsTab;
+}
+
+void InvestigationSession::setAnalyticsTab(
+    InvestigationAnalyticsTab tab
+    )
+{
+    m_analyticsTab = tab;
+}
+
+InvestigationTimelineBreakdown
+InvestigationSession::timelineBreakdown() const
+{
+    return m_timelineBreakdown;
+}
+
+void InvestigationSession::setTimelineBreakdown(
+    InvestigationTimelineBreakdown breakdown
+    )
+{
+    m_timelineBreakdown =
+        breakdown;
+}
+
+int InvestigationSession::subsystemTrendLimit() const
+{
+    return m_subsystemTrendLimit;
+}
+
+void InvestigationSession::setSubsystemTrendLimit(
+    int limit
+    )
+{
+    m_subsystemTrendLimit =
+        limit;
+}
+
 void InvestigationSession::
     refreshSourceMetadata()
 {
@@ -411,4 +464,38 @@ void InvestigationSession::rebuildDerivedData(
                        ) < 0;
         }
         );
+}
+
+InvestigationBurstTimingMode
+InvestigationSession::burstTimingMode() const
+{
+    return m_burstTimingMode;
+}
+
+void InvestigationSession::setBurstTimingMode(
+    InvestigationBurstTimingMode mode
+    )
+{
+    m_burstTimingMode =
+        mode;
+}
+
+const BurstDetectionSettings &
+    InvestigationSession::
+    burstDetectionSettings() const
+{
+    return m_burstDetectionSettings;
+}
+
+void InvestigationSession::
+    setBurstDetectionSettings(
+        const BurstDetectionSettings &settings
+        )
+{
+    if (!settings.isValid()) {
+        return;
+    }
+
+    m_burstDetectionSettings =
+        settings;
 }

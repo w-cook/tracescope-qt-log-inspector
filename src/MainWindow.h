@@ -9,6 +9,9 @@
 #include <QSettings>
 
 #include "analysis/EventTimelineAnalyzer.h"
+#include "analysis/InvestigationAnalyticsAnalyzer.h"
+#include "analysis/InvestigationBurstAnalyzer.h"
+#include "analysis/InvestigationCadenceAnalyzer.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
@@ -42,6 +45,7 @@ class QCheckBox;
 class QDateTimeEdit;
 class QWidget;
 class QDialog;
+class QTabWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -80,8 +84,27 @@ private:
     QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
+
+    QTabWidget *investigationReviewTabs = nullptr;
+
+    QWidget *findingsPanel = nullptr;
     QLabel *findingsSummaryLabel = nullptr;
     QTableWidget *findingsTable = nullptr;
+
+    QWidget *analyticsPanel = nullptr;
+
+    QTabWidget *analyticsTabs = nullptr;
+
+    QWidget *analyticsOverviewPage = nullptr;
+    QWidget *analyticsBurstsPage = nullptr;
+
+    QTableWidget *eventCodeFrequencyTable = nullptr;
+    QTableWidget *entityFrequencyTable = nullptr;
+
+    QTableWidget *burstTable = nullptr;
+    QPlainTextEdit *burstDetailText = nullptr;
+
+    QPushButton *burstSettingsButton = nullptr;
 
     InvestigationWorkspace *workspace;
     InvestigationController *investigationController =
@@ -89,6 +112,10 @@ private:
 
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
+    InvestigationAnalyticsAnalyzer analyticsAnalyzer;
+    InvestigationBurstAnalyzer burstAnalyzer;
+    InvestigationCadenceAnalyzer cadenceAnalyzer;
+
     InvestigationCsvExporter csvExporter;
 
     QMetaObject::Connection eventSelectionConnection;
@@ -149,6 +176,18 @@ private:
     QComboBox *timelineIntervalCombo =
         nullptr;
 
+    QWidget *timelineBreakdownWidget =
+        nullptr;
+
+    QComboBox *timelineBreakdownCombo =
+        nullptr;
+
+    QWidget *timelineSubsystemShowWidget =
+        nullptr;
+
+    QComboBox *timelineSubsystemLimitCombo =
+        nullptr;
+
     QScrollBar *timelineScrollBar =
         nullptr;
 
@@ -167,6 +206,12 @@ private:
     QString currentFilePath;
 
     QChartView *timelineChartView;
+
+    QGroupBox *analyticsEventCodeGroup = nullptr;
+    QGroupBox *analyticsEntityGroup = nullptr;
+    QLabel *analyticsOverviewEmptyLabel = nullptr;
+
+    QVector<InvestigationBurst> currentBursts;
 
     void buildLayout();
     void createMenus();
@@ -212,6 +257,8 @@ private:
 
     void updateTimeRangeButton();
 
+    void updateTimelineBreakdownControls();
+
     QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();
     void displayEventDetail(
@@ -253,10 +300,12 @@ private:
         );
     void drillDownTimelineBucket(
         int visibleBucketIndex,
-        const QString &severity
+        const QString &severity,
+        const QString &subsystem
         );
 
-    QWidget *buildFindingsPanel();
+    QWidget *buildFindingsPanel();    
+    QWidget *buildAnalyticsPanel();
 
     void updateFindingsPanel();
 
@@ -300,4 +349,22 @@ private:
     void resizeCustomFiltersDialogToContents();
 
     void updateEventRowHeaderWidth();
+
+    void updateAnalyticsOverview(
+        const QVector<InvestigationRecord> &records
+        );
+
+    void updateBurstsPanel(
+        const QVector<InvestigationRecord> &records
+        );
+
+    void updateBurstDetail(
+        int row
+        );
+
+    void showBurstSettingsDialog();
+
+    void drillDownBurst(
+        int row
+        );
 };

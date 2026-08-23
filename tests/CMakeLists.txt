@@ -123,6 +123,75 @@ target_link_libraries(IssueAnalyzerTests
 
 add_test(NAME IssueAnalyzerTests COMMAND IssueAnalyzerTests)
 
+qt_add_executable(InvestigationAnalyticsAnalyzerTests
+    InvestigationAnalyticsAnalyzerTests.cpp
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.cpp
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+    ../src/analysis/InvestigationValueTrendBucket.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationAnalyticsAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationAnalyticsAnalyzerTests
+    COMMAND InvestigationAnalyticsAnalyzerTests
+)
+
+qt_add_executable(InvestigationCadenceAnalyzerTests
+    InvestigationCadenceAnalyzerTests.cpp
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationCadenceAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationCadenceAnalyzerTests
+    COMMAND InvestigationCadenceAnalyzerTests
+)
+
+qt_add_executable(InvestigationBurstAnalyzerTests
+    InvestigationBurstAnalyzerTests.cpp
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(InvestigationBurstAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationBurstAnalyzerTests
+    COMMAND InvestigationBurstAnalyzerTests
+)
+
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
     ../src/exporting/InvestigationCsvExporter.h
@@ -147,6 +216,9 @@ qt_add_executable(EventTimelineAnalyzerTests
     ../src/analysis/EventTimelineAnalyzer.h
     ../src/analysis/EventTimelineAnalyzer.cpp
     ../src/domain/TelemetryEvent.h
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
 )
 
 target_link_libraries(EventTimelineAnalyzerTests
@@ -156,6 +228,23 @@ target_link_libraries(EventTimelineAnalyzerTests
 )
 
 add_test(NAME EventTimelineAnalyzerTests COMMAND EventTimelineAnalyzerTests)
+
+qt_add_executable(AnalysisTimeBucketRangeTests
+    AnalysisTimeBucketRangeTests.cpp
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+)
+
+target_link_libraries(AnalysisTimeBucketRangeTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME AnalysisTimeBucketRangeTests
+    COMMAND AnalysisTimeBucketRangeTests
+)
 
 qt_add_executable(ImporterRegistryTests
     ImporterRegistryTests.cpp

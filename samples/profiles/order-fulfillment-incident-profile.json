@@ -1,0 +1,62 @@
+{
+    "schemaVersion": 1,
+    "name": "Order Fulfillment Incident",
+    "importerId": "json-lines",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Host",
+            "sourcePath": "host"
+        },
+        {
+            "name": "Region",
+            "sourcePath": "region"
+        },
+        {
+            "name": "Environment",
+            "sourcePath": "environment"
+        },
+        {
+            "name": "Correlation ID",
+            "sourcePath": "correlationId"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "latencyMs"
+        },
+        {
+            "name": "Queue Depth",
+            "sourcePath": "queueDepth"
+        },
+        {
+            "name": "Retry Attempt",
+            "sourcePath": "retryAttempt"
+        },
+        {
+            "name": "Database",
+            "sourcePath": "database"
+        },
+        {
+            "name": "DB Pool Utilization (%)",
+            "sourcePath": "poolUtilizationPercent"
+        },
+        {
+            "name": "Payment Provider",
+            "sourcePath": "paymentProvider"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

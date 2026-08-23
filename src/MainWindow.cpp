@@ -52,6 +52,11 @@
 #include <QPainter>
 #include <QStyledItemDelegate>
 #include <QTextDocument>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QRadioButton>
+#include <QSpinBox>
+#include <QColor>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -81,6 +86,8 @@ constexpr int TimelineAutoTargetBuckets = 20;
 constexpr int TimelineVisibleBucketCount = 20;
 
 constexpr int TimelineScaledScrollMaximum = 1'000'000;
+
+constexpr int AnalyticsTopEntityCount = 10;
 
 constexpr qint64 MillisecondsPerSecond = 1'000;
 
@@ -374,6 +381,72 @@ QString timelineDisplayLabel(
      * is useful context.
      */
     return canonicalLabel;
+}
+
+QString formatDurationMilliseconds(
+    qint64 milliseconds
+    )
+{
+    if (milliseconds < 1000) {
+        return QStringLiteral("%1 ms")
+            .arg(milliseconds);
+    }
+
+    if (milliseconds < 60 * 1000) {
+        const double seconds =
+            static_cast<double>(
+                milliseconds
+                )
+            / 1000.0;
+
+        return QStringLiteral("%1 s")
+            .arg(
+                seconds,
+                0,
+                'f',
+                seconds < 10.0
+                    ? 1
+                    : 0
+                );
+    }
+
+    if (milliseconds < 60 * 60 * 1000) {
+        const double minutes =
+            static_cast<double>(
+                milliseconds
+                )
+            / static_cast<double>(
+                60 * 1000
+                );
+
+        return QStringLiteral("%1 min")
+            .arg(
+                minutes,
+                0,
+                'f',
+                minutes < 10.0
+                    ? 1
+                    : 0
+                );
+    }
+
+    const double hours =
+        static_cast<double>(
+            milliseconds
+            )
+        / static_cast<double>(
+            60 * 60 * 1000
+            );
+
+    return QStringLiteral("%1 h")
+        .arg(
+            hours,
+            0,
+            'f',
+            hours < 10.0
+                ? 1
+                : 0
+            );
 }
 
 QString findingStatusDisplayText(
@@ -1299,10 +1372,13 @@ void MainWindow::buildLayout()
     issueSummaryGroup =
         buildIssueSummaryPanel();
 
-    auto *findingsPanel =
+    findingsPanel =
         buildFindingsPanel();
 
-    auto *investigationReviewTabs =
+    analyticsPanel =
+        buildAnalyticsPanel();
+
+    investigationReviewTabs =
         new QTabWidget(this);
 
     investigationReviewTabs->setDocumentMode(
@@ -1317,6 +1393,11 @@ void MainWindow::buildLayout()
     investigationReviewTabs->addTab(
         findingsPanel,
         tr("Findings")
+        );
+
+    investigationReviewTabs->addTab(
+        analyticsPanel,
+        tr("Analytics")
         );
 
     auto *detailGroup =
@@ -1383,21 +1464,48 @@ void MainWindow::buildLayout()
         this,
         [
             this,
-            bottomSplitter,
-            investigationReviewTabs
+            bottomSplitter
         ](int index) {
+        InvestigationSession *session =
+            workspace->activeSession();
+
+            if (session != nullptr) {
+                QWidget *currentPage =
+                    investigationReviewTabs
+                        ->widget(index);
+
+                if (currentPage == issueSummaryGroup) {
+                    session->setReviewTab(
+                        InvestigationReviewTab::
+                            IssueSummary
+                        );
+                } else if (currentPage == findingsPanel) {
+                    session->setReviewTab(
+                        InvestigationReviewTab::
+                            Findings
+                        );
+                } else if (currentPage == analyticsPanel) {
+                    session->setReviewTab(
+                        InvestigationReviewTab::
+                            Analytics
+                        );
+                }
+            }
+
             const int totalWidth =
                 std::max(
                     1,
                     bottomSplitter->width()
                     );
 
-            const bool findingsSelected =
-                investigationReviewTabs
-                    ->tabText(index)
-                == QObject::tr("Findings");
+            const QString selectedTabText =
+                investigationReviewTabs->tabText(index);
 
-            if (findingsSelected) {
+            const bool wideReviewSelected =
+                selectedTabText == QObject::tr("Findings")
+                || selectedTabText == QObject::tr("Analytics");
+
+            if (wideReviewSelected) {
                 /*
                  * Findings is a genuine review surface
                  * and benefits from more horizontal space.
@@ -2970,6 +3078,14 @@ void MainWindow::applyFilters()
         );
 
     updateIssueSummary(
+        visibleRecords
+        );
+
+    updateAnalyticsOverview(
+        visibleRecords
+        );
+
+    updateBurstsPanel(
         visibleRecords
         );
 
@@ -5020,6 +5136,542 @@ QWidget *MainWindow::buildFindingsPanel()
     return panel;
 }
 
+QWidget *MainWindow::buildAnalyticsPanel()
+{
+    auto *panel =
+        new QWidget(this);
+
+    auto *panelLayout =
+        new QVBoxLayout(panel);
+
+    panelLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    panelLayout->setSpacing(
+        0
+        );
+
+    analyticsTabs =
+        new QTabWidget(panel);
+
+    analyticsTabs->setDocumentMode(
+        true
+        );
+
+    /*
+     * Overview
+     */
+    analyticsOverviewPage =
+        new QWidget(analyticsTabs);
+
+    auto *overviewLayout =
+        new QVBoxLayout(analyticsOverviewPage);
+
+    overviewLayout->setContentsMargins(
+        4,
+        2,
+        4,
+        4
+        );
+
+    overviewLayout->setSpacing(
+        2
+        );
+
+    analyticsOverviewEmptyLabel =
+        new QLabel(
+            tr(
+                "Event-code and entity analytics are "
+                "not available for this source."
+                ),
+            analyticsOverviewPage
+            );
+
+    analyticsOverviewEmptyLabel->setWordWrap(
+        true
+        );
+
+    analyticsOverviewEmptyLabel->setVisible(
+        false
+        );
+
+    overviewLayout->addWidget(
+        analyticsOverviewEmptyLabel
+        );
+
+    auto *overviewSplitter =
+        new QSplitter(
+            Qt::Horizontal,
+            analyticsOverviewPage
+            );
+
+    /*
+     * Event-code frequencies
+     */
+    analyticsEventCodeGroup =
+        new QGroupBox(
+            tr("Event Code Frequencies"),
+            overviewSplitter
+            );
+
+    auto *eventCodeLayout =
+        new QVBoxLayout(
+            analyticsEventCodeGroup
+            );
+
+    eventCodeFrequencyTable =
+        new QTableWidget(
+            0,
+            2,
+            analyticsEventCodeGroup
+            );
+
+    eventCodeFrequencyTable
+        ->setHorizontalHeaderLabels({
+            tr("Event Code"),
+            tr("Count")
+        });
+
+    eventCodeFrequencyTable
+        ->setEditTriggers(
+            QAbstractItemView::NoEditTriggers
+            );
+
+    eventCodeFrequencyTable
+        ->setSelectionBehavior(
+            QAbstractItemView::SelectRows
+            );
+
+    eventCodeFrequencyTable
+        ->setSelectionMode(
+            QAbstractItemView::SingleSelection
+            );
+
+    eventCodeFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            0,
+            QHeaderView::Stretch
+            );
+
+    eventCodeFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            1,
+            QHeaderView::ResizeToContents
+            );
+
+    eventCodeFrequencyTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    eventCodeLayout->addWidget(
+        eventCodeFrequencyTable
+        );
+
+    /*
+     * Top entities
+     */
+    analyticsEntityGroup =
+        new QGroupBox(
+            tr("Top Entities"),
+            overviewSplitter
+            );
+
+    auto *entityLayout =
+        new QVBoxLayout(
+            analyticsEntityGroup
+            );
+
+    entityFrequencyTable =
+        new QTableWidget(
+            0,
+            2,
+            analyticsEntityGroup
+            );
+
+    entityFrequencyTable
+        ->setHorizontalHeaderLabels({
+            tr("Entity"),
+            tr("Count")
+        });
+
+    entityFrequencyTable
+        ->setEditTriggers(
+            QAbstractItemView::NoEditTriggers
+            );
+
+    entityFrequencyTable
+        ->setSelectionBehavior(
+            QAbstractItemView::SelectRows
+            );
+
+    entityFrequencyTable
+        ->setSelectionMode(
+            QAbstractItemView::SingleSelection
+            );
+
+    entityFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            0,
+            QHeaderView::Stretch
+            );
+
+    entityFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            1,
+            QHeaderView::ResizeToContents
+            );
+
+    entityFrequencyTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    entityLayout->addWidget(
+        entityFrequencyTable
+        );
+
+    overviewSplitter->addWidget(
+        analyticsEventCodeGroup
+        );
+
+    overviewSplitter->addWidget(
+        analyticsEntityGroup
+        );
+
+    overviewSplitter->setStretchFactor(
+        0,
+        1
+        );
+
+    overviewSplitter->setStretchFactor(
+        1,
+        1
+        );
+
+    overviewLayout->addWidget(
+        overviewSplitter
+        );
+
+    /*
+     * Bursts
+     */
+    analyticsBurstsPage =
+        new QWidget(analyticsTabs);
+
+    auto *burstsLayout =
+        new QVBoxLayout(analyticsBurstsPage);
+
+    burstsLayout->setContentsMargins(
+        4,
+        2,
+        4,
+        4
+        );
+
+    burstsLayout->setSpacing(
+        2
+        );
+
+    auto *burstToolbar =
+        new QHBoxLayout();
+
+    burstToolbar->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    burstToolbar->setSpacing(
+        4
+        );
+
+    auto *burstHeading =
+        new QLabel(
+            tr(
+                "Deterministic warning and error "
+                "burst detection"
+                ),
+            analyticsBurstsPage
+            );
+
+    burstSettingsButton =
+        new QPushButton(
+            tr("Burst Settings..."),
+            analyticsBurstsPage
+            );
+
+    connect(
+        burstSettingsButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            showBurstSettingsDialog();
+        }
+        );
+
+    burstToolbar->addWidget(
+        burstHeading
+        );
+
+    burstToolbar->addStretch();
+
+    burstToolbar->addWidget(
+        burstSettingsButton
+        );
+
+    burstsLayout->addLayout(
+        burstToolbar
+        );
+
+    auto *burstSplitter =
+        new QSplitter(
+            Qt::Horizontal,
+            analyticsBurstsPage
+            );
+
+    /*
+     * Burst list
+     */
+    auto *burstListGroup =
+        new QGroupBox(
+            tr("Detected Bursts"),
+            burstSplitter
+            );
+
+    auto *burstListLayout =
+        new QVBoxLayout(
+            burstListGroup
+            );
+
+    burstListLayout->setContentsMargins(
+        4,
+        4,
+        4,
+        4
+        );
+
+    burstListLayout->setSpacing(
+        2
+        );
+
+    burstTable =
+        new QTableWidget(
+            0,
+            4,
+            burstListGroup
+            );
+
+    burstTable->setHorizontalHeaderLabels({
+        tr("Start"),
+        tr("End"),
+        tr("Elevated"),
+        tr("Highest Severity")
+    });
+
+    burstTable->setEditTriggers(
+        QAbstractItemView::NoEditTriggers
+        );
+
+    burstTable->setSelectionBehavior(
+        QAbstractItemView::SelectRows
+        );
+
+    burstTable->setSelectionMode(
+        QAbstractItemView::SingleSelection
+        );
+
+    burstTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            QHeaderView::ResizeToContents
+            );
+
+    burstTable
+        ->horizontalHeader()
+        ->setStretchLastSection(
+            true
+            );
+
+    burstTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    connect(
+        burstTable,
+        &QTableWidget::cellClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            updateBurstDetail(
+                row
+                );
+        }
+        );
+
+    connect(
+        burstTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            drillDownBurst(
+                row
+                );
+        }
+        );
+
+    burstTable->setToolTip(
+        tr(
+            "Select a burst to review its explanation. "
+            "Double-click to filter the investigation "
+            "to its contributing elevated events."
+            )
+        );
+
+    burstListLayout->addWidget(
+        burstTable
+        );
+
+    /*
+     * Burst explanation
+     */
+    auto *burstDetailGroup =
+        new QGroupBox(
+            tr("Burst Explanation"),
+            burstSplitter
+            );
+
+    auto *burstDetailLayout =
+        new QVBoxLayout(
+            burstDetailGroup
+            );
+
+    burstDetailLayout->setContentsMargins(
+        4,
+        4,
+        4,
+        4
+        );
+
+    burstDetailLayout->setSpacing(
+        2
+        );
+
+    burstDetailText =
+        new QPlainTextEdit(
+            burstDetailGroup
+            );
+
+    burstDetailText->setReadOnly(
+        true
+        );
+
+    burstDetailText->setPlaceholderText(
+        tr(
+            "Select a detected burst to review "
+            "why it was identified."
+            )
+        );
+
+    burstDetailLayout->addWidget(
+        burstDetailText
+        );
+
+    burstSplitter->addWidget(
+        burstListGroup
+        );
+
+    burstSplitter->addWidget(
+        burstDetailGroup
+        );
+
+    burstSplitter->setStretchFactor(
+        0,
+        3
+        );
+
+    burstSplitter->setStretchFactor(
+        1,
+        2
+        );
+
+    burstsLayout->addWidget(
+        burstSplitter
+        );
+
+    /*
+     * Analytics tabs
+     */
+    analyticsTabs->addTab(
+        analyticsOverviewPage,
+        tr("Overview")
+        );
+
+    analyticsTabs->addTab(
+        analyticsBurstsPage,
+        tr("Bursts")
+        );
+
+    connect(
+        analyticsTabs,
+        &QTabWidget::currentChanged,
+        this,
+        [this](int index) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr) {
+                return;
+            }
+
+            QWidget *currentPage =
+                analyticsTabs->widget(
+                    index
+                    );
+
+            if (currentPage
+                == analyticsOverviewPage) {
+                session->setAnalyticsTab(
+                    InvestigationAnalyticsTab::
+                        Overview
+                    );
+            } else if (
+                currentPage
+                == analyticsBurstsPage
+                ) {
+                session->setAnalyticsTab(
+                    InvestigationAnalyticsTab::
+                        Bursts
+                    );
+            }
+        }
+        );
+
+    panelLayout->addWidget(
+        analyticsTabs
+        );
+
+    return panel;
+}
+
 void MainWindow::updateIssueSummary(
     const QVector<InvestigationRecord> &records
     )
@@ -5511,6 +6163,136 @@ void MainWindow::updateFindingsPanel()
         );
 }
 
+void MainWindow::updateAnalyticsOverview(
+    const QVector<InvestigationRecord> &records
+    )
+{
+    eventCodeFrequencyTable->setRowCount(
+        0
+        );
+
+    entityFrequencyTable->setRowCount(
+        0
+        );
+
+    analyticsEventCodeGroup->setVisible(
+        hasEventCodeData
+        );
+
+    analyticsEntityGroup->setVisible(
+        hasEntityData
+        );
+
+    analyticsOverviewEmptyLabel->setVisible(
+        !hasEventCodeData
+        && !hasEntityData
+        );
+
+    if (hasEventCodeData) {
+        const auto frequencies =
+            analyticsAnalyzer
+                .eventCodeFrequencies(
+                    records
+                    );
+
+        eventCodeFrequencyTable->setRowCount(
+            frequencies.size()
+            );
+
+        for (int row = 0;
+             row < frequencies.size();
+             ++row) {
+            const auto &frequency =
+                frequencies.at(row);
+
+            auto *valueItem =
+                new QTableWidgetItem(
+                    frequency.value
+                    );
+
+            auto *countItem =
+                new QTableWidgetItem(
+                    QString::number(
+                        frequency.count
+                        )
+                    );
+
+            countItem->setTextAlignment(
+                Qt::AlignRight
+                | Qt::AlignVCenter
+                );
+
+            eventCodeFrequencyTable->setItem(
+                row,
+                0,
+                valueItem
+                );
+
+            eventCodeFrequencyTable->setItem(
+                row,
+                1,
+                countItem
+                );
+        }
+    }
+
+    if (hasEntityData) {
+        const auto frequencies =
+            analyticsAnalyzer
+                .entityFrequencies(
+                    records
+                    );
+
+        const int displayedCount =
+            std::min(
+                AnalyticsTopEntityCount,
+                static_cast<int>(
+                    frequencies.size()
+                    )
+                );
+
+        entityFrequencyTable->setRowCount(
+            displayedCount
+            );
+
+        for (int row = 0;
+             row < displayedCount;
+             ++row) {
+            const auto &frequency =
+                frequencies.at(row);
+
+            auto *valueItem =
+                new QTableWidgetItem(
+                    frequency.value
+                    );
+
+            auto *countItem =
+                new QTableWidgetItem(
+                    QString::number(
+                        frequency.count
+                        )
+                    );
+
+            countItem->setTextAlignment(
+                Qt::AlignRight
+                | Qt::AlignVCenter
+                );
+
+            entityFrequencyTable->setItem(
+                row,
+                0,
+                valueItem
+                );
+
+            entityFrequencyTable->setItem(
+                row,
+                1,
+                countItem
+                );
+        }
+    }
+}
+
 void MainWindow::drillDownIssueSummary(
     int row,
     int column
@@ -5683,7 +6465,8 @@ void MainWindow::drillDownIssueSummary(
 
 void MainWindow::drillDownTimelineBucket(
     int visibleBucketIndex,
-    const QString &severity
+    const QString &severity,
+    const QString &subsystem
     )
 {
     if (investigationController == nullptr
@@ -5826,6 +6609,24 @@ void MainWindow::drillDownTimelineBucket(
         }
     }
 
+    /*
+     * A subsystem bar represents one exact subsystem.
+     * As with severity drill-down, never broaden an
+     * already active filter to reach the clicked value.
+     */
+    if (!subsystem.isEmpty()) {
+        const QStringList currentSubsystems =
+            subsystemFilterCombo
+                ->selectedValues();
+
+        if (!currentSubsystems.isEmpty()
+            && !currentSubsystems.contains(
+                subsystem
+                )) {
+            return;
+        }
+    }
+
     const QDateTime bucketStart =
         QDateTime::fromMSecsSinceEpoch(
             bucketStartEpoch,
@@ -5850,6 +6651,10 @@ void MainWindow::drillDownTimelineBucket(
             levelFilterCombo
             );
 
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
         const QSignalBlocker startCheckBlocker(
             timeRangeStartCheckBox
             );
@@ -5870,6 +6675,14 @@ void MainWindow::drillDownTimelineBucket(
             levelFilterCombo->setSelectedValues(
                 QStringList {
                     severity
+                }
+                );
+        }
+
+        if (!subsystem.isEmpty()) {
+            subsystemFilterCombo->setSelectedValues(
+                QStringList {
+                    subsystem
                 }
                 );
         }
@@ -6723,6 +7536,126 @@ QGroupBox *MainWindow::buildTimelinePanel()
         timelineIntervalCombo
         );
 
+    controlsLayout->addSpacing(
+        12
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Timeline breakdown
+     * ---------------------------------------------------------
+     */
+    timelineBreakdownWidget =
+        new QWidget(
+            timelineGroup
+            );
+
+    auto *breakdownLayout =
+        new QHBoxLayout(
+            timelineBreakdownWidget
+            );
+
+    breakdownLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    breakdownLayout->setSpacing(
+        4
+        );
+
+    auto *breakdownLabel =
+        new QLabel(
+            tr("Breakdown:"),
+            timelineBreakdownWidget
+            );
+
+    timelineBreakdownCombo =
+        new QComboBox(
+            timelineBreakdownWidget
+            );
+
+    timelineBreakdownCombo->setMinimumWidth(
+        timelineBreakdownCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Subsystem")
+                )
+        + 40
+        );
+
+    breakdownLayout->addWidget(
+        breakdownLabel
+        );
+
+    breakdownLayout->addWidget(
+        timelineBreakdownCombo
+        );
+
+    controlsLayout->addWidget(
+        timelineBreakdownWidget
+        );
+
+    timelineSubsystemShowWidget =
+        new QWidget(
+            timelineGroup
+            );
+
+    auto *subsystemShowLayout =
+        new QHBoxLayout(
+            timelineSubsystemShowWidget
+            );
+
+    subsystemShowLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    subsystemShowLayout->setSpacing(
+        4
+        );
+
+    auto *subsystemShowLabel =
+        new QLabel(
+            tr("Show:"),
+            timelineSubsystemShowWidget
+            );
+
+    timelineSubsystemLimitCombo =
+        new QComboBox(
+            timelineSubsystemShowWidget
+            );
+
+    timelineSubsystemLimitCombo->addItem(
+        tr("Top 5"),
+        5
+        );
+
+    timelineSubsystemLimitCombo->addItem(
+        tr("Top 10"),
+        10
+        );
+
+    subsystemShowLayout->addWidget(
+        subsystemShowLabel
+        );
+
+    subsystemShowLayout->addWidget(
+        timelineSubsystemLimitCombo
+        );
+
+    controlsLayout->addWidget(
+        timelineSubsystemShowWidget
+        );
+
+    timelineSubsystemShowWidget->setVisible(
+        false
+        );
+
     timelineRangeLabel =
         new QLabel(
             tr("Visible: —"),
@@ -6787,8 +7720,8 @@ QGroupBox *MainWindow::buildTimelinePanel()
         tr(
             "Double-click a bar to filter the "
             "investigation to that time bucket. "
-            "Severity bars also filter to the "
-            "selected severity."
+            "Severity and subsystem breakdowns also "
+            "filter to the selected series."
             )
         );
 
@@ -6884,6 +7817,94 @@ QGroupBox *MainWindow::buildTimelinePanel()
             updateTimelineChart(
                 visibleRecords
                 );
+        }
+        );
+
+    connect(
+        timelineBreakdownCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr
+                || !timelineBreakdownCombo
+                        ->currentData()
+                        .isValid()) {
+                return;
+            }
+
+            const auto breakdown =
+                static_cast<
+                    InvestigationTimelineBreakdown>(
+                        timelineBreakdownCombo
+                            ->currentData()
+                            .toInt()
+                        );
+
+            session->setTimelineBreakdown(
+                breakdown
+                );
+
+            timelineSubsystemShowWidget->setVisible(
+                breakdown
+                == InvestigationTimelineBreakdown::
+                       Subsystem
+                );
+
+            /*
+             * The rendered series will differ between
+             * breakdowns, so its cached Y scale will
+             * need to be recalculated.
+             */
+            timelineScaleValid =
+                false;
+
+            /*
+             * We will make this redraw meaningful in
+             * the next step when Subsystem rendering
+             * is wired.
+             */
+            if (investigationController != nullptr) {
+                updateTimelineChart(
+                    investigationController
+                        ->recordsForAnalysis()
+                    );
+            }
+        }
+        );
+
+    connect(
+        timelineSubsystemLimitCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr
+                || !timelineSubsystemLimitCombo
+                        ->currentData()
+                        .isValid()) {
+                return;
+            }
+
+            session->setSubsystemTrendLimit(
+                timelineSubsystemLimitCombo
+                    ->currentData()
+                    .toInt()
+                );
+
+            timelineScaleValid =
+                false;
+
+            if (investigationController != nullptr) {
+                updateTimelineChart(
+                    investigationController
+                        ->recordsForAnalysis()
+                    );
+            }
         }
         );
 
@@ -6990,6 +8011,70 @@ void MainWindow::updateTimelineChart(
         return;
     }
 
+    InvestigationTimelineBreakdown breakdown =
+        InvestigationTimelineBreakdown::Severity;
+
+    if (timelineBreakdownCombo != nullptr
+        && timelineBreakdownCombo
+               ->currentData()
+               .isValid()) {
+        breakdown =
+            static_cast<
+                InvestigationTimelineBreakdown>(
+                    timelineBreakdownCombo
+                        ->currentData()
+                        .toInt()
+                    );
+    }
+
+    const bool subsystemBreakdown =
+        breakdown
+            == InvestigationTimelineBreakdown::
+                   Subsystem
+        && hasSubsystemData;
+
+    QStringList displayedSubsystems;
+
+    if (subsystemBreakdown) {
+        const auto frequencies =
+            analyticsAnalyzer
+                .subsystemFrequencies(
+                    records
+                    );
+
+        const int requestedLimit =
+            timelineSubsystemLimitCombo != nullptr
+                    && timelineSubsystemLimitCombo
+                           ->currentData()
+                           .isValid()
+                ? timelineSubsystemLimitCombo
+                      ->currentData()
+                      .toInt()
+                : 5;
+
+        const int displayedCount =
+            std::min(
+                requestedLimit,
+                static_cast<int>(
+                    frequencies.size()
+                    )
+                );
+
+        displayedSubsystems.reserve(
+            displayedCount
+            );
+
+        for (int index = 0;
+             index < displayedCount;
+             ++index) {
+            displayedSubsystems.append(
+                frequencies
+                    .at(index)
+                    .value
+                );
+        }
+    }
+
     /*
      * Calculate a stable Y-axis maximum for the
      * complete currently filtered investigation.
@@ -7001,22 +8086,37 @@ void MainWindow::updateTimelineChart(
     if (!timelineScaleValid
         || timelineScaleIntervalMilliseconds
                != intervalMilliseconds) {
-        const EventTimelineScale scale =
-            timelineAnalyzer
-                .scaleForIntervalMilliseconds(
-                    records,
-                    *effectiveFirstTimestamp,
-                    *effectiveLastTimestamp,
-                    intervalMilliseconds
+        if (subsystemBreakdown) {
+            timelineScaleMaximum =
+                std::max(
+                    1,
+                    analyticsAnalyzer
+                        .subsystemTrendScaleMaximum(
+                            records,
+                            *effectiveFirstTimestamp,
+                            *effectiveLastTimestamp,
+                            intervalMilliseconds,
+                            displayedSubsystems
+                            )
                     );
+        } else {
+            const EventTimelineScale scale =
+                timelineAnalyzer
+                    .scaleForIntervalMilliseconds(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds
+                        );
 
-        timelineScaleMaximum =
-            std::max(
-                1,
-                hasSeverityData
-                    ? scale.maximumSeriesCount
-                    : scale.maximumTotalCount
-                );
+            timelineScaleMaximum =
+                std::max(
+                    1,
+                    hasSeverityData
+                        ? scale.maximumSeriesCount
+                        : scale.maximumTotalCount
+                    );
+        }
 
         timelineScaleIntervalMilliseconds =
             intervalMilliseconds;
@@ -7045,6 +8145,9 @@ void MainWindow::updateTimelineChart(
 
     QVector<EventCountBucket> buckets;
 
+    QVector<InvestigationValueTrendBucket>
+        subsystemBuckets;
+
     if (automaticInterval) {
         /*
          * Auto selects a resolution intended to
@@ -7052,14 +8155,25 @@ void MainWindow::updateTimelineChart(
          * materializing its complete bucket set is
          * safe.
          */
-        buckets =
-            timelineAnalyzer
-                .groupRecordsByIntervalMilliseconds(
-                    records,
-                    *effectiveFirstTimestamp,
-                    *effectiveLastTimestamp,
-                    intervalMilliseconds
-                    );
+        if (subsystemBreakdown) {
+            subsystemBuckets =
+                analyticsAnalyzer
+                    .subsystemTrends(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds
+                        );
+        } else {
+            buckets =
+                timelineAnalyzer
+                    .groupRecordsByIntervalMilliseconds(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds
+                        );
+        }
 
         if (timelineScrollBar != nullptr) {
             const QSignalBlocker blocker(
@@ -7196,20 +8310,216 @@ void MainWindow::updateTimelineChart(
          * buckets without millions of chart
          * objects being allocated.
          */
-        buckets =
-            timelineAnalyzer
-                .groupRecordsByIntervalWindowMilliseconds(
-                    records,
-                    *effectiveFirstTimestamp,
-                    *effectiveLastTimestamp,
-                    intervalMilliseconds,
-                    startBucketIndex,
-                    TimelineVisibleBucketCount
-                    );
+        if (subsystemBreakdown) {
+            subsystemBuckets =
+                analyticsAnalyzer
+                    .subsystemTrendsWindow(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds,
+                        startBucketIndex,
+                        TimelineVisibleBucketCount
+                        );
+        } else {
+            buckets =
+                timelineAnalyzer
+                    .groupRecordsByIntervalWindowMilliseconds(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds,
+                        startBucketIndex,
+                        TimelineVisibleBucketCount
+                        );
+        }
     }
 
-    if (buckets.isEmpty()) {
+    if (
+        (
+            subsystemBreakdown
+            && (
+                subsystemBuckets.isEmpty()
+                || displayedSubsystems.isEmpty()
+                )
+            )
+        || (
+            !subsystemBreakdown
+            && buckets.isEmpty()
+            )
+        ) {
         showEmptyTimeline();
+        return;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Subsystem breakdown
+     * ---------------------------------------------------------
+     *
+     * The displayed subsystem set is ranked across the
+     * complete currently filtered investigation. Every
+     * horizontal timeline window therefore retains the
+     * same legend and series identities while scrolling.
+     */
+    if (subsystemBreakdown) {
+        QStringList categories;
+
+        categories.reserve(
+            subsystemBuckets.size()
+            );
+
+        for (
+            const InvestigationValueTrendBucket &bucket
+            : std::as_const(subsystemBuckets)
+            ) {
+            categories.append(
+                timelineDisplayLabel(
+                    bucket.label,
+                    intervalMilliseconds
+                    )
+                );
+        }
+
+        auto *series =
+            new QBarSeries();
+
+        for (const QString &subsystem
+             : std::as_const(displayedSubsystems)) {
+            auto *barSet =
+                new QBarSet(
+                    subsystem
+                    );
+
+            for (
+                const InvestigationValueTrendBucket &bucket
+                : std::as_const(subsystemBuckets)
+                ) {
+                *barSet
+                    << bucket.countFor(
+                           subsystem
+                           );
+            }
+
+            connect(
+                barSet,
+                &QBarSet::doubleClicked,
+                this,
+                [
+                    this,
+                    subsystem
+                ](int index) {
+                    drillDownTimelineBucket(
+                        index,
+                        QString(),
+                        subsystem
+                        );
+                },
+                Qt::QueuedConnection
+                );
+
+            series->append(
+                barSet
+                );
+        }
+
+        auto *chart =
+            new QChart();
+
+        chart->setMargins(
+            QMargins(
+                0,
+                0,
+                0,
+                0
+                )
+            );
+
+        chart->addSeries(
+            series
+            );
+
+        chart->setAnimationOptions(
+            QChart::NoAnimation
+            );
+
+        /*
+         * Keep the selected Top-N subsystem key below
+         * the chart, matching the existing severity
+         * legend placement.
+         */
+        QLegend *legend =
+            chart->legend();
+
+        legend->setAlignment(
+            Qt::AlignBottom
+            );
+
+        legend->setContentsMargins(
+            0,
+            0,
+            0,
+            0
+            );
+
+        if (legend->layout() != nullptr) {
+            legend
+                ->layout()
+                ->setContentsMargins(
+                    0,
+                    0,
+                    0,
+                    0
+                    );
+        }
+
+        auto *axisX =
+            new QBarCategoryAxis();
+
+        axisX->append(
+            categories
+            );
+
+        axisX->setTruncateLabels(
+            false
+            );
+
+        chart->addAxis(
+            axisX,
+            Qt::AlignBottom
+            );
+
+        series->attachAxis(
+            axisX
+            );
+
+        auto *axisY =
+            new QValueAxis();
+
+        configureEventCountAxis(
+            axisY,
+            timelineScaleMaximum
+            );
+
+        chart->addAxis(
+            axisY,
+            Qt::AlignLeft
+            );
+
+        series->attachAxis(
+            axisY
+            );
+
+        timelineChartView->setChart(
+            chart
+            );
+
+        updateTimelineRangeLabel(
+            timelineScrollBar != nullptr
+                ? timelineScrollBar->value()
+                : 0
+            );
+
         return;
     }
 
@@ -7232,6 +8542,7 @@ void MainWindow::updateTimelineChart(
                 ) {
                 drillDownTimelineBucket(
                     index,
+                    QString(),
                     QString()
                     );
             },
@@ -7375,6 +8686,42 @@ void MainWindow::updateTimelineChart(
             tr("CRITICAL")
             );
 
+    traceSet->setColor(
+        QColor(
+            QStringLiteral("#9E9E9E")
+            )
+        );
+
+    debugSet->setColor(
+        QColor(
+            QStringLiteral("#607D8B")
+            )
+        );
+
+    infoSet->setColor(
+        QColor(
+            QStringLiteral("#1976D2")
+            )
+        );
+
+    warnSet->setColor(
+        QColor(
+            QStringLiteral("#F9A825")
+            )
+        );
+
+    errorSet->setColor(
+        QColor(
+            QStringLiteral("#D32F2F")
+            )
+        );
+
+    criticalSet->setColor(
+        QColor(
+            QStringLiteral("#7A0019")
+            )
+        );
+
     auto connectTimelineDrillDown =
         [this](
             QBarSet *barSet,
@@ -7392,7 +8739,8 @@ void MainWindow::updateTimelineChart(
                     ) {
                     drillDownTimelineBucket(
                         index,
-                        severity
+                        severity,
+                        QString()
                         );
                 },
                 Qt::QueuedConnection
@@ -7450,6 +8798,12 @@ void MainWindow::updateTimelineChart(
             new QBarSet(
                 tr("UNSPECIFIED")
                 );
+
+        unspecifiedSet->setColor(
+            QColor(
+                QStringLiteral("#BDBDBD")
+                )
+            );
     }
 
     if (unspecifiedSet != nullptr) {
@@ -7625,6 +8979,145 @@ void MainWindow::updateTimelineChart(
         timelineScrollBar != nullptr
             ? timelineScrollBar->value()
             : 0
+        );
+}
+
+void MainWindow::updateTimelineBreakdownControls()
+{
+    if (timelineBreakdownWidget == nullptr
+        || timelineBreakdownCombo == nullptr
+        || timelineSubsystemShowWidget == nullptr
+        || timelineSubsystemLimitCombo == nullptr) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const QSignalBlocker breakdownBlocker(
+        timelineBreakdownCombo
+        );
+
+    const QSignalBlocker limitBlocker(
+        timelineSubsystemLimitCombo
+        );
+
+    timelineBreakdownCombo->clear();
+
+    if (session == nullptr) {
+        timelineBreakdownWidget->setVisible(
+            false
+            );
+
+        timelineSubsystemShowWidget->setVisible(
+            false
+            );
+
+        return;
+    }
+
+    /*
+     * Add only the analysis dimensions actually
+     * supported by this investigation.
+     */
+    if (hasSeverityData) {
+        timelineBreakdownCombo->addItem(
+            tr("Severity"),
+            static_cast<int>(
+                InvestigationTimelineBreakdown::
+                    Severity
+                )
+            );
+    }
+
+    if (hasSubsystemData) {
+        timelineBreakdownCombo->addItem(
+            tr("Subsystem"),
+            static_cast<int>(
+                InvestigationTimelineBreakdown::
+                    Subsystem
+                )
+            );
+    }
+
+    /*
+     * A source with neither canonical dimension
+     * still retains the existing TOTAL timeline,
+     * but there is no breakdown choice to expose.
+     */
+    if (timelineBreakdownCombo->count() == 0) {
+        timelineBreakdownWidget->setVisible(
+            false
+            );
+
+        timelineSubsystemShowWidget->setVisible(
+            false
+            );
+
+        return;
+    }
+
+    timelineBreakdownWidget->setVisible(
+        true
+        );
+
+    int breakdownIndex =
+        timelineBreakdownCombo->findData(
+            static_cast<int>(
+                session->timelineBreakdown()
+                )
+            );
+
+    /*
+     * The session may have selected a breakdown
+     * that this particular source cannot support.
+     * Fall back to its first available dimension.
+     */
+    if (breakdownIndex < 0) {
+        breakdownIndex = 0;
+    }
+
+    timelineBreakdownCombo->setCurrentIndex(
+        breakdownIndex
+        );
+
+    const auto effectiveBreakdown =
+        static_cast<
+            InvestigationTimelineBreakdown>(
+                timelineBreakdownCombo
+                    ->currentData()
+                    .toInt()
+                );
+
+    session->setTimelineBreakdown(
+        effectiveBreakdown
+        );
+
+    int limitIndex =
+        timelineSubsystemLimitCombo->findData(
+            session->subsystemTrendLimit()
+            );
+
+    if (limitIndex < 0) {
+        limitIndex =
+            timelineSubsystemLimitCombo
+                ->findData(5);
+    }
+
+    timelineSubsystemLimitCombo->setCurrentIndex(
+        limitIndex
+        );
+
+    session->setSubsystemTrendLimit(
+        timelineSubsystemLimitCombo
+            ->currentData()
+            .toInt()
+        );
+
+    timelineSubsystemShowWidget->setVisible(
+        effectiveBreakdown
+        == InvestigationTimelineBreakdown::
+               Subsystem
         );
 }
 
@@ -8172,12 +9665,28 @@ void MainWindow::updateDataCapabilities()
     /*
      * Warning/error grouping requires both
      * severity and subsystem information.
+     *
+     * Issue Summary is a QTabWidget page, so its
+     * visibility must be managed through the tab
+     * widget rather than by showing/hiding the page
+     * widget directly. Direct setVisible() calls can
+     * cause the page to be painted alongside the
+     * currently selected review tab.
      */
-    if (issueSummaryGroup != nullptr) {
-        issueSummaryGroup->setVisible(
-            hasSeverityData
-            && hasSubsystemData
-            );
+    if (investigationReviewTabs != nullptr
+        && issueSummaryGroup != nullptr) {
+        const int issueSummaryIndex =
+            investigationReviewTabs->indexOf(
+                issueSummaryGroup
+                );
+
+        if (issueSummaryIndex >= 0) {
+            investigationReviewTabs->setTabVisible(
+                issueSummaryIndex,
+                hasSeverityData
+                    && hasSubsystemData
+                );
+        }
     }
 }
 
@@ -8229,6 +9738,8 @@ void MainWindow::bindActiveSession()
                 false
                 );
         }
+
+        updateTimelineBreakdownControls();
 
         investigationController =
             nullptr;
@@ -8441,8 +9952,8 @@ void MainWindow::bindActiveSession()
             0
             );
 
-        if (issueSummaryGroup != nullptr) {
-            issueSummaryGroup->setVisible(
+        if (investigationReviewTabs != nullptr) {
+            investigationReviewTabs->setVisible(
                 false
                 );
         }
@@ -8481,10 +9992,16 @@ void MainWindow::bindActiveSession()
             ->sourceMetadata()
             .sourcePath;
 
-    eventTable->setModel(
-        investigationController
-            ->proxyModel()
-        );
+    {
+        const QSignalBlocker headerBlocker(
+            eventTable->horizontalHeader()
+            );
+
+        eventTable->setModel(
+            investigationController
+                ->proxyModel()
+            );
+    }
 
     connectEventTableSelectionModel();
 
@@ -8570,6 +10087,118 @@ void MainWindow::bindActiveSession()
 
     refreshSubsystemFilterOptions();
     refreshCanonicalFilterOptions();
+
+    updateTimelineBreakdownControls();
+
+    if (investigationReviewTabs != nullptr) {
+        investigationReviewTabs->setVisible(
+            true
+            );
+    }
+
+    if (investigationReviewTabs != nullptr) {
+        QWidget *preferredPage =
+            nullptr;
+
+        switch (session->reviewTab()) {
+        case InvestigationReviewTab::IssueSummary:
+            preferredPage =
+                issueSummaryGroup;
+            break;
+
+        case InvestigationReviewTab::Findings:
+            preferredPage =
+                findingsPanel;
+            break;
+
+        case InvestigationReviewTab::Analytics:
+            preferredPage =
+                analyticsPanel;
+            break;
+        }
+
+        int preferredIndex =
+            preferredPage != nullptr
+                ? investigationReviewTabs
+                      ->indexOf(
+                          preferredPage
+                          )
+                : -1;
+
+        /*
+         * Restore this investigation's preferred
+         * review surface when it is available.
+         */
+        if (preferredIndex >= 0
+            && investigationReviewTabs
+                   ->isTabVisible(
+                       preferredIndex
+                       )) {
+            investigationReviewTabs
+                ->setCurrentIndex(
+                    preferredIndex
+                    );
+        } else {
+            /*
+             * A saved page may not be applicable to
+             * the active source. Issue Summary, for
+             * example, requires severity and subsystem
+             * data. Fall back deterministically to the
+             * first available review surface.
+             */
+            for (
+                int index = 0;
+                index
+                    < investigationReviewTabs
+                          ->count();
+                ++index
+                ) {
+                if (!investigationReviewTabs
+                         ->isTabVisible(
+                             index
+                             )) {
+                    continue;
+                }
+
+                investigationReviewTabs
+                    ->setCurrentIndex(
+                        index
+                        );
+
+                break;
+            }
+        }
+    }
+
+    if (analyticsTabs != nullptr) {
+        QWidget *preferredAnalyticsPage =
+            nullptr;
+
+        switch (session->analyticsTab()) {
+        case InvestigationAnalyticsTab::Overview:
+            preferredAnalyticsPage =
+                analyticsOverviewPage;
+            break;
+
+        case InvestigationAnalyticsTab::Bursts:
+            preferredAnalyticsPage =
+                analyticsBurstsPage;
+            break;
+        }
+
+        if (preferredAnalyticsPage != nullptr) {
+            const int preferredIndex =
+                analyticsTabs->indexOf(
+                    preferredAnalyticsPage
+                    );
+
+            if (preferredIndex >= 0) {
+                analyticsTabs->setCurrentIndex(
+                    preferredIndex
+                    );
+            }
+        }
+    }
 
     /*
      * Restore this investigation's independent
@@ -8771,7 +10400,7 @@ void MainWindow::bindActiveSession()
      * ---------------------------------------------------------
      */
 
-    const QVector<int> &columnWidths =
+    const QVector<int> columnWidths =
         session->columnWidths();
 
     const int columnCount =
@@ -8781,6 +10410,18 @@ void MainWindow::bindActiveSession()
 
     if (columnWidths.size()
         == columnCount) {
+        /*
+         * Restoring stored widths is UI
+         * synchronization, not a user resize.
+         *
+         * Suppress sectionResized so the partially
+         * restored header cannot overwrite this
+         * session's saved width vector.
+         */
+        const QSignalBlocker headerBlocker(
+            eventTable->horizontalHeader()
+            );
+
         for (
             int column = 0;
             column < columnCount;
@@ -8792,24 +10433,39 @@ void MainWindow::bindActiveSession()
                 );
         }
     } else {
-        eventTable->resizeColumnsToContents();
-
         QVector<int> measuredWidths;
 
         measuredWidths.reserve(
             columnCount
             );
 
-        for (
-            int column = 0;
-            column < columnCount;
-            ++column
-            ) {
-            measuredWidths.append(
-                eventTable->columnWidth(
-                    column
-                    )
+        /*
+         * A session without compatible saved widths
+         * receives content-based initial sizing.
+         *
+         * resizeColumnsToContents() can emit
+         * sectionResized, so suppress those signals
+         * and explicitly store the finished result
+         * afterward.
+         */
+        {
+            const QSignalBlocker headerBlocker(
+                eventTable->horizontalHeader()
                 );
+
+            eventTable->resizeColumnsToContents();
+
+            for (
+                int column = 0;
+                column < columnCount;
+                ++column
+                ) {
+                measuredWidths.append(
+                    eventTable->columnWidth(
+                        column
+                        )
+                    );
+            }
         }
 
         session->setColumnWidths(
@@ -8819,11 +10475,17 @@ void MainWindow::bindActiveSession()
             );
     }
 
-    eventTable
-        ->horizontalHeader()
-        ->setStretchLastSection(
-            true
+    {
+        const QSignalBlocker headerBlocker(
+            eventTable->horizontalHeader()
             );
+
+        eventTable
+            ->horizontalHeader()
+            ->setStretchLastSection(
+                true
+                );
+    }
 
     updateEventNavigationState();
 }
@@ -9007,4 +10669,1286 @@ void MainWindow::updateEventRowHeaderWidth()
     header->setFixedWidth(
         headerWidth
         );
+}
+
+void MainWindow::updateBurstsPanel(
+    const QVector<InvestigationRecord> &records
+    )
+{
+    if (burstTable == nullptr
+        || burstDetailText == nullptr) {
+        return;
+    }
+
+    burstTable->setRowCount(
+        0
+        );
+
+    currentBursts.clear();
+
+    burstDetailText->clear();
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    /*
+     * Burst detection depends on both temporal
+     * information and severity classification.
+     */
+    if (!hasTimestampData
+        || !hasSeverityData) {
+        burstDetailText->setPlainText(
+            tr(
+                "Burst detection requires valid "
+                "timestamps and severity values."
+                )
+            );
+
+        return;
+    }
+
+    /*
+     * Always analyze cadence so Auto timing can be
+     * derived from the currently filtered
+     * investigation and presented transparently.
+     */
+    const InvestigationCadence cadence =
+        cadenceAnalyzer.analyze(
+            records
+            );
+
+    /*
+     * Stored session settings contain the analyst's
+     * thresholds plus the last manually selected
+     * timing values.
+     */
+    BurstDetectionSettings settings =
+        session->burstDetectionSettings();
+
+    const bool automaticTiming =
+        session->burstTimingMode()
+        == InvestigationBurstTimingMode::Auto;
+
+    /*
+     * Auto controls only the temporal parameters.
+     * Detection thresholds remain explicit analyst
+     * criteria in either timing mode.
+     */
+    if (automaticTiming) {
+        settings.windowMilliseconds =
+            cadence
+                .recommendedBurstWindowMilliseconds;
+
+        settings.mergeGapMilliseconds =
+            cadence
+                .recommendedMergeGapMilliseconds;
+    }
+
+    if (!settings.isValid()) {
+        burstDetailText->setPlainText(
+            tr(
+                "The current burst-detection "
+                "settings are invalid."
+                )
+            );
+
+        return;
+    }
+
+    currentBursts =
+        burstAnalyzer.detectBursts(
+            records,
+            settings
+            );
+
+    /*
+     * ---------------------------------------------------------
+     * Empty result
+     * ---------------------------------------------------------
+     *
+     * An empty result is meaningful analytical
+     * information, not an error. Show the exact
+     * criteria that produced it.
+     */
+    if (currentBursts.isEmpty()) {
+        QStringList lines;
+
+        lines.append(
+            tr(
+                "No warning/error bursts were "
+                "detected with the current settings."
+                )
+            );
+
+        lines.append(
+            QString()
+            );
+
+        lines.append(
+            tr("Timing mode: %1")
+                .arg(
+                    automaticTiming
+                        ? tr("Auto")
+                        : tr("Manual")
+                    )
+            );
+
+        lines.append(
+            tr("Window: %1")
+                .arg(
+                    formatDurationMilliseconds(
+                        settings
+                            .windowMilliseconds
+                        )
+                    )
+            );
+
+        lines.append(
+            tr("Merge gap: %1")
+                .arg(
+                    formatDurationMilliseconds(
+                        settings
+                            .mergeGapMilliseconds
+                        )
+                    )
+            );
+
+        lines.append(
+            tr(
+                "WARN/ERROR/CRITICAL threshold: %1"
+                )
+                .arg(
+                    settings
+                        .elevatedEventThreshold
+                    )
+            );
+
+        lines.append(
+            tr(
+                "ERROR/CRITICAL threshold: %1"
+                )
+                .arg(
+                    settings
+                        .errorCriticalThreshold
+                    )
+            );
+
+        /*
+         * Auto should be explainable. Include the
+         * cadence basis without cluttering Manual
+         * mode with irrelevant statistics.
+         */
+        if (automaticTiming) {
+            lines.append(
+                QString()
+                );
+
+            if (cadence.usesFallbackRecommendation) {
+                lines.append(
+                    tr(
+                        "Auto timing is using the "
+                        "fallback recommendation "
+                        "because this investigation "
+                        "does not contain enough "
+                        "positive timestamp gaps for "
+                        "an adaptive recommendation."
+                        )
+                    );
+            } else {
+                lines.append(
+                    tr(
+                        "Auto timing was derived from "
+                        "the timestamp cadence of the "
+                        "currently filtered "
+                        "investigation."
+                        )
+                    );
+            }
+
+            lines.append(
+                tr(
+                    "Valid timestamps: %1"
+                    )
+                    .arg(
+                        cadence.timestampCount
+                        )
+                );
+
+            lines.append(
+                tr(
+                    "Positive gaps: %1"
+                    )
+                    .arg(
+                        cadence.positiveGapCount
+                        )
+                );
+
+            lines.append(
+                tr(
+                    "Zero gaps: %1"
+                    )
+                    .arg(
+                        cadence.zeroGapCount
+                        )
+                );
+
+            if (cadence.positiveGapCount > 0) {
+                lines.append(
+                    tr(
+                        "Median positive gap: %1"
+                        )
+                        .arg(
+                            formatDurationMilliseconds(
+                                static_cast<qint64>(
+                                    std::llround(
+                                        cadence
+                                            .medianPositiveGapMilliseconds
+                                        )
+                                    )
+                                )
+                            )
+                    );
+
+                lines.append(
+                    tr(
+                        "P90 positive gap: %1"
+                        )
+                        .arg(
+                            formatDurationMilliseconds(
+                                cadence
+                                    .p90PositiveGapMilliseconds
+                                )
+                            )
+                    );
+            }
+        }
+
+        burstDetailText->setPlainText(
+            lines.join(
+                QStringLiteral("\n")
+                )
+            );
+
+        return;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Populate detected bursts
+     * ---------------------------------------------------------
+     */
+    const bool spansMultipleDates =
+        session->firstTimestamp().has_value()
+        && session->lastTimestamp().has_value()
+        && session->firstTimestamp()
+                   ->date()
+               != session->lastTimestamp()
+                      ->date();
+
+    const QString burstTableTimestampFormat =
+        spansMultipleDates
+            ? QStringLiteral(
+                  "MM-dd HH:mm:ss.zzz"
+                  )
+            : QStringLiteral(
+                  "HH:mm:ss.zzz"
+                  );
+
+    burstTable->setRowCount(
+        currentBursts.size()
+        );
+
+    for (int row = 0;
+         row < currentBursts.size();
+         ++row) {
+        const InvestigationBurst &burst =
+            currentBursts.at(
+                row
+                );
+
+        auto *startItem =
+            new QTableWidgetItem(
+                burst
+                    .startTimestamp
+                    .toString(
+                        burstTableTimestampFormat
+                        )
+                );
+
+        auto *endItem =
+            new QTableWidgetItem(
+                burst
+                    .endTimestamp
+                    .toString(
+                        burstTableTimestampFormat
+                        )
+                );
+
+        startItem->setToolTip(
+            burst
+                .startTimestamp
+                .toString(
+                    Qt::ISODateWithMs
+                    )
+            );
+
+        endItem->setToolTip(
+            burst
+                .endTimestamp
+                .toString(
+                    Qt::ISODateWithMs
+                    )
+            );
+
+        auto *elevatedItem =
+            new QTableWidgetItem(
+                QString::number(
+                    burst
+                        .totalElevatedCount()
+                    )
+                );
+
+        auto *severityItem =
+            new QTableWidgetItem(
+                recordSeverityToString(
+                    burst
+                        .highestSeverity()
+                    )
+                );
+
+        elevatedItem->setTextAlignment(
+            Qt::AlignRight
+            | Qt::AlignVCenter
+            );
+
+        burstTable->setItem(
+            row,
+            0,
+            startItem
+            );
+
+        burstTable->setItem(
+            row,
+            1,
+            endItem
+            );
+
+        burstTable->setItem(
+            row,
+            2,
+            elevatedItem
+            );
+
+        burstTable->setItem(
+            row,
+            3,
+            severityItem
+            );
+    }
+
+    /*
+     * Select the first burst so the detail pane is
+     * immediately useful after every recalculation.
+     */
+    burstTable->selectRow(
+        0
+        );
+
+    updateBurstDetail(
+        0
+        );
+}
+
+void MainWindow::updateBurstDetail(
+    int row
+    )
+{
+    if (burstDetailText == nullptr
+        || row < 0
+        || row >= currentBursts.size()) {
+        return;
+    }
+
+    const InvestigationBurst &burst =
+        currentBursts.at(
+            row
+            );
+
+    QStringList lines;
+
+    lines.append(
+        tr("Detected burst")
+        );
+
+    lines.append(
+        QString()
+        );
+
+    lines.append(
+        tr("Start: %1")
+            .arg(
+                burst
+                    .startTimestamp
+                    .toString(
+                        Qt::ISODateWithMs
+                        )
+                )
+        );
+
+    lines.append(
+        tr("End: %1")
+            .arg(
+                burst
+                    .endTimestamp
+                    .toString(
+                        Qt::ISODateWithMs
+                        )
+                )
+        );
+
+    lines.append(
+        tr("Duration: %1")
+            .arg(
+                formatDurationMilliseconds(
+                    burst
+                        .durationMilliseconds()
+                    )
+                )
+        );
+
+    lines.append(
+        QString()
+        );
+
+    lines.append(
+        tr("Elevated events: %1")
+            .arg(
+                burst
+                    .totalElevatedCount()
+                )
+        );
+
+    lines.append(
+        tr("WARN: %1")
+            .arg(
+                burst.warningCount
+                )
+        );
+
+    lines.append(
+        tr("ERROR: %1")
+            .arg(
+                burst.errorCount
+                )
+        );
+
+    lines.append(
+        tr("CRITICAL: %1")
+            .arg(
+                burst.criticalCount
+                )
+        );
+
+    lines.append(
+        tr("Highest severity: %1")
+            .arg(
+                recordSeverityToString(
+                    burst
+                        .highestSeverity()
+                    )
+                )
+        );
+
+    lines.append(
+        QString()
+        );
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session != nullptr) {
+        lines.append(
+            tr("Timing mode: %1")
+                .arg(
+                    session->burstTimingMode()
+                            == InvestigationBurstTimingMode::Auto
+                        ? tr("Auto")
+                        : tr("Manual")
+                    )
+            );
+
+        lines.append(
+            QString()
+            );
+    }
+
+    lines.append(
+        tr("Why this was detected:")
+        );
+
+    if (burst.triggeredByElevatedThreshold) {
+        lines.append(
+            tr(
+                "• At least %1 WARN/ERROR/CRITICAL "
+                "events occurred within a %2 window."
+                )
+                .arg(
+                    burst
+                        .settings
+                        .elevatedEventThreshold
+                    )
+                .arg(
+                    formatDurationMilliseconds(
+                        burst
+                            .settings
+                            .windowMilliseconds
+                        )
+                    )
+            );
+    }
+
+    if (
+        burst
+            .triggeredByErrorCriticalThreshold
+        ) {
+        lines.append(
+            tr(
+                "• At least %1 ERROR/CRITICAL events "
+                "occurred within a %2 window."
+                )
+                .arg(
+                    burst
+                        .settings
+                        .errorCriticalThreshold
+                    )
+                .arg(
+                    formatDurationMilliseconds(
+                        burst
+                            .settings
+                            .windowMilliseconds
+                        )
+                    )
+            );
+    }
+
+    lines.append(
+        QString()
+        );
+
+    lines.append(
+        tr(
+            "Merge gap: %1"
+            )
+            .arg(
+                formatDurationMilliseconds(
+                    burst
+                        .settings
+                        .mergeGapMilliseconds
+                    )
+                )
+        );
+
+    lines.append(
+        tr(
+            "Contributing elevated records: %1"
+            )
+            .arg(
+                burst
+                    .recordIds
+                    .size()
+                )
+        );
+
+    auto appendCounts =
+        [&lines](
+            const QString &heading,
+            const QMap<QString, int> &counts
+            ) {
+            if (counts.isEmpty()) {
+                return;
+            }
+
+            lines.append(
+                QString()
+                );
+
+            lines.append(
+                heading
+                );
+
+            for (
+                auto iterator =
+                    counts.cbegin();
+                iterator != counts.cend();
+                ++iterator
+                ) {
+                lines.append(
+                    QStringLiteral(
+                        "• %1: %2"
+                        )
+                        .arg(
+                            iterator.key()
+                            )
+                        .arg(
+                            iterator.value()
+                            )
+                    );
+            }
+        };
+
+    appendCounts(
+        tr("Subsystems:"),
+        burst.subsystemCounts
+        );
+
+    appendCounts(
+        tr("Event codes:"),
+        burst.eventCodeCounts
+        );
+
+    appendCounts(
+        tr("Entities:"),
+        burst.entityCounts
+        );
+
+    burstDetailText->setPlainText(
+        lines.join(
+            QStringLiteral("\n")
+            )
+        );
+}
+
+void MainWindow::showBurstSettingsDialog()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr
+        || investigationController == nullptr) {
+        return;
+    }
+
+    const QVector<InvestigationRecord> records =
+        investigationController
+            ->recordsForAnalysis();
+
+    const InvestigationCadence cadence =
+        cadenceAnalyzer.analyze(
+            records
+            );
+
+    const BurstDetectionSettings currentSettings =
+        session->burstDetectionSettings();
+
+    QDialog dialog(this);
+
+    dialog.setWindowTitle(
+        tr("Burst Detection Settings")
+        );
+
+    auto *layout =
+        new QVBoxLayout(
+            &dialog
+            );
+
+    layout->setSpacing(
+        8
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Timing mode
+     * ---------------------------------------------------------
+     */
+    auto *timingGroup =
+        new QGroupBox(
+            tr("Timing"),
+            &dialog
+            );
+
+    auto *timingLayout =
+        new QVBoxLayout(
+            timingGroup
+            );
+
+    auto *autoRadio =
+        new QRadioButton(
+            tr("Auto"),
+            timingGroup
+            );
+
+    auto *manualRadio =
+        new QRadioButton(
+            tr("Manual"),
+            timingGroup
+            );
+
+    const bool automatic =
+        session->burstTimingMode()
+        == InvestigationBurstTimingMode::Auto;
+
+    autoRadio->setChecked(
+        automatic
+        );
+
+    manualRadio->setChecked(
+        !automatic
+        );
+
+    timingLayout->addWidget(
+        autoRadio
+        );
+
+    auto *autoDescription =
+        new QLabel(
+            timingGroup
+            );
+
+    autoDescription->setWordWrap(
+        true
+        );
+
+    QString autoText =
+        tr(
+            "Recommended window: %1\n"
+            "Recommended merge gap: %2\n"
+            "Valid timestamps: %3    "
+            "Positive gaps: %4    "
+            "Zero gaps: %5"
+            )
+            .arg(
+                formatDurationMilliseconds(
+                    cadence
+                        .recommendedBurstWindowMilliseconds
+                    ),
+                formatDurationMilliseconds(
+                    cadence
+                        .recommendedMergeGapMilliseconds
+                    ),
+                QString::number(
+                    cadence.timestampCount
+                    ),
+                QString::number(
+                    cadence.positiveGapCount
+                    ),
+                QString::number(
+                    cadence.zeroGapCount
+                    )
+                );
+
+    if (cadence.positiveGapCount > 0) {
+        autoText +=
+            tr(
+                "\nMedian gap: %1    "
+                "Mean gap: %2    "
+                "P90 gap: %3"
+                )
+                .arg(
+                    formatDurationMilliseconds(
+                        static_cast<qint64>(
+                            std::llround(
+                                cadence
+                                    .medianPositiveGapMilliseconds
+                                )
+                            )
+                        ),
+                    formatDurationMilliseconds(
+                        static_cast<qint64>(
+                            std::llround(
+                                cadence
+                                    .meanPositiveGapMilliseconds
+                                )
+                            )
+                        ),
+                    formatDurationMilliseconds(
+                        cadence
+                            .p90PositiveGapMilliseconds
+                        )
+                    );
+    }
+
+    if (cadence.usesFallbackRecommendation) {
+        autoText +=
+            tr(
+                "\n\nFallback timing is being used "
+                "because this investigation does not "
+                "contain enough positive timestamp gaps "
+                "for an adaptive recommendation."
+                );
+    } else {
+        autoText +=
+            tr(
+                "\n\nAuto derives timing from the "
+                "timestamp cadence of the currently "
+                "filtered investigation."
+                );
+    }
+
+    autoDescription->setText(
+        autoText
+        );
+
+    timingLayout->addWidget(
+        autoDescription
+        );
+
+    timingLayout->addWidget(
+        manualRadio
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Manual timing
+     *
+     * Seconds with three decimals gives us 1-ms
+     * precision without exposing raw millisecond
+     * values such as 120000 to the analyst.
+     * ---------------------------------------------------------
+     */
+    auto *manualWidget =
+        new QWidget(
+            timingGroup
+            );
+
+    auto *manualLayout =
+        new QFormLayout(
+            manualWidget
+            );
+
+    manualLayout->setContentsMargins(
+        20,
+        0,
+        0,
+        0
+        );
+
+    auto *windowSpin =
+        new QDoubleSpinBox(
+            manualWidget
+            );
+
+    windowSpin->setDecimals(
+        3
+        );
+
+    windowSpin->setRange(
+        0.001,
+        7.0 * 24.0 * 60.0 * 60.0
+        );
+
+    windowSpin->setSuffix(
+        tr(" s")
+        );
+
+    windowSpin->setValue(
+        static_cast<double>(
+            currentSettings
+                .windowMilliseconds
+            )
+        / 1000.0
+        );
+
+    auto *mergeGapSpin =
+        new QDoubleSpinBox(
+            manualWidget
+            );
+
+    mergeGapSpin->setDecimals(
+        3
+        );
+
+    mergeGapSpin->setRange(
+        0.0,
+        7.0 * 24.0 * 60.0 * 60.0
+        );
+
+    mergeGapSpin->setSuffix(
+        tr(" s")
+        );
+
+    mergeGapSpin->setValue(
+        static_cast<double>(
+            currentSettings
+                .mergeGapMilliseconds
+            )
+        / 1000.0
+        );
+
+    manualLayout->addRow(
+        tr("Window:"),
+        windowSpin
+        );
+
+    manualLayout->addRow(
+        tr("Merge gap:"),
+        mergeGapSpin
+        );
+
+    manualWidget->setEnabled(
+        !automatic
+        );
+
+    timingLayout->addWidget(
+        manualWidget
+        );
+
+    layout->addWidget(
+        timingGroup
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Detection thresholds
+     *
+     * These are explicit analytical criteria rather
+     * than cadence-derived values, so they remain
+     * editable in both Auto and Manual timing modes.
+     * ---------------------------------------------------------
+     */
+    auto *thresholdGroup =
+        new QGroupBox(
+            tr("Detection Thresholds"),
+            &dialog
+            );
+
+    auto *thresholdLayout =
+        new QFormLayout(
+            thresholdGroup
+            );
+
+    auto *elevatedSpin =
+        new QSpinBox(
+            thresholdGroup
+            );
+
+    elevatedSpin->setRange(
+        1,
+        1000000
+        );
+
+    elevatedSpin->setValue(
+        currentSettings
+            .elevatedEventThreshold
+        );
+
+    auto *errorCriticalSpin =
+        new QSpinBox(
+            thresholdGroup
+            );
+
+    errorCriticalSpin->setRange(
+        1,
+        1000000
+        );
+
+    errorCriticalSpin->setValue(
+        currentSettings
+            .errorCriticalThreshold
+        );
+
+    thresholdLayout->addRow(
+        tr(
+            "WARN/ERROR/CRITICAL events:"
+            ),
+        elevatedSpin
+        );
+
+    thresholdLayout->addRow(
+        tr(
+            "ERROR/CRITICAL events:"
+            ),
+        errorCriticalSpin
+        );
+
+    auto *thresholdDescription =
+        new QLabel(
+            tr(
+                "A burst is detected when either "
+                "threshold is met within the selected "
+                "time window."
+                ),
+            thresholdGroup
+            );
+
+    thresholdDescription->setWordWrap(
+        true
+        );
+
+    thresholdLayout->addRow(
+        thresholdDescription
+        );
+
+    layout->addWidget(
+        thresholdGroup
+        );
+
+    connect(
+        autoRadio,
+        &QRadioButton::toggled,
+        &dialog,
+        [manualWidget](bool checked) {
+            manualWidget->setEnabled(
+                !checked
+                );
+        }
+        );
+
+    auto *buttons =
+        new QDialogButtonBox(
+            QDialogButtonBox::Ok
+                | QDialogButtonBox::Cancel,
+            &dialog
+            );
+
+    connect(
+        buttons,
+        &QDialogButtonBox::accepted,
+        &dialog,
+        &QDialog::accept
+        );
+
+    connect(
+        buttons,
+        &QDialogButtonBox::rejected,
+        &dialog,
+        &QDialog::reject
+        );
+
+    layout->addWidget(
+        buttons
+        );
+
+    if (dialog.exec()
+        != QDialog::Accepted) {
+        return;
+    }
+
+    BurstDetectionSettings newSettings =
+        currentSettings;
+
+    /*
+     * Thresholds apply in either timing mode.
+     */
+    newSettings.elevatedEventThreshold =
+        elevatedSpin->value();
+
+    newSettings.errorCriticalThreshold =
+        errorCriticalSpin->value();
+
+    if (manualRadio->isChecked()) {
+        newSettings.windowMilliseconds =
+            std::max<qint64>(
+                1,
+                static_cast<qint64>(
+                    std::llround(
+                        windowSpin->value()
+                        * 1000.0
+                        )
+                    )
+                );
+
+        newSettings.mergeGapMilliseconds =
+            std::max<qint64>(
+                0,
+                static_cast<qint64>(
+                    std::llround(
+                        mergeGapSpin->value()
+                        * 1000.0
+                        )
+                    )
+                );
+
+        session->setBurstTimingMode(
+            InvestigationBurstTimingMode::Manual
+            );
+    } else {
+        /*
+         * Preserve the session's previous manual
+         * timing values so switching Auto → Manual
+         * later restores the analyst's last manual
+         * configuration.
+         */
+        session->setBurstTimingMode(
+            InvestigationBurstTimingMode::Auto
+            );
+    }
+
+    session->setBurstDetectionSettings(
+        newSettings
+        );
+
+    updateBurstsPanel(
+        investigationController
+            ->recordsForAnalysis()
+        );
+}
+
+void MainWindow::drillDownBurst(
+    int row
+    )
+{
+    if (investigationController == nullptr
+        || row < 0
+        || row >= currentBursts.size()) {
+        return;
+    }
+
+    const InvestigationBurst &burst =
+        currentBursts.at(
+            row
+            );
+
+    if (!burst.startTimestamp.isValid()
+        || !burst.endTimestamp.isValid()) {
+        return;
+    }
+
+    /*
+     * Preserve an existing severity restriction.
+     *
+     * With no severity filter active, narrow to all
+     * elevated severities because those are the
+     * records contributing to burst detection.
+     */
+    const QStringList currentSeverities =
+        levelFilterCombo
+            ->selectedValues();
+
+    const QStringList elevatedSeverities = {
+        QStringLiteral("WARN"),
+        QStringLiteral("ERROR"),
+        QStringLiteral("CRITICAL")
+    };
+
+    QStringList selectedSeverities;
+
+    if (currentSeverities.isEmpty()) {
+        selectedSeverities =
+            elevatedSeverities;
+    } else {
+        for (const QString &severity
+             : currentSeverities) {
+            if (elevatedSeverities.contains(
+                    severity
+                    )) {
+                selectedSeverities.append(
+                    severity
+                    );
+            }
+        }
+    }
+
+    /*
+     * The burst was derived from the current
+     * filtered investigation, so normally at least
+     * one elevated severity remains. Do not broaden
+     * an incompatible existing filter.
+     */
+    if (selectedSeverities.isEmpty()) {
+        return;
+    }
+
+    QDateTime start =
+        burst.startTimestamp;
+
+    QDateTime end =
+        burst.endTimestamp;
+
+    /*
+     * Drill-down may only narrow an existing time
+     * range, never widen it.
+     */
+    if (
+        timeRangeStartCheckBox
+            ->isChecked()
+        && timeRangeStartEdit
+               ->dateTime()
+               > start
+        ) {
+        start =
+            timeRangeStartEdit
+                ->dateTime();
+    }
+
+    if (
+        timeRangeEndCheckBox
+            ->isChecked()
+        && timeRangeEndEdit
+               ->dateTime()
+               < end
+        ) {
+        end =
+            timeRangeEndEdit
+                ->dateTime();
+    }
+
+    if (start > end) {
+        return;
+    }
+
+    /*
+     * Apply the drill-down as one filter update.
+     * Subsystem, event code, entity, custom-field,
+     * search, finding, and bookmark criteria remain
+     * untouched.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker startCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker startEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker endCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker endEditBlocker(
+            timeRangeEndEdit
+            );
+
+        levelFilterCombo->setSelectedValues(
+            selectedSeverities
+            );
+
+        timeRangeStartCheckBox->setChecked(
+            true
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            true
+            );
+
+        timeRangeStartEdit->setEnabled(
+            true
+            );
+
+        timeRangeEndEdit->setEnabled(
+            true
+            );
+
+        timeRangeStartEdit->setDateTime(
+            start
+            );
+
+        timeRangeEndEdit->setDateTime(
+            end
+            );
+    }
+
+    updateTimeRangeButton();
+
+    applyFilters();
+
+    eventTable->setFocus();
 }

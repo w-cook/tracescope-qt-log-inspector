@@ -9,6 +9,7 @@
 
 #include "InvestigationStateStore.h"
 
+#include "../analysis/BurstDetectionSettings.h"
 #include "../controllers/InvestigationController.h"
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
@@ -23,6 +24,31 @@ struct InvestigationSessionSourceMetadata
 
     QDateTime sourceLastModified;
     QDateTime importedAtUtc;
+};
+
+enum class InvestigationReviewTab
+{
+    IssueSummary,
+    Findings,
+    Analytics
+};
+
+enum class InvestigationAnalyticsTab
+{
+    Overview,
+    Bursts
+};
+
+enum class InvestigationTimelineBreakdown
+{
+    Severity,
+    Subsystem
+};
+
+enum class InvestigationBurstTimingMode
+{
+    Auto,
+    Manual
 };
 
 class InvestigationSession
@@ -92,8 +118,47 @@ public:
     const QVector<int> &
     columnWidths() const;
 
+    InvestigationReviewTab reviewTab() const;
+
+    InvestigationAnalyticsTab analyticsTab() const;
+
+    void setReviewTab(
+        InvestigationReviewTab tab
+        );
+
+    void setAnalyticsTab(
+        InvestigationAnalyticsTab tab
+        );
+
     void setColumnWidths(
         QVector<int> widths
+        );
+
+    InvestigationTimelineBreakdown
+    timelineBreakdown() const;
+
+    void setTimelineBreakdown(
+        InvestigationTimelineBreakdown breakdown
+        );
+
+    int subsystemTrendLimit() const;
+
+    void setSubsystemTrendLimit(
+        int limit
+        );
+
+    InvestigationBurstTimingMode
+    burstTimingMode() const;
+
+    void setBurstTimingMode(
+        InvestigationBurstTimingMode mode
+        );
+
+    const BurstDetectionSettings &
+    burstDetectionSettings() const;
+
+    void setBurstDetectionSettings(
+        const BurstDetectionSettings &settings
         );
 
 private:
@@ -139,6 +204,25 @@ private:
         m_lastTimestamp;
 
     QVector<int> m_columnWidths;
+
+    InvestigationReviewTab m_reviewTab =
+        InvestigationReviewTab::IssueSummary;
+
+    InvestigationAnalyticsTab m_analyticsTab =
+        InvestigationAnalyticsTab::Overview;
+
+    InvestigationTimelineBreakdown
+        m_timelineBreakdown =
+        InvestigationTimelineBreakdown::Severity;
+
+    int m_subsystemTrendLimit = 5;
+
+    InvestigationBurstTimingMode
+        m_burstTimingMode =
+        InvestigationBurstTimingMode::Auto;
+
+    BurstDetectionSettings
+        m_burstDetectionSettings;
 
     void refreshSourceMetadata();
 

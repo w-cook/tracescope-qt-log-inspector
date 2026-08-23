@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.11.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.12.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -109,6 +109,19 @@ qt_add_executable(TraceScope
     src/domain/InvestigationRecordState.h
     src/workspace/InvestigationStateStore.h
     src/workspace/InvestigationStateStore.cpp
+    src/analysis/InvestigationValueFrequency.h
+    src/analysis/InvestigationAnalyticsAnalyzer.h
+    src/analysis/InvestigationAnalyticsAnalyzer.cpp
+    src/analysis/AnalysisTimeBucketRange.h
+    src/analysis/AnalysisTimeBucketRange.cpp
+    src/analysis/InvestigationValueTrendBucket.h
+    src/analysis/InvestigationCadence.h
+    src/analysis/InvestigationCadenceAnalyzer.h
+    src/analysis/InvestigationCadenceAnalyzer.cpp
+    src/analysis/BurstDetectionSettings.h
+    src/analysis/InvestigationBurst.h
+    src/analysis/InvestigationBurstAnalyzer.h
+    src/analysis/InvestigationBurstAnalyzer.cpp
 
 )
 
