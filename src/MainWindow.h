@@ -9,6 +9,7 @@
 #include <QSettings>
 
 #include "analysis/EventTimelineAnalyzer.h"
+#include "analysis/InvestigationAnalyticsAnalyzer.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
@@ -42,6 +43,7 @@ class QCheckBox;
 class QDateTimeEdit;
 class QWidget;
 class QDialog;
+class QTabWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -80,8 +82,27 @@ private:
     QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
+
+    QTabWidget *investigationReviewTabs = nullptr;
+
+    QWidget *findingsPanel = nullptr;
     QLabel *findingsSummaryLabel = nullptr;
     QTableWidget *findingsTable = nullptr;
+
+    QWidget *analyticsPanel = nullptr;
+
+    QTabWidget *analyticsTabs = nullptr;
+
+    QWidget *analyticsOverviewPage = nullptr;
+    QWidget *analyticsBurstsPage = nullptr;
+
+    QTableWidget *eventCodeFrequencyTable = nullptr;
+    QTableWidget *entityFrequencyTable = nullptr;
+
+    QTableWidget *burstTable = nullptr;
+    QPlainTextEdit *burstDetailText = nullptr;
+
+    QPushButton *burstSettingsButton = nullptr;
 
     InvestigationWorkspace *workspace;
     InvestigationController *investigationController =
@@ -89,6 +110,7 @@ private:
 
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
+    InvestigationAnalyticsAnalyzer analyticsAnalyzer;
     InvestigationCsvExporter csvExporter;
 
     QMetaObject::Connection eventSelectionConnection;
@@ -167,6 +189,10 @@ private:
     QString currentFilePath;
 
     QChartView *timelineChartView;
+
+    QGroupBox *analyticsEventCodeGroup = nullptr;
+    QGroupBox *analyticsEntityGroup = nullptr;
+    QLabel *analyticsOverviewEmptyLabel = nullptr;
 
     void buildLayout();
     void createMenus();
@@ -256,7 +282,8 @@ private:
         const QString &severity
         );
 
-    QWidget *buildFindingsPanel();
+    QWidget *buildFindingsPanel();    
+    QWidget *buildAnalyticsPanel();
 
     void updateFindingsPanel();
 
@@ -300,4 +327,8 @@ private:
     void resizeCustomFiltersDialogToContents();
 
     void updateEventRowHeaderWidth();
+
+    void updateAnalyticsOverview(
+        const QVector<InvestigationRecord> &records
+        );
 };

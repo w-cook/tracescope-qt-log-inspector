@@ -205,6 +205,32 @@ void InvestigationSession::setColumnWidths(
         std::move(widths);
 }
 
+InvestigationReviewTab
+InvestigationSession::reviewTab() const
+{
+    return m_reviewTab;
+}
+
+void InvestigationSession::setReviewTab(
+    InvestigationReviewTab tab
+    )
+{
+    m_reviewTab = tab;
+}
+
+InvestigationAnalyticsTab
+InvestigationSession::analyticsTab() const
+{
+    return m_analyticsTab;
+}
+
+void InvestigationSession::setAnalyticsTab(
+    InvestigationAnalyticsTab tab
+    )
+{
+    m_analyticsTab = tab;
+}
+
 void InvestigationSession::
     refreshSourceMetadata()
 {

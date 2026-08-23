@@ -25,6 +25,19 @@ struct InvestigationSessionSourceMetadata
     QDateTime importedAtUtc;
 };
 
+enum class InvestigationReviewTab
+{
+    IssueSummary,
+    Findings,
+    Analytics
+};
+
+enum class InvestigationAnalyticsTab
+{
+    Overview,
+    Bursts
+};
+
 class InvestigationSession
 {
 public:
@@ -92,6 +105,18 @@ public:
     const QVector<int> &
     columnWidths() const;
 
+    InvestigationReviewTab reviewTab() const;
+
+    InvestigationAnalyticsTab analyticsTab() const;
+
+    void setReviewTab(
+        InvestigationReviewTab tab
+        );
+
+    void setAnalyticsTab(
+        InvestigationAnalyticsTab tab
+        );
+
     void setColumnWidths(
         QVector<int> widths
         );
@@ -139,6 +164,12 @@ private:
         m_lastTimestamp;
 
     QVector<int> m_columnWidths;
+
+    InvestigationReviewTab m_reviewTab =
+        InvestigationReviewTab::IssueSummary;
+
+    InvestigationAnalyticsTab m_analyticsTab =
+        InvestigationAnalyticsTab::Overview;
 
     void refreshSourceMetadata();
 

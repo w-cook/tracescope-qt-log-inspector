@@ -82,6 +82,8 @@ constexpr int TimelineVisibleBucketCount = 20;
 
 constexpr int TimelineScaledScrollMaximum = 1'000'000;
 
+constexpr int AnalyticsTopEntityCount = 10;
+
 constexpr qint64 MillisecondsPerSecond = 1'000;
 
 constexpr qint64 MillisecondsPerMinute = 60 * MillisecondsPerSecond;
@@ -1299,10 +1301,13 @@ void MainWindow::buildLayout()
     issueSummaryGroup =
         buildIssueSummaryPanel();
 
-    auto *findingsPanel =
+    findingsPanel =
         buildFindingsPanel();
 
-    auto *investigationReviewTabs =
+    analyticsPanel =
+        buildAnalyticsPanel();
+
+    investigationReviewTabs =
         new QTabWidget(this);
 
     investigationReviewTabs->setDocumentMode(
@@ -1317,6 +1322,11 @@ void MainWindow::buildLayout()
     investigationReviewTabs->addTab(
         findingsPanel,
         tr("Findings")
+        );
+
+    investigationReviewTabs->addTab(
+        analyticsPanel,
+        tr("Analytics")
         );
 
     auto *detailGroup =
@@ -1383,21 +1393,48 @@ void MainWindow::buildLayout()
         this,
         [
             this,
-            bottomSplitter,
-            investigationReviewTabs
+            bottomSplitter
         ](int index) {
+        InvestigationSession *session =
+            workspace->activeSession();
+
+            if (session != nullptr) {
+                QWidget *currentPage =
+                    investigationReviewTabs
+                        ->widget(index);
+
+                if (currentPage == issueSummaryGroup) {
+                    session->setReviewTab(
+                        InvestigationReviewTab::
+                            IssueSummary
+                        );
+                } else if (currentPage == findingsPanel) {
+                    session->setReviewTab(
+                        InvestigationReviewTab::
+                            Findings
+                        );
+                } else if (currentPage == analyticsPanel) {
+                    session->setReviewTab(
+                        InvestigationReviewTab::
+                            Analytics
+                        );
+                }
+            }
+
             const int totalWidth =
                 std::max(
                     1,
                     bottomSplitter->width()
                     );
 
-            const bool findingsSelected =
-                investigationReviewTabs
-                    ->tabText(index)
-                == QObject::tr("Findings");
+            const QString selectedTabText =
+                investigationReviewTabs->tabText(index);
 
-            if (findingsSelected) {
+            const bool wideReviewSelected =
+                selectedTabText == QObject::tr("Findings")
+                || selectedTabText == QObject::tr("Analytics");
+
+            if (wideReviewSelected) {
                 /*
                  * Findings is a genuine review surface
                  * and benefits from more horizontal space.
@@ -2970,6 +3007,10 @@ void MainWindow::applyFilters()
         );
 
     updateIssueSummary(
+        visibleRecords
+        );
+
+    updateAnalyticsOverview(
         visibleRecords
         );
 
@@ -5020,6 +5061,432 @@ QWidget *MainWindow::buildFindingsPanel()
     return panel;
 }
 
+QWidget *MainWindow::buildAnalyticsPanel()
+{
+    auto *panel =
+        new QWidget(this);
+
+    auto *panelLayout =
+        new QVBoxLayout(panel);
+
+    analyticsTabs =
+        new QTabWidget(panel);
+
+    analyticsTabs->setDocumentMode(
+        true
+        );
+
+    /*
+     * Overview
+     */
+    analyticsOverviewPage =
+        new QWidget(analyticsTabs);
+
+    auto *overviewLayout =
+        new QVBoxLayout(analyticsOverviewPage);
+
+    analyticsOverviewEmptyLabel =
+        new QLabel(
+            tr(
+                "Event-code and entity analytics are "
+                "not available for this source."
+                ),
+            analyticsOverviewPage
+            );
+
+    analyticsOverviewEmptyLabel->setWordWrap(
+        true
+        );
+
+    analyticsOverviewEmptyLabel->setVisible(
+        false
+        );
+
+    overviewLayout->addWidget(
+        analyticsOverviewEmptyLabel
+        );
+
+    auto *overviewSplitter =
+        new QSplitter(
+            Qt::Horizontal,
+            analyticsOverviewPage
+            );
+
+    /*
+     * Event-code frequencies
+     */
+    analyticsEventCodeGroup =
+        new QGroupBox(
+            tr("Event Code Frequencies"),
+            overviewSplitter
+            );
+
+    auto *eventCodeLayout =
+        new QVBoxLayout(
+            analyticsEventCodeGroup
+            );
+
+    eventCodeFrequencyTable =
+        new QTableWidget(
+            0,
+            2,
+            analyticsEventCodeGroup
+            );
+
+    eventCodeFrequencyTable
+        ->setHorizontalHeaderLabels({
+            tr("Event Code"),
+            tr("Count")
+        });
+
+    eventCodeFrequencyTable
+        ->setEditTriggers(
+            QAbstractItemView::NoEditTriggers
+            );
+
+    eventCodeFrequencyTable
+        ->setSelectionBehavior(
+            QAbstractItemView::SelectRows
+            );
+
+    eventCodeFrequencyTable
+        ->setSelectionMode(
+            QAbstractItemView::SingleSelection
+            );
+
+    eventCodeFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            0,
+            QHeaderView::Stretch
+            );
+
+    eventCodeFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            1,
+            QHeaderView::ResizeToContents
+            );
+
+    eventCodeFrequencyTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    eventCodeLayout->addWidget(
+        eventCodeFrequencyTable
+        );
+
+    /*
+     * Top entities
+     */
+    analyticsEntityGroup =
+        new QGroupBox(
+            tr("Top Entities"),
+            overviewSplitter
+            );
+
+    auto *entityLayout =
+        new QVBoxLayout(
+            analyticsEntityGroup
+            );
+
+    entityFrequencyTable =
+        new QTableWidget(
+            0,
+            2,
+            analyticsEntityGroup
+            );
+
+    entityFrequencyTable
+        ->setHorizontalHeaderLabels({
+            tr("Entity"),
+            tr("Count")
+        });
+
+    entityFrequencyTable
+        ->setEditTriggers(
+            QAbstractItemView::NoEditTriggers
+            );
+
+    entityFrequencyTable
+        ->setSelectionBehavior(
+            QAbstractItemView::SelectRows
+            );
+
+    entityFrequencyTable
+        ->setSelectionMode(
+            QAbstractItemView::SingleSelection
+            );
+
+    entityFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            0,
+            QHeaderView::Stretch
+            );
+
+    entityFrequencyTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            1,
+            QHeaderView::ResizeToContents
+            );
+
+    entityFrequencyTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    entityLayout->addWidget(
+        entityFrequencyTable
+        );
+
+    overviewSplitter->addWidget(
+        analyticsEventCodeGroup
+        );
+
+    overviewSplitter->addWidget(
+        analyticsEntityGroup
+        );
+
+    overviewSplitter->setStretchFactor(
+        0,
+        1
+        );
+
+    overviewSplitter->setStretchFactor(
+        1,
+        1
+        );
+
+    overviewLayout->addWidget(
+        overviewSplitter
+        );
+
+    /*
+     * Bursts
+     */
+    analyticsBurstsPage =
+        new QWidget(analyticsTabs);
+
+    auto *burstsLayout =
+        new QVBoxLayout(analyticsBurstsPage);
+
+    auto *burstToolbar =
+        new QHBoxLayout();
+
+    auto *burstHeading =
+        new QLabel(
+            tr(
+                "Deterministic warning and error "
+                "burst detection"
+                ),
+            analyticsBurstsPage
+            );
+
+    burstSettingsButton =
+        new QPushButton(
+            tr("Burst Settings..."),
+            analyticsBurstsPage
+            );
+
+    burstToolbar->addWidget(
+        burstHeading
+        );
+
+    burstToolbar->addStretch();
+
+    burstToolbar->addWidget(
+        burstSettingsButton
+        );
+
+    burstsLayout->addLayout(
+        burstToolbar
+        );
+
+    auto *burstSplitter =
+        new QSplitter(
+            Qt::Horizontal,
+            analyticsBurstsPage
+            );
+
+    /*
+     * Burst list
+     */
+    auto *burstListGroup =
+        new QGroupBox(
+            tr("Detected Bursts"),
+            burstSplitter
+            );
+
+    auto *burstListLayout =
+        new QVBoxLayout(
+            burstListGroup
+            );
+
+    burstTable =
+        new QTableWidget(
+            0,
+            4,
+            burstListGroup
+            );
+
+    burstTable->setHorizontalHeaderLabels({
+        tr("Start"),
+        tr("End"),
+        tr("Elevated"),
+        tr("Highest Severity")
+    });
+
+    burstTable->setEditTriggers(
+        QAbstractItemView::NoEditTriggers
+        );
+
+    burstTable->setSelectionBehavior(
+        QAbstractItemView::SelectRows
+        );
+
+    burstTable->setSelectionMode(
+        QAbstractItemView::SingleSelection
+        );
+
+    burstTable
+        ->horizontalHeader()
+        ->setSectionResizeMode(
+            QHeaderView::ResizeToContents
+            );
+
+    burstTable
+        ->horizontalHeader()
+        ->setStretchLastSection(
+            true
+            );
+
+    burstTable
+        ->verticalHeader()
+        ->setVisible(
+            false
+            );
+
+    burstListLayout->addWidget(
+        burstTable
+        );
+
+    /*
+     * Burst explanation
+     */
+    auto *burstDetailGroup =
+        new QGroupBox(
+            tr("Burst Explanation"),
+            burstSplitter
+            );
+
+    auto *burstDetailLayout =
+        new QVBoxLayout(
+            burstDetailGroup
+            );
+
+    burstDetailText =
+        new QPlainTextEdit(
+            burstDetailGroup
+            );
+
+    burstDetailText->setReadOnly(
+        true
+        );
+
+    burstDetailText->setPlaceholderText(
+        tr(
+            "Select a detected burst to review "
+            "why it was identified and which "
+            "records contributed to it."
+            )
+        );
+
+    burstDetailLayout->addWidget(
+        burstDetailText
+        );
+
+    burstSplitter->addWidget(
+        burstListGroup
+        );
+
+    burstSplitter->addWidget(
+        burstDetailGroup
+        );
+
+    burstSplitter->setStretchFactor(
+        0,
+        3
+        );
+
+    burstSplitter->setStretchFactor(
+        1,
+        2
+        );
+
+    burstsLayout->addWidget(
+        burstSplitter
+        );
+
+    /*
+     * Analytics tabs
+     */
+    analyticsTabs->addTab(
+        analyticsOverviewPage,
+        tr("Overview")
+        );
+
+    analyticsTabs->addTab(
+        analyticsBurstsPage,
+        tr("Bursts")
+        );
+
+    connect(
+        analyticsTabs,
+        &QTabWidget::currentChanged,
+        this,
+        [this](int index) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr) {
+                return;
+            }
+
+            QWidget *currentPage =
+                analyticsTabs->widget(
+                    index
+                    );
+
+            if (currentPage
+                == analyticsOverviewPage) {
+                session->setAnalyticsTab(
+                    InvestigationAnalyticsTab::
+                        Overview
+                    );
+            } else if (
+                currentPage
+                == analyticsBurstsPage
+                ) {
+                session->setAnalyticsTab(
+                    InvestigationAnalyticsTab::
+                        Bursts
+                    );
+            }
+        }
+        );
+
+    panelLayout->addWidget(
+        analyticsTabs
+        );
+
+    return panel;
+}
+
 void MainWindow::updateIssueSummary(
     const QVector<InvestigationRecord> &records
     )
@@ -5509,6 +5976,136 @@ void MainWindow::updateFindingsPanel()
     findingsTable->setHorizontalScrollBarPolicy(
         Qt::ScrollBarAlwaysOff
         );
+}
+
+void MainWindow::updateAnalyticsOverview(
+    const QVector<InvestigationRecord> &records
+    )
+{
+    eventCodeFrequencyTable->setRowCount(
+        0
+        );
+
+    entityFrequencyTable->setRowCount(
+        0
+        );
+
+    analyticsEventCodeGroup->setVisible(
+        hasEventCodeData
+        );
+
+    analyticsEntityGroup->setVisible(
+        hasEntityData
+        );
+
+    analyticsOverviewEmptyLabel->setVisible(
+        !hasEventCodeData
+        && !hasEntityData
+        );
+
+    if (hasEventCodeData) {
+        const auto frequencies =
+            analyticsAnalyzer
+                .eventCodeFrequencies(
+                    records
+                    );
+
+        eventCodeFrequencyTable->setRowCount(
+            frequencies.size()
+            );
+
+        for (int row = 0;
+             row < frequencies.size();
+             ++row) {
+            const auto &frequency =
+                frequencies.at(row);
+
+            auto *valueItem =
+                new QTableWidgetItem(
+                    frequency.value
+                    );
+
+            auto *countItem =
+                new QTableWidgetItem(
+                    QString::number(
+                        frequency.count
+                        )
+                    );
+
+            countItem->setTextAlignment(
+                Qt::AlignRight
+                | Qt::AlignVCenter
+                );
+
+            eventCodeFrequencyTable->setItem(
+                row,
+                0,
+                valueItem
+                );
+
+            eventCodeFrequencyTable->setItem(
+                row,
+                1,
+                countItem
+                );
+        }
+    }
+
+    if (hasEntityData) {
+        const auto frequencies =
+            analyticsAnalyzer
+                .entityFrequencies(
+                    records
+                    );
+
+        const int displayedCount =
+            std::min(
+                AnalyticsTopEntityCount,
+                static_cast<int>(
+                    frequencies.size()
+                    )
+                );
+
+        entityFrequencyTable->setRowCount(
+            displayedCount
+            );
+
+        for (int row = 0;
+             row < displayedCount;
+             ++row) {
+            const auto &frequency =
+                frequencies.at(row);
+
+            auto *valueItem =
+                new QTableWidgetItem(
+                    frequency.value
+                    );
+
+            auto *countItem =
+                new QTableWidgetItem(
+                    QString::number(
+                        frequency.count
+                        )
+                    );
+
+            countItem->setTextAlignment(
+                Qt::AlignRight
+                | Qt::AlignVCenter
+                );
+
+            entityFrequencyTable->setItem(
+                row,
+                0,
+                valueItem
+                );
+
+            entityFrequencyTable->setItem(
+                row,
+                1,
+                countItem
+                );
+        }
+    }
 }
 
 void MainWindow::drillDownIssueSummary(
@@ -8172,12 +8769,28 @@ void MainWindow::updateDataCapabilities()
     /*
      * Warning/error grouping requires both
      * severity and subsystem information.
+     *
+     * Issue Summary is a QTabWidget page, so its
+     * visibility must be managed through the tab
+     * widget rather than by showing/hiding the page
+     * widget directly. Direct setVisible() calls can
+     * cause the page to be painted alongside the
+     * currently selected review tab.
      */
-    if (issueSummaryGroup != nullptr) {
-        issueSummaryGroup->setVisible(
-            hasSeverityData
-            && hasSubsystemData
-            );
+    if (investigationReviewTabs != nullptr
+        && issueSummaryGroup != nullptr) {
+        const int issueSummaryIndex =
+            investigationReviewTabs->indexOf(
+                issueSummaryGroup
+                );
+
+        if (issueSummaryIndex >= 0) {
+            investigationReviewTabs->setTabVisible(
+                issueSummaryIndex,
+                hasSeverityData
+                    && hasSubsystemData
+                );
+        }
     }
 }
 
@@ -8441,8 +9054,8 @@ void MainWindow::bindActiveSession()
             0
             );
 
-        if (issueSummaryGroup != nullptr) {
-            issueSummaryGroup->setVisible(
+        if (investigationReviewTabs != nullptr) {
+            investigationReviewTabs->setVisible(
                 false
                 );
         }
@@ -8481,10 +9094,16 @@ void MainWindow::bindActiveSession()
             ->sourceMetadata()
             .sourcePath;
 
-    eventTable->setModel(
-        investigationController
-            ->proxyModel()
-        );
+    {
+        const QSignalBlocker headerBlocker(
+            eventTable->horizontalHeader()
+            );
+
+        eventTable->setModel(
+            investigationController
+                ->proxyModel()
+            );
+    }
 
     connectEventTableSelectionModel();
 
@@ -8570,6 +9189,116 @@ void MainWindow::bindActiveSession()
 
     refreshSubsystemFilterOptions();
     refreshCanonicalFilterOptions();
+
+    if (investigationReviewTabs != nullptr) {
+        investigationReviewTabs->setVisible(
+            true
+            );
+    }
+
+    if (investigationReviewTabs != nullptr) {
+        QWidget *preferredPage =
+            nullptr;
+
+        switch (session->reviewTab()) {
+        case InvestigationReviewTab::IssueSummary:
+            preferredPage =
+                issueSummaryGroup;
+            break;
+
+        case InvestigationReviewTab::Findings:
+            preferredPage =
+                findingsPanel;
+            break;
+
+        case InvestigationReviewTab::Analytics:
+            preferredPage =
+                analyticsPanel;
+            break;
+        }
+
+        int preferredIndex =
+            preferredPage != nullptr
+                ? investigationReviewTabs
+                      ->indexOf(
+                          preferredPage
+                          )
+                : -1;
+
+        /*
+         * Restore this investigation's preferred
+         * review surface when it is available.
+         */
+        if (preferredIndex >= 0
+            && investigationReviewTabs
+                   ->isTabVisible(
+                       preferredIndex
+                       )) {
+            investigationReviewTabs
+                ->setCurrentIndex(
+                    preferredIndex
+                    );
+        } else {
+            /*
+             * A saved page may not be applicable to
+             * the active source. Issue Summary, for
+             * example, requires severity and subsystem
+             * data. Fall back deterministically to the
+             * first available review surface.
+             */
+            for (
+                int index = 0;
+                index
+                    < investigationReviewTabs
+                          ->count();
+                ++index
+                ) {
+                if (!investigationReviewTabs
+                         ->isTabVisible(
+                             index
+                             )) {
+                    continue;
+                }
+
+                investigationReviewTabs
+                    ->setCurrentIndex(
+                        index
+                        );
+
+                break;
+            }
+        }
+    }
+
+    if (analyticsTabs != nullptr) {
+        QWidget *preferredAnalyticsPage =
+            nullptr;
+
+        switch (session->analyticsTab()) {
+        case InvestigationAnalyticsTab::Overview:
+            preferredAnalyticsPage =
+                analyticsOverviewPage;
+            break;
+
+        case InvestigationAnalyticsTab::Bursts:
+            preferredAnalyticsPage =
+                analyticsBurstsPage;
+            break;
+        }
+
+        if (preferredAnalyticsPage != nullptr) {
+            const int preferredIndex =
+                analyticsTabs->indexOf(
+                    preferredAnalyticsPage
+                    );
+
+            if (preferredIndex >= 0) {
+                analyticsTabs->setCurrentIndex(
+                    preferredIndex
+                    );
+            }
+        }
+    }
 
     /*
      * Restore this investigation's independent
@@ -8771,7 +9500,7 @@ void MainWindow::bindActiveSession()
      * ---------------------------------------------------------
      */
 
-    const QVector<int> &columnWidths =
+    const QVector<int> columnWidths =
         session->columnWidths();
 
     const int columnCount =
@@ -8781,6 +9510,18 @@ void MainWindow::bindActiveSession()
 
     if (columnWidths.size()
         == columnCount) {
+        /*
+         * Restoring stored widths is UI
+         * synchronization, not a user resize.
+         *
+         * Suppress sectionResized so the partially
+         * restored header cannot overwrite this
+         * session's saved width vector.
+         */
+        const QSignalBlocker headerBlocker(
+            eventTable->horizontalHeader()
+            );
+
         for (
             int column = 0;
             column < columnCount;
@@ -8792,24 +9533,39 @@ void MainWindow::bindActiveSession()
                 );
         }
     } else {
-        eventTable->resizeColumnsToContents();
-
         QVector<int> measuredWidths;
 
         measuredWidths.reserve(
             columnCount
             );
 
-        for (
-            int column = 0;
-            column < columnCount;
-            ++column
-            ) {
-            measuredWidths.append(
-                eventTable->columnWidth(
-                    column
-                    )
+        /*
+         * A session without compatible saved widths
+         * receives content-based initial sizing.
+         *
+         * resizeColumnsToContents() can emit
+         * sectionResized, so suppress those signals
+         * and explicitly store the finished result
+         * afterward.
+         */
+        {
+            const QSignalBlocker headerBlocker(
+                eventTable->horizontalHeader()
                 );
+
+            eventTable->resizeColumnsToContents();
+
+            for (
+                int column = 0;
+                column < columnCount;
+                ++column
+                ) {
+                measuredWidths.append(
+                    eventTable->columnWidth(
+                        column
+                        )
+                    );
+            }
         }
 
         session->setColumnWidths(
@@ -8819,11 +9575,17 @@ void MainWindow::bindActiveSession()
             );
     }
 
-    eventTable
-        ->horizontalHeader()
-        ->setStretchLastSection(
-            true
+    {
+        const QSignalBlocker headerBlocker(
+            eventTable->horizontalHeader()
             );
+
+        eventTable
+            ->horizontalHeader()
+            ->setStretchLastSection(
+                true
+                );
+    }
 
     updateEventNavigationState();
 }
