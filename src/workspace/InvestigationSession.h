@@ -9,6 +9,7 @@
 
 #include "InvestigationStateStore.h"
 
+#include "../analysis/BurstDetectionSettings.h"
 #include "../controllers/InvestigationController.h"
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
@@ -42,6 +43,12 @@ enum class InvestigationTimelineBreakdown
 {
     Severity,
     Subsystem
+};
+
+enum class InvestigationBurstTimingMode
+{
+    Auto,
+    Manual
 };
 
 class InvestigationSession
@@ -140,6 +147,20 @@ public:
         int limit
         );
 
+    InvestigationBurstTimingMode
+    burstTimingMode() const;
+
+    void setBurstTimingMode(
+        InvestigationBurstTimingMode mode
+        );
+
+    const BurstDetectionSettings &
+    burstDetectionSettings() const;
+
+    void setBurstDetectionSettings(
+        const BurstDetectionSettings &settings
+        );
+
 private:
     QString m_id;
 
@@ -195,6 +216,13 @@ private:
         InvestigationTimelineBreakdown::Severity;
 
     int m_subsystemTrendLimit = 5;
+
+    InvestigationBurstTimingMode
+        m_burstTimingMode =
+        InvestigationBurstTimingMode::Auto;
+
+    BurstDetectionSettings
+        m_burstDetectionSettings;
 
     void refreshSourceMetadata();
 

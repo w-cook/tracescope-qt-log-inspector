@@ -52,6 +52,10 @@
 #include <QPainter>
 #include <QStyledItemDelegate>
 #include <QTextDocument>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QRadioButton>
+#include <QSpinBox>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -376,6 +380,72 @@ QString timelineDisplayLabel(
      * is useful context.
      */
     return canonicalLabel;
+}
+
+QString formatDurationMilliseconds(
+    qint64 milliseconds
+    )
+{
+    if (milliseconds < 1000) {
+        return QStringLiteral("%1 ms")
+            .arg(milliseconds);
+    }
+
+    if (milliseconds < 60 * 1000) {
+        const double seconds =
+            static_cast<double>(
+                milliseconds
+                )
+            / 1000.0;
+
+        return QStringLiteral("%1 s")
+            .arg(
+                seconds,
+                0,
+                'f',
+                seconds < 10.0
+                    ? 1
+                    : 0
+                );
+    }
+
+    if (milliseconds < 60 * 60 * 1000) {
+        const double minutes =
+            static_cast<double>(
+                milliseconds
+                )
+            / static_cast<double>(
+                60 * 1000
+                );
+
+        return QStringLiteral("%1 min")
+            .arg(
+                minutes,
+                0,
+                'f',
+                minutes < 10.0
+                    ? 1
+                    : 0
+                );
+    }
+
+    const double hours =
+        static_cast<double>(
+            milliseconds
+            )
+        / static_cast<double>(
+            60 * 60 * 1000
+            );
+
+    return QStringLiteral("%1 h")
+        .arg(
+            hours,
+            0,
+            'f',
+            hours < 10.0
+                ? 1
+                : 0
+            );
 }
 
 QString findingStatusDisplayText(
@@ -3014,6 +3084,10 @@ void MainWindow::applyFilters()
         visibleRecords
         );
 
+    updateBurstsPanel(
+        visibleRecords
+        );
+
     updateTimelineChart(
         visibleRecords
         );
@@ -5069,6 +5143,17 @@ QWidget *MainWindow::buildAnalyticsPanel()
     auto *panelLayout =
         new QVBoxLayout(panel);
 
+    panelLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    panelLayout->setSpacing(
+        0
+        );
+
     analyticsTabs =
         new QTabWidget(panel);
 
@@ -5084,6 +5169,17 @@ QWidget *MainWindow::buildAnalyticsPanel()
 
     auto *overviewLayout =
         new QVBoxLayout(analyticsOverviewPage);
+
+    overviewLayout->setContentsMargins(
+        4,
+        2,
+        4,
+        4
+        );
+
+    overviewLayout->setSpacing(
+        2
+        );
 
     analyticsOverviewEmptyLabel =
         new QLabel(
@@ -5275,8 +5371,30 @@ QWidget *MainWindow::buildAnalyticsPanel()
     auto *burstsLayout =
         new QVBoxLayout(analyticsBurstsPage);
 
+    burstsLayout->setContentsMargins(
+        4,
+        2,
+        4,
+        4
+        );
+
+    burstsLayout->setSpacing(
+        2
+        );
+
     auto *burstToolbar =
         new QHBoxLayout();
+
+    burstToolbar->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    burstToolbar->setSpacing(
+        4
+        );
 
     auto *burstHeading =
         new QLabel(
@@ -5292,6 +5410,15 @@ QWidget *MainWindow::buildAnalyticsPanel()
             tr("Burst Settings..."),
             analyticsBurstsPage
             );
+
+    connect(
+        burstSettingsButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            showBurstSettingsDialog();
+        }
+        );
 
     burstToolbar->addWidget(
         burstHeading
@@ -5326,6 +5453,17 @@ QWidget *MainWindow::buildAnalyticsPanel()
         new QVBoxLayout(
             burstListGroup
             );
+
+    burstListLayout->setContentsMargins(
+        4,
+        4,
+        4,
+        4
+        );
+
+    burstListLayout->setSpacing(
+        2
+        );
 
     burstTable =
         new QTableWidget(
@@ -5371,6 +5509,42 @@ QWidget *MainWindow::buildAnalyticsPanel()
             false
             );
 
+    connect(
+        burstTable,
+        &QTableWidget::cellClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            updateBurstDetail(
+                row
+                );
+        }
+        );
+
+    connect(
+        burstTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            drillDownBurst(
+                row
+                );
+        }
+        );
+
+    burstTable->setToolTip(
+        tr(
+            "Select a burst to review its explanation. "
+            "Double-click to filter the investigation "
+            "to its contributing elevated events."
+            )
+        );
+
     burstListLayout->addWidget(
         burstTable
         );
@@ -5389,6 +5563,17 @@ QWidget *MainWindow::buildAnalyticsPanel()
             burstDetailGroup
             );
 
+    burstDetailLayout->setContentsMargins(
+        4,
+        4,
+        4,
+        4
+        );
+
+    burstDetailLayout->setSpacing(
+        2
+        );
+
     burstDetailText =
         new QPlainTextEdit(
             burstDetailGroup
@@ -5401,8 +5586,7 @@ QWidget *MainWindow::buildAnalyticsPanel()
     burstDetailText->setPlaceholderText(
         tr(
             "Select a detected burst to review "
-            "why it was identified and which "
-            "records contributed to it."
+            "why it was identified."
             )
         );
 
@@ -10442,4 +10626,1286 @@ void MainWindow::updateEventRowHeaderWidth()
     header->setFixedWidth(
         headerWidth
         );
+}
+
+void MainWindow::updateBurstsPanel(
+    const QVector<InvestigationRecord> &records
+    )
+{
+    if (burstTable == nullptr
+        || burstDetailText == nullptr) {
+        return;
+    }
+
+    burstTable->setRowCount(
+        0
+        );
+
+    currentBursts.clear();
+
+    burstDetailText->clear();
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    /*
+     * Burst detection depends on both temporal
+     * information and severity classification.
+     */
+    if (!hasTimestampData
+        || !hasSeverityData) {
+        burstDetailText->setPlainText(
+            tr(
+                "Burst detection requires valid "
+                "timestamps and severity values."
+                )
+            );
+
+        return;
+    }
+
+    /*
+     * Always analyze cadence so Auto timing can be
+     * derived from the currently filtered
+     * investigation and presented transparently.
+     */
+    const InvestigationCadence cadence =
+        cadenceAnalyzer.analyze(
+            records
+            );
+
+    /*
+     * Stored session settings contain the analyst's
+     * thresholds plus the last manually selected
+     * timing values.
+     */
+    BurstDetectionSettings settings =
+        session->burstDetectionSettings();
+
+    const bool automaticTiming =
+        session->burstTimingMode()
+        == InvestigationBurstTimingMode::Auto;
+
+    /*
+     * Auto controls only the temporal parameters.
+     * Detection thresholds remain explicit analyst
+     * criteria in either timing mode.
+     */
+    if (automaticTiming) {
+        settings.windowMilliseconds =
+            cadence
+                .recommendedBurstWindowMilliseconds;
+
+        settings.mergeGapMilliseconds =
+            cadence
+                .recommendedMergeGapMilliseconds;
+    }
+
+    if (!settings.isValid()) {
+        burstDetailText->setPlainText(
+            tr(
+                "The current burst-detection "
+                "settings are invalid."
+                )
+            );
+
+        return;
+    }
+
+    currentBursts =
+        burstAnalyzer.detectBursts(
+            records,
+            settings
+            );
+
+    /*
+     * ---------------------------------------------------------
+     * Empty result
+     * ---------------------------------------------------------
+     *
+     * An empty result is meaningful analytical
+     * information, not an error. Show the exact
+     * criteria that produced it.
+     */
+    if (currentBursts.isEmpty()) {
+        QStringList lines;
+
+        lines.append(
+            tr(
+                "No warning/error bursts were "
+                "detected with the current settings."
+                )
+            );
+
+        lines.append(
+            QString()
+            );
+
+        lines.append(
+            tr("Timing mode: %1")
+                .arg(
+                    automaticTiming
+                        ? tr("Auto")
+                        : tr("Manual")
+                    )
+            );
+
+        lines.append(
+            tr("Window: %1")
+                .arg(
+                    formatDurationMilliseconds(
+                        settings
+                            .windowMilliseconds
+                        )
+                    )
+            );
+
+        lines.append(
+            tr("Merge gap: %1")
+                .arg(
+                    formatDurationMilliseconds(
+                        settings
+                            .mergeGapMilliseconds
+                        )
+                    )
+            );
+
+        lines.append(
+            tr(
+                "WARN/ERROR/CRITICAL threshold: %1"
+                )
+                .arg(
+                    settings
+                        .elevatedEventThreshold
+                    )
+            );
+
+        lines.append(
+            tr(
+                "ERROR/CRITICAL threshold: %1"
+                )
+                .arg(
+                    settings
+                        .errorCriticalThreshold
+                    )
+            );
+
+        /*
+         * Auto should be explainable. Include the
+         * cadence basis without cluttering Manual
+         * mode with irrelevant statistics.
+         */
+        if (automaticTiming) {
+            lines.append(
+                QString()
+                );
+
+            if (cadence.usesFallbackRecommendation) {
+                lines.append(
+                    tr(
+                        "Auto timing is using the "
+                        "fallback recommendation "
+                        "because this investigation "
+                        "does not contain enough "
+                        "positive timestamp gaps for "
+                        "an adaptive recommendation."
+                        )
+                    );
+            } else {
+                lines.append(
+                    tr(
+                        "Auto timing was derived from "
+                        "the timestamp cadence of the "
+                        "currently filtered "
+                        "investigation."
+                        )
+                    );
+            }
+
+            lines.append(
+                tr(
+                    "Valid timestamps: %1"
+                    )
+                    .arg(
+                        cadence.timestampCount
+                        )
+                );
+
+            lines.append(
+                tr(
+                    "Positive gaps: %1"
+                    )
+                    .arg(
+                        cadence.positiveGapCount
+                        )
+                );
+
+            lines.append(
+                tr(
+                    "Zero gaps: %1"
+                    )
+                    .arg(
+                        cadence.zeroGapCount
+                        )
+                );
+
+            if (cadence.positiveGapCount > 0) {
+                lines.append(
+                    tr(
+                        "Median positive gap: %1"
+                        )
+                        .arg(
+                            formatDurationMilliseconds(
+                                static_cast<qint64>(
+                                    std::llround(
+                                        cadence
+                                            .medianPositiveGapMilliseconds
+                                        )
+                                    )
+                                )
+                            )
+                    );
+
+                lines.append(
+                    tr(
+                        "P90 positive gap: %1"
+                        )
+                        .arg(
+                            formatDurationMilliseconds(
+                                cadence
+                                    .p90PositiveGapMilliseconds
+                                )
+                            )
+                    );
+            }
+        }
+
+        burstDetailText->setPlainText(
+            lines.join(
+                QStringLiteral("\n")
+                )
+            );
+
+        return;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Populate detected bursts
+     * ---------------------------------------------------------
+     */
+    const bool spansMultipleDates =
+        session->firstTimestamp().has_value()
+        && session->lastTimestamp().has_value()
+        && session->firstTimestamp()
+                   ->date()
+               != session->lastTimestamp()
+                      ->date();
+
+    const QString burstTableTimestampFormat =
+        spansMultipleDates
+            ? QStringLiteral(
+                  "MM-dd HH:mm:ss.zzz"
+                  )
+            : QStringLiteral(
+                  "HH:mm:ss.zzz"
+                  );
+
+    burstTable->setRowCount(
+        currentBursts.size()
+        );
+
+    for (int row = 0;
+         row < currentBursts.size();
+         ++row) {
+        const InvestigationBurst &burst =
+            currentBursts.at(
+                row
+                );
+
+        auto *startItem =
+            new QTableWidgetItem(
+                burst
+                    .startTimestamp
+                    .toString(
+                        burstTableTimestampFormat
+                        )
+                );
+
+        auto *endItem =
+            new QTableWidgetItem(
+                burst
+                    .endTimestamp
+                    .toString(
+                        burstTableTimestampFormat
+                        )
+                );
+
+        startItem->setToolTip(
+            burst
+                .startTimestamp
+                .toString(
+                    Qt::ISODateWithMs
+                    )
+            );
+
+        endItem->setToolTip(
+            burst
+                .endTimestamp
+                .toString(
+                    Qt::ISODateWithMs
+                    )
+            );
+
+        auto *elevatedItem =
+            new QTableWidgetItem(
+                QString::number(
+                    burst
+                        .totalElevatedCount()
+                    )
+                );
+
+        auto *severityItem =
+            new QTableWidgetItem(
+                recordSeverityToString(
+                    burst
+                        .highestSeverity()
+                    )
+                );
+
+        elevatedItem->setTextAlignment(
+            Qt::AlignRight
+            | Qt::AlignVCenter
+            );
+
+        burstTable->setItem(
+            row,
+            0,
+            startItem
+            );
+
+        burstTable->setItem(
+            row,
+            1,
+            endItem
+            );
+
+        burstTable->setItem(
+            row,
+            2,
+            elevatedItem
+            );
+
+        burstTable->setItem(
+            row,
+            3,
+            severityItem
+            );
+    }
+
+    /*
+     * Select the first burst so the detail pane is
+     * immediately useful after every recalculation.
+     */
+    burstTable->selectRow(
+        0
+        );
+
+    updateBurstDetail(
+        0
+        );
+}
+
+void MainWindow::updateBurstDetail(
+    int row
+    )
+{
+    if (burstDetailText == nullptr
+        || row < 0
+        || row >= currentBursts.size()) {
+        return;
+    }
+
+    const InvestigationBurst &burst =
+        currentBursts.at(
+            row
+            );
+
+    QStringList lines;
+
+    lines.append(
+        tr("Detected burst")
+        );
+
+    lines.append(
+        QString()
+        );
+
+    lines.append(
+        tr("Start: %1")
+            .arg(
+                burst
+                    .startTimestamp
+                    .toString(
+                        Qt::ISODateWithMs
+                        )
+                )
+        );
+
+    lines.append(
+        tr("End: %1")
+            .arg(
+                burst
+                    .endTimestamp
+                    .toString(
+                        Qt::ISODateWithMs
+                        )
+                )
+        );
+
+    lines.append(
+        tr("Duration: %1")
+            .arg(
+                formatDurationMilliseconds(
+                    burst
+                        .durationMilliseconds()
+                    )
+                )
+        );
+
+    lines.append(
+        QString()
+        );
+
+    lines.append(
+        tr("Elevated events: %1")
+            .arg(
+                burst
+                    .totalElevatedCount()
+                )
+        );
+
+    lines.append(
+        tr("WARN: %1")
+            .arg(
+                burst.warningCount
+                )
+        );
+
+    lines.append(
+        tr("ERROR: %1")
+            .arg(
+                burst.errorCount
+                )
+        );
+
+    lines.append(
+        tr("CRITICAL: %1")
+            .arg(
+                burst.criticalCount
+                )
+        );
+
+    lines.append(
+        tr("Highest severity: %1")
+            .arg(
+                recordSeverityToString(
+                    burst
+                        .highestSeverity()
+                    )
+                )
+        );
+
+    lines.append(
+        QString()
+        );
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session != nullptr) {
+        lines.append(
+            tr("Timing mode: %1")
+                .arg(
+                    session->burstTimingMode()
+                            == InvestigationBurstTimingMode::Auto
+                        ? tr("Auto")
+                        : tr("Manual")
+                    )
+            );
+
+        lines.append(
+            QString()
+            );
+    }
+
+    lines.append(
+        tr("Why this was detected:")
+        );
+
+    if (burst.triggeredByElevatedThreshold) {
+        lines.append(
+            tr(
+                "• At least %1 WARN/ERROR/CRITICAL "
+                "events occurred within a %2 window."
+                )
+                .arg(
+                    burst
+                        .settings
+                        .elevatedEventThreshold
+                    )
+                .arg(
+                    formatDurationMilliseconds(
+                        burst
+                            .settings
+                            .windowMilliseconds
+                        )
+                    )
+            );
+    }
+
+    if (
+        burst
+            .triggeredByErrorCriticalThreshold
+        ) {
+        lines.append(
+            tr(
+                "• At least %1 ERROR/CRITICAL events "
+                "occurred within a %2 window."
+                )
+                .arg(
+                    burst
+                        .settings
+                        .errorCriticalThreshold
+                    )
+                .arg(
+                    formatDurationMilliseconds(
+                        burst
+                            .settings
+                            .windowMilliseconds
+                        )
+                    )
+            );
+    }
+
+    lines.append(
+        QString()
+        );
+
+    lines.append(
+        tr(
+            "Merge gap: %1"
+            )
+            .arg(
+                formatDurationMilliseconds(
+                    burst
+                        .settings
+                        .mergeGapMilliseconds
+                    )
+                )
+        );
+
+    lines.append(
+        tr(
+            "Contributing elevated records: %1"
+            )
+            .arg(
+                burst
+                    .recordIds
+                    .size()
+                )
+        );
+
+    auto appendCounts =
+        [&lines](
+            const QString &heading,
+            const QMap<QString, int> &counts
+            ) {
+            if (counts.isEmpty()) {
+                return;
+            }
+
+            lines.append(
+                QString()
+                );
+
+            lines.append(
+                heading
+                );
+
+            for (
+                auto iterator =
+                    counts.cbegin();
+                iterator != counts.cend();
+                ++iterator
+                ) {
+                lines.append(
+                    QStringLiteral(
+                        "• %1: %2"
+                        )
+                        .arg(
+                            iterator.key()
+                            )
+                        .arg(
+                            iterator.value()
+                            )
+                    );
+            }
+        };
+
+    appendCounts(
+        tr("Subsystems:"),
+        burst.subsystemCounts
+        );
+
+    appendCounts(
+        tr("Event codes:"),
+        burst.eventCodeCounts
+        );
+
+    appendCounts(
+        tr("Entities:"),
+        burst.entityCounts
+        );
+
+    burstDetailText->setPlainText(
+        lines.join(
+            QStringLiteral("\n")
+            )
+        );
+}
+
+void MainWindow::showBurstSettingsDialog()
+{
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr
+        || investigationController == nullptr) {
+        return;
+    }
+
+    const QVector<InvestigationRecord> records =
+        investigationController
+            ->recordsForAnalysis();
+
+    const InvestigationCadence cadence =
+        cadenceAnalyzer.analyze(
+            records
+            );
+
+    const BurstDetectionSettings currentSettings =
+        session->burstDetectionSettings();
+
+    QDialog dialog(this);
+
+    dialog.setWindowTitle(
+        tr("Burst Detection Settings")
+        );
+
+    auto *layout =
+        new QVBoxLayout(
+            &dialog
+            );
+
+    layout->setSpacing(
+        8
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Timing mode
+     * ---------------------------------------------------------
+     */
+    auto *timingGroup =
+        new QGroupBox(
+            tr("Timing"),
+            &dialog
+            );
+
+    auto *timingLayout =
+        new QVBoxLayout(
+            timingGroup
+            );
+
+    auto *autoRadio =
+        new QRadioButton(
+            tr("Auto"),
+            timingGroup
+            );
+
+    auto *manualRadio =
+        new QRadioButton(
+            tr("Manual"),
+            timingGroup
+            );
+
+    const bool automatic =
+        session->burstTimingMode()
+        == InvestigationBurstTimingMode::Auto;
+
+    autoRadio->setChecked(
+        automatic
+        );
+
+    manualRadio->setChecked(
+        !automatic
+        );
+
+    timingLayout->addWidget(
+        autoRadio
+        );
+
+    auto *autoDescription =
+        new QLabel(
+            timingGroup
+            );
+
+    autoDescription->setWordWrap(
+        true
+        );
+
+    QString autoText =
+        tr(
+            "Recommended window: %1\n"
+            "Recommended merge gap: %2\n"
+            "Valid timestamps: %3    "
+            "Positive gaps: %4    "
+            "Zero gaps: %5"
+            )
+            .arg(
+                formatDurationMilliseconds(
+                    cadence
+                        .recommendedBurstWindowMilliseconds
+                    ),
+                formatDurationMilliseconds(
+                    cadence
+                        .recommendedMergeGapMilliseconds
+                    ),
+                QString::number(
+                    cadence.timestampCount
+                    ),
+                QString::number(
+                    cadence.positiveGapCount
+                    ),
+                QString::number(
+                    cadence.zeroGapCount
+                    )
+                );
+
+    if (cadence.positiveGapCount > 0) {
+        autoText +=
+            tr(
+                "\nMedian gap: %1    "
+                "Mean gap: %2    "
+                "P90 gap: %3"
+                )
+                .arg(
+                    formatDurationMilliseconds(
+                        static_cast<qint64>(
+                            std::llround(
+                                cadence
+                                    .medianPositiveGapMilliseconds
+                                )
+                            )
+                        ),
+                    formatDurationMilliseconds(
+                        static_cast<qint64>(
+                            std::llround(
+                                cadence
+                                    .meanPositiveGapMilliseconds
+                                )
+                            )
+                        ),
+                    formatDurationMilliseconds(
+                        cadence
+                            .p90PositiveGapMilliseconds
+                        )
+                    );
+    }
+
+    if (cadence.usesFallbackRecommendation) {
+        autoText +=
+            tr(
+                "\n\nFallback timing is being used "
+                "because this investigation does not "
+                "contain enough positive timestamp gaps "
+                "for an adaptive recommendation."
+                );
+    } else {
+        autoText +=
+            tr(
+                "\n\nAuto derives timing from the "
+                "timestamp cadence of the currently "
+                "filtered investigation."
+                );
+    }
+
+    autoDescription->setText(
+        autoText
+        );
+
+    timingLayout->addWidget(
+        autoDescription
+        );
+
+    timingLayout->addWidget(
+        manualRadio
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Manual timing
+     *
+     * Seconds with three decimals gives us 1-ms
+     * precision without exposing raw millisecond
+     * values such as 120000 to the analyst.
+     * ---------------------------------------------------------
+     */
+    auto *manualWidget =
+        new QWidget(
+            timingGroup
+            );
+
+    auto *manualLayout =
+        new QFormLayout(
+            manualWidget
+            );
+
+    manualLayout->setContentsMargins(
+        20,
+        0,
+        0,
+        0
+        );
+
+    auto *windowSpin =
+        new QDoubleSpinBox(
+            manualWidget
+            );
+
+    windowSpin->setDecimals(
+        3
+        );
+
+    windowSpin->setRange(
+        0.001,
+        7.0 * 24.0 * 60.0 * 60.0
+        );
+
+    windowSpin->setSuffix(
+        tr(" s")
+        );
+
+    windowSpin->setValue(
+        static_cast<double>(
+            currentSettings
+                .windowMilliseconds
+            )
+        / 1000.0
+        );
+
+    auto *mergeGapSpin =
+        new QDoubleSpinBox(
+            manualWidget
+            );
+
+    mergeGapSpin->setDecimals(
+        3
+        );
+
+    mergeGapSpin->setRange(
+        0.0,
+        7.0 * 24.0 * 60.0 * 60.0
+        );
+
+    mergeGapSpin->setSuffix(
+        tr(" s")
+        );
+
+    mergeGapSpin->setValue(
+        static_cast<double>(
+            currentSettings
+                .mergeGapMilliseconds
+            )
+        / 1000.0
+        );
+
+    manualLayout->addRow(
+        tr("Window:"),
+        windowSpin
+        );
+
+    manualLayout->addRow(
+        tr("Merge gap:"),
+        mergeGapSpin
+        );
+
+    manualWidget->setEnabled(
+        !automatic
+        );
+
+    timingLayout->addWidget(
+        manualWidget
+        );
+
+    layout->addWidget(
+        timingGroup
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Detection thresholds
+     *
+     * These are explicit analytical criteria rather
+     * than cadence-derived values, so they remain
+     * editable in both Auto and Manual timing modes.
+     * ---------------------------------------------------------
+     */
+    auto *thresholdGroup =
+        new QGroupBox(
+            tr("Detection Thresholds"),
+            &dialog
+            );
+
+    auto *thresholdLayout =
+        new QFormLayout(
+            thresholdGroup
+            );
+
+    auto *elevatedSpin =
+        new QSpinBox(
+            thresholdGroup
+            );
+
+    elevatedSpin->setRange(
+        1,
+        1000000
+        );
+
+    elevatedSpin->setValue(
+        currentSettings
+            .elevatedEventThreshold
+        );
+
+    auto *errorCriticalSpin =
+        new QSpinBox(
+            thresholdGroup
+            );
+
+    errorCriticalSpin->setRange(
+        1,
+        1000000
+        );
+
+    errorCriticalSpin->setValue(
+        currentSettings
+            .errorCriticalThreshold
+        );
+
+    thresholdLayout->addRow(
+        tr(
+            "WARN/ERROR/CRITICAL events:"
+            ),
+        elevatedSpin
+        );
+
+    thresholdLayout->addRow(
+        tr(
+            "ERROR/CRITICAL events:"
+            ),
+        errorCriticalSpin
+        );
+
+    auto *thresholdDescription =
+        new QLabel(
+            tr(
+                "A burst is detected when either "
+                "threshold is met within the selected "
+                "time window."
+                ),
+            thresholdGroup
+            );
+
+    thresholdDescription->setWordWrap(
+        true
+        );
+
+    thresholdLayout->addRow(
+        thresholdDescription
+        );
+
+    layout->addWidget(
+        thresholdGroup
+        );
+
+    connect(
+        autoRadio,
+        &QRadioButton::toggled,
+        &dialog,
+        [manualWidget](bool checked) {
+            manualWidget->setEnabled(
+                !checked
+                );
+        }
+        );
+
+    auto *buttons =
+        new QDialogButtonBox(
+            QDialogButtonBox::Ok
+                | QDialogButtonBox::Cancel,
+            &dialog
+            );
+
+    connect(
+        buttons,
+        &QDialogButtonBox::accepted,
+        &dialog,
+        &QDialog::accept
+        );
+
+    connect(
+        buttons,
+        &QDialogButtonBox::rejected,
+        &dialog,
+        &QDialog::reject
+        );
+
+    layout->addWidget(
+        buttons
+        );
+
+    if (dialog.exec()
+        != QDialog::Accepted) {
+        return;
+    }
+
+    BurstDetectionSettings newSettings =
+        currentSettings;
+
+    /*
+     * Thresholds apply in either timing mode.
+     */
+    newSettings.elevatedEventThreshold =
+        elevatedSpin->value();
+
+    newSettings.errorCriticalThreshold =
+        errorCriticalSpin->value();
+
+    if (manualRadio->isChecked()) {
+        newSettings.windowMilliseconds =
+            std::max<qint64>(
+                1,
+                static_cast<qint64>(
+                    std::llround(
+                        windowSpin->value()
+                        * 1000.0
+                        )
+                    )
+                );
+
+        newSettings.mergeGapMilliseconds =
+            std::max<qint64>(
+                0,
+                static_cast<qint64>(
+                    std::llround(
+                        mergeGapSpin->value()
+                        * 1000.0
+                        )
+                    )
+                );
+
+        session->setBurstTimingMode(
+            InvestigationBurstTimingMode::Manual
+            );
+    } else {
+        /*
+         * Preserve the session's previous manual
+         * timing values so switching Auto → Manual
+         * later restores the analyst's last manual
+         * configuration.
+         */
+        session->setBurstTimingMode(
+            InvestigationBurstTimingMode::Auto
+            );
+    }
+
+    session->setBurstDetectionSettings(
+        newSettings
+        );
+
+    updateBurstsPanel(
+        investigationController
+            ->recordsForAnalysis()
+        );
+}
+
+void MainWindow::drillDownBurst(
+    int row
+    )
+{
+    if (investigationController == nullptr
+        || row < 0
+        || row >= currentBursts.size()) {
+        return;
+    }
+
+    const InvestigationBurst &burst =
+        currentBursts.at(
+            row
+            );
+
+    if (!burst.startTimestamp.isValid()
+        || !burst.endTimestamp.isValid()) {
+        return;
+    }
+
+    /*
+     * Preserve an existing severity restriction.
+     *
+     * With no severity filter active, narrow to all
+     * elevated severities because those are the
+     * records contributing to burst detection.
+     */
+    const QStringList currentSeverities =
+        levelFilterCombo
+            ->selectedValues();
+
+    const QStringList elevatedSeverities = {
+        QStringLiteral("WARN"),
+        QStringLiteral("ERROR"),
+        QStringLiteral("CRITICAL")
+    };
+
+    QStringList selectedSeverities;
+
+    if (currentSeverities.isEmpty()) {
+        selectedSeverities =
+            elevatedSeverities;
+    } else {
+        for (const QString &severity
+             : currentSeverities) {
+            if (elevatedSeverities.contains(
+                    severity
+                    )) {
+                selectedSeverities.append(
+                    severity
+                    );
+            }
+        }
+    }
+
+    /*
+     * The burst was derived from the current
+     * filtered investigation, so normally at least
+     * one elevated severity remains. Do not broaden
+     * an incompatible existing filter.
+     */
+    if (selectedSeverities.isEmpty()) {
+        return;
+    }
+
+    QDateTime start =
+        burst.startTimestamp;
+
+    QDateTime end =
+        burst.endTimestamp;
+
+    /*
+     * Drill-down may only narrow an existing time
+     * range, never widen it.
+     */
+    if (
+        timeRangeStartCheckBox
+            ->isChecked()
+        && timeRangeStartEdit
+               ->dateTime()
+               > start
+        ) {
+        start =
+            timeRangeStartEdit
+                ->dateTime();
+    }
+
+    if (
+        timeRangeEndCheckBox
+            ->isChecked()
+        && timeRangeEndEdit
+               ->dateTime()
+               < end
+        ) {
+        end =
+            timeRangeEndEdit
+                ->dateTime();
+    }
+
+    if (start > end) {
+        return;
+    }
+
+    /*
+     * Apply the drill-down as one filter update.
+     * Subsystem, event code, entity, custom-field,
+     * search, finding, and bookmark criteria remain
+     * untouched.
+     */
+    {
+        const QSignalBlocker severityBlocker(
+            levelFilterCombo
+            );
+
+        const QSignalBlocker startCheckBlocker(
+            timeRangeStartCheckBox
+            );
+
+        const QSignalBlocker startEditBlocker(
+            timeRangeStartEdit
+            );
+
+        const QSignalBlocker endCheckBlocker(
+            timeRangeEndCheckBox
+            );
+
+        const QSignalBlocker endEditBlocker(
+            timeRangeEndEdit
+            );
+
+        levelFilterCombo->setSelectedValues(
+            selectedSeverities
+            );
+
+        timeRangeStartCheckBox->setChecked(
+            true
+            );
+
+        timeRangeEndCheckBox->setChecked(
+            true
+            );
+
+        timeRangeStartEdit->setEnabled(
+            true
+            );
+
+        timeRangeEndEdit->setEnabled(
+            true
+            );
+
+        timeRangeStartEdit->setDateTime(
+            start
+            );
+
+        timeRangeEndEdit->setDateTime(
+            end
+            );
+    }
+
+    updateTimeRangeButton();
+
+    applyFilters();
+
+    eventTable->setFocus();
 }

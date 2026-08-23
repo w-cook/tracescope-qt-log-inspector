@@ -13,6 +13,7 @@ private slots:
     void zeroGapsAreCountedButExcludedFromStatistics();
     void inputOrderDoesNotAffectCadence();
     void invalidTimestampsAreIgnored();
+    void adaptiveRecommendationIsCappedToInvestigationSpan();
     void insufficientPositiveGapsUseFallbackRecommendation();
 };
 
@@ -45,6 +46,13 @@ void InvestigationCadenceAnalyzerTests::
             Qt::ISODateWithMs
             );
 
+    /*
+     * Eleven records with ten 100-ms positive gaps
+     * provide exactly enough timing information for
+     * an adaptive recommendation.
+     *
+     * The complete investigation spans one second.
+     */
     for (int index = 0;
          index <= 10;
          ++index) {
@@ -107,14 +115,28 @@ void InvestigationCadenceAnalyzerTests::
         !cadence.usesFallbackRecommendation
         );
 
+    /*
+     * The cadence-only recommendation would be
+     * two seconds, but an adaptive burst window
+     * must remain local to the one-second
+     * investigation.
+     *
+     * One quarter of the span is 250 ms, which
+     * rounds down to the preferred 200-ms
+     * duration.
+     */
     QCOMPARE(
         cadence.recommendedBurstWindowMilliseconds,
-        2000
+        200
         );
 
+    /*
+     * One sixth of 200 ms rounds upward to the
+     * preferred 50-ms merge gap.
+     */
     QCOMPARE(
         cadence.recommendedMergeGapMilliseconds,
-        500
+        50
         );
 }
 
@@ -145,7 +167,9 @@ void InvestigationCadenceAnalyzerTests::
          index < 9;
          ++index) {
         timestamp =
-            timestamp.addMSecs(100);
+            timestamp.addMSecs(
+                100
+                );
 
         InvestigationRecord record;
         record.timestamp = timestamp;
@@ -202,10 +226,19 @@ void InvestigationCadenceAnalyzerTests::
      * The mean is capped by P90, so the single
      * 10-second idle period must not inflate the
      * recommended burst window.
+     *
+     * The overall investigation is also long
+     * enough that the span-based cap does not
+     * reduce this recommendation.
      */
     QCOMPARE(
         cadence.recommendedBurstWindowMilliseconds,
         2000
+        );
+
+    QCOMPARE(
+        cadence.recommendedMergeGapMilliseconds,
+        500
         );
 }
 
@@ -299,14 +332,19 @@ void InvestigationCadenceAnalyzerTests::
         !cadence.usesFallbackRecommendation
         );
 
+    /*
+     * Simultaneous records do not change the
+     * one-second investigation span, so the same
+     * locality cap applies.
+     */
     QCOMPARE(
         cadence.recommendedBurstWindowMilliseconds,
-        2000
+        200
         );
 
     QCOMPARE(
         cadence.recommendedMergeGapMilliseconds,
-        500
+        50
         );
 }
 
@@ -326,7 +364,7 @@ void InvestigationCadenceAnalyzerTests::
     /*
      * Add records in reverse chronological order.
      * The analyzer should sort timestamps before
-     * calculating gaps.
+     * calculating gaps or the investigation span.
      */
     for (int index = 10;
          index >= 0;
@@ -378,7 +416,16 @@ void InvestigationCadenceAnalyzerTests::
 
     QCOMPARE(
         cadence.recommendedBurstWindowMilliseconds,
-        2000
+        200
+        );
+
+    QCOMPARE(
+        cadence.recommendedMergeGapMilliseconds,
+        50
+        );
+
+    QVERIFY(
+        !cadence.usesFallbackRecommendation
         );
 }
 
@@ -435,7 +482,8 @@ void InvestigationCadenceAnalyzerTests::
 
     /*
      * Only the eleven valid timestamps should
-     * contribute to the cadence calculation.
+     * contribute to the cadence calculation and
+     * investigation span.
      */
     QCOMPARE(
         cadence.timestampCount,
@@ -464,11 +512,130 @@ void InvestigationCadenceAnalyzerTests::
 
     QCOMPARE(
         cadence.recommendedBurstWindowMilliseconds,
-        2000
+        200
+        );
+
+    QCOMPARE(
+        cadence.recommendedMergeGapMilliseconds,
+        50
         );
 
     QVERIFY(
         !cadence.usesFallbackRecommendation
+        );
+}
+
+void InvestigationCadenceAnalyzerTests::
+    adaptiveRecommendationIsCappedToInvestigationSpan()
+{
+    QVector<InvestigationRecord> records;
+
+    const QDateTime firstTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-22T10:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    /*
+     * Fourteen records spaced forty seconds apart.
+     *
+     * Thirteen positive gaps provide sufficient
+     * timing information for an adaptive
+     * recommendation, while the complete
+     * investigation spans 8 minutes 40 seconds.
+     *
+     * The cadence-only recommendation would round
+     * to 15 minutes, which is larger than the
+     * investigation itself and therefore cannot
+     * meaningfully represent a local burst.
+     */
+    for (int index = 0;
+         index < 14;
+         ++index) {
+        InvestigationRecord record;
+
+        record.timestamp =
+            firstTimestamp.addSecs(
+                index * 40
+                );
+
+        records.append(
+            record
+            );
+    }
+
+    InvestigationCadenceAnalyzer analyzer;
+
+    const InvestigationCadence cadence =
+        analyzer.analyze(
+            records
+            );
+
+    QCOMPARE(
+        cadence.timestampCount,
+        14
+        );
+
+    QCOMPARE(
+        cadence.positiveGapCount,
+        13
+        );
+
+    QCOMPARE(
+        cadence.zeroGapCount,
+        0
+        );
+
+    QCOMPARE(
+        cadence.minimumPositiveGapMilliseconds,
+        40 * 1000
+        );
+
+    QCOMPARE(
+        cadence.maximumPositiveGapMilliseconds,
+        40 * 1000
+        );
+
+    QCOMPARE(
+        cadence.medianPositiveGapMilliseconds,
+        40000.0
+        );
+
+    QCOMPARE(
+        cadence.meanPositiveGapMilliseconds,
+        40000.0
+        );
+
+    QCOMPARE(
+        cadence.p90PositiveGapMilliseconds,
+        40 * 1000
+        );
+
+    QVERIFY(
+        !cadence.usesFallbackRecommendation
+        );
+
+    /*
+     * One quarter of 8 minutes 40 seconds is
+     * 2 minutes 10 seconds. The locality cap
+     * rounds that down to the preferred
+     * two-minute duration.
+     */
+    QCOMPARE(
+        cadence.recommendedBurstWindowMilliseconds,
+        2 * 60 * 1000
+        );
+
+    /*
+     * One sixth of the two-minute burst window is
+     * twenty seconds. The recommendation rounds up
+     * to the next preferred duration: thirty seconds.
+     */
+    QCOMPARE(
+        cadence.recommendedMergeGapMilliseconds,
+        30 * 1000
         );
 }
 
@@ -547,6 +714,12 @@ void InvestigationCadenceAnalyzerTests::
         cadence.usesFallbackRecommendation
         );
 
+    /*
+     * Sparse investigations retain the documented
+     * fallback values. The investigation-span cap
+     * applies only when enough timing information
+     * exists for an adaptive recommendation.
+     */
     QCOMPARE(
         cadence.recommendedBurstWindowMilliseconds,
         30000

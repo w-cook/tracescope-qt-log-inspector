@@ -11,6 +11,8 @@ namespace
 constexpr int MinimumPositiveGapCount = 10;
 constexpr int ExpectedRecordsPerBurstWindow = 20;
 
+constexpr qint64 MinimumInvestigationWindowCount = 4;
+
 constexpr qint64 FallbackBurstWindowMilliseconds =
     30 * 1000;
 
@@ -94,6 +96,44 @@ qint64 roundDurationUp(
 
     return wholeDays
            * MillisecondsPerDay;
+}
+
+qint64 roundDurationDown(
+    qint64 durationMilliseconds
+    )
+{
+    if (durationMilliseconds <= 1) {
+        return 1;
+    }
+
+    qint64 rounded =
+        1;
+
+    for (const qint64 preferredDuration
+         : PreferredDurationsMilliseconds) {
+        if (preferredDuration
+            > durationMilliseconds) {
+            break;
+        }
+
+        rounded =
+            preferredDuration;
+    }
+
+    if (durationMilliseconds
+        < MillisecondsPerDay) {
+        return rounded;
+    }
+
+    const qint64 wholeDays =
+        durationMilliseconds
+        / MillisecondsPerDay;
+
+    return std::max<qint64>(
+        MillisecondsPerDay,
+        wholeDays
+            * MillisecondsPerDay
+        );
 }
 
 double medianOfSortedValues(
@@ -344,10 +384,43 @@ InvestigationCadenceAnalyzer::analyze(
                 )
             );
 
-    cadence.recommendedBurstWindowMilliseconds =
+    qint64 recommendedBurstWindow =
         safeRecommendedWindow(
             effectiveGapMilliseconds
             );
+
+    /*
+     * A burst window should describe a local episode,
+     * not consume most or all of the investigation.
+     *
+     * Keep at least four potential temporal regions
+     * across the complete investigation when enough
+     * cadence data exists for an adaptive
+     * recommendation.
+     */
+    const qint64 investigationSpanMilliseconds =
+        timestamps.last()
+        - timestamps.first();
+
+    if (investigationSpanMilliseconds > 0) {
+        const qint64 maximumBurstWindow =
+            std::max<qint64>(
+                1,
+                investigationSpanMilliseconds
+                    / MinimumInvestigationWindowCount
+                );
+
+        recommendedBurstWindow =
+            std::min(
+                recommendedBurstWindow,
+                roundDurationDown(
+                    maximumBurstWindow
+                    )
+                );
+    }
+
+    cadence.recommendedBurstWindowMilliseconds =
+        recommendedBurstWindow;
 
     const qint64 rawMergeGapMilliseconds =
         std::max<qint64>(

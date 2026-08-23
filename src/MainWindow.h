@@ -10,6 +10,8 @@
 
 #include "analysis/EventTimelineAnalyzer.h"
 #include "analysis/InvestigationAnalyticsAnalyzer.h"
+#include "analysis/InvestigationBurstAnalyzer.h"
+#include "analysis/InvestigationCadenceAnalyzer.h"
 #include "analysis/TelemetryIssueAnalyzer.h"
 #include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
@@ -111,6 +113,9 @@ private:
     TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationAnalyticsAnalyzer analyticsAnalyzer;
+    InvestigationBurstAnalyzer burstAnalyzer;
+    InvestigationCadenceAnalyzer cadenceAnalyzer;
+
     InvestigationCsvExporter csvExporter;
 
     QMetaObject::Connection eventSelectionConnection;
@@ -205,6 +210,8 @@ private:
     QGroupBox *analyticsEventCodeGroup = nullptr;
     QGroupBox *analyticsEntityGroup = nullptr;
     QLabel *analyticsOverviewEmptyLabel = nullptr;
+
+    QVector<InvestigationBurst> currentBursts;
 
     void buildLayout();
     void createMenus();
@@ -345,5 +352,19 @@ private:
 
     void updateAnalyticsOverview(
         const QVector<InvestigationRecord> &records
+        );
+
+    void updateBurstsPanel(
+        const QVector<InvestigationRecord> &records
+        );
+
+    void updateBurstDetail(
+        int row
+        );
+
+    void showBurstSettingsDialog();
+
+    void drillDownBurst(
+        int row
         );
 };

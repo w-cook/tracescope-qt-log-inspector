@@ -465,3 +465,37 @@ void InvestigationSession::rebuildDerivedData(
         }
         );
 }
+
+InvestigationBurstTimingMode
+InvestigationSession::burstTimingMode() const
+{
+    return m_burstTimingMode;
+}
+
+void InvestigationSession::setBurstTimingMode(
+    InvestigationBurstTimingMode mode
+    )
+{
+    m_burstTimingMode =
+        mode;
+}
+
+const BurstDetectionSettings &
+    InvestigationSession::
+    burstDetectionSettings() const
+{
+    return m_burstDetectionSettings;
+}
+
+void InvestigationSession::
+    setBurstDetectionSettings(
+        const BurstDetectionSettings &settings
+        )
+{
+    if (!settings.isValid()) {
+        return;
+    }
+
+    m_burstDetectionSettings =
+        settings;
+}
