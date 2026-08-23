@@ -19,6 +19,9 @@ private slots:
     void subsystemTrendsIgnoresMissingSubsystems();
     void subsystemTrendsSkipsInvalidTimestamps();
     void subsystemTrendsRejectsInvalidRange();
+    void subsystemFrequenciesCountsAndSortsValues();
+    void subsystemTrendsWindowMaterializesOnlyRequestedBuckets();
+    void subsystemTrendScaleUsesSelectedSubsystems();
 };
 
 static InvestigationRecord
@@ -705,6 +708,209 @@ void InvestigationAnalyticsAnalyzerTests::
     QVERIFY(
         invalidLastTimestamp.isEmpty()
         );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemFrequenciesCountsAndSortsValues()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:00.000Z"
+                ),
+            QStringLiteral("Tracking")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:01.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:02.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:03.000Z"
+                ),
+            QStringLiteral("Guidance")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto frequencies =
+        analyzer.subsystemFrequencies(
+            records
+            );
+
+    QCOMPARE(frequencies.size(), 3);
+
+    QCOMPARE(
+        frequencies.at(0).value,
+        QStringLiteral("Comms")
+        );
+
+    QCOMPARE(
+        frequencies.at(0).count,
+        2
+        );
+
+    /*
+     * Equal counts use the analyzer's existing
+     * deterministic lexical tie-break.
+     */
+    QCOMPARE(
+        frequencies.at(1).value,
+        QStringLiteral("Guidance")
+        );
+
+    QCOMPARE(
+        frequencies.at(2).value,
+        QStringLiteral("Tracking")
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendsWindowMaterializesOnlyRequestedBuckets()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:01.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:01.001Z"
+                ),
+            QStringLiteral("Tracking")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:10.000Z"
+                ),
+            QStringLiteral("Outside")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const auto trends =
+        analyzer.subsystemTrendsWindow(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T11:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            1,
+            1000,
+            2
+            );
+
+    QCOMPARE(trends.size(), 2);
+
+    QCOMPARE(
+        trends.at(0).countFor(
+            QStringLiteral("Comms")
+            ),
+        1
+        );
+
+    QCOMPARE(
+        trends.at(1).countFor(
+            QStringLiteral("Tracking")
+            ),
+        1
+        );
+
+    QCOMPARE(
+        trends.at(0).countFor(
+            QStringLiteral("Outside")
+            ),
+        0
+        );
+}
+
+void InvestigationAnalyticsAnalyzerTests::
+    subsystemTrendScaleUsesSelectedSubsystems()
+{
+    const QVector<InvestigationRecord> records = {
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:01.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:02.000Z"
+                ),
+            QStringLiteral("Comms")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:03.000Z"
+                ),
+            QStringLiteral("Tracking")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:04.000Z"
+                ),
+            QStringLiteral("Ignored")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:05.000Z"
+                ),
+            QStringLiteral("Ignored")
+            ),
+        makeSubsystemTrendRecord(
+            QStringLiteral(
+                "2026-08-22T10:00:06.000Z"
+                ),
+            QStringLiteral("Ignored")
+            )
+    };
+
+    InvestigationAnalyticsAnalyzer analyzer;
+
+    const int maximum =
+        analyzer.subsystemTrendScaleMaximum(
+            records,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-22T10:00:59.999Z"
+                    ),
+                Qt::ISODateWithMs
+                ),
+            60 * 1000,
+            {
+                QStringLiteral("Comms"),
+                QStringLiteral("Tracking")
+            }
+            );
+
+    QCOMPARE(maximum, 2);
 }
 
 QTEST_MAIN(InvestigationAnalyticsAnalyzerTests)

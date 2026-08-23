@@ -171,6 +171,18 @@ private:
     QComboBox *timelineIntervalCombo =
         nullptr;
 
+    QWidget *timelineBreakdownWidget =
+        nullptr;
+
+    QComboBox *timelineBreakdownCombo =
+        nullptr;
+
+    QWidget *timelineSubsystemShowWidget =
+        nullptr;
+
+    QComboBox *timelineSubsystemLimitCombo =
+        nullptr;
+
     QScrollBar *timelineScrollBar =
         nullptr;
 
@@ -238,6 +250,8 @@ private:
 
     void updateTimeRangeButton();
 
+    void updateTimelineBreakdownControls();
+
     QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();
     void displayEventDetail(
@@ -279,7 +293,8 @@ private:
         );
     void drillDownTimelineBucket(
         int visibleBucketIndex,
-        const QString &severity
+        const QString &severity,
+        const QString &subsystem
         );
 
     QWidget *buildFindingsPanel();    

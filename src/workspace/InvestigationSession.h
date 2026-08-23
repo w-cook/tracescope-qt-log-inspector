@@ -38,6 +38,12 @@ enum class InvestigationAnalyticsTab
     Bursts
 };
 
+enum class InvestigationTimelineBreakdown
+{
+    Severity,
+    Subsystem
+};
+
 class InvestigationSession
 {
 public:
@@ -121,6 +127,19 @@ public:
         QVector<int> widths
         );
 
+    InvestigationTimelineBreakdown
+    timelineBreakdown() const;
+
+    void setTimelineBreakdown(
+        InvestigationTimelineBreakdown breakdown
+        );
+
+    int subsystemTrendLimit() const;
+
+    void setSubsystemTrendLimit(
+        int limit
+        );
+
 private:
     QString m_id;
 
@@ -170,6 +189,12 @@ private:
 
     InvestigationAnalyticsTab m_analyticsTab =
         InvestigationAnalyticsTab::Overview;
+
+    InvestigationTimelineBreakdown
+        m_timelineBreakdown =
+        InvestigationTimelineBreakdown::Severity;
+
+    int m_subsystemTrendLimit = 5;
 
     void refreshSourceMetadata();
 

@@ -231,6 +231,33 @@ void InvestigationSession::setAnalyticsTab(
     m_analyticsTab = tab;
 }
 
+InvestigationTimelineBreakdown
+InvestigationSession::timelineBreakdown() const
+{
+    return m_timelineBreakdown;
+}
+
+void InvestigationSession::setTimelineBreakdown(
+    InvestigationTimelineBreakdown breakdown
+    )
+{
+    m_timelineBreakdown =
+        breakdown;
+}
+
+int InvestigationSession::subsystemTrendLimit() const
+{
+    return m_subsystemTrendLimit;
+}
+
+void InvestigationSession::setSubsystemTrendLimit(
+    int limit
+    )
+{
+    m_subsystemTrendLimit =
+        limit;
+}
+
 void InvestigationSession::
     refreshSourceMetadata()
 {

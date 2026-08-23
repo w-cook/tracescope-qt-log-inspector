@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QVector>
+#include <QStringList>
 
 #include "../domain/InvestigationRecord.h"
 
@@ -26,5 +27,28 @@ public:
         const QDateTime &firstTimestamp,
         const QDateTime &lastTimestamp,
         qint64 intervalMilliseconds
+        ) const;
+
+    QVector<InvestigationValueFrequency>
+    subsystemFrequencies(
+        const QVector<InvestigationRecord> &records
+        ) const;
+
+    QVector<InvestigationValueTrendBucket>
+    subsystemTrendsWindow(
+        const QVector<InvestigationRecord> &records,
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp,
+        qint64 intervalMilliseconds,
+        qint64 startBucketIndex,
+        int bucketCount
+        ) const;
+
+    int subsystemTrendScaleMaximum(
+        const QVector<InvestigationRecord> &records,
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp,
+        qint64 intervalMilliseconds,
+        const QStringList &subsystems
         ) const;
 };

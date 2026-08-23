@@ -6280,7 +6280,8 @@ void MainWindow::drillDownIssueSummary(
 
 void MainWindow::drillDownTimelineBucket(
     int visibleBucketIndex,
-    const QString &severity
+    const QString &severity,
+    const QString &subsystem
     )
 {
     if (investigationController == nullptr
@@ -6423,6 +6424,24 @@ void MainWindow::drillDownTimelineBucket(
         }
     }
 
+    /*
+     * A subsystem bar represents one exact subsystem.
+     * As with severity drill-down, never broaden an
+     * already active filter to reach the clicked value.
+     */
+    if (!subsystem.isEmpty()) {
+        const QStringList currentSubsystems =
+            subsystemFilterCombo
+                ->selectedValues();
+
+        if (!currentSubsystems.isEmpty()
+            && !currentSubsystems.contains(
+                subsystem
+                )) {
+            return;
+        }
+    }
+
     const QDateTime bucketStart =
         QDateTime::fromMSecsSinceEpoch(
             bucketStartEpoch,
@@ -6447,6 +6466,10 @@ void MainWindow::drillDownTimelineBucket(
             levelFilterCombo
             );
 
+        const QSignalBlocker subsystemBlocker(
+            subsystemFilterCombo
+            );
+
         const QSignalBlocker startCheckBlocker(
             timeRangeStartCheckBox
             );
@@ -6467,6 +6490,14 @@ void MainWindow::drillDownTimelineBucket(
             levelFilterCombo->setSelectedValues(
                 QStringList {
                     severity
+                }
+                );
+        }
+
+        if (!subsystem.isEmpty()) {
+            subsystemFilterCombo->setSelectedValues(
+                QStringList {
+                    subsystem
                 }
                 );
         }
@@ -7320,6 +7351,126 @@ QGroupBox *MainWindow::buildTimelinePanel()
         timelineIntervalCombo
         );
 
+    controlsLayout->addSpacing(
+        12
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Timeline breakdown
+     * ---------------------------------------------------------
+     */
+    timelineBreakdownWidget =
+        new QWidget(
+            timelineGroup
+            );
+
+    auto *breakdownLayout =
+        new QHBoxLayout(
+            timelineBreakdownWidget
+            );
+
+    breakdownLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    breakdownLayout->setSpacing(
+        4
+        );
+
+    auto *breakdownLabel =
+        new QLabel(
+            tr("Breakdown:"),
+            timelineBreakdownWidget
+            );
+
+    timelineBreakdownCombo =
+        new QComboBox(
+            timelineBreakdownWidget
+            );
+
+    timelineBreakdownCombo->setMinimumWidth(
+        timelineBreakdownCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Subsystem")
+                )
+        + 40
+        );
+
+    breakdownLayout->addWidget(
+        breakdownLabel
+        );
+
+    breakdownLayout->addWidget(
+        timelineBreakdownCombo
+        );
+
+    controlsLayout->addWidget(
+        timelineBreakdownWidget
+        );
+
+    timelineSubsystemShowWidget =
+        new QWidget(
+            timelineGroup
+            );
+
+    auto *subsystemShowLayout =
+        new QHBoxLayout(
+            timelineSubsystemShowWidget
+            );
+
+    subsystemShowLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    subsystemShowLayout->setSpacing(
+        4
+        );
+
+    auto *subsystemShowLabel =
+        new QLabel(
+            tr("Show:"),
+            timelineSubsystemShowWidget
+            );
+
+    timelineSubsystemLimitCombo =
+        new QComboBox(
+            timelineSubsystemShowWidget
+            );
+
+    timelineSubsystemLimitCombo->addItem(
+        tr("Top 5"),
+        5
+        );
+
+    timelineSubsystemLimitCombo->addItem(
+        tr("Top 10"),
+        10
+        );
+
+    subsystemShowLayout->addWidget(
+        subsystemShowLabel
+        );
+
+    subsystemShowLayout->addWidget(
+        timelineSubsystemLimitCombo
+        );
+
+    controlsLayout->addWidget(
+        timelineSubsystemShowWidget
+        );
+
+    timelineSubsystemShowWidget->setVisible(
+        false
+        );
+
     timelineRangeLabel =
         new QLabel(
             tr("Visible: —"),
@@ -7384,8 +7535,8 @@ QGroupBox *MainWindow::buildTimelinePanel()
         tr(
             "Double-click a bar to filter the "
             "investigation to that time bucket. "
-            "Severity bars also filter to the "
-            "selected severity."
+            "Severity and subsystem breakdowns also "
+            "filter to the selected series."
             )
         );
 
@@ -7481,6 +7632,94 @@ QGroupBox *MainWindow::buildTimelinePanel()
             updateTimelineChart(
                 visibleRecords
                 );
+        }
+        );
+
+    connect(
+        timelineBreakdownCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr
+                || !timelineBreakdownCombo
+                        ->currentData()
+                        .isValid()) {
+                return;
+            }
+
+            const auto breakdown =
+                static_cast<
+                    InvestigationTimelineBreakdown>(
+                        timelineBreakdownCombo
+                            ->currentData()
+                            .toInt()
+                        );
+
+            session->setTimelineBreakdown(
+                breakdown
+                );
+
+            timelineSubsystemShowWidget->setVisible(
+                breakdown
+                == InvestigationTimelineBreakdown::
+                       Subsystem
+                );
+
+            /*
+             * The rendered series will differ between
+             * breakdowns, so its cached Y scale will
+             * need to be recalculated.
+             */
+            timelineScaleValid =
+                false;
+
+            /*
+             * We will make this redraw meaningful in
+             * the next step when Subsystem rendering
+             * is wired.
+             */
+            if (investigationController != nullptr) {
+                updateTimelineChart(
+                    investigationController
+                        ->recordsForAnalysis()
+                    );
+            }
+        }
+        );
+
+    connect(
+        timelineSubsystemLimitCombo,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int) {
+            InvestigationSession *session =
+                workspace->activeSession();
+
+            if (session == nullptr
+                || !timelineSubsystemLimitCombo
+                        ->currentData()
+                        .isValid()) {
+                return;
+            }
+
+            session->setSubsystemTrendLimit(
+                timelineSubsystemLimitCombo
+                    ->currentData()
+                    .toInt()
+                );
+
+            timelineScaleValid =
+                false;
+
+            if (investigationController != nullptr) {
+                updateTimelineChart(
+                    investigationController
+                        ->recordsForAnalysis()
+                    );
+            }
         }
         );
 
@@ -7587,6 +7826,70 @@ void MainWindow::updateTimelineChart(
         return;
     }
 
+    InvestigationTimelineBreakdown breakdown =
+        InvestigationTimelineBreakdown::Severity;
+
+    if (timelineBreakdownCombo != nullptr
+        && timelineBreakdownCombo
+               ->currentData()
+               .isValid()) {
+        breakdown =
+            static_cast<
+                InvestigationTimelineBreakdown>(
+                    timelineBreakdownCombo
+                        ->currentData()
+                        .toInt()
+                    );
+    }
+
+    const bool subsystemBreakdown =
+        breakdown
+            == InvestigationTimelineBreakdown::
+                   Subsystem
+        && hasSubsystemData;
+
+    QStringList displayedSubsystems;
+
+    if (subsystemBreakdown) {
+        const auto frequencies =
+            analyticsAnalyzer
+                .subsystemFrequencies(
+                    records
+                    );
+
+        const int requestedLimit =
+            timelineSubsystemLimitCombo != nullptr
+                    && timelineSubsystemLimitCombo
+                           ->currentData()
+                           .isValid()
+                ? timelineSubsystemLimitCombo
+                      ->currentData()
+                      .toInt()
+                : 5;
+
+        const int displayedCount =
+            std::min(
+                requestedLimit,
+                static_cast<int>(
+                    frequencies.size()
+                    )
+                );
+
+        displayedSubsystems.reserve(
+            displayedCount
+            );
+
+        for (int index = 0;
+             index < displayedCount;
+             ++index) {
+            displayedSubsystems.append(
+                frequencies
+                    .at(index)
+                    .value
+                );
+        }
+    }
+
     /*
      * Calculate a stable Y-axis maximum for the
      * complete currently filtered investigation.
@@ -7598,22 +7901,37 @@ void MainWindow::updateTimelineChart(
     if (!timelineScaleValid
         || timelineScaleIntervalMilliseconds
                != intervalMilliseconds) {
-        const EventTimelineScale scale =
-            timelineAnalyzer
-                .scaleForIntervalMilliseconds(
-                    records,
-                    *effectiveFirstTimestamp,
-                    *effectiveLastTimestamp,
-                    intervalMilliseconds
+        if (subsystemBreakdown) {
+            timelineScaleMaximum =
+                std::max(
+                    1,
+                    analyticsAnalyzer
+                        .subsystemTrendScaleMaximum(
+                            records,
+                            *effectiveFirstTimestamp,
+                            *effectiveLastTimestamp,
+                            intervalMilliseconds,
+                            displayedSubsystems
+                            )
                     );
+        } else {
+            const EventTimelineScale scale =
+                timelineAnalyzer
+                    .scaleForIntervalMilliseconds(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds
+                        );
 
-        timelineScaleMaximum =
-            std::max(
-                1,
-                hasSeverityData
-                    ? scale.maximumSeriesCount
-                    : scale.maximumTotalCount
-                );
+            timelineScaleMaximum =
+                std::max(
+                    1,
+                    hasSeverityData
+                        ? scale.maximumSeriesCount
+                        : scale.maximumTotalCount
+                    );
+        }
 
         timelineScaleIntervalMilliseconds =
             intervalMilliseconds;
@@ -7642,6 +7960,9 @@ void MainWindow::updateTimelineChart(
 
     QVector<EventCountBucket> buckets;
 
+    QVector<InvestigationValueTrendBucket>
+        subsystemBuckets;
+
     if (automaticInterval) {
         /*
          * Auto selects a resolution intended to
@@ -7649,14 +7970,25 @@ void MainWindow::updateTimelineChart(
          * materializing its complete bucket set is
          * safe.
          */
-        buckets =
-            timelineAnalyzer
-                .groupRecordsByIntervalMilliseconds(
-                    records,
-                    *effectiveFirstTimestamp,
-                    *effectiveLastTimestamp,
-                    intervalMilliseconds
-                    );
+        if (subsystemBreakdown) {
+            subsystemBuckets =
+                analyticsAnalyzer
+                    .subsystemTrends(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds
+                        );
+        } else {
+            buckets =
+                timelineAnalyzer
+                    .groupRecordsByIntervalMilliseconds(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds
+                        );
+        }
 
         if (timelineScrollBar != nullptr) {
             const QSignalBlocker blocker(
@@ -7793,20 +8125,216 @@ void MainWindow::updateTimelineChart(
          * buckets without millions of chart
          * objects being allocated.
          */
-        buckets =
-            timelineAnalyzer
-                .groupRecordsByIntervalWindowMilliseconds(
-                    records,
-                    *effectiveFirstTimestamp,
-                    *effectiveLastTimestamp,
-                    intervalMilliseconds,
-                    startBucketIndex,
-                    TimelineVisibleBucketCount
-                    );
+        if (subsystemBreakdown) {
+            subsystemBuckets =
+                analyticsAnalyzer
+                    .subsystemTrendsWindow(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds,
+                        startBucketIndex,
+                        TimelineVisibleBucketCount
+                        );
+        } else {
+            buckets =
+                timelineAnalyzer
+                    .groupRecordsByIntervalWindowMilliseconds(
+                        records,
+                        *effectiveFirstTimestamp,
+                        *effectiveLastTimestamp,
+                        intervalMilliseconds,
+                        startBucketIndex,
+                        TimelineVisibleBucketCount
+                        );
+        }
     }
 
-    if (buckets.isEmpty()) {
+    if (
+        (
+            subsystemBreakdown
+            && (
+                subsystemBuckets.isEmpty()
+                || displayedSubsystems.isEmpty()
+                )
+            )
+        || (
+            !subsystemBreakdown
+            && buckets.isEmpty()
+            )
+        ) {
         showEmptyTimeline();
+        return;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Subsystem breakdown
+     * ---------------------------------------------------------
+     *
+     * The displayed subsystem set is ranked across the
+     * complete currently filtered investigation. Every
+     * horizontal timeline window therefore retains the
+     * same legend and series identities while scrolling.
+     */
+    if (subsystemBreakdown) {
+        QStringList categories;
+
+        categories.reserve(
+            subsystemBuckets.size()
+            );
+
+        for (
+            const InvestigationValueTrendBucket &bucket
+            : std::as_const(subsystemBuckets)
+            ) {
+            categories.append(
+                timelineDisplayLabel(
+                    bucket.label,
+                    intervalMilliseconds
+                    )
+                );
+        }
+
+        auto *series =
+            new QBarSeries();
+
+        for (const QString &subsystem
+             : std::as_const(displayedSubsystems)) {
+            auto *barSet =
+                new QBarSet(
+                    subsystem
+                    );
+
+            for (
+                const InvestigationValueTrendBucket &bucket
+                : std::as_const(subsystemBuckets)
+                ) {
+                *barSet
+                    << bucket.countFor(
+                           subsystem
+                           );
+            }
+
+            connect(
+                barSet,
+                &QBarSet::doubleClicked,
+                this,
+                [
+                    this,
+                    subsystem
+                ](int index) {
+                    drillDownTimelineBucket(
+                        index,
+                        QString(),
+                        subsystem
+                        );
+                },
+                Qt::QueuedConnection
+                );
+
+            series->append(
+                barSet
+                );
+        }
+
+        auto *chart =
+            new QChart();
+
+        chart->setMargins(
+            QMargins(
+                0,
+                0,
+                0,
+                0
+                )
+            );
+
+        chart->addSeries(
+            series
+            );
+
+        chart->setAnimationOptions(
+            QChart::NoAnimation
+            );
+
+        /*
+         * Keep the selected Top-N subsystem key below
+         * the chart, matching the existing severity
+         * legend placement.
+         */
+        QLegend *legend =
+            chart->legend();
+
+        legend->setAlignment(
+            Qt::AlignBottom
+            );
+
+        legend->setContentsMargins(
+            0,
+            0,
+            0,
+            0
+            );
+
+        if (legend->layout() != nullptr) {
+            legend
+                ->layout()
+                ->setContentsMargins(
+                    0,
+                    0,
+                    0,
+                    0
+                    );
+        }
+
+        auto *axisX =
+            new QBarCategoryAxis();
+
+        axisX->append(
+            categories
+            );
+
+        axisX->setTruncateLabels(
+            false
+            );
+
+        chart->addAxis(
+            axisX,
+            Qt::AlignBottom
+            );
+
+        series->attachAxis(
+            axisX
+            );
+
+        auto *axisY =
+            new QValueAxis();
+
+        configureEventCountAxis(
+            axisY,
+            timelineScaleMaximum
+            );
+
+        chart->addAxis(
+            axisY,
+            Qt::AlignLeft
+            );
+
+        series->attachAxis(
+            axisY
+            );
+
+        timelineChartView->setChart(
+            chart
+            );
+
+        updateTimelineRangeLabel(
+            timelineScrollBar != nullptr
+                ? timelineScrollBar->value()
+                : 0
+            );
+
         return;
     }
 
@@ -7829,6 +8357,7 @@ void MainWindow::updateTimelineChart(
                 ) {
                 drillDownTimelineBucket(
                     index,
+                    QString(),
                     QString()
                     );
             },
@@ -7989,7 +8518,8 @@ void MainWindow::updateTimelineChart(
                     ) {
                     drillDownTimelineBucket(
                         index,
-                        severity
+                        severity,
+                        QString()
                         );
                 },
                 Qt::QueuedConnection
@@ -8222,6 +8752,145 @@ void MainWindow::updateTimelineChart(
         timelineScrollBar != nullptr
             ? timelineScrollBar->value()
             : 0
+        );
+}
+
+void MainWindow::updateTimelineBreakdownControls()
+{
+    if (timelineBreakdownWidget == nullptr
+        || timelineBreakdownCombo == nullptr
+        || timelineSubsystemShowWidget == nullptr
+        || timelineSubsystemLimitCombo == nullptr) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const QSignalBlocker breakdownBlocker(
+        timelineBreakdownCombo
+        );
+
+    const QSignalBlocker limitBlocker(
+        timelineSubsystemLimitCombo
+        );
+
+    timelineBreakdownCombo->clear();
+
+    if (session == nullptr) {
+        timelineBreakdownWidget->setVisible(
+            false
+            );
+
+        timelineSubsystemShowWidget->setVisible(
+            false
+            );
+
+        return;
+    }
+
+    /*
+     * Add only the analysis dimensions actually
+     * supported by this investigation.
+     */
+    if (hasSeverityData) {
+        timelineBreakdownCombo->addItem(
+            tr("Severity"),
+            static_cast<int>(
+                InvestigationTimelineBreakdown::
+                    Severity
+                )
+            );
+    }
+
+    if (hasSubsystemData) {
+        timelineBreakdownCombo->addItem(
+            tr("Subsystem"),
+            static_cast<int>(
+                InvestigationTimelineBreakdown::
+                    Subsystem
+                )
+            );
+    }
+
+    /*
+     * A source with neither canonical dimension
+     * still retains the existing TOTAL timeline,
+     * but there is no breakdown choice to expose.
+     */
+    if (timelineBreakdownCombo->count() == 0) {
+        timelineBreakdownWidget->setVisible(
+            false
+            );
+
+        timelineSubsystemShowWidget->setVisible(
+            false
+            );
+
+        return;
+    }
+
+    timelineBreakdownWidget->setVisible(
+        true
+        );
+
+    int breakdownIndex =
+        timelineBreakdownCombo->findData(
+            static_cast<int>(
+                session->timelineBreakdown()
+                )
+            );
+
+    /*
+     * The session may have selected a breakdown
+     * that this particular source cannot support.
+     * Fall back to its first available dimension.
+     */
+    if (breakdownIndex < 0) {
+        breakdownIndex = 0;
+    }
+
+    timelineBreakdownCombo->setCurrentIndex(
+        breakdownIndex
+        );
+
+    const auto effectiveBreakdown =
+        static_cast<
+            InvestigationTimelineBreakdown>(
+                timelineBreakdownCombo
+                    ->currentData()
+                    .toInt()
+                );
+
+    session->setTimelineBreakdown(
+        effectiveBreakdown
+        );
+
+    int limitIndex =
+        timelineSubsystemLimitCombo->findData(
+            session->subsystemTrendLimit()
+            );
+
+    if (limitIndex < 0) {
+        limitIndex =
+            timelineSubsystemLimitCombo
+                ->findData(5);
+    }
+
+    timelineSubsystemLimitCombo->setCurrentIndex(
+        limitIndex
+        );
+
+    session->setSubsystemTrendLimit(
+        timelineSubsystemLimitCombo
+            ->currentData()
+            .toInt()
+        );
+
+    timelineSubsystemShowWidget->setVisible(
+        effectiveBreakdown
+        == InvestigationTimelineBreakdown::
+               Subsystem
         );
 }
 
@@ -8843,6 +9512,8 @@ void MainWindow::bindActiveSession()
                 );
         }
 
+        updateTimelineBreakdownControls();
+
         investigationController =
             nullptr;
 
@@ -9189,6 +9860,8 @@ void MainWindow::bindActiveSession()
 
     refreshSubsystemFilterOptions();
     refreshCanonicalFilterOptions();
+
+    updateTimelineBreakdownControls();
 
     if (investigationReviewTabs != nullptr) {
         investigationReviewTabs->setVisible(
