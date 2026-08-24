@@ -971,6 +971,29 @@ add_test(
 )
 
 qt_add_executable(
+    WorkspaceDocumentHostTests
+    WorkspaceDocumentHostTests.cpp
+
+    ../src/ui/workspace/WorkspaceDocument.h
+    ../src/ui/workspace/WorkspaceDocument.cpp
+
+    ../src/ui/workspace/WorkspaceDocumentHost.h
+    ../src/ui/workspace/WorkspaceDocumentHost.cpp
+)
+
+target_link_libraries(
+    WorkspaceDocumentHostTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Widgets
+)
+
+add_test(
+    NAME WorkspaceDocumentHostTests
+    COMMAND WorkspaceDocumentHostTests
+)
+
+qt_add_executable(
     RecentItemsStoreTests
 
     RecentItemsStoreTests.cpp

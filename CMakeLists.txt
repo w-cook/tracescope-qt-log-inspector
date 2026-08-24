@@ -125,6 +125,10 @@ qt_add_executable(TraceScope
     src/analysis/InvestigationSessionComparison.h
     src/analysis/InvestigationSessionComparisonAnalyzer.h
     src/analysis/InvestigationSessionComparisonAnalyzer.cpp
+    src/ui/workspace/WorkspaceDocument.h
+    src/ui/workspace/WorkspaceDocument.cpp
+    src/ui/workspace/WorkspaceDocumentHost.h
+    src/ui/workspace/WorkspaceDocumentHost.cpp
 
 )
 
