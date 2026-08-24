@@ -23,7 +23,6 @@
 #include "workspace/InvestigationWorkspace.h"
 
 class QLabel;
-class QTableView;
 class QTableWidget;
 class QComboBox;
 class QLineEdit;
@@ -48,6 +47,7 @@ class QTabWidget;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationEventDetailPanel;
+class InvestigationEventPanel;
 
 class MainWindow : public QMainWindow
 {
@@ -72,12 +72,6 @@ private:
 
     QMenu *recentFilesMenu = nullptr;
 
-    QTableView *eventTable;
-    QPushButton *previousEventButton;
-    QPushButton *nextEventButton;
-    QLabel *eventPositionLabel;
-    QPushButton *previousIssueButton;
-    QPushButton *nextIssueButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
 
@@ -118,6 +112,9 @@ private:
     InvestigationSessionView *surfaceSessionView =
         nullptr;
 
+    InvestigationEventPanel *eventPanel =
+        nullptr;
+
     InvestigationEventDetailPanel
         *eventDetailPanel = nullptr;
 
@@ -131,8 +128,6 @@ private:
     InvestigationCadenceAnalyzer cadenceAnalyzer;
 
     InvestigationCsvExporter csvExporter;
-
-    QMetaObject::Connection eventSelectionConnection;
 
     MultiSelectFilterComboBox *levelFilterCombo;
     MultiSelectFilterComboBox *subsystemFilterCombo;
@@ -287,18 +282,9 @@ private:
 
     void syncInvestigationStatePresentation();
 
-    void navigateToAdjacentIssue(
-        int direction
-        );
-    void navigateToAdjacentEvent(
-        int direction
-        );
-
     void selectProxyRow(
         int proxyRow
         );
-
-    void updateEventNavigationState();
 
     QGroupBox *buildIssueSummaryPanel();
     void updateIssueSummary(
@@ -347,7 +333,6 @@ private:
     void updateDataCapabilities();
 
     void bindActiveSession();
-    void connectEventTableSelectionModel();
     void reloadActiveSession();
 
     void refreshRecentFilesMenu();
@@ -357,8 +342,6 @@ private:
         );
 
     void resizeCustomFiltersDialogToContents();
-
-    void updateEventRowHeaderWidth();
 
     void updateAnalyticsOverview(
         const QVector<InvestigationRecord> &records

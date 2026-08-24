@@ -77,6 +77,7 @@
 #include "ui/CustomFieldFilterEditor.h"
 #include "ui/MultiSelectFilterComboBox.h"
 #include "ui/investigation/InvestigationEventDetailPanel.h"
+#include "ui/investigation/InvestigationEventPanel.h"
 #include "ui/investigation/InvestigationSessionSummaryPanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
@@ -706,36 +707,6 @@ MainWindow::MainWindow(QWidget *parent)
     settings(),
     recentItemsStore(settings),
     filterPresetStore(settings),
-    eventTable(new QTableView(this)),
-    previousEventButton(
-        new QPushButton(
-            tr("Previous Event"),
-            this
-            )
-        ),
-    nextEventButton(
-        new QPushButton(
-            tr("Next Event"),
-            this
-            )
-        ),
-    eventPositionLabel(
-        new QLabel(
-            this
-            )
-        ),
-    previousIssueButton(
-        new QPushButton(
-            tr("Previous Issue"),
-            this
-            )
-        ),
-    nextIssueButton(
-        new QPushButton(
-            tr("Next Issue"),
-            this
-            )
-        ),
     issueSummaryTable(new QTableWidget(0, 4)),
     issueSummaryGroup(nullptr),
     workspace(new InvestigationWorkspace(this)),
@@ -1183,336 +1154,36 @@ void MainWindow::buildLayout()
 
     auto *timelineGroup = buildTimelinePanel();
 
-    auto *eventsGroup = new QGroupBox("Telemetry Events", this);
-    auto *eventsLayout = new QVBoxLayout(eventsGroup);
-
-    auto *eventNavigationLayout =
-        new QHBoxLayout();
-
-    eventNavigationLayout->setContentsMargins(
-        0,
-        0,
-        0,
-        0
-        );
-
-    eventNavigationLayout->setSpacing(
-        6
-        );
-
-    previousEventButton->setToolTip(
-        tr(
-            "Select the previous visible event"
-            )
-        );
-
-    nextEventButton->setToolTip(
-        tr(
-            "Select the next visible event"
-            )
-        );
-
-    previousIssueButton->setToolTip(
-        tr(
-            "Select the previous visible WARN, "
-            "ERROR, or CRITICAL event"
-            )
-        );
-
-    nextIssueButton->setToolTip(
-        tr(
-            "Select the next visible WARN, "
-            "ERROR, or CRITICAL event"
-            )
-        );
-
-    eventNavigationLayout->addStretch();
-
-    eventNavigationLayout->addWidget(
-        previousEventButton
-        );
-
-    eventNavigationLayout->addWidget(
-        nextEventButton
-        );
-
-    eventNavigationLayout->addStretch(
-        1
-        );
-
-    eventPositionLabel->setAlignment(
-        Qt::AlignCenter
-        );
-
-    eventNavigationLayout->addWidget(
-        eventPositionLabel
-        );
-
-    eventNavigationLayout->addStretch(
-        1
-        );
-
-    eventNavigationLayout->addWidget(
-        previousIssueButton
-        );
-
-    eventNavigationLayout->addWidget(
-        nextIssueButton
-        );
-
-    eventsLayout->addLayout(
-        eventNavigationLayout
-        );
-
-    eventsLayout->setSpacing(
-        4
-        );
-
-    eventTable->setSizePolicy(
-        QSizePolicy::Expanding,
-        QSizePolicy::Expanding
-        );
-
-    eventTable->setAlternatingRowColors(true);
-
-    eventTable->setSelectionBehavior(
-        QAbstractItemView::SelectRows
-        );
-
-    eventTable->setSelectionMode(
-        QAbstractItemView::SingleSelection
-        );
-
-    eventTable->setContextMenuPolicy(
-        Qt::CustomContextMenu
-        );
-
-    connect(
-        eventTable,
-        &QTableView::customContextMenuRequested,
-        this,
-        [this](
-            const QPoint &position
-            ) {
-            const QModelIndex proxyIndex =
-                eventTable->indexAt(
-                    position
-                    );
-
-            if (!proxyIndex.isValid()
-                || investigationController
-                       == nullptr) {
-                return;
-            }
-
-            const QString value =
-                proxyIndex
-                    .data(Qt::DisplayRole)
-                    .toString();
-
-            InvestigationFilterProxyModel
-                *proxyModel =
-                investigationController
-                    ->proxyModel();
-
-            InvestigationTableModel
-                *sourceModel =
-                investigationController
-                    ->sourceModel();
-
-            const QModelIndex sourceIndex =
-                proxyModel->mapToSource(
-                    proxyIndex
-                    );
-
-            const bool customColumn =
-                sourceIndex.isValid()
-                && sourceModel
-                       ->isCustomColumn(
-                           sourceIndex.column()
-                           );
-
-            const QString customField =
-                customColumn
-                    ? sourceModel
-                          ->columnKey(
-                              sourceIndex.column()
-                              )
-                    : QString();
-
-            QMenu menu(
-                eventTable
-                );
-
-            QAction *copyValueAction =
-                menu.addAction(
-                    tr("Copy Cell Value")
-                    );
-
-            QAction *filterValueAction =
-                nullptr;
-
-            /*
-             * Exact custom-field filtering only makes
-             * sense when both a custom field and a
-             * concrete displayed value are present.
-             */
-            if (customColumn
-                && !customField.isEmpty()
-                && !value.isEmpty()) {
-                menu.addSeparator();
-
-                filterValueAction =
-                    menu.addAction(
-                        tr("Filter by This Value")
-                        );
-            }
-
-            QAction *selectedAction =
-                menu.exec(
-                    eventTable
-                        ->viewport()
-                        ->mapToGlobal(
-                            position
-                            )
-                    );
-
-            if (selectedAction
-                == copyValueAction) {
-                QApplication::clipboard()
-                ->setText(
-                    value
-                    );
-
-                return;
-            }
-
-            if (filterValueAction != nullptr
-                && selectedAction
-                       == filterValueAction) {
-                customFieldFilterEditor
-                    ->addFilter(
-                        customField,
-                        value
-                        );
-            }
-        }
-        );
-
-    eventTable->setSortingEnabled(true);
-
-    eventTable->sortByColumn(
-        -1,
-        Qt::AscendingOrder
-        );
-
-    eventTable
-        ->horizontalHeader()
-        ->setResizeContentsPrecision(
-            200
+    eventPanel =
+        new InvestigationEventPanel(
+            this
             );
 
-    eventTable->horizontalHeader()->setStretchLastSection(true);
-
     connect(
-        previousEventButton,
-        &QPushButton::clicked,
+        eventPanel,
+        &InvestigationEventPanel::
+            selectedRecordChanged,
         this,
-        [this]() {
-            navigateToAdjacentEvent(
-                -1
-                );
-        }
+        &MainWindow::
+            updateEventDetailFromSelection
         );
 
     connect(
-        nextEventButton,
-        &QPushButton::clicked,
-        this,
-        [this]() {
-            navigateToAdjacentEvent(
-                1
-                );
-        }
-        );
-
-    connect(
-        previousIssueButton,
-        &QPushButton::clicked,
-        this,
-        [this]() {
-            navigateToAdjacentIssue(
-                -1
-                );
-        }
-        );
-
-    connect(
-        nextIssueButton,
-        &QPushButton::clicked,
-        this,
-        [this]() {
-            navigateToAdjacentIssue(
-                1
-                );
-        }
-        );
-
-    previousIssueButton->setVisible(
-        false
-        );
-
-    nextIssueButton->setVisible(
-        false
-        );
-
-    connect(
-        eventTable->horizontalHeader(),
-        &QHeaderView::sectionResized,
+        eventPanel,
+        &InvestigationEventPanel::
+            customFieldFilterRequested,
         this,
         [this](
-            int,
-            int,
-            int
+            const QString &fieldName,
+            const QString &value
             ) {
-            InvestigationSession *session =
-                workspace->activeSession();
-
-            if (session == nullptr
-                || eventTable->model() == nullptr) {
-                return;
-            }
-
-            const int columnCount =
-                eventTable
-                    ->horizontalHeader()
-                    ->count();
-
-            QVector<int> widths;
-
-            widths.reserve(
-                columnCount
-                );
-
-            for (
-                int column = 0;
-                column < columnCount;
-                ++column
-                ) {
-                widths.append(
-                    eventTable->columnWidth(
-                        column
-                        )
+            customFieldFilterEditor
+                ->addFilter(
+                    fieldName,
+                    value
                     );
-            }
-
-            session->setColumnWidths(
-                std::move(widths)
-                );
         }
         );
-
-    eventsLayout->addWidget(eventTable);
 
     issueSummaryGroup =
         buildIssueSummaryPanel();
@@ -1629,7 +1300,7 @@ void MainWindow::buildLayout()
 
     auto *mainSplitter = new QSplitter(Qt::Vertical, this);
     mainSplitter->addWidget(timelineGroup);
-    mainSplitter->addWidget(eventsGroup);
+    mainSplitter->addWidget(eventPanel);
     mainSplitter->addWidget(bottomSplitter);
 
     connect(
@@ -3220,32 +2891,18 @@ void MainWindow::applyFilters()
         visibleRecords
         );
 
-    if (selectedProxyRow >= 0) {
-        /*
-         * Filtering changed the visible result set,
-         * but the analyst's selected record remains
-         * part of that result. Preserve the current
-         * investigation context.
-         */
-        selectProxyRow(
-            selectedProxyRow
-            );
-    } else {
-        /*
-         * The selected record is no longer visible
-         * under the active filter state. Only now
-         * should the selection be discarded.
-         */
-        eventTable->clearSelection();
-        clearEventDetail();
-
-        if (session != nullptr) {
-            session->setSelectedRecordId(
-                QString()
+    if (eventPanel != nullptr) {
+        if (selectedProxyRow >= 0) {
+            eventPanel->selectProxyRow(
+                selectedProxyRow
                 );
+        } else {
+            eventPanel->clearSelection();
+
+            clearEventDetail();
         }
 
-        updateEventNavigationState();
+        eventPanel->refreshNavigationState();
     }
 }
 
@@ -4090,25 +3747,9 @@ void MainWindow::clearEventDetail()
 const InvestigationRecord *
 MainWindow::selectedEventRecord() const
 {
-    if (investigationController == nullptr
-        || eventTable->selectionModel()
-               == nullptr) {
-        return nullptr;
-    }
-
-    const QModelIndexList selectedRows =
-        eventTable
-            ->selectionModel()
-            ->selectedRows();
-
-    if (selectedRows.isEmpty()) {
-        return nullptr;
-    }
-
-    return investigationController
-        ->recordForProxyIndex(
-            selectedRows.first()
-            );
+    return eventPanel != nullptr
+        ? eventPanel->selectedRecord()
+        : nullptr;
 }
 
 void MainWindow::
@@ -4458,205 +4099,16 @@ void MainWindow::toggleSelectedEventBookmark()
     }
 }
 
-void MainWindow::navigateToAdjacentIssue(
-    int direction
-    )
-{
-    if (investigationController == nullptr
-        || eventTable->model() == nullptr) {
-        return;
-    }
-
-    int currentProxyRow = -1;
-
-    const QModelIndex currentIndex =
-        eventTable->currentIndex();
-
-    if (currentIndex.isValid()) {
-        currentProxyRow =
-            currentIndex.row();
-    }
-
-    const int targetProxyRow =
-        investigationController
-            ->adjacentIssueProxyRow(
-                currentProxyRow,
-                direction
-                );
-
-    selectProxyRow(
-        targetProxyRow
-        );
-}
-
-void MainWindow::navigateToAdjacentEvent(
-    int direction
-    )
-{
-    if (investigationController == nullptr
-        || eventTable->model() == nullptr) {
-        return;
-    }
-
-    const QModelIndex currentIndex =
-        eventTable->currentIndex();
-
-    const int currentProxyRow =
-        currentIndex.isValid()
-            ? currentIndex.row()
-            : -1;
-
-    const int targetProxyRow =
-        investigationController
-            ->adjacentVisibleProxyRow(
-                currentProxyRow,
-                direction
-                );
-
-    selectProxyRow(
-        targetProxyRow
-        );
-}
-
 void MainWindow::selectProxyRow(
     int proxyRow
     )
 {
-    if (investigationController == nullptr
-        || proxyRow < 0) {
+    if (eventPanel == nullptr) {
         return;
     }
 
-    const QModelIndex targetIndex =
-        investigationController
-            ->proxyModel()
-            ->index(
-                proxyRow,
-                0
-                );
-
-    if (!targetIndex.isValid()) {
-        return;
-    }
-
-    QItemSelectionModel *selectionModel =
-        eventTable->selectionModel();
-
-    if (selectionModel == nullptr) {
-        return;
-    }
-
-    selectionModel->setCurrentIndex(
-        targetIndex,
-        QItemSelectionModel::ClearAndSelect
-            | QItemSelectionModel::Rows
-        );
-
-    eventTable->scrollTo(
-        targetIndex,
-        QAbstractItemView::PositionAtCenter
-        );
-}
-
-void MainWindow::updateEventNavigationState()
-{
-    const bool hasInvestigation =
-        investigationController != nullptr
-        && eventTable->model() != nullptr;
-
-    previousEventButton->setVisible(
-        hasInvestigation
-        );
-
-    nextEventButton->setVisible(
-        hasInvestigation
-        );
-
-    eventPositionLabel->setVisible(
-        hasInvestigation
-        );
-
-    if (!hasInvestigation) {
-        previousEventButton->setEnabled(
-            false
-            );
-
-        nextEventButton->setEnabled(
-            false
-            );
-
-        eventPositionLabel->clear();
-
-        return;
-    }
-
-    const int visibleCount =
-        eventTable->model()->rowCount();
-
-    const QModelIndex currentIndex =
-        eventTable->currentIndex();
-
-    if (!currentIndex.isValid()) {
-        const bool hasVisibleEvents =
-            visibleCount > 0;
-
-        previousEventButton->setEnabled(
-            hasVisibleEvents
-            );
-
-        nextEventButton->setEnabled(
-            hasVisibleEvents
-            );
-
-        eventPositionLabel->setText(
-            tr("%1 visible events")
-                .arg(
-                    visibleCount
-                    )
-            );
-
-        return;
-    }
-
-    const int currentRow =
-        currentIndex.row();
-
-    previousEventButton->setEnabled(
-        currentRow > 0
-        );
-
-    nextEventButton->setEnabled(
-        currentRow
-        < visibleCount - 1
-        );
-
-    QString positionText =
-        tr("Event %1 of %2 visible")
-            .arg(
-                currentRow + 1
-                )
-            .arg(
-                visibleCount
-                );
-
-    const InvestigationRecord *record =
-        investigationController
-            ->recordForProxyIndex(
-                currentIndex
-                );
-
-    if (record != nullptr) {
-        positionText +=
-            tr(" • Source record %1")
-                .arg(
-                    record
-                        ->source
-                        .recordNumber
-                    );
-    }
-
-    eventPositionLabel->setText(
-        positionText
+    eventPanel->selectProxyRow(
+        proxyRow
         );
 }
 
@@ -6583,7 +6035,9 @@ void MainWindow::navigateToFinding(
             proxyRow
             );
 
-        eventTable->setFocus();
+        if (eventPanel != nullptr) {
+            eventPanel->focusTable();
+        }
 
         return;
     }
@@ -6610,7 +6064,9 @@ void MainWindow::navigateToFinding(
         proxyRow
         );
 
-    eventTable->setFocus();
+    if (eventPanel != nullptr) {
+        eventPanel->focusTable();
+    }
 }
 
 void MainWindow::revealFindingRecord(
@@ -9261,14 +8717,6 @@ void MainWindow::updateDataCapabilities()
             false
             );
 
-        previousIssueButton->setVisible(
-            false
-            );
-
-        nextIssueButton->setVisible(
-            false
-            );
-
         return;
     }
 
@@ -9450,14 +8898,6 @@ void MainWindow::updateDataCapabilities()
         hasCustomFieldData
         );
 
-    previousIssueButton->setVisible(
-        hasSeverityData
-        );
-
-    nextIssueButton->setVisible(
-        hasSeverityData
-        );
-
     /*
      * Warning/error grouping requires both
      * severity and subsystem information.
@@ -9486,51 +8926,6 @@ void MainWindow::updateDataCapabilities()
     }
 }
 
-void MainWindow::connectEventTableSelectionModel()
-{
-    QObject::disconnect(
-        eventSelectionConnection
-        );
-
-    QItemSelectionModel *selectionModel =
-        eventTable->selectionModel();
-
-    if (selectionModel == nullptr) {
-        eventSelectionConnection =
-            QMetaObject::Connection();
-
-        return;
-    }
-
-    eventSelectionConnection =
-        connect(
-            selectionModel,
-            &QItemSelectionModel::selectionChanged,
-            this,
-            [this](
-                const QItemSelection &,
-                const QItemSelection &
-                ) {
-                InvestigationSession *session =
-                    workspace->activeSession();
-
-                if (session != nullptr) {
-                    const InvestigationRecord *record =
-                        selectedEventRecord();
-
-                    session->setSelectedRecordId(
-                        record != nullptr
-                            ? record->recordId
-                            : QString()
-                        );
-                }
-
-                updateEventDetailFromSelection();
-                updateEventNavigationState();
-            }
-            );
-}
-
 void MainWindow::bindActiveSession()
 {
     InvestigationSession *session =
@@ -9555,17 +8950,13 @@ void MainWindow::bindActiveSession()
 
         currentFilePath.clear();
 
-        eventTable->setModel(
-            nullptr
-            );
-
-        connectEventTableSelectionModel();
-
-        updateEventRowHeaderWidth();
+        if (eventPanel != nullptr) {
+            eventPanel->setSession(
+                nullptr
+                );
+        }
 
         clearEventDetail();
-
-        updateEventNavigationState();
 
         searchDebounceTimer->stop();
 
@@ -9749,14 +9140,6 @@ void MainWindow::bindActiveSession()
             false
             );
 
-        previousIssueButton->setVisible(
-            false
-            );
-
-        nextIssueButton->setVisible(
-            false
-            );
-
         issueSummaryTable->setRowCount(
             0
             );
@@ -9797,20 +9180,11 @@ void MainWindow::bindActiveSession()
             ->sourceMetadata()
             .sourcePath;
 
-    {
-        const QSignalBlocker headerBlocker(
-            eventTable->horizontalHeader()
-            );
-
-        eventTable->setModel(
-            investigationController
-                ->proxyModel()
+    if (eventPanel != nullptr) {
+        eventPanel->setSession(
+            session
             );
     }
-
-    connectEventTableSelectionModel();
-
-    updateEventRowHeaderWidth();
 
     InvestigationFilterProxyModel
         *proxyModel =
@@ -10199,100 +9573,9 @@ void MainWindow::bindActiveSession()
      */
     applyFilters();
 
-    /*
-     * ---------------------------------------------------------
-     * Restore per-session column widths
-     * ---------------------------------------------------------
-     */
-
-    const QVector<int> columnWidths =
-        session->columnWidths();
-
-    const int columnCount =
-        eventTable
-            ->horizontalHeader()
-            ->count();
-
-    if (columnWidths.size()
-        == columnCount) {
-        /*
-         * Restoring stored widths is UI
-         * synchronization, not a user resize.
-         *
-         * Suppress sectionResized so the partially
-         * restored header cannot overwrite this
-         * session's saved width vector.
-         */
-        const QSignalBlocker headerBlocker(
-            eventTable->horizontalHeader()
-            );
-
-        for (
-            int column = 0;
-            column < columnCount;
-            ++column
-            ) {
-            eventTable->setColumnWidth(
-                column,
-                columnWidths[column]
-                );
-        }
-    } else {
-        QVector<int> measuredWidths;
-
-        measuredWidths.reserve(
-            columnCount
-            );
-
-        /*
-         * A session without compatible saved widths
-         * receives content-based initial sizing.
-         *
-         * resizeColumnsToContents() can emit
-         * sectionResized, so suppress those signals
-         * and explicitly store the finished result
-         * afterward.
-         */
-        {
-            const QSignalBlocker headerBlocker(
-                eventTable->horizontalHeader()
-                );
-
-            eventTable->resizeColumnsToContents();
-
-            for (
-                int column = 0;
-                column < columnCount;
-                ++column
-                ) {
-                measuredWidths.append(
-                    eventTable->columnWidth(
-                        column
-                        )
-                    );
-            }
-        }
-
-        session->setColumnWidths(
-            std::move(
-                measuredWidths
-                )
-            );
+    if (eventPanel != nullptr) {
+        eventPanel->refreshNavigationState();
     }
-
-    {
-        const QSignalBlocker headerBlocker(
-            eventTable->horizontalHeader()
-            );
-
-        eventTable
-            ->horizontalHeader()
-            ->setStretchLastSection(
-                true
-                );
-    }
-
-    updateEventNavigationState();
 }
 
 void MainWindow::reloadActiveSession()
@@ -10420,59 +9703,6 @@ void MainWindow::
         [this]() {
             customFiltersDialog->adjustSize();
         }
-        );
-}
-
-void MainWindow::updateEventRowHeaderWidth()
-{
-    QHeaderView *header =
-        eventTable->verticalHeader();
-
-    if (header == nullptr) {
-        return;
-    }
-
-    int maximumRowNumber = 1;
-
-    if (investigationController != nullptr) {
-        maximumRowNumber =
-            std::max(
-                1,
-                investigationController
-                    ->totalRecordCount()
-                );
-    }
-
-    /*
-     * Always reserve space for the bookmark star,
-     * even when no records are currently bookmarked.
-     *
-     * Use the total investigation record count rather
-     * than the currently visible row count so filtering
-     * cannot make the header jump between widths either.
-     */
-    const QString widestExpectedText =
-        QStringLiteral("★ %1")
-            .arg(
-                maximumRowNumber
-                );
-
-    const int textWidth =
-        header
-            ->fontMetrics()
-            .horizontalAdvance(
-                widestExpectedText
-                );
-
-    /*
-     * Reserve a modest amount of padding for the
-     * header's frame/margins around the text.
-     */
-    const int headerWidth =
-        textWidth + 8;
-
-    header->setFixedWidth(
-        headerWidth
         );
 }
 
@@ -11755,5 +10985,7 @@ void MainWindow::drillDownBurst(
 
     applyFilters();
 
-    eventTable->setFocus();
+    if (eventPanel != nullptr) {
+        eventPanel->focusTable();
+    }
 }
