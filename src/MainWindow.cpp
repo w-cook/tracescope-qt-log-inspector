@@ -3132,6 +3132,14 @@ void MainWindow::applyFilters()
         return;
     }
 
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    const QString selectedRecordId =
+        session != nullptr
+            ? session->selectedRecordId()
+            : QString();
+
     timelineScaleValid =
         false;
 
@@ -3178,8 +3186,13 @@ void MainWindow::applyFilters()
                 ->isChecked()
             );
 
-    eventTable->clearSelection();
-    clearEventDetail();
+    const int selectedProxyRow =
+        !selectedRecordId.isEmpty()
+            ? investigationController
+                  ->proxyRowForRecordId(
+                      selectedRecordId
+                      )
+            : -1;
 
     const QVector<InvestigationRecord>
         visibleRecords =
@@ -3207,7 +3220,33 @@ void MainWindow::applyFilters()
         visibleRecords
         );
 
-    updateEventNavigationState();
+    if (selectedProxyRow >= 0) {
+        /*
+         * Filtering changed the visible result set,
+         * but the analyst's selected record remains
+         * part of that result. Preserve the current
+         * investigation context.
+         */
+        selectProxyRow(
+            selectedProxyRow
+            );
+    } else {
+        /*
+         * The selected record is no longer visible
+         * under the active filter state. Only now
+         * should the selection be discarded.
+         */
+        eventTable->clearSelection();
+        clearEventDetail();
+
+        if (session != nullptr) {
+            session->setSelectedRecordId(
+                QString()
+                );
+        }
+
+        updateEventNavigationState();
+    }
 }
 
 void MainWindow::resetFilters()
@@ -9472,8 +9511,21 @@ void MainWindow::connectEventTableSelectionModel()
                 const QItemSelection &,
                 const QItemSelection &
                 ) {
-                updateEventDetailFromSelection();
+                InvestigationSession *session =
+                    workspace->activeSession();
 
+                if (session != nullptr) {
+                    const InvestigationRecord *record =
+                        selectedEventRecord();
+
+                    session->setSelectedRecordId(
+                        record != nullptr
+                            ? record->recordId
+                            : QString()
+                        );
+                }
+
+                updateEventDetailFromSelection();
                 updateEventNavigationState();
             }
             );

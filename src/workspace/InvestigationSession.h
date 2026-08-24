@@ -62,6 +62,12 @@ public:
 
     const QString &id() const;
 
+    const QString &selectedRecordId() const;
+
+    void setSelectedRecordId(
+        const QString &recordId
+        );
+
     const InvestigationSessionSourceMetadata &
     sourceMetadata() const;
 
@@ -163,6 +169,8 @@ public:
 
 private:
     QString m_id;
+
+    QString m_selectedRecordId;
 
     InvestigationSessionSourceMetadata
         m_sourceMetadata;
