@@ -12,7 +12,6 @@
 #include "analysis/InvestigationAnalyticsAnalyzer.h"
 #include "analysis/InvestigationBurstAnalyzer.h"
 #include "analysis/InvestigationCadenceAnalyzer.h"
-#include "analysis/TelemetryIssueAnalyzer.h"
 #include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -48,6 +47,7 @@ class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
+class InvestigationFindingsPanel;
 class InvestigationIssueSummaryPanel;
 
 enum class InvestigationIssueDrillDownType;
@@ -76,10 +76,6 @@ private:
     QMenu *recentFilesMenu = nullptr;
 
     QTabWidget *investigationReviewTabs = nullptr;
-
-    QWidget *findingsPanel = nullptr;
-    QLabel *findingsSummaryLabel = nullptr;
-    QTableWidget *findingsTable = nullptr;
 
     QWidget *analyticsPanel = nullptr;
 
@@ -117,6 +113,9 @@ private:
 
     InvestigationIssueSummaryPanel
         *issueSummaryPanel = nullptr;
+
+    InvestigationFindingsPanel *findingsPanel =
+        nullptr;
 
     InvestigationEventDetailPanel
         *eventDetailPanel = nullptr;
@@ -301,13 +300,12 @@ private:
         const QString &subsystem
         );
 
-    QWidget *buildFindingsPanel();    
     QWidget *buildAnalyticsPanel();
 
     void updateFindingsPanel();
 
     void navigateToFinding(
-        int row
+        const QString &recordId
         );
 
     void revealFindingRecord(

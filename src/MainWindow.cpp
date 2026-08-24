@@ -78,6 +78,7 @@
 #include "ui/MultiSelectFilterComboBox.h"
 #include "ui/investigation/InvestigationEventDetailPanel.h"
 #include "ui/investigation/InvestigationEventPanel.h"
+#include "ui/investigation/InvestigationFindingsPanel.h"
 #include "ui/investigation/InvestigationIssueSummaryPanel.h"
 #include "ui/investigation/InvestigationSessionSummaryPanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
@@ -1199,7 +1200,18 @@ void MainWindow::buildLayout()
         );
 
     findingsPanel =
-        buildFindingsPanel();
+        new InvestigationFindingsPanel(
+            this
+            );
+
+    connect(
+        findingsPanel,
+        &InvestigationFindingsPanel::
+            findingActivated,
+        this,
+        &MainWindow::
+            navigateToFinding
+        );
 
     analyticsPanel =
         buildAnalyticsPanel();
@@ -4121,205 +4133,6 @@ void MainWindow::selectProxyRow(
         );
 }
 
-QWidget *MainWindow::buildFindingsPanel()
-{
-    auto *panel =
-        new QWidget(this);
-
-    auto *layout =
-        new QVBoxLayout(panel);
-
-    layout->setContentsMargins(
-        0,
-        0,
-        0,
-        0
-        );
-
-    layout->setSpacing(
-        4
-        );
-
-    findingsSummaryLabel =
-        new QLabel(
-            tr(
-                "Open: 0    Resolved: 0    "
-                "Dismissed: 0"
-                ),
-            panel
-            );
-
-    findingsSummaryLabel->setToolTip(
-        tr(
-            "Summary of explicitly classified "
-            "investigation findings"
-            )
-        );
-
-    layout->addWidget(
-        findingsSummaryLabel
-        );
-
-    findingsTable =
-        new QTableWidget(
-            0,
-            4,
-            panel
-            );
-
-    findingsTable->setHorizontalHeaderLabels({
-        tr("Status"),
-        tr("#"),
-        tr("Time"),
-        tr("Finding")
-    });
-
-    /*
-     * The "#" column is the source-record number.
-     * Keep the visible heading tiny while making
-     * its meaning explicit on hover.
-     */
-    findingsTable
-        ->horizontalHeaderItem(1)
-        ->setToolTip(
-            tr("Source record number")
-            );
-
-    findingsTable
-        ->horizontalHeaderItem(2)
-        ->setToolTip(
-            tr(
-                "Event time. Hover a value to see "
-                "the complete timestamp."
-                )
-            );
-
-    findingsTable->setAlternatingRowColors(
-        true
-        );
-
-    findingsTable->setSelectionBehavior(
-        QAbstractItemView::SelectRows
-        );
-
-    findingsTable->setSelectionMode(
-        QAbstractItemView::SingleSelection
-        );
-
-    findingsTable->setEditTriggers(
-        QAbstractItemView::NoEditTriggers
-        );
-
-    findingsTable->setSortingEnabled(
-        false
-        );
-
-    findingsTable->setItemDelegateForColumn(
-        3,
-        new FindingTextDelegate(
-            findingsTable
-            )
-        );
-
-    findingsTable->setWordWrap(
-        true
-        );
-
-    findingsTable->setTextElideMode(
-        Qt::ElideNone
-        );
-
-    findingsTable
-        ->verticalHeader()
-        ->setVisible(
-            false
-            );
-
-    findingsTable
-        ->verticalHeader()
-        ->setSectionResizeMode(
-            QHeaderView::ResizeToContents
-            );
-
-    findingsTable
-        ->verticalHeader()
-        ->setMinimumSectionSize(
-            findingsTable
-                ->fontMetrics()
-                .height()
-            + 8
-            );
-
-    /*
-     * Status and time size to their contents.
-     *
-     * The source-record column is deliberately
-     * fixed and compact.
-     *
-     * Finding receives all remaining width.
-     */
-    findingsTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            0,
-            QHeaderView::ResizeToContents
-            );
-
-    findingsTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            1,
-            QHeaderView::Fixed
-            );
-
-    findingsTable->setColumnWidth(
-        1,
-        58
-        );
-
-    findingsTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            2,
-            QHeaderView::ResizeToContents
-            );
-
-    findingsTable
-        ->horizontalHeader()
-        ->setSectionResizeMode(
-            3,
-            QHeaderView::Stretch
-            );
-
-    findingsTable->setToolTip(
-        tr(
-            "Review conclusions recorded during "
-            "this investigation"
-            )
-        );
-
-    connect(
-        findingsTable,
-        &QTableWidget::cellDoubleClicked,
-        this,
-        [this](
-            int row,
-            int
-            ) {
-            navigateToFinding(
-                row
-                );
-        }
-        );
-
-    layout->addWidget(
-        findingsTable,
-        1
-        );
-
-    return panel;
-}
-
 QWidget *MainWindow::buildAnalyticsPanel()
 {
     auto *panel =
@@ -4877,308 +4690,11 @@ void MainWindow::updateIssueSummary(
 
 void MainWindow::updateFindingsPanel()
 {
-    if (findingsTable == nullptr
-        || findingsSummaryLabel == nullptr) {
+    if (findingsPanel == nullptr) {
         return;
     }
 
-    findingsTable->setRowCount(
-        0
-        );
-
-    int openCount = 0;
-    int resolvedCount = 0;
-    int dismissedCount = 0;
-
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (session == nullptr
-        || investigationController
-               == nullptr) {
-        findingsSummaryLabel->setText(
-            tr(
-                "Open: 0    Resolved: 0    "
-                "Dismissed: 0"
-                )
-            );
-
-        return;
-    }
-
-    const InvestigationStateStore *stateStore =
-        session->investigationStateStore();
-
-    const QVector<InvestigationRecord> &records =
-        investigationController
-            ->allRecords();
-
-    for (
-        const InvestigationRecord &record
-        : records
-        ) {
-        if (record.recordId.isEmpty()) {
-            continue;
-        }
-
-        const InvestigationRecordState state =
-            stateStore->stateForRecord(
-                record.recordId
-                );
-
-        /*
-         * A bookmark or note alone is not a finding.
-         *
-         * The Findings view contains only records
-         * the analyst has explicitly classified.
-         */
-        if (state.findingStatus
-            == FindingStatus::None) {
-            continue;
-        }
-
-        switch (state.findingStatus) {
-        case FindingStatus::Open:
-            ++openCount;
-            break;
-
-        case FindingStatus::Resolved:
-            ++resolvedCount;
-            break;
-
-        case FindingStatus::Dismissed:
-            ++dismissedCount;
-            break;
-
-        case FindingStatus::None:
-            break;
-        }
-
-        const int row =
-            findingsTable->rowCount();
-
-        findingsTable->insertRow(
-            row
-            );
-
-        /*
-         * -----------------------------------------------------
-         * Status
-         * -----------------------------------------------------
-         */
-
-        auto *statusItem =
-            new QTableWidgetItem(
-                findingStatusDisplayText(
-                    state.findingStatus
-                    )
-                );
-
-        /*
-         * -----------------------------------------------------
-         * Source provenance
-         * -----------------------------------------------------
-         */
-
-        auto *sourceRecordItem =
-            new QTableWidgetItem(
-                QString::number(
-                    record
-                        .source
-                        .recordNumber
-                    )
-                );
-
-        /*
-         * -----------------------------------------------------
-         * Timestamp
-         * -----------------------------------------------------
-         */
-
-        QString timestampText;
-        QString fullTimestampText;
-
-        if (record.timestamp.has_value()) {
-            timestampText =
-                record.timestamp
-                    ->toString(
-                        QStringLiteral(
-                            "HH:mm:ss.zzz"
-                            )
-                        );
-
-            fullTimestampText =
-                record.timestamp
-                    ->toString(
-                        Qt::ISODateWithMs
-                        );
-        }
-
-        auto *timestampItem =
-            new QTableWidgetItem(
-                timestampText
-                );
-
-        if (!fullTimestampText.isEmpty()) {
-            timestampItem->setToolTip(
-                fullTimestampText
-                );
-        }
-
-        /*
-         * -----------------------------------------------------
-         * Finding text
-         *
-         * Analyst notes are the preferred description because
-         * this is a conclusions-oriented view.
-         *
-         * A finding does not require a note. When one is absent,
-         * make that fact visible while still supplying enough
-         * source-event context for the row to be useful.
-         * -----------------------------------------------------
-         */
-
-        QString findingText;
-
-        const QString trimmedNote =
-            state.note.trimmed();
-
-        if (!trimmedNote.isEmpty()) {
-            findingText =
-                state.note.trimmed();
-        } else {
-            QString eventDescription;
-
-            const QString eventCode =
-                record.eventCode.value_or(
-                    QString()
-                    );
-
-            const QString message =
-                record.message.value_or(
-                    QString()
-                    );
-
-            if (!eventCode.isEmpty()
-                && !message.isEmpty()) {
-                eventDescription =
-                    QStringLiteral("%1 — %2")
-                        .arg(
-                            eventCode,
-                            message
-                            );
-            } else if (!eventCode.isEmpty()) {
-                eventDescription =
-                    eventCode;
-            } else if (!message.isEmpty()) {
-                eventDescription =
-                    message;
-            } else {
-                eventDescription =
-                    tr(
-                        "No event description"
-                        );
-            }
-
-            findingText =
-                tr("(No analyst note) — %1")
-                    .arg(
-                        eventDescription
-                        );
-        }
-
-        auto *findingItem =
-            new QTableWidgetItem(
-                findingText
-                );
-
-        /*
-         * Store the stable event identity now even
-         * though navigation is the next slice.
-         *
-         * This ensures navigation will be based on
-         * the actual investigation record rather
-         * than display text or source-record numbers.
-         */
-        statusItem->setData(
-            Qt::UserRole,
-            record.recordId
-            );
-
-        sourceRecordItem->setData(
-            Qt::UserRole,
-            record.recordId
-            );
-
-        timestampItem->setData(
-            Qt::UserRole,
-            record.recordId
-            );
-
-        findingItem->setData(
-            Qt::UserRole,
-            record.recordId
-            );
-
-        if (!trimmedNote.isEmpty()) {
-            findingItem->setToolTip(
-                state.note
-                );
-        } else {
-            findingItem->setToolTip(
-                tr(
-                    "This finding has no analyst "
-                    "note yet."
-                    )
-                );
-        }
-
-        findingsTable->setItem(
-            row,
-            0,
-            statusItem
-            );
-
-        findingsTable->setItem(
-            row,
-            1,
-            sourceRecordItem
-            );
-
-        findingsTable->setItem(
-            row,
-            2,
-            timestampItem
-            );
-
-        findingsTable->setItem(
-            row,
-            3,
-            findingItem
-            );
-    }
-
-    findingsSummaryLabel->setText(
-        tr(
-            "Open: %1    Resolved: %2    "
-            "Dismissed: %3"
-            )
-            .arg(
-                openCount
-                )
-            .arg(
-                resolvedCount
-                )
-            .arg(
-                dismissedCount
-                )
-        );
-
-    findingsTable->resizeRowsToContents();
-
-    findingsTable->setHorizontalScrollBarPolicy(
-        Qt::ScrollBarAlwaysOff
-        );
+    findingsPanel->refresh();
 }
 
 void MainWindow::updateAnalyticsOverview(
@@ -5665,33 +5181,11 @@ void MainWindow::drillDownTimelineBucket(
 }
 
 void MainWindow::navigateToFinding(
-    int row
+    const QString &recordId
     )
 {
     if (investigationController == nullptr
-        || row < 0
-        || row >= findingsTable->rowCount()) {
-        return;
-    }
-
-    QTableWidgetItem *item =
-        findingsTable->item(
-            row,
-            0
-            );
-
-    if (item == nullptr) {
-        return;
-    }
-
-    const QString recordId =
-        item
-            ->data(
-                Qt::UserRole
-                )
-            .toString();
-
-    if (recordId.isEmpty()) {
+        || recordId.isEmpty()) {
         return;
     }
 
@@ -5702,10 +5196,8 @@ void MainWindow::navigateToFinding(
     const InvestigationRecord *targetRecord =
         nullptr;
 
-    for (
-        const InvestigationRecord &record
-        : records
-        ) {
+    for (const InvestigationRecord &record
+         : records) {
         if (record.recordId
             == recordId) {
             targetRecord =
@@ -8655,6 +8147,12 @@ void MainWindow::bindActiveSession()
                 );
         }
 
+        if (findingsPanel != nullptr) {
+            findingsPanel->setSession(
+                nullptr
+                );
+        }
+
         clearEventDetail();
 
         searchDebounceTimer->stop();
@@ -8881,6 +8379,12 @@ void MainWindow::bindActiveSession()
 
     if (eventPanel != nullptr) {
         eventPanel->setSession(
+            session
+            );
+    }
+
+    if (findingsPanel != nullptr) {
+        findingsPanel->setSession(
             session
             );
     }
