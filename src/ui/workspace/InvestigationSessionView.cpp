@@ -2,6 +2,7 @@
 
 #include <QVBoxLayout>
 
+#include "../investigation/InvestigationSessionSummaryPanel.h"
 #include "../../workspace/InvestigationSession.h"
 
 namespace
@@ -39,6 +40,12 @@ InvestigationSessionView::InvestigationSessionView(
           parent
           ),
     m_session(session),
+    m_summaryPanel(
+        new InvestigationSessionSummaryPanel(
+            session,
+            this
+            )
+        ),
     m_layout(
         new QVBoxLayout(this)
         )
@@ -48,6 +55,10 @@ InvestigationSessionView::InvestigationSessionView(
         0,
         0,
         0
+        );
+
+    m_layout->addWidget(
+        m_summaryPanel
         );
 
     if (m_session != nullptr) {
@@ -63,6 +74,12 @@ InvestigationSession *
 InvestigationSessionView::session() const
 {
     return m_session;
+}
+
+InvestigationSessionSummaryPanel *
+InvestigationSessionView::summaryPanel() const
+{
+    return m_summaryPanel;
 }
 
 bool InvestigationSessionView::attachContent(

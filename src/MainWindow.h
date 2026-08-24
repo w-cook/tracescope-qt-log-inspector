@@ -71,7 +71,6 @@ private:
 
     QMenu *recentFilesMenu = nullptr;
 
-    QLabel *summaryLabel;
     QTableView *eventTable;
     QPushButton *previousEventButton;
     QPushButton *nextEventButton;

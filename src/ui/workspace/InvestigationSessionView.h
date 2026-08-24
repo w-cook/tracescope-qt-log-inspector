@@ -3,6 +3,7 @@
 #include "WorkspaceDocument.h"
 
 class InvestigationSession;
+class InvestigationSessionSummaryPanel;
 class QVBoxLayout;
 
 class InvestigationSessionView
@@ -17,6 +18,9 @@ public:
         );
 
     InvestigationSession *session() const;
+
+    InvestigationSessionSummaryPanel *
+    summaryPanel() const;
 
     /*
      * During the incremental migration from the
@@ -38,6 +42,9 @@ public:
 
 private:
     InvestigationSession *m_session = nullptr;
+
+    InvestigationSessionSummaryPanel
+        *m_summaryPanel = nullptr;
 
     QVBoxLayout *m_layout = nullptr;
 

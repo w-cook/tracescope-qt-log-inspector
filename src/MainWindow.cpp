@@ -76,6 +76,7 @@
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/CustomFieldFilterEditor.h"
 #include "ui/MultiSelectFilterComboBox.h"
+#include "ui/investigation/InvestigationSessionSummaryPanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
 
@@ -704,7 +705,6 @@ MainWindow::MainWindow(QWidget *parent)
     settings(),
     recentItemsStore(settings),
     filterPresetStore(settings),
-    summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
     previousEventButton(
         new QPushButton(
@@ -1194,7 +1194,6 @@ void MainWindow::buildLayout()
 
     investigationSurface->hide();
 
-    layout->addWidget(summaryLabel);
     buildFilterControls(layout);
 
     auto *timelineGroup = buildTimelinePanel();
@@ -2134,81 +2133,21 @@ void MainWindow::completeLogFileImport(
 
 void MainWindow::updateSummary(
     const QVector<InvestigationRecord> &records,
-    const QString &filePath
+    const QString &
     )
 {
-    int traceCount = 0;
-    int debugCount = 0;
-    int infoCount = 0;
-    int warningCount = 0;
-    int errorCount = 0;
-    int criticalCount = 0;
-
-    if (!hasSeverityData) {
-        summaryLabel->setText(
-            QString(
-                "TOTAL: %1 visible of %2 events from %3"
-                )
-                .arg(records.size())
-                .arg(
-                    investigationController
-                        ->totalRecordCount()
-                    )
-                .arg(filePath)
-            );
-
+    if (surfaceSessionView == nullptr
+        || surfaceSessionView
+               ->summaryPanel()
+               == nullptr) {
         return;
     }
 
-    for (const InvestigationRecord &record
-         : records) {
-        if (!record.severity.has_value()) {
-            continue;
-        }
-
-        switch (record.severity.value()) {
-            case RecordSeverity::Trace:
-                ++traceCount;
-                break;
-
-            case RecordSeverity::Debug:
-                ++debugCount;
-                break;
-
-            case RecordSeverity::Info:
-                ++infoCount;
-                break;
-
-            case RecordSeverity::Warning:
-                ++warningCount;
-                break;
-
-            case RecordSeverity::Error:
-                ++errorCount;
-                break;
-
-            case RecordSeverity::Critical:
-                ++criticalCount;
-                break;
-        }
-    }
-
-    summaryLabel->setText(
-        QString(
-            "Showing %1 of %2 events from %3 | "
-            "TRACE: %4 | DEBUG: %5 | INFO: %6 | "
-            "WARN: %7 | ERROR: %8 | CRITICAL: %9"
-            )
-            .arg(records.size())
-            .arg(investigationController->totalRecordCount())
-            .arg(filePath)
-            .arg(traceCount)
-            .arg(debugCount)
-            .arg(infoCount)
-            .arg(warningCount)
-            .arg(errorCount)
-            .arg(criticalCount)
-        );
+    surfaceSessionView
+        ->summaryPanel()
+        ->refresh(
+            records
+            );
 }
 
 void MainWindow::buildFilterControls(
@@ -10124,10 +10063,6 @@ void MainWindow::bindActiveSession()
 
         updateTimelineChart(
             QVector<InvestigationRecord>()
-            );
-
-        summaryLabel->setText(
-            tr("No log file loaded.")
             );
 
         return;
