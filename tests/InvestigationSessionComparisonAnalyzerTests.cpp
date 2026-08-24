@@ -30,6 +30,13 @@ private slots:
     void mixedNumericAndTextValuesRemainCategorical();
     void structuredCustomValuesAreIgnored();
     void customFieldsMustExistInBothSessions();
+
+    void twoArgumentComparisonDoesNotPerformBurstAnalysis();
+    void sharedBurstSettingsCompareHealthyAndDegradedSessions();
+    void burstSummaryAggregatesMultipleEpisodes();
+    void dominantBurstValuesUseDeterministicTieBreaking();
+    void burstComparisonIsUnavailableWithoutUsableTimingAndSeverity();
+    void invalidBurstSettingsDoNotCreateBurstComparison();
 };
 
 static InvestigationRecord
@@ -78,6 +85,54 @@ makeCustomComparisonRecord(
         );
 
     return record;
+}
+
+static InvestigationRecord
+makeBurstComparisonRecord(
+    const QString &timestamp,
+    RecordSeverity severity,
+    const QString &recordId,
+    qint64 recordNumber,
+    const std::optional<QString> &subsystem =
+    std::nullopt,
+    const std::optional<QString> &eventCode =
+    std::nullopt,
+    const std::optional<QString> &entityId =
+    std::nullopt
+    )
+{
+    InvestigationRecord record =
+        makeComparisonRecord(
+            timestamp,
+            severity,
+            subsystem,
+            eventCode,
+            entityId
+            );
+
+    record.recordId =
+        recordId;
+
+    record.source.sourceName =
+        QStringLiteral("comparison.log");
+
+    record.source.recordNumber =
+        recordNumber;
+
+    return record;
+}
+
+static BurstDetectionSettings
+comparisonBurstSettings()
+{
+    BurstDetectionSettings settings;
+
+    settings.windowMilliseconds = 1000;
+    settings.elevatedEventThreshold = 3;
+    settings.errorCriticalThreshold = 99;
+    settings.mergeGapMilliseconds = 200;
+
+    return settings;
 }
 
 void InvestigationSessionComparisonAnalyzerTests::
@@ -1562,6 +1617,621 @@ void InvestigationSessionComparisonAnalyzerTests::
             .numericFields.isEmpty()
         );
 }
+
+void InvestigationSessionComparisonAnalyzerTests::
+    twoArgumentComparisonDoesNotPerformBurstAnalysis()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T10:00:00.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("baseline-1"),
+                1
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.000Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-1"),
+                1
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    /*
+     * Basic comparison deliberately makes no
+     * implicit burst-settings decision.
+     */
+    QVERIFY(
+        !result.bursts.has_value()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    sharedBurstSettingsCompareHealthyAndDegradedSessions()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T10:00:00.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("baseline-1"),
+                1,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_HEALTH"),
+                QStringLiteral("PLC-03")
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T10:00:01.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("baseline-2"),
+                2,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_HEALTH"),
+                QStringLiteral("PLC-03")
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.000Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-1"),
+                1,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_RETRY"),
+                QStringLiteral("PLC-03")
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.400Z"
+                    ),
+                RecordSeverity::Error,
+                QStringLiteral("comparison-2"),
+                2,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_DROP"),
+                QStringLiteral("PLC-03")
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.800Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-3"),
+                3,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_RETRY"),
+                QStringLiteral("PLC-03")
+                )
+        };
+
+    const BurstDetectionSettings settings =
+        comparisonBurstSettings();
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords,
+            settings
+            );
+
+    QVERIFY(
+        result.bursts.has_value()
+        );
+
+    const InvestigationBurstComparison &bursts =
+        result.bursts.value();
+
+    QVERIFY(
+        bursts.comparable()
+        );
+
+    /*
+     * Both sides were eligible for burst analysis.
+     * The healthy baseline genuinely has zero
+     * detected episodes.
+     */
+    QVERIFY(
+        bursts.baseline.available
+        );
+
+    QCOMPARE(
+        bursts.baseline.burstCount,
+        0
+        );
+
+    QCOMPARE(
+        bursts.baseline
+            .elevatedRecordCountInBursts,
+        0
+        );
+
+    QVERIFY(
+        bursts.comparison.available
+        );
+
+    QCOMPARE(
+        bursts.comparison.burstCount,
+        1
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .elevatedRecordCountInBursts,
+        3
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .peakBurstElevatedCount,
+        3
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .longestBurstDurationMilliseconds,
+        800
+        );
+
+    QVERIFY(
+        bursts.comparison
+            .dominantSubsystem.has_value()
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .dominantSubsystem->value,
+        QStringLiteral("Network")
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .dominantSubsystem->count,
+        3
+        );
+
+    QVERIFY(
+        bursts.comparison
+            .dominantEntity.has_value()
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .dominantEntity->value,
+        QStringLiteral("PLC-03")
+        );
+
+    QCOMPARE(
+        bursts.comparison
+            .dominantEntity->count,
+        3
+        );
+
+    QCOMPARE(
+        bursts.settings.windowMilliseconds,
+        settings.windowMilliseconds
+        );
+
+    QCOMPARE(
+        bursts.settings.elevatedEventThreshold,
+        settings.elevatedEventThreshold
+        );
+
+    QCOMPARE(
+        bursts.settings.errorCriticalThreshold,
+        settings.errorCriticalThreshold
+        );
+
+    QCOMPARE(
+        bursts.settings.mergeGapMilliseconds,
+        settings.mergeGapMilliseconds
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    burstSummaryAggregatesMultipleEpisodes()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T10:00:00.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("baseline-1"),
+                1
+                )
+        };
+
+    /*
+     * Two three-record episodes separated by much
+     * more than the configured merge gap.
+     */
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.000Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-1"),
+                1
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.300Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-2"),
+                2
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.600Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-3"),
+                3
+                ),
+
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:05.000Z"
+                    ),
+                RecordSeverity::Error,
+                QStringLiteral("comparison-4"),
+                4
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:05.500Z"
+                    ),
+                RecordSeverity::Error,
+                QStringLiteral("comparison-5"),
+                5
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:06.000Z"
+                    ),
+                RecordSeverity::Error,
+                QStringLiteral("comparison-6"),
+                6
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords,
+            comparisonBurstSettings()
+            );
+
+    QVERIFY(
+        result.bursts.has_value()
+        );
+
+    const InvestigationBurstSessionSummary
+        &summary =
+        result.bursts
+            ->comparison;
+
+    QCOMPARE(
+        summary.burstCount,
+        2
+        );
+
+    QCOMPARE(
+        summary.elevatedRecordCountInBursts,
+        6
+        );
+
+    QCOMPARE(
+        summary.peakBurstElevatedCount,
+        3
+        );
+
+    /*
+     * First episode = 600 ms.
+     * Second episode = 1000 ms.
+     */
+    QCOMPARE(
+        summary.longestBurstDurationMilliseconds,
+        1000
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    dominantBurstValuesUseDeterministicTieBreaking()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T10:00:00.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("baseline-1"),
+                1
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.000Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-1"),
+                1,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_DROP"),
+                QStringLiteral("PLC-03")
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.300Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-2"),
+                2,
+                QStringLiteral("Modbus"),
+                QStringLiteral("MODBUS_TIMEOUT"),
+                QStringLiteral("RTU-07")
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.600Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-3"),
+                3,
+                QStringLiteral("Network"),
+                QStringLiteral("LINK_DROP"),
+                QStringLiteral("PLC-03")
+                ),
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.900Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-4"),
+                4,
+                QStringLiteral("Modbus"),
+                QStringLiteral("MODBUS_TIMEOUT"),
+                QStringLiteral("RTU-07")
+                )
+        };
+
+    BurstDetectionSettings settings =
+        comparisonBurstSettings();
+
+    settings.elevatedEventThreshold = 4;
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords,
+            settings
+            );
+
+    QVERIFY(
+        result.bursts.has_value()
+        );
+
+    const InvestigationBurstSessionSummary
+        &summary =
+        result.bursts
+            ->comparison;
+
+    /*
+     * Each candidate value occurs twice.
+     * QMap's case-sensitive key order provides
+     * deterministic tie breaking.
+     */
+    QVERIFY(
+        summary.dominantSubsystem.has_value()
+        );
+
+    QCOMPARE(
+        summary.dominantSubsystem->value,
+        QStringLiteral("Modbus")
+        );
+
+    QCOMPARE(
+        summary.dominantSubsystem->count,
+        2
+        );
+
+    QVERIFY(
+        summary.dominantEventCode.has_value()
+        );
+
+    QCOMPARE(
+        summary.dominantEventCode->value,
+        QStringLiteral("LINK_DROP")
+        );
+
+    QCOMPARE(
+        summary.dominantEventCode->count,
+        2
+        );
+
+    QVERIFY(
+        summary.dominantEntity.has_value()
+        );
+
+    QCOMPARE(
+        summary.dominantEntity->value,
+        QStringLiteral("PLC-03")
+        );
+
+    QCOMPARE(
+        summary.dominantEntity->count,
+        2
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    burstComparisonIsUnavailableWithoutUsableTimingAndSeverity()
+{
+    InvestigationRecord baselineRecord;
+
+    /*
+     * A timestamp without severity cannot be
+     * classified for burst analysis.
+     */
+    baselineRecord.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-24T10:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("comparison-1"),
+                1
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            {baselineRecord},
+            comparisonRecords,
+            comparisonBurstSettings()
+            );
+
+    QVERIFY(
+        result.bursts.has_value()
+        );
+
+    QVERIFY(
+        !result.bursts
+             ->baseline.available
+        );
+
+    QVERIFY(
+        result.bursts
+            ->comparison.available
+        );
+
+    QVERIFY(
+        !result.bursts
+             ->comparable()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    invalidBurstSettingsDoNotCreateBurstComparison()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T10:00:00.000Z"
+                    ),
+                RecordSeverity::Info,
+                QStringLiteral("baseline-1"),
+                1
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeBurstComparisonRecord(
+                QStringLiteral(
+                    "2026-08-24T11:00:00.000Z"
+                    ),
+                RecordSeverity::Warning,
+                QStringLiteral("comparison-1"),
+                1
+                )
+        };
+
+    BurstDetectionSettings settings =
+        comparisonBurstSettings();
+
+    settings.windowMilliseconds = 0;
+
+    QVERIFY(
+        !settings.isValid()
+        );
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords,
+            settings
+            );
+
+    /*
+     * Invalid settings do not turn an otherwise
+     * valid session comparison into a failed
+     * comparison. Burst analysis simply remains
+     * unperformed.
+     */
+    QVERIFY(
+        !result.bursts.has_value()
+        );
+
+    QCOMPARE(
+        result.totalRecords.baselineCount,
+        1
+        );
+
+    QCOMPARE(
+        result.totalRecords.comparisonCount,
+        1
+        );
+}
+
 QTEST_MAIN(
     InvestigationSessionComparisonAnalyzerTests
     )

@@ -8,6 +8,9 @@
 #include <QtGlobal>
 #include <QStringList>
 
+#include "BurstDetectionSettings.h"
+#include "InvestigationValueFrequency.h"
+
 #include "../domain/RecordSeverity.h"
 
 struct InvestigationCountDifference
@@ -157,6 +160,47 @@ struct InvestigationCustomFieldComparison
         numericFields;
 };
 
+struct InvestigationBurstSessionSummary
+{
+    bool available = false;
+
+    int burstCount = 0;
+
+    /*
+     * Elevated records contained within detected
+     * burst episodes. A healthy session may
+     * legitimately have zero.
+     */
+    int elevatedRecordCountInBursts = 0;
+
+    int peakBurstElevatedCount = 0;
+
+    qint64 longestBurstDurationMilliseconds = 0;
+
+    std::optional<InvestigationValueFrequency>
+        dominantSubsystem;
+
+    std::optional<InvestigationValueFrequency>
+        dominantEventCode;
+
+    std::optional<InvestigationValueFrequency>
+        dominantEntity;
+};
+
+struct InvestigationBurstComparison
+{
+    BurstDetectionSettings settings;
+
+    InvestigationBurstSessionSummary baseline;
+    InvestigationBurstSessionSummary comparison;
+
+    bool comparable() const
+    {
+        return baseline.available
+               && comparison.available;
+    }
+};
+
 struct InvestigationSessionComparison
 {
     InvestigationCountDifference totalRecords;
@@ -200,4 +244,16 @@ struct InvestigationSessionComparison
      * - unchanged or unsuitable fields are omitted
      */
     InvestigationCustomFieldComparison customFields;
+
+    /*
+     * Burst comparison is optional because the
+     * basic session comparison can be calculated
+     * without choosing shared burst-detection
+     * settings.
+     *
+     * When present, both sessions were analyzed
+     * with exactly the settings stored here.
+     */
+    std::optional<InvestigationBurstComparison>
+        bursts;
 };

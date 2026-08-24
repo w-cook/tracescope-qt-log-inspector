@@ -8,6 +8,9 @@
 #include <array>
 #include <cmath>
 #include <optional>
+#include <utility>
+
+#include "InvestigationBurstAnalyzer.h"
 
 namespace
 {
@@ -679,7 +682,7 @@ customFieldComparisonFor(
         );
 
     for (const QString &fieldName
-         : sharedFieldNames) {
+         : std::as_const(sharedFieldNames)) {
         bool baselineSupported = true;
         bool comparisonSupported = true;
 
@@ -827,7 +830,7 @@ customFieldComparisonFor(
             fieldName;
 
         for (const QString &value
-             : sortedValues) {
+             : std::as_const(sortedValues)) {
             const qint64 baselineCount =
                 baselineCounts.value(
                     value,
@@ -873,6 +876,199 @@ customFieldComparisonFor(
                 );
         }
     }
+
+    return result;
+}
+
+bool burstAnalysisAvailableFor(
+    const QVector<InvestigationRecord> &records
+    )
+{
+    for (const InvestigationRecord &record
+         : records) {
+        if (record.timestamp.has_value()
+            && record.timestamp->isValid()
+            && record.severity.has_value()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+template<typename CountsSelector>
+std::optional<InvestigationValueFrequency>
+dominantBurstValue(
+    const QVector<InvestigationBurst> &bursts,
+    CountsSelector selector
+    )
+{
+    QMap<QString, int> combinedCounts;
+
+    for (const InvestigationBurst &burst
+         : bursts) {
+        const QMap<QString, int> &counts =
+            selector(burst);
+
+        for (auto iterator =
+             counts.cbegin();
+             iterator != counts.cend();
+             ++iterator) {
+            combinedCounts[iterator.key()] +=
+                iterator.value();
+        }
+    }
+
+    if (combinedCounts.isEmpty()) {
+        return std::nullopt;
+    }
+
+    QString dominantValue;
+    int dominantCount = -1;
+
+    /*
+     * QMap iteration is case-sensitive key order.
+     * Updating only for a strictly larger count
+     * makes that ordering the deterministic
+     * tie-breaker.
+     */
+    for (auto iterator =
+         combinedCounts.cbegin();
+         iterator != combinedCounts.cend();
+         ++iterator) {
+        if (iterator.value()
+            <= dominantCount) {
+            continue;
+        }
+
+        dominantValue =
+            iterator.key();
+
+        dominantCount =
+            iterator.value();
+    }
+
+    InvestigationValueFrequency result;
+
+    result.value =
+        dominantValue;
+
+    result.count =
+        dominantCount;
+
+    return result;
+}
+
+InvestigationBurstSessionSummary
+burstSummaryFor(
+    const QVector<InvestigationRecord> &records,
+    const BurstDetectionSettings &settings
+    )
+{
+    InvestigationBurstSessionSummary summary;
+
+    summary.available =
+        burstAnalysisAvailableFor(
+            records
+            );
+
+    /*
+     * A session with usable timestamp/severity
+     * information remains available even if no
+     * burst is detected.
+     */
+    if (!summary.available) {
+        return summary;
+    }
+
+    InvestigationBurstAnalyzer analyzer;
+
+    const QVector<InvestigationBurst> bursts =
+        analyzer.detectBursts(
+            records,
+            settings
+            );
+
+    summary.burstCount =
+        bursts.size();
+
+    for (const InvestigationBurst &burst
+         : bursts) {
+        const int elevatedCount =
+            burst.totalElevatedCount();
+
+        summary.elevatedRecordCountInBursts +=
+            elevatedCount;
+
+        summary.peakBurstElevatedCount =
+            std::max(
+                summary.peakBurstElevatedCount,
+                elevatedCount
+                );
+
+        summary.longestBurstDurationMilliseconds =
+            std::max(
+                summary.longestBurstDurationMilliseconds,
+                burst.durationMilliseconds()
+                );
+    }
+
+    summary.dominantSubsystem =
+        dominantBurstValue(
+            bursts,
+            [](
+                const InvestigationBurst &burst
+                ) -> const QMap<QString, int> & {
+                return burst.subsystemCounts;
+            }
+            );
+
+    summary.dominantEventCode =
+        dominantBurstValue(
+            bursts,
+            [](
+                const InvestigationBurst &burst
+                ) -> const QMap<QString, int> & {
+                return burst.eventCodeCounts;
+            }
+            );
+
+    summary.dominantEntity =
+        dominantBurstValue(
+            bursts,
+            [](
+                const InvestigationBurst &burst
+                ) -> const QMap<QString, int> & {
+                return burst.entityCounts;
+            }
+            );
+
+    return summary;
+}
+
+InvestigationBurstComparison
+burstComparisonFor(
+    const QVector<InvestigationRecord> &baselineRecords,
+    const QVector<InvestigationRecord> &comparisonRecords,
+    const BurstDetectionSettings &settings
+    )
+{
+    InvestigationBurstComparison result;
+
+    result.settings =
+        settings;
+
+    result.baseline =
+        burstSummaryFor(
+            baselineRecords,
+            settings
+            );
+
+    result.comparison =
+        burstSummaryFor(
+            comparisonRecords,
+            settings
+            );
 
     return result;
 }
@@ -948,6 +1144,38 @@ InvestigationSessionComparisonAnalyzer::compare(
         customFieldComparisonFor(
             baselineRecords,
             comparisonRecords
+            );
+
+    return result;
+}
+
+InvestigationSessionComparison
+InvestigationSessionComparisonAnalyzer::compare(
+    const QVector<InvestigationRecord> &baselineRecords,
+    const QVector<InvestigationRecord> &comparisonRecords,
+    const BurstDetectionSettings &burstSettings
+    ) const
+{
+    InvestigationSessionComparison result =
+        compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    /*
+     * Invalid shared settings mean burst comparison
+     * was not performed. The canonical comparison
+     * remains completely usable.
+     */
+    if (!burstSettings.isValid()) {
+        return result;
+    }
+
+    result.bursts =
+        burstComparisonFor(
+            baselineRecords,
+            comparisonRecords,
+            burstSettings
             );
 
     return result;
