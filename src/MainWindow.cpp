@@ -76,6 +76,7 @@
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/CustomFieldFilterEditor.h"
 #include "ui/MultiSelectFilterComboBox.h"
+#include "ui/investigation/InvestigationEventDetailPanel.h"
 #include "ui/investigation/InvestigationSessionSummaryPanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
@@ -732,22 +733,6 @@ MainWindow::MainWindow(QWidget *parent)
     nextIssueButton(
         new QPushButton(
             tr("Next Issue"),
-            this
-            )
-        ),
-    eventDetailText(new QPlainTextEdit(this)),
-    findingStatusCombo(
-        new QComboBox(this)
-        ),
-    noteButton(
-        new QPushButton(
-            tr("Add Note"),
-            this
-            )
-        ),
-    bookmarkButton(
-        new QPushButton(
-            tr("Bookmark Event"),
             this
             )
         ),
@@ -1560,8 +1545,37 @@ void MainWindow::buildLayout()
         tr("Analytics")
         );
 
-    auto *detailGroup =
-        buildDetailPanel();
+    eventDetailPanel =
+        new InvestigationEventDetailPanel(
+            this
+            );
+
+    connect(
+        eventDetailPanel,
+        &InvestigationEventDetailPanel::
+            findingStatusChangeRequested,
+        this,
+        &MainWindow::
+            updateSelectedEventFindingStatus
+        );
+
+    connect(
+        eventDetailPanel,
+        &InvestigationEventDetailPanel::
+            noteEditRequested,
+        this,
+        &MainWindow::
+            editSelectedEventNote
+        );
+
+    connect(
+        eventDetailPanel,
+        &InvestigationEventDetailPanel::
+            bookmarkToggleRequested,
+        this,
+        &MainWindow::
+            toggleSelectedEventBookmark
+        );
 
     auto *bottomSplitter =
         new QSplitter(
@@ -1574,7 +1588,7 @@ void MainWindow::buildLayout()
         );
 
     bottomSplitter->addWidget(
-        detailGroup
+        eventDetailPanel
         );
 
     bottomSplitter->setStretchFactor(
@@ -4006,195 +4020,6 @@ void MainWindow::
         );
 }
 
-QGroupBox *MainWindow::buildDetailPanel()
-{
-    auto *detailGroup =
-        new QGroupBox(
-            tr("Selected Event Details"),
-            this
-            );
-
-    eventDetailText->setReadOnly(
-        true
-        );
-
-    eventDetailText->setPlaceholderText(
-        tr(
-            "Select a telemetry event to "
-            "view its details."
-            )
-        );
-
-    auto *detailLayout =
-        new QVBoxLayout(
-            detailGroup
-            );
-
-    detailLayout->setSpacing(
-        4
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Per-event investigation state
-     *
-     * Keep bookmarks, notes, and finding status
-     * together on one compact row so investigation
-     * controls do not consume additional vertical
-     * space from the event-detail view.
-     * ---------------------------------------------------------
-     */
-
-    auto *stateLayout =
-        new QHBoxLayout();
-
-    stateLayout->setContentsMargins(
-        0,
-        0,
-        0,
-        0
-        );
-
-    stateLayout->setSpacing(
-        6
-        );
-
-    auto *findingStatusLabel =
-        new QLabel(
-            tr("Finding status:"),
-            detailGroup
-            );
-
-    findingStatusCombo->addItem(
-        tr("None"),
-        static_cast<int>(
-            FindingStatus::None
-            )
-        );
-
-    findingStatusCombo->addItem(
-        tr("Open"),
-        static_cast<int>(
-            FindingStatus::Open
-            )
-        );
-
-    findingStatusCombo->addItem(
-        tr("Resolved"),
-        static_cast<int>(
-            FindingStatus::Resolved
-            )
-        );
-
-    findingStatusCombo->addItem(
-        tr("Dismissed"),
-        static_cast<int>(
-            FindingStatus::Dismissed
-            )
-        );
-
-    findingStatusCombo->setMinimumWidth(
-        findingStatusCombo
-            ->sizeHint()
-            .width()
-        + 8
-        );
-
-    findingStatusCombo->setToolTip(
-        tr(
-            "Set the investigation finding status "
-            "for the selected event"
-            )
-        );
-
-    findingStatusCombo->setEnabled(
-        false
-        );
-
-    noteButton->setEnabled(
-        false
-        );
-
-    noteButton->setToolTip(
-        tr(
-            "Add an analyst note to "
-            "the selected event"
-            )
-        );
-
-    bookmarkButton->setEnabled(
-        false
-        );
-
-    bookmarkButton->setToolTip(
-        tr(
-            "Bookmark the selected event "
-            "for later investigation"
-            )
-        );
-
-    stateLayout->addWidget(
-        findingStatusLabel
-        );
-
-    stateLayout->addWidget(
-        findingStatusCombo
-        );
-
-    stateLayout->addStretch();
-
-    stateLayout->addWidget(
-        noteButton
-        );
-
-    stateLayout->addWidget(
-        bookmarkButton
-        );
-
-    detailLayout->addLayout(
-        stateLayout
-        );
-
-    detailLayout->addWidget(
-        eventDetailText
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Investigation-state interactions
-     * ---------------------------------------------------------
-     */
-
-    connect(
-        findingStatusCombo,
-        &QComboBox::currentIndexChanged,
-        this,
-        [this](int) {
-            updateSelectedEventFindingStatus();
-        }
-        );
-
-    connect(
-        noteButton,
-        &QPushButton::clicked,
-        this,
-        [this]() {
-            editSelectedEventNote();
-        }
-        );
-
-    connect(
-        bookmarkButton,
-        &QPushButton::clicked,
-        this,
-        [this]() {
-            toggleSelectedEventBookmark();
-        }
-        );
-
-    return detailGroup;
-}
-
 void MainWindow::updateEventDetailFromSelection()
 {
     const InvestigationRecord *record =
@@ -4205,98 +4030,20 @@ void MainWindow::updateEventDetailFromSelection()
         return;
     }
 
-    displayEventDetail(
-        *record
-        );
+    if (eventDetailPanel != nullptr) {
+        eventDetailPanel->displayRecord(
+            *record
+            );
+    }
 
     updateInvestigationStateControls();
 }
 
-void MainWindow::displayEventDetail(
-    const InvestigationRecord &record
-    )
-{
-    QStringList lines;
-
-    lines << "Timestamp: "
-                 + (
-                     record.timestamp.has_value()
-                         ? record.timestamp->toString(
-                               Qt::ISODateWithMs
-                               )
-                         : QString()
-                     );
-
-    lines << "Level: "
-                 + (
-                     record.severity.has_value()
-                         ? recordSeverityToString(
-                               record.severity.value()
-                               )
-                         : QString()
-                     );
-
-    lines << "Subsystem: "
-                 + record.subsystem.value_or(
-                     QString()
-                     );
-
-    lines << "Event Code: "
-                 + record.eventCode.value_or(
-                     QString()
-                     );
-
-    lines << "Entity ID: "
-                 + record.entityId.value_or(
-                     QString()
-                     );
-
-    lines << "";
-    lines << "Message:";
-    lines << record.message.value_or(
-        QString()
-        );
-
-    if (!record.customAttributes.isEmpty()) {
-        lines << "";
-        lines << "Custom Attributes:";
-
-        QStringList attributeKeys =
-            record.customAttributes.keys();
-
-        std::sort(
-            attributeKeys.begin(),
-            attributeKeys.end(),
-            [](const QString &left, const QString &right) {
-                return left.compare(
-                           right,
-                           Qt::CaseInsensitive
-                           ) < 0;
-            }
-            );
-
-        for (
-            const QString &key :
-            std::as_const(attributeKeys)
-            ) {
-            lines << QString("%1: %2")
-            .arg(
-                key,
-                record.customAttributes
-                    .value(key)
-                    .toString()
-                );
-        }
-    }
-
-    eventDetailText->setPlainText(
-        lines.join("\n")
-        );
-}
-
 void MainWindow::clearEventDetail()
 {
-    eventDetailText->clear();
+    if (eventDetailPanel != nullptr) {
+        eventDetailPanel->clearRecord();
+    }
 
     updateInvestigationStateControls();
 }
@@ -4328,6 +4075,10 @@ MainWindow::selectedEventRecord() const
 void MainWindow::
     updateInvestigationStateControls()
 {
+    if (eventDetailPanel == nullptr) {
+        return;
+    }
+
     InvestigationSession *session =
         workspace->activeSession();
 
@@ -4337,49 +4088,8 @@ void MainWindow::
     if (session == nullptr
         || record == nullptr
         || record->recordId.isEmpty()) {
-        {
-            const QSignalBlocker blocker(
-                findingStatusCombo
-                );
-
-            const int noneIndex =
-                findingStatusCombo->findData(
-                    static_cast<int>(
-                        FindingStatus::None
-                        )
-                    );
-
-            findingStatusCombo->setCurrentIndex(
-                noneIndex
-                );
-        }
-
-        findingStatusCombo->setEnabled(
-            false
-            );
-
-        noteButton->setEnabled(
-            false
-            );
-
-        noteButton->setText(
-            tr("Add Note")
-            );
-
-        noteButton->setToolTip(
-            tr(
-                "Add an analyst note to "
-                "the selected event"
-                )
-            );
-
-        bookmarkButton->setEnabled(
-            false
-            );
-
-        bookmarkButton->setText(
-            tr("Bookmark Event")
-            );
+        eventDetailPanel
+            ->clearInvestigationState();
 
         return;
     }
@@ -4391,58 +4101,10 @@ void MainWindow::
                 record->recordId
                 );
 
-    {
-        const QSignalBlocker blocker(
-            findingStatusCombo
+    eventDetailPanel
+        ->setInvestigationState(
+            state
             );
-
-        const int statusIndex =
-            findingStatusCombo->findData(
-                static_cast<int>(
-                    state.findingStatus
-                    )
-                );
-
-        findingStatusCombo->setCurrentIndex(
-            statusIndex
-            );
-    }
-
-    findingStatusCombo->setEnabled(
-        true
-        );
-
-    const bool hasNote =
-        !state.note.trimmed().isEmpty();
-
-    noteButton->setEnabled(
-        true
-        );
-
-    noteButton->setText(
-        hasNote
-            ? tr("View/Edit Note")
-            : tr("Add Note")
-        );
-
-    noteButton->setToolTip(
-        hasNote
-            ? state.note
-            : tr(
-                  "Add an analyst note to "
-                  "the selected event"
-                  )
-        );
-
-    bookmarkButton->setEnabled(
-        true
-        );
-
-    bookmarkButton->setText(
-        state.bookmarked
-            ? tr("Remove Bookmark")
-            : tr("Bookmark Event")
-        );
 }
 
 void MainWindow::
@@ -4457,18 +4119,13 @@ void MainWindow::
     if (session == nullptr
         || record == nullptr
         || record->recordId.isEmpty()
-        || !findingStatusCombo
-                ->currentData()
-                .isValid()) {
+        || eventDetailPanel == nullptr) {
         return;
     }
 
     const FindingStatus status =
-        static_cast<FindingStatus>(
-            findingStatusCombo
-                ->currentData()
-                .toInt()
-            );
+        eventDetailPanel
+            ->selectedFindingStatus();
 
     session
         ->investigationStateStore()

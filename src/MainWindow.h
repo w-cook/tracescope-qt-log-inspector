@@ -47,6 +47,7 @@ class QDialog;
 class QTabWidget;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
+class InvestigationEventDetailPanel;
 
 class MainWindow : public QMainWindow
 {
@@ -77,10 +78,6 @@ private:
     QLabel *eventPositionLabel;
     QPushButton *previousIssueButton;
     QPushButton *nextIssueButton;
-    QPlainTextEdit *eventDetailText;
-    QComboBox *findingStatusCombo;
-    QPushButton *noteButton;
-    QPushButton *bookmarkButton;
     QTableWidget *issueSummaryTable;
     QGroupBox *issueSummaryGroup;
 
@@ -120,6 +117,9 @@ private:
      */
     InvestigationSessionView *surfaceSessionView =
         nullptr;
+
+    InvestigationEventDetailPanel
+        *eventDetailPanel = nullptr;
 
     InvestigationController *investigationController =
         nullptr;
@@ -273,11 +273,7 @@ private:
 
     void updateTimelineBreakdownControls();
 
-    QGroupBox *buildDetailPanel();
     void updateEventDetailFromSelection();
-    void displayEventDetail(
-        const InvestigationRecord &record
-        );
     void clearEventDetail();
 
     const InvestigationRecord *
