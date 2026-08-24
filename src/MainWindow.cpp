@@ -78,6 +78,7 @@
 #include "ui/MultiSelectFilterComboBox.h"
 #include "ui/investigation/InvestigationEventDetailPanel.h"
 #include "ui/investigation/InvestigationEventPanel.h"
+#include "ui/investigation/InvestigationIssueSummaryPanel.h"
 #include "ui/investigation/InvestigationSessionSummaryPanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
@@ -707,8 +708,6 @@ MainWindow::MainWindow(QWidget *parent)
     settings(),
     recentItemsStore(settings),
     filterPresetStore(settings),
-    issueSummaryTable(new QTableWidget(0, 4)),
-    issueSummaryGroup(nullptr),
     workspace(new InvestigationWorkspace(this)),
     investigationController(nullptr),
     timelineChartView(new QChartView(this)),
@@ -1185,8 +1184,19 @@ void MainWindow::buildLayout()
         }
         );
 
-    issueSummaryGroup =
-        buildIssueSummaryPanel();
+    issueSummaryPanel =
+        new InvestigationIssueSummaryPanel(
+            this
+            );
+
+    connect(
+        issueSummaryPanel,
+        &InvestigationIssueSummaryPanel::
+            drillDownRequested,
+        this,
+        &MainWindow::
+            drillDownIssueSummary
+        );
 
     findingsPanel =
         buildFindingsPanel();
@@ -1202,7 +1212,7 @@ void MainWindow::buildLayout()
         );
 
     investigationReviewTabs->addTab(
-        issueSummaryGroup,
+        issueSummaryPanel,
         tr("Issue Summary")
         );
 
@@ -1294,7 +1304,7 @@ void MainWindow::buildLayout()
     bottomSplitter->setCollapsible(1, false);
 
     bottomSplitter->setSizes({
-        issueSummaryTable->minimumWidth() + 30,
+        issueSummaryPanel->preferredCompactWidth(),
         1000
     });
 
@@ -1319,7 +1329,7 @@ void MainWindow::buildLayout()
                     investigationReviewTabs
                         ->widget(index);
 
-                if (currentPage == issueSummaryGroup) {
+                if (currentPage == issueSummaryPanel) {
                     session->setReviewTab(
                         InvestigationReviewTab::
                             IssueSummary
@@ -1376,9 +1386,8 @@ void MainWindow::buildLayout()
              */
             const int issueWidth =
                 std::max(
-                    issueSummaryTable
-                        ->minimumWidth()
-                    + 30,
+                    issueSummaryPanel
+                        ->preferredCompactWidth(),
                     static_cast<int>(
                         totalWidth * 0.35
                         )
@@ -4112,79 +4121,6 @@ void MainWindow::selectProxyRow(
         );
 }
 
-QGroupBox *MainWindow::buildIssueSummaryPanel()
-{
-    auto *issueSummaryGroup =
-        new QGroupBox("Grouped Warnings and Errors", this);
-
-    issueSummaryTable->setColumnCount(4);
-    issueSummaryTable->setHorizontalHeaderLabels({
-        "Subsystem",
-        "Warnings",
-        "Errors",
-        "Total"
-    });
-
-    issueSummaryTable->horizontalHeader()->setSectionResizeMode(
-        QHeaderView::ResizeToContents
-        );
-
-    issueSummaryTable->horizontalHeader()->setStretchLastSection(false);
-    issueSummaryTable->horizontalHeader()->resizeSections(
-        QHeaderView::ResizeToContents
-        );
-
-    const int requiredTableWidth =
-        issueSummaryTable->verticalHeader()->width()
-        + issueSummaryTable->horizontalHeader()->length()
-        + issueSummaryTable->frameWidth() * 2
-        + issueSummaryTable->verticalScrollBar()->sizeHint().width()
-        + 8;
-
-    issueSummaryTable->setMinimumWidth(requiredTableWidth);
-    issueSummaryTable->setAlternatingRowColors(true);
-
-    issueSummaryTable->setSelectionBehavior(
-        QAbstractItemView::SelectItems
-        );
-
-    issueSummaryTable->setSelectionMode(
-        QAbstractItemView::SingleSelection
-        );
-
-    issueSummaryTable->setEditTriggers(
-        QAbstractItemView::NoEditTriggers
-        );
-
-    issueSummaryTable->setToolTip(
-        tr(
-            "Double-click a summary value to filter "
-            "the investigation to the represented issues."
-            )
-        );
-
-    connect(
-        issueSummaryTable,
-        &QTableWidget::cellDoubleClicked,
-        this,
-        [this](
-            int row,
-            int column
-            ) {
-            drillDownIssueSummary(
-                row,
-                column
-                );
-        },
-        Qt::QueuedConnection
-        );
-
-    auto *issueLayout = new QVBoxLayout(issueSummaryGroup);
-    issueLayout->addWidget(issueSummaryTable);
-
-    return issueSummaryGroup;
-}
-
 QWidget *MainWindow::buildFindingsPanel()
 {
     auto *panel =
@@ -4924,184 +4860,18 @@ void MainWindow::updateIssueSummary(
     const QVector<InvestigationRecord> &records
     )
 {
-    if (!hasSeverityData
-        || !hasSubsystemData) {
-        issueSummaryTable->setRowCount(
-            0
-            );
-
+    if (issueSummaryPanel == nullptr) {
         return;
     }
 
-    const QVector<TelemetryIssueGroup> groups =
-        issueAnalyzer
-            .groupWarningsAndErrorsBySubsystem(
-                records
-                );
-
-    issueSummaryTable->setRowCount(
-        groups.size()
-        );
-
-    for (int row = 0;
-         row < groups.size();
-         ++row) {
-        const TelemetryIssueGroup &group =
-            groups[row];
-
-        auto *subsystemItem =
-            new QTableWidgetItem(
-                group.subsystem
-                );
-
-        auto *warningItem =
-            new QTableWidgetItem(
-                QString::number(
-                    group.warningCount
-                    )
-                );
-
-        auto *errorItem =
-            new QTableWidgetItem(
-                QString::number(
-                    group.errorCount
-                    )
-                );
-
-        auto *totalItem =
-            new QTableWidgetItem(
-                QString::number(
-                    group.totalCount()
-                    )
-                );
-
-        /*
-         * Records without a subsystem are grouped
-         * together by the analyzer for presentation,
-         * but the exact-value subsystem filter cannot
-         * currently express "missing subsystem".
-         *
-         * Do not advertise a drill-down interaction
-         * that cannot be reproduced by the active
-         * filter controls.
-         */
-        if (group.subsystem
-            == QStringLiteral("(No subsystem)")) {
-            const QString unavailableToolTip =
-                tr(
-                    "Drill-down is unavailable because "
-                    "these records do not contain a "
-                    "subsystem value."
-                    );
-
-            subsystemItem->setToolTip(
-                unavailableToolTip
-                );
-
-            warningItem->setToolTip(
-                unavailableToolTip
-                );
-
-            errorItem->setToolTip(
-                unavailableToolTip
-                );
-
-            totalItem->setToolTip(
-                unavailableToolTip
-                );
-        } else {
-            subsystemItem->setToolTip(
-                tr(
-                    "Double-click to show "
-                    "warning/error-class events "
-                    "for this subsystem."
-                    )
-                );
-
-            warningItem->setToolTip(
-                group.warningCount > 0
-                    ? tr(
-                          "Double-click to show "
-                          "warnings for this subsystem."
-                          )
-                    : tr(
-                          "No warnings are currently "
-                          "visible for this subsystem."
-                          )
-                );
-
-            errorItem->setToolTip(
-                group.errorCount > 0
-                    ? tr(
-                          "Double-click to show errors "
-                          "and critical events for this "
-                          "subsystem."
-                          )
-                    : tr(
-                          "No errors or critical events "
-                          "are currently visible for "
-                          "this subsystem."
-                          )
-                );
-
-            totalItem->setToolTip(
-                tr(
-                    "Double-click to show all "
-                    "warning/error-class events "
-                    "for this subsystem."
-                    )
-                );
-        }
-
-        issueSummaryTable->setItem(
-            row,
-            0,
-            subsystemItem
-            );
-
-        issueSummaryTable->setItem(
-            row,
-            1,
-            warningItem
-            );
-
-        issueSummaryTable->setItem(
-            row,
-            2,
-            errorItem
-            );
-
-        issueSummaryTable->setItem(
-            row,
-            3,
-            totalItem
-            );
+    if (!hasSeverityData
+        || !hasSubsystemData) {
+        issueSummaryPanel->clear();
+        return;
     }
 
-    issueSummaryTable
-        ->horizontalHeader()
-        ->resizeSections(
-            QHeaderView::ResizeToContents
-            );
-
-    const int requiredTableWidth =
-        issueSummaryTable
-            ->verticalHeader()
-            ->width()
-        + issueSummaryTable
-              ->horizontalHeader()
-              ->length()
-        + issueSummaryTable
-                  ->frameWidth()
-              * 2
-        + issueSummaryTable
-              ->verticalScrollBar()
-              ->sizeHint()
-              .width()
-        + 8;
-
-    issueSummaryTable->setMinimumWidth(
-        requiredTableWidth
+    issueSummaryPanel->updateRecords(
+        records
         );
 }
 
@@ -5542,112 +5312,50 @@ void MainWindow::updateAnalyticsOverview(
 }
 
 void MainWindow::drillDownIssueSummary(
-    int row,
-    int column
+    const QString &subsystem,
+    InvestigationIssueDrillDownType type
     )
 {
     if (investigationController == nullptr
-        || row < 0
-        || row >= issueSummaryTable->rowCount()
-        || column < 0
-        || column >= issueSummaryTable->columnCount()) {
-        return;
-    }
-
-    QTableWidgetItem *subsystemItem =
-        issueSummaryTable->item(
-            row,
-            0
-            );
-
-    if (subsystemItem == nullptr) {
-        return;
-    }
-
-    const QString subsystem =
-        subsystemItem->text();
-
-    /*
-     * The grouped analyzer uses this display label
-     * for records without a subsystem. The current
-     * exact-value subsystem filter cannot express
-     * "missing subsystem", so do not pretend this
-     * drill-down can reproduce that group.
-     */
-    if (subsystem
-        == QStringLiteral("(No subsystem)")) {
+        || subsystem.isEmpty()) {
         return;
     }
 
     QStringList targetSeverities;
 
-    switch (column) {
-    case 1:
-    {
-        QTableWidgetItem *warningItem =
-            issueSummaryTable->item(
-                row,
-                1
-                );
-
-        if (warningItem == nullptr
-            || warningItem
-                       ->text()
-                       .toInt() <= 0) {
-            return;
-        }
-
+    switch (type) {
+    case InvestigationIssueDrillDownType::
+        Warnings:
         targetSeverities = {
             QStringLiteral("WARN")
-    };
-
+        };
         break;
-    }
 
-    case 2:
-    {
-        QTableWidgetItem *errorItem =
-            issueSummaryTable->item(
-                row,
-                2
-                );
-
-        if (errorItem == nullptr
-            || errorItem
-                   ->text()
-                   .toInt() <= 0) {
-            return;
-        }
-
+    case InvestigationIssueDrillDownType::
+        Errors:
         /*
          * Existing grouped analysis intentionally
-         * counts CRITICAL together with ERROR.
+         * treats CRITICAL as error-class behavior.
          */
         targetSeverities = {
             QStringLiteral("ERROR"),
             QStringLiteral("CRITICAL")
         };
-
         break;
-    }
 
-    case 0:
-    case 3:
+    case InvestigationIssueDrillDownType::
+        AllElevated:
         targetSeverities = {
             QStringLiteral("WARN"),
             QStringLiteral("ERROR"),
             QStringLiteral("CRITICAL")
         };
         break;
-
-    default:
-        return;
     }
 
     /*
-     * Drill-down must narrow the current result
-     * set rather than silently broaden an existing
-     * severity filter.
+     * Drill-down narrows the current result rather
+     * than broadening an existing severity filter.
      */
     const QStringList currentSeverities =
         levelFilterCombo
@@ -5656,18 +5364,13 @@ void MainWindow::drillDownIssueSummary(
     if (!currentSeverities.isEmpty()) {
         QStringList intersection;
 
-        for (
-            auto severityIterator =
-            targetSeverities.cbegin();
-            severityIterator
-            != targetSeverities.cend();
-            ++severityIterator
-            ) {
+        for (const QString &severity
+             : std::as_const(targetSeverities)) {
             if (currentSeverities.contains(
-                    *severityIterator
+                    severity
                     )) {
                 intersection.append(
-                    *severityIterator
+                    severity
                     );
             }
         }
@@ -5684,10 +5387,6 @@ void MainWindow::drillDownIssueSummary(
 
     searchDebounceTimer->stop();
 
-    /*
-     * Synchronize both affected controls before
-     * applying the complete filter state once.
-     */
     {
         const QSignalBlocker severityBlocker(
             levelFilterCombo
@@ -5702,7 +5401,7 @@ void MainWindow::drillDownIssueSummary(
             );
 
         subsystemFilterCombo->setSelectedValues(
-            {
+            QStringList {
                 subsystem
             }
             );
@@ -8910,10 +8609,10 @@ void MainWindow::updateDataCapabilities()
      * currently selected review tab.
      */
     if (investigationReviewTabs != nullptr
-        && issueSummaryGroup != nullptr) {
+        && issueSummaryPanel != nullptr) {
         const int issueSummaryIndex =
             investigationReviewTabs->indexOf(
-                issueSummaryGroup
+                issueSummaryPanel
                 );
 
         if (issueSummaryIndex >= 0) {
@@ -9140,9 +8839,9 @@ void MainWindow::bindActiveSession()
             false
             );
 
-        issueSummaryTable->setRowCount(
-            0
-            );
+        if (issueSummaryPanel != nullptr) {
+            issueSummaryPanel->clear();
+        }
 
         if (investigationReviewTabs != nullptr) {
             investigationReviewTabs->setVisible(
@@ -9282,7 +8981,7 @@ void MainWindow::bindActiveSession()
         switch (session->reviewTab()) {
         case InvestigationReviewTab::IssueSummary:
             preferredPage =
-                issueSummaryGroup;
+                issueSummaryPanel;
             break;
 
         case InvestigationReviewTab::Findings:

@@ -48,6 +48,9 @@ class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
+class InvestigationIssueSummaryPanel;
+
+enum class InvestigationIssueDrillDownType;
 
 class MainWindow : public QMainWindow
 {
@@ -71,9 +74,6 @@ private:
     FilterPresetStore filterPresetStore;
 
     QMenu *recentFilesMenu = nullptr;
-
-    QTableWidget *issueSummaryTable;
-    QGroupBox *issueSummaryGroup;
 
     QTabWidget *investigationReviewTabs = nullptr;
 
@@ -115,13 +115,15 @@ private:
     InvestigationEventPanel *eventPanel =
         nullptr;
 
+    InvestigationIssueSummaryPanel
+        *issueSummaryPanel = nullptr;
+
     InvestigationEventDetailPanel
         *eventDetailPanel = nullptr;
 
     InvestigationController *investigationController =
         nullptr;
 
-    TelemetryIssueAnalyzer issueAnalyzer;
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationAnalyticsAnalyzer analyticsAnalyzer;
     InvestigationBurstAnalyzer burstAnalyzer;
@@ -286,13 +288,12 @@ private:
         int proxyRow
         );
 
-    QGroupBox *buildIssueSummaryPanel();
     void updateIssueSummary(
         const QVector<InvestigationRecord> &records
         );
     void drillDownIssueSummary(
-        int row,
-        int column
+        const QString &subsystem,
+        InvestigationIssueDrillDownType type
         );
     void drillDownTimelineBucket(
         int visibleBucketIndex,
