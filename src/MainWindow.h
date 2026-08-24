@@ -10,8 +10,6 @@
 
 #include "analysis/EventTimelineAnalyzer.h"
 #include "analysis/InvestigationAnalyticsAnalyzer.h"
-#include "analysis/InvestigationBurstAnalyzer.h"
-#include "analysis/InvestigationCadenceAnalyzer.h"
 #include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -45,6 +43,7 @@ class QDialog;
 class QTabWidget;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
+class InvestigationAnalyticsPanel;
 class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
 class InvestigationFindingsPanel;
@@ -77,21 +76,6 @@ private:
 
     QTabWidget *investigationReviewTabs = nullptr;
 
-    QWidget *analyticsPanel = nullptr;
-
-    QTabWidget *analyticsTabs = nullptr;
-
-    QWidget *analyticsOverviewPage = nullptr;
-    QWidget *analyticsBurstsPage = nullptr;
-
-    QTableWidget *eventCodeFrequencyTable = nullptr;
-    QTableWidget *entityFrequencyTable = nullptr;
-
-    QTableWidget *burstTable = nullptr;
-    QPlainTextEdit *burstDetailText = nullptr;
-
-    QPushButton *burstSettingsButton = nullptr;
-
     InvestigationWorkspace *workspace;
 
     WorkspaceDocumentHost *workspaceDocumentHost =
@@ -117,6 +101,9 @@ private:
     InvestigationFindingsPanel *findingsPanel =
         nullptr;
 
+    InvestigationAnalyticsPanel *analyticsPanel =
+        nullptr;
+
     InvestigationEventDetailPanel
         *eventDetailPanel = nullptr;
 
@@ -125,8 +112,6 @@ private:
 
     EventTimelineAnalyzer timelineAnalyzer;
     InvestigationAnalyticsAnalyzer analyticsAnalyzer;
-    InvestigationBurstAnalyzer burstAnalyzer;
-    InvestigationCadenceAnalyzer cadenceAnalyzer;
 
     InvestigationCsvExporter csvExporter;
 
@@ -217,12 +202,6 @@ private:
 
     QChartView *timelineChartView;
 
-    QGroupBox *analyticsEventCodeGroup = nullptr;
-    QGroupBox *analyticsEntityGroup = nullptr;
-    QLabel *analyticsOverviewEmptyLabel = nullptr;
-
-    QVector<InvestigationBurst> currentBursts;
-
     void buildLayout();
     void createMenus();
     void openLogFile(
@@ -300,8 +279,6 @@ private:
         const QString &subsystem
         );
 
-    QWidget *buildAnalyticsPanel();
-
     void updateFindingsPanel();
 
     void navigateToFinding(
@@ -342,21 +319,8 @@ private:
 
     void resizeCustomFiltersDialogToContents();
 
-    void updateAnalyticsOverview(
-        const QVector<InvestigationRecord> &records
-        );
-
-    void updateBurstsPanel(
-        const QVector<InvestigationRecord> &records
-        );
-
-    void updateBurstDetail(
-        int row
-        );
-
-    void showBurstSettingsDialog();
-
     void drillDownBurst(
-        int row
+        const QDateTime &startTimestamp,
+        const QDateTime &endTimestamp
         );
 };
