@@ -36,7 +36,6 @@ class QDropEvent;
 class QTimer;
 class QAction;
 class QScrollBar;
-class QTabBar;
 class QMenu;
 class MultiSelectFilterComboBox;
 class CustomFieldFilterEditor;
@@ -46,6 +45,8 @@ class QDateTimeEdit;
 class QWidget;
 class QDialog;
 class QTabWidget;
+class WorkspaceDocumentHost;
+class InvestigationSessionView;
 
 class MainWindow : public QMainWindow
 {
@@ -70,7 +71,6 @@ private:
 
     QMenu *recentFilesMenu = nullptr;
 
-    QTabBar *sessionTabBar;
     QLabel *summaryLabel;
     QTableView *eventTable;
     QPushButton *previousEventButton;
@@ -107,6 +107,21 @@ private:
     QPushButton *burstSettingsButton = nullptr;
 
     InvestigationWorkspace *workspace;
+
+    WorkspaceDocumentHost *workspaceDocumentHost =
+        nullptr;
+
+    QWidget *investigationSurface =
+        nullptr;
+
+    /*
+     * Transitional owner of the shared investigation
+     * surface while the session UI is being extracted
+     * into independently renderable components.
+     */
+    InvestigationSessionView *surfaceSessionView =
+        nullptr;
+
     InvestigationController *investigationController =
         nullptr;
 

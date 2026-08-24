@@ -155,6 +155,11 @@ bool WorkspaceDocumentHost::addDocument(
             document->documentTitle()
             );
 
+    m_tabs->setTabToolTip(
+        index,
+        document->toolTip()
+        );
+
     connect(
         document,
         &WorkspaceDocument::

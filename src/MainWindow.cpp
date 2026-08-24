@@ -76,6 +76,8 @@
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/CustomFieldFilterEditor.h"
 #include "ui/MultiSelectFilterComboBox.h"
+#include "ui/workspace/InvestigationSessionView.h"
+#include "ui/workspace/WorkspaceDocumentHost.h"
 
 namespace
 {
@@ -702,7 +704,6 @@ MainWindow::MainWindow(QWidget *parent)
     settings(),
     recentItemsStore(settings),
     filterPresetStore(settings),
-    sessionTabBar(new QTabBar(this)),
     summaryLabel(new QLabel("No log file loaded.")),
     eventTable(new QTableView(this)),
     previousEventButton(
@@ -819,29 +820,34 @@ MainWindow::MainWindow(QWidget *parent)
             InvestigationSession *session =
                 workspace->sessionAt(index);
 
-            if (session == nullptr) {
+            if (session == nullptr
+                || workspaceDocumentHost
+                       == nullptr) {
                 return;
             }
 
+            auto *sessionView =
+                new InvestigationSessionView(
+                    session
+                    );
+
+            /*
+             * InvestigationWorkspace::addSession()
+             * emits sessionAdded before it activates
+             * the new session. Avoid letting QTabWidget
+             * selection get ahead of workspace state.
+             */
             const QSignalBlocker blocker(
-                sessionTabBar
+                workspaceDocumentHost
                 );
 
-            sessionTabBar->insertTab(
-                index,
-                session
-                    ->sourceMetadata()
-                    .sourceName
-                );
-
-            sessionTabBar->setTabToolTip(
-                index,
-                session
-                    ->sourceMetadata()
-                    .sourcePath
-                );
-
-            sessionTabBar->setVisible(true);
+            if (!workspaceDocumentHost
+                     ->addDocument(
+                         sessionView,
+                         false
+                         )) {
+                delete sessionView;
+            }
         }
         );
 
@@ -849,32 +855,140 @@ MainWindow::MainWindow(QWidget *parent)
         workspace,
         &InvestigationWorkspace::sessionClosed,
         this,
-        [this](int index) {
+        [this](int) {
+            if (workspaceDocumentHost
+                == nullptr) {
+                return;
+            }
+
+            /*
+             * Tabs are movable, so document position
+             * must never be assumed to match workspace
+             * session index. Stable document/session IDs
+             * are the source of truth.
+             */
             const QSignalBlocker blocker(
-                sessionTabBar
+                workspaceDocumentHost
                 );
 
-            sessionTabBar->removeTab(index);
+            for (int documentIndex =
+                     workspaceDocumentHost
+                         ->documentCount()
+                     - 1;
+                 documentIndex >= 0;
+                 --documentIndex) {
+                auto *sessionView =
+                    qobject_cast<
+                        InvestigationSessionView *>(
+                        workspaceDocumentHost
+                            ->documentAt(
+                                documentIndex
+                                )
+                        );
 
-            sessionTabBar->setVisible(
-                workspace->sessionCount() > 0
-                );
+                if (sessionView == nullptr) {
+                    continue;
+                }
+
+                if (workspace->indexOfSession(
+                        sessionView
+                            ->documentId()
+                        )
+                    >= 0) {
+                    continue;
+                }
+
+                /*
+                 * Never destroy the shared surface
+                 * along with a closing session view.
+                 */
+                if (surfaceSessionView
+                    == sessionView) {
+                    sessionView->takeContent();
+
+                    surfaceSessionView =
+                        nullptr;
+                }
+
+                WorkspaceDocument *removed =
+                    workspaceDocumentHost
+                        ->removeDocument(
+                            sessionView
+                                ->documentId()
+                            );
+
+                if (removed != nullptr) {
+                    removed->deleteLater();
+                }
+            }
         }
         );
 
     connect(
         workspace,
-        &InvestigationWorkspace::activeSessionChanged,
+        &InvestigationWorkspace::
+            activeSessionChanged,
         this,
         [this](int index) {
-            {
-                const QSignalBlocker blocker(
-                    sessionTabBar
-                    );
+            /*
+             * Release the shared surface from whichever
+             * session document currently owns it.
+             */
+            if (surfaceSessionView
+                != nullptr) {
+                surfaceSessionView
+                    ->takeContent();
 
-                sessionTabBar->setCurrentIndex(
+                surfaceSessionView =
+                    nullptr;
+            }
+
+            InvestigationSession *session =
+                workspace->sessionAt(
                     index
                     );
+
+            if (session != nullptr
+                && workspaceDocumentHost
+                       != nullptr) {
+                {
+                    /*
+                     * Keep document selection synchronized
+                     * without feeding the change back into
+                     * InvestigationWorkspace.
+                     */
+                    const QSignalBlocker blocker(
+                        workspaceDocumentHost
+                        );
+
+                    workspaceDocumentHost
+                        ->setCurrentDocument(
+                            session->id()
+                            );
+                }
+
+                const int documentIndex =
+                    workspaceDocumentHost
+                        ->indexOfDocument(
+                            session->id()
+                            );
+
+                auto *sessionView =
+                    qobject_cast<
+                        InvestigationSessionView *>(
+                        workspaceDocumentHost
+                            ->documentAt(
+                                documentIndex
+                                )
+                        );
+
+                if (sessionView != nullptr
+                    && sessionView->attachContent(
+                        investigationSurface
+                        )) {
+                    surfaceSessionView =
+                        sessionView;
+                }
             }
 
             bindActiveSession();
@@ -895,27 +1009,53 @@ MainWindow::MainWindow(QWidget *parent)
         );
 
     connect(
-        sessionTabBar,
-        &QTabBar::currentChanged,
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+            currentDocumentChanged,
         this,
-        [this](int index) {
-            if (index < 0) {
+        [this](
+            const QString &documentId
+            ) {
+            /*
+             * Comparison documents will eventually use
+             * the same host. Only IDs belonging to real
+             * investigation sessions affect active
+             * session state here.
+             */
+            const int sessionIndex =
+                workspace->indexOfSession(
+                    documentId
+                    );
+
+            if (sessionIndex < 0) {
                 return;
             }
 
             workspace->setActiveSession(
-                index
+                sessionIndex
                 );
         }
         );
 
     connect(
-        sessionTabBar,
-        &QTabBar::tabCloseRequested,
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+            documentCloseRequested,
         this,
-        [this](int index) {
+        [this](
+            const QString &documentId
+            ) {
+            const int sessionIndex =
+                workspace->indexOfSession(
+                    documentId
+                    );
+
+            if (sessionIndex < 0) {
+                return;
+            }
+
             workspace->closeSession(
-                index
+                sessionIndex
                 );
         }
         );
@@ -1012,26 +1152,47 @@ void MainWindow::createMenus()
 
 void MainWindow::buildLayout()
 {
-    auto *centralWidget = new QWidget(this);
-    auto *layout = new QVBoxLayout(centralWidget);
+    auto *centralWidget =
+        new QWidget(this);
 
-    sessionTabBar->setTabsClosable(true);
+    auto *centralLayout =
+        new QVBoxLayout(
+            centralWidget
+            );
 
-    sessionTabBar->setExpanding(false);
-
-    sessionTabBar->setDocumentMode(true);
-
-    sessionTabBar->setUsesScrollButtons(true);
-
-    sessionTabBar->setElideMode(
-        Qt::ElideMiddle
+    centralLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
         );
 
-    sessionTabBar->setVisible(false);
+    workspaceDocumentHost =
+        new WorkspaceDocumentHost(
+            centralWidget
+            );
 
-    layout->addWidget(
-        sessionTabBar
+    centralLayout->addWidget(
+        workspaceDocumentHost,
+        1
         );
+
+    /*
+     * During the incremental session-view
+     * migration, the existing investigation UI
+     * remains one shared surface. The active
+     * InvestigationSessionView temporarily owns
+     * this widget.
+     */
+    investigationSurface =
+        new QWidget(this);
+
+    auto *layout =
+        new QVBoxLayout(
+            investigationSurface
+            );
+
+    investigationSurface->hide();
 
     layout->addWidget(summaryLabel);
     buildFilterControls(layout);
