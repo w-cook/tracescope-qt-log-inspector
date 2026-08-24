@@ -6,6 +6,7 @@
 #include <QString>
 #include <QVector>
 #include <QtGlobal>
+#include <QStringList>
 
 #include "../domain/RecordSeverity.h"
 
@@ -115,6 +116,47 @@ struct InvestigationSeverityComparison
     }
 };
 
+struct InvestigationNumericFieldSummary
+{
+    qint64 populatedRecordCount = 0;
+
+    double minimum = 0.0;
+    double median = 0.0;
+    double maximum = 0.0;
+};
+
+struct InvestigationNumericCustomFieldComparison
+{
+    QString fieldName;
+
+    InvestigationNumericFieldSummary baseline;
+    InvestigationNumericFieldSummary comparison;
+};
+
+struct InvestigationCategoricalCustomFieldComparison
+{
+    QString fieldName;
+
+    /*
+     * Only values that actually appear or disappear
+     * are retained. Shared values whose occurrence
+     * counts merely changed are intentionally omitted
+     * to keep custom-field comparison focused on
+     * meaningful context/configuration differences.
+     */
+    QVector<InvestigationValueDifference>
+        changedValues;
+};
+
+struct InvestigationCustomFieldComparison
+{
+    QVector<InvestigationCategoricalCustomFieldComparison>
+        categoricalFields;
+
+    QVector<InvestigationNumericCustomFieldComparison>
+        numericFields;
+};
+
 struct InvestigationSessionComparison
 {
     InvestigationCountDifference totalRecords;
@@ -147,4 +189,15 @@ struct InvestigationSessionComparison
      */
     InvestigationDimensionComparison
         elevatedEntities;
+
+    /*
+     * Shared custom fields are compared conservatively:
+     *
+     * - categorical fields surface appearing/disappearing
+     *   values rather than raw frequency changes
+     * - numeric fields surface compact distribution
+     *   summaries
+     * - unchanged or unsuitable fields are omitted
+     */
+    InvestigationCustomFieldComparison customFields;
 };

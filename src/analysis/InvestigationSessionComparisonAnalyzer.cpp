@@ -1,8 +1,12 @@
 #include "InvestigationSessionComparisonAnalyzer.h"
 
+#include <QJsonValue>
 #include <QMap>
+#include <QSet>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 
 namespace
@@ -370,6 +374,508 @@ dimensionComparisonFor(
 
     return result;
 }
+
+constexpr int MaximumCategoricalCustomFieldValues = 20;
+
+enum class CustomValueReadResult
+{
+    Missing,
+    Scalar,
+    Unsupported
+};
+
+CustomValueReadResult readCustomScalarValue(
+    const QVariant &value,
+    QString &text
+    )
+{
+    if (!value.isValid()
+        || value.isNull()) {
+        return CustomValueReadResult::Missing;
+    }
+
+    const QJsonValue jsonValue =
+        QJsonValue::fromVariant(value);
+
+    /*
+     * Structured values are preserved by the
+     * investigation model, but automatically
+     * comparing arbitrary objects or arrays would
+     * produce noisy and poorly defined results.
+     */
+    if (jsonValue.isObject()
+        || jsonValue.isArray()) {
+        return CustomValueReadResult::Unsupported;
+    }
+
+    text =
+        value.toString().trimmed();
+
+    if (text.isEmpty()) {
+        return CustomValueReadResult::Missing;
+    }
+
+    return CustomValueReadResult::Scalar;
+}
+
+QVector<QString> customScalarValuesFor(
+    const QVector<InvestigationRecord> &records,
+    const QString &fieldName,
+    bool &supported
+    )
+{
+    supported = true;
+
+    QVector<QString> values;
+
+    for (const InvestigationRecord &record
+         : records) {
+        const auto iterator =
+            record.customAttributes.constFind(
+                fieldName
+                );
+
+        if (iterator
+            == record.customAttributes.cend()) {
+            continue;
+        }
+
+        QString text;
+
+        const CustomValueReadResult readResult =
+            readCustomScalarValue(
+                iterator.value(),
+                text
+                );
+
+        if (readResult
+            == CustomValueReadResult::Unsupported) {
+            supported = false;
+            return {};
+        }
+
+        if (readResult
+            == CustomValueReadResult::Missing) {
+            continue;
+        }
+
+        values.append(text);
+    }
+
+    return values;
+}
+
+bool parseFiniteNumber(
+    const QString &text,
+    double &number
+    )
+{
+    bool converted = false;
+
+    const double parsed =
+        text.toDouble(
+            &converted
+            );
+
+    if (!converted
+        || !std::isfinite(parsed)) {
+        return false;
+    }
+
+    number = parsed;
+
+    return true;
+}
+
+bool numericValuesFor(
+    const QVector<QString> &values,
+    QVector<double> &numbers
+    )
+{
+    numbers.clear();
+    numbers.reserve(values.size());
+
+    for (const QString &value
+         : values) {
+        double number = 0.0;
+
+        if (!parseFiniteNumber(
+                value,
+                number
+                )) {
+            numbers.clear();
+            return false;
+        }
+
+        numbers.append(number);
+    }
+
+    return !numbers.isEmpty();
+}
+
+InvestigationNumericFieldSummary
+numericSummaryFor(
+    QVector<double> values
+    )
+{
+    InvestigationNumericFieldSummary summary;
+
+    if (values.isEmpty()) {
+        return summary;
+    }
+
+    std::sort(
+        values.begin(),
+        values.end()
+        );
+
+    summary.populatedRecordCount =
+        values.size();
+
+    summary.minimum =
+        values.first();
+
+    summary.maximum =
+        values.last();
+
+    const qsizetype middle =
+        values.size() / 2;
+
+    if (values.size() % 2 != 0) {
+        summary.median =
+            values.at(middle);
+    } else {
+        summary.median =
+            (
+                values.at(middle - 1)
+                + values.at(middle)
+                )
+            / 2.0;
+    }
+
+    return summary;
+}
+
+bool numericSummariesDiffer(
+    const InvestigationNumericFieldSummary &baseline,
+    const InvestigationNumericFieldSummary &comparison
+    )
+{
+    /*
+     * Populated-record count alone is not treated
+     * as an investigation signal. The numeric
+     * distribution itself must differ.
+     */
+    return baseline.minimum
+               != comparison.minimum
+           || baseline.median
+                  != comparison.median
+           || baseline.maximum
+                  != comparison.maximum;
+}
+
+QMap<QString, qint64> categoricalCountsFor(
+    const QVector<QString> &values
+    )
+{
+    QMap<QString, qint64> counts;
+
+    for (const QString &value
+         : values) {
+        ++counts[value];
+    }
+
+    return counts;
+}
+
+QSet<QString> customFieldNamesFor(
+    const QVector<InvestigationRecord> &records
+    )
+{
+    QSet<QString> names;
+
+    for (const InvestigationRecord &record
+         : records) {
+        for (auto iterator =
+             record.customAttributes.cbegin();
+             iterator
+             != record.customAttributes.cend();
+             ++iterator) {
+            if (!iterator.key()
+                     .trimmed()
+                     .isEmpty()) {
+                names.insert(
+                    iterator.key()
+                    );
+            }
+        }
+    }
+
+    return names;
+}
+
+InvestigationCustomFieldComparison
+customFieldComparisonFor(
+    const QVector<InvestigationRecord> &baselineRecords,
+    const QVector<InvestigationRecord> &comparisonRecords
+    )
+{
+    InvestigationCustomFieldComparison result;
+
+    const QSet<QString> baselineFieldNames =
+        customFieldNamesFor(
+            baselineRecords
+            );
+
+    const QSet<QString> comparisonFieldNames =
+        customFieldNamesFor(
+            comparisonRecords
+            );
+
+    QStringList sharedFieldNames;
+
+    for (const QString &fieldName
+         : baselineFieldNames) {
+        if (comparisonFieldNames.contains(
+                fieldName
+                )) {
+            sharedFieldNames.append(
+                fieldName
+                );
+        }
+    }
+
+    /*
+     * Match custom fields only by exact key.
+     * Guessing that differently named fields have
+     * the same meaning would make comparison less
+     * reproducible.
+     */
+    std::sort(
+        sharedFieldNames.begin(),
+        sharedFieldNames.end(),
+        [](
+            const QString &left,
+            const QString &right
+            ) {
+            const int caseInsensitive =
+                QString::compare(
+                    left,
+                    right,
+                    Qt::CaseInsensitive
+                    );
+
+            if (caseInsensitive != 0) {
+                return caseInsensitive < 0;
+            }
+
+            return QString::compare(
+                       left,
+                       right,
+                       Qt::CaseSensitive
+                       )
+                   < 0;
+        }
+        );
+
+    for (const QString &fieldName
+         : sharedFieldNames) {
+        bool baselineSupported = true;
+        bool comparisonSupported = true;
+
+        const QVector<QString> baselineValues =
+            customScalarValuesFor(
+                baselineRecords,
+                fieldName,
+                baselineSupported
+                );
+
+        const QVector<QString> comparisonValues =
+            customScalarValuesFor(
+                comparisonRecords,
+                fieldName,
+                comparisonSupported
+                );
+
+        /*
+         * A custom field must contain at least one
+         * usable scalar value in both sessions.
+         */
+        if (!baselineSupported
+            || !comparisonSupported
+            || baselineValues.isEmpty()
+            || comparisonValues.isEmpty()) {
+            continue;
+        }
+
+        QVector<double> baselineNumbers;
+        QVector<double> comparisonNumbers;
+
+        const bool baselineNumeric =
+            numericValuesFor(
+                baselineValues,
+                baselineNumbers
+                );
+
+        const bool comparisonNumeric =
+            numericValuesFor(
+                comparisonValues,
+                comparisonNumbers
+                );
+
+        /*
+         * Only classify a field as numeric when
+         * every populated value on BOTH sides is a
+         * finite number.
+         */
+        if (baselineNumeric
+            && comparisonNumeric) {
+            InvestigationNumericCustomFieldComparison
+                comparison;
+
+            comparison.fieldName =
+                fieldName;
+
+            comparison.baseline =
+                numericSummaryFor(
+                    baselineNumbers
+                    );
+
+            comparison.comparison =
+                numericSummaryFor(
+                    comparisonNumbers
+                    );
+
+            if (numericSummariesDiffer(
+                    comparison.baseline,
+                    comparison.comparison
+                    )) {
+                result.numericFields.append(
+                    comparison
+                    );
+            }
+
+            continue;
+        }
+
+        const QMap<QString, qint64>
+            baselineCounts =
+            categoricalCountsFor(
+                baselineValues
+                );
+
+        const QMap<QString, qint64>
+            comparisonCounts =
+            categoricalCountsFor(
+                comparisonValues
+                );
+
+        QSet<QString> distinctValues;
+
+        for (auto iterator =
+             baselineCounts.cbegin();
+             iterator != baselineCounts.cend();
+             ++iterator) {
+            distinctValues.insert(
+                iterator.key()
+                );
+        }
+
+        for (auto iterator =
+             comparisonCounts.cbegin();
+             iterator != comparisonCounts.cend();
+             ++iterator) {
+            distinctValues.insert(
+                iterator.key()
+                );
+        }
+
+        /*
+         * High-cardinality custom fields are more
+         * likely to be identifiers or otherwise
+         * produce comparison noise than useful
+         * investigation context.
+         */
+        if (distinctValues.size()
+            > MaximumCategoricalCustomFieldValues) {
+            continue;
+        }
+
+        QStringList sortedValues =
+            distinctValues.values();
+
+        std::sort(
+            sortedValues.begin(),
+            sortedValues.end(),
+            [](
+                const QString &left,
+                const QString &right
+                ) {
+                return QString::compare(
+                           left,
+                           right,
+                           Qt::CaseSensitive
+                           )
+                       < 0;
+            }
+            );
+
+        InvestigationCategoricalCustomFieldComparison
+            comparison;
+
+        comparison.fieldName =
+            fieldName;
+
+        for (const QString &value
+             : sortedValues) {
+            const qint64 baselineCount =
+                baselineCounts.value(
+                    value,
+                    0
+                    );
+
+            const qint64 comparisonCount =
+                comparisonCounts.value(
+                    value,
+                    0
+                    );
+
+            /*
+             * Frequency-only changes are deliberately
+             * ignored for categorical custom fields.
+             * Surface only values that genuinely
+             * appeared or disappeared.
+             */
+            if ((baselineCount > 0
+                 && comparisonCount > 0)
+                || (baselineCount == 0
+                    && comparisonCount == 0)) {
+                continue;
+            }
+
+            InvestigationValueDifference
+                difference;
+
+            difference.value = value;
+            difference.baselineCount =
+                baselineCount;
+            difference.comparisonCount =
+                comparisonCount;
+
+            comparison.changedValues.append(
+                difference
+                );
+        }
+
+        if (!comparison.changedValues.isEmpty()) {
+            result.categoricalFields.append(
+                comparison
+                );
+        }
+    }
+
+    return result;
+}
 }
 
 InvestigationSessionComparison
@@ -436,6 +942,12 @@ InvestigationSessionComparisonAnalyzer::compare(
                 return record.entityId;
             },
             true
+            );
+
+    result.customFields =
+        customFieldComparisonFor(
+            baselineRecords,
+            comparisonRecords
             );
 
     return result;

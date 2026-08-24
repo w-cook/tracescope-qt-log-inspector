@@ -21,6 +21,15 @@ private slots:
     void elevatedSubsystemDifferencesAreCompared();
     void elevatedEntityDifferencesAreCompared();
     void elevatedDimensionsAreUnavailableWithoutRequiredData();
+
+    void categoricalCustomFieldsShowAppearingAndDisappearingValues();
+    void categoricalFrequencyOnlyChangesAreIgnored();
+    void numericCustomFieldsSummarizeNumericStrings();
+    void unchangedNumericCustomFieldsAreIgnored();
+    void highCardinalityCategoricalFieldsAreIgnored();
+    void mixedNumericAndTextValuesRemainCategorical();
+    void structuredCustomValuesAreIgnored();
+    void customFieldsMustExistInBothSessions();
 };
 
 static InvestigationRecord
@@ -50,6 +59,23 @@ makeComparisonRecord(
     record.subsystem = subsystem;
     record.eventCode = eventCode;
     record.entityId = entityId;
+
+    return record;
+}
+
+static InvestigationRecord
+makeCustomComparisonRecord(
+    const QString &fieldName,
+    const QVariant &value
+    )
+{
+    InvestigationRecord record =
+        makeComparisonRecord();
+
+    record.customAttributes.insert(
+        fieldName,
+        value
+        );
 
     return record;
 }
@@ -963,6 +989,579 @@ void InvestigationSessionComparisonAnalyzerTests::
         );
 }
 
+void InvestigationSessionComparisonAnalyzerTests::
+    categoricalCustomFieldsShowAppearingAndDisappearingValues()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Firmware"),
+                QStringLiteral("3.14.7")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Firmware"),
+                QStringLiteral("3.14.7")
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Firmware"),
+                QStringLiteral("3.14.8-rc1")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Firmware"),
+                QStringLiteral("3.14.8-rc1")
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    QCOMPARE(
+        result.customFields
+            .categoricalFields.size(),
+        1
+        );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+
+    const InvestigationCategoricalCustomFieldComparison
+        &firmware =
+        result.customFields
+            .categoricalFields.first();
+
+    QCOMPARE(
+        firmware.fieldName,
+        QStringLiteral("Firmware")
+        );
+
+    QCOMPARE(
+        firmware.changedValues.size(),
+        2
+        );
+
+    QCOMPARE(
+        firmware.changedValues.at(0).value,
+        QStringLiteral("3.14.7")
+        );
+
+    QCOMPARE(
+        firmware.changedValues.at(0)
+            .baselineCount,
+        2
+        );
+
+    QCOMPARE(
+        firmware.changedValues.at(0)
+            .comparisonCount,
+        0
+        );
+
+    QVERIFY(
+        firmware.changedValues.at(0)
+            .appearsOnlyInBaseline()
+        );
+
+    QCOMPARE(
+        firmware.changedValues.at(1).value,
+        QStringLiteral("3.14.8-rc1")
+        );
+
+    QCOMPARE(
+        firmware.changedValues.at(1)
+            .baselineCount,
+        0
+        );
+
+    QCOMPARE(
+        firmware.changedValues.at(1)
+            .comparisonCount,
+        2
+        );
+
+    QVERIFY(
+        firmware.changedValues.at(1)
+            .appearsOnlyInComparison()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    categoricalFrequencyOnlyChangesAreIgnored()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Interface"),
+                QStringLiteral("cell0")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Interface"),
+                QStringLiteral("rs485-1")
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Interface"),
+                QStringLiteral("cell0")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Interface"),
+                QStringLiteral("cell0")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Interface"),
+                QStringLiteral("rs485-1")
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    /*
+     * Both sessions contain exactly the same set
+     * of interface values. The changed occurrence
+     * count of cell0 is intentionally not treated
+     * as a custom-field investigation signal.
+     */
+    QVERIFY(
+        result.customFields
+            .categoricalFields.isEmpty()
+        );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    numericCustomFieldsSummarizeNumericStrings()
+{
+    /*
+     * Key-value/logfmt imports preserve values such
+     * as latencyMs as QString-backed QVariant values,
+     * so numeric classification must not depend on
+     * the QVariant storage type.
+     */
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Latency (ms)"),
+                QStringLiteral("18")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Latency (ms)"),
+                QStringLiteral("34")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Latency (ms)"),
+                QStringLiteral("50")
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Latency (ms)"),
+                QStringLiteral("18")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Latency (ms)"),
+                QStringLiteral("38")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Latency (ms)"),
+                QStringLiteral("850")
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    QVERIFY(
+        result.customFields
+            .categoricalFields.isEmpty()
+        );
+
+    QCOMPARE(
+        result.customFields
+            .numericFields.size(),
+        1
+        );
+
+    const InvestigationNumericCustomFieldComparison
+        &latency =
+        result.customFields
+            .numericFields.first();
+
+    QCOMPARE(
+        latency.fieldName,
+        QStringLiteral("Latency (ms)")
+        );
+
+    QCOMPARE(
+        latency.baseline
+            .populatedRecordCount,
+        3
+        );
+
+    QCOMPARE(
+        latency.comparison
+            .populatedRecordCount,
+        3
+        );
+
+    QCOMPARE(
+        latency.baseline.minimum,
+        18.0
+        );
+
+    QCOMPARE(
+        latency.baseline.median,
+        34.0
+        );
+
+    QCOMPARE(
+        latency.baseline.maximum,
+        50.0
+        );
+
+    QCOMPARE(
+        latency.comparison.minimum,
+        18.0
+        );
+
+    QCOMPARE(
+        latency.comparison.median,
+        38.0
+        );
+
+    QCOMPARE(
+        latency.comparison.maximum,
+        850.0
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    unchangedNumericCustomFieldsAreIgnored()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Queue Depth"),
+                2
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Queue Depth"),
+                4
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Queue Depth"),
+                6
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Queue Depth"),
+                2
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Queue Depth"),
+                4
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Queue Depth"),
+                6
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+
+    QVERIFY(
+        result.customFields
+            .categoricalFields.isEmpty()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    highCardinalityCategoricalFieldsAreIgnored()
+{
+    QVector<InvestigationRecord>
+        baselineRecords;
+
+    QVector<InvestigationRecord>
+        comparisonRecords;
+
+    for (int index = 0;
+         index < 11;
+         ++index) {
+        baselineRecords.append(
+            makeCustomComparisonRecord(
+                QStringLiteral("Request ID"),
+                QStringLiteral("baseline-%1")
+                    .arg(index)
+                )
+            );
+    }
+
+    for (int index = 0;
+         index < 10;
+         ++index) {
+        comparisonRecords.append(
+            makeCustomComparisonRecord(
+                QStringLiteral("Request ID"),
+                QStringLiteral("comparison-%1")
+                    .arg(index)
+                )
+            );
+    }
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    /*
+     * Twenty-one distinct categorical values exceed
+     * the automatic comparison cardinality limit.
+     */
+    QVERIFY(
+        result.customFields
+            .categoricalFields.isEmpty()
+        );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    mixedNumericAndTextValuesRemainCategorical()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Build"),
+                QStringLiteral("100")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Build"),
+                QStringLiteral("101")
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Build"),
+                QStringLiteral("100")
+                ),
+            makeCustomComparisonRecord(
+                QStringLiteral("Build"),
+                QStringLiteral("release-candidate")
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+
+    QCOMPARE(
+        result.customFields
+            .categoricalFields.size(),
+        1
+        );
+
+    const InvestigationCategoricalCustomFieldComparison
+        &build =
+        result.customFields
+            .categoricalFields.first();
+
+    QCOMPARE(
+        build.fieldName,
+        QStringLiteral("Build")
+        );
+
+    QCOMPARE(
+        build.changedValues.size(),
+        2
+        );
+
+    QCOMPARE(
+        build.changedValues.at(0).value,
+        QStringLiteral("101")
+        );
+
+    QVERIFY(
+        build.changedValues.at(0)
+            .appearsOnlyInBaseline()
+        );
+
+    QCOMPARE(
+        build.changedValues.at(1).value,
+        QStringLiteral("release-candidate")
+        );
+
+    QVERIFY(
+        build.changedValues.at(1)
+            .appearsOnlyInComparison()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    structuredCustomValuesAreIgnored()
+{
+    InvestigationRecord baselineRecord =
+        makeComparisonRecord();
+
+    InvestigationRecord comparisonRecord =
+        makeComparisonRecord();
+
+    QVariantMap baselineDetails;
+
+    baselineDetails.insert(
+        QStringLiteral("mode"),
+        QStringLiteral("normal")
+        );
+
+    QVariantMap comparisonDetails;
+
+    comparisonDetails.insert(
+        QStringLiteral("mode"),
+        QStringLiteral("degraded")
+        );
+
+    baselineRecord.customAttributes.insert(
+        QStringLiteral("Details"),
+        baselineDetails
+        );
+
+    comparisonRecord.customAttributes.insert(
+        QStringLiteral("Details"),
+        comparisonDetails
+        );
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            {baselineRecord},
+            {comparisonRecord}
+            );
+
+    /*
+     * Objects and arrays remain preserved source
+     * data, but are not automatically reduced to
+     * scalar comparison semantics.
+     */
+    QVERIFY(
+        result.customFields
+            .categoricalFields.isEmpty()
+        );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+}
+
+void InvestigationSessionComparisonAnalyzerTests::
+    customFieldsMustExistInBothSessions()
+{
+    const QVector<InvestigationRecord>
+        baselineRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Firmware"),
+                QStringLiteral("3.14.7")
+                )
+        };
+
+    const QVector<InvestigationRecord>
+        comparisonRecords = {
+            makeCustomComparisonRecord(
+                QStringLiteral("Environment"),
+                QStringLiteral("Field")
+                )
+        };
+
+    InvestigationSessionComparisonAnalyzer
+        analyzer;
+
+    const InvestigationSessionComparison result =
+        analyzer.compare(
+            baselineRecords,
+            comparisonRecords
+            );
+
+    /*
+     * Differently named fields are not assumed to
+     * represent equivalent concepts.
+     */
+    QVERIFY(
+        result.customFields
+            .categoricalFields.isEmpty()
+        );
+
+    QVERIFY(
+        result.customFields
+            .numericFields.isEmpty()
+        );
+}
 QTEST_MAIN(
     InvestigationSessionComparisonAnalyzerTests
     )
