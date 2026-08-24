@@ -122,6 +122,9 @@ qt_add_executable(TraceScope
     src/analysis/InvestigationBurst.h
     src/analysis/InvestigationBurstAnalyzer.h
     src/analysis/InvestigationBurstAnalyzer.cpp
+    src/analysis/InvestigationSessionComparison.h
+    src/analysis/InvestigationSessionComparisonAnalyzer.h
+    src/analysis/InvestigationSessionComparisonAnalyzer.cpp
 
 )
 

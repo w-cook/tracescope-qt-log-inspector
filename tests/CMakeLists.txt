@@ -192,6 +192,33 @@ add_test(
     COMMAND InvestigationBurstAnalyzerTests
 )
 
+qt_add_executable(
+    InvestigationSessionComparisonAnalyzerTests
+
+    InvestigationSessionComparisonAnalyzerTests.cpp
+
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationSessionComparisonAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationSessionComparisonAnalyzerTests
+    COMMAND InvestigationSessionComparisonAnalyzerTests
+)
+
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
     ../src/exporting/InvestigationCsvExporter.h
