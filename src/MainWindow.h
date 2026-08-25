@@ -1,7 +1,5 @@
 #pragma once
 
-#include <optional>
-
 #include <QDateTime>
 #include <QMainWindow>
 #include <QVector>
@@ -19,30 +17,22 @@
 
 class QLabel;
 class QTableWidget;
-class QComboBox;
-class QLineEdit;
 class QVBoxLayout;
 class QPlainTextEdit;
 class QGroupBox;
 class QChartView;
 class QDragEnterEvent;
 class QDropEvent;
-class QTimer;
 class QAction;
 class QScrollBar;
 class QMenu;
-class MultiSelectFilterComboBox;
-class CustomFieldFilterEditor;
-class QPushButton;
-class QCheckBox;
-class QDateTimeEdit;
 class QWidget;
-class QDialog;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationAnalyticsPanel;
 class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
+class InvestigationFilterPanel;
 class InvestigationFindingsPanel;
 class InvestigationIssueSummaryPanel;
 class InvestigationReviewPanel;
@@ -89,6 +79,9 @@ private:
     InvestigationSessionView *surfaceSessionView =
         nullptr;
 
+    InvestigationFilterPanel *filterPanel =
+        nullptr;
+
     InvestigationTimelinePanel *timelinePanel =
         nullptr;
 
@@ -115,47 +108,6 @@ private:
 
     InvestigationCsvExporter csvExporter;
 
-    MultiSelectFilterComboBox *levelFilterCombo;
-    MultiSelectFilterComboBox *subsystemFilterCombo;
-    QLineEdit *searchInput;
-    QPushButton *resetFiltersButton;
-
-    QCheckBox *bookmarksOnlyCheckBox;
-
-    QPushButton *filterPresetsButton;
-    QMenu *filterPresetsMenu;
-
-    QPushButton *customFiltersButton;
-    QDialog *customFiltersDialog;
-
-    QPushButton *timeRangeButton;
-    QDialog *timeRangeDialog;
-
-    MultiSelectFilterComboBox *eventCodeFilterCombo;
-    MultiSelectFilterComboBox *entityFilterCombo;
-    MultiSelectFilterComboBox *findingStatusFilterCombo;
-
-    CustomFieldFilterEditor *customFieldFilterEditor;
-
-    QWidget *eventCodeFilterWidget = nullptr;
-    QWidget *entityFilterWidget = nullptr;
-
-    bool hasEventCodeData = false;
-    bool hasEntityData = false;
-    bool hasCustomFieldData = false;
-
-    QWidget *timeRangeFilterWidget = nullptr;
-
-    QCheckBox *timeRangeStartCheckBox = nullptr;
-    QDateTimeEdit *timeRangeStartEdit = nullptr;
-
-    QCheckBox *timeRangeEndCheckBox = nullptr;
-    QDateTimeEdit *timeRangeEndEdit = nullptr;
-
-    bool hasTimestampData = false;
-
-    QTimer *searchDebounceTimer;
-
     QAction *openAction = nullptr;
     QAction *reloadAction = nullptr;
 
@@ -164,9 +116,6 @@ private:
 
     bool hasSeverityData = false;
     bool hasSubsystemData = false;
-
-    std::optional<QDateTime> timelineFirstTimestamp;
-    std::optional<QDateTime> timelineLastTimestamp;
 
     QString currentFilePath;
 
@@ -194,25 +143,7 @@ private:
         const QString &filePath
         );
 
-    void buildFilterControls(QVBoxLayout *layout);
     void applyFilters();
-    void resetFilters();
-    void refreshSubsystemFilterOptions();
-    void refreshCanonicalFilterOptions();
-
-    InvestigationFilterPreset currentFilterPreset(
-        const QString &name
-        ) const;
-
-    void applyFilterPreset(
-        const InvestigationFilterPreset &preset
-        );
-
-    void refreshFilterPresetsMenu();
-
-    void updateCustomFiltersButton();
-
-    void updateTimeRangeButton();
 
     void updateEventDetailFromSelection();
     void clearEventDetail();
@@ -258,8 +189,6 @@ private:
 
     void exportFilteredResults();
 
-    void updateDataCapabilities();
-
     void bindActiveSession();
     void reloadActiveSession();
 
@@ -268,8 +197,6 @@ private:
     void openRecentFile(
         const QString &filePath
         );
-
-    void resizeCustomFiltersDialogToContents();
 
     void drillDownBurst(
         const QDateTime &startTimestamp,
