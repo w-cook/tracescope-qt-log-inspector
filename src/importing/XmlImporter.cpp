@@ -291,6 +291,18 @@ QJsonValue readElementValue(
             executionContext
             );
 
+        /*
+     * A parse error leaves QXmlStreamReader on an
+     * invalid token. Do not pass that token to
+     * QXmlStreamWriter::writeCurrentToken(), which
+     * would itself emit a warning while we are already
+     * handling the malformed source as an import
+     * diagnostic.
+     */
+        if (reader.hasError()) {
+            break;
+        }
+
         if (reader.isStartElement()) {
             hasChildElements = true;
 
@@ -568,6 +580,19 @@ ImportResult XmlImporter::importDevice(
                     );
 
             if (result.cancelled) {
+                break;
+            }
+
+            /*
+             * A record whose element could not be parsed to
+             * completion is not a valid imported record.
+             *
+             * Keep any records that were fully parsed before
+             * the malformed portion of the document, but do
+             * not manufacture a partial record from the
+             * element in which parsing failed.
+             */
+            if (reader.hasError()) {
                 break;
             }
 
