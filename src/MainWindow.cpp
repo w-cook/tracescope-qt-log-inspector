@@ -2,49 +2,29 @@
 
 #include <QAction>
 #include <QFileDialog>
-#include <QHeaderView>
-#include <QScrollBar>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QTableWidget>
-#include <QTableView>
-#include <QItemSelectionModel>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QHBoxLayout>
-#include <QGroupBox>
 #include <QPlainTextEdit>
 #include <QStringList>
-#include <QSizePolicy>
-#include <QSplitter>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
 #include <QUrl>
-#include <QAbstractItemView>
-#include <QFontMetrics>
 #include <QtConcurrentRun>
 #include <QFileInfo>
 #include <QProgressDialog>
 #include <QPromise>
 #include <QSignalBlocker>
-#include <QMargins>
-#include <QGraphicsLayout>
-#include <QFrame>
 #include <QVariant>
-#include <QTabBar>
-#include <QPushButton>
 #include <QDialog>
 #include <QApplication>
 #include <QClipboard>
 #include <QMenu>
-#include <QDialogButtonBox>
-#include <QTextOption>
 #include <QPainter>
 #include <QStyledItemDelegate>
-#include <QTextDocument>
-#include <QColor>
 
 #include <algorithm>
 #include <cmath>
@@ -54,15 +34,6 @@
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
-#include "ui/investigation/InvestigationAnalyticsPanel.h"
-#include "ui/investigation/InvestigationEventDetailPanel.h"
-#include "ui/investigation/InvestigationEventPanel.h"
-#include "ui/investigation/InvestigationFilterPanel.h"
-#include "ui/investigation/InvestigationFindingsPanel.h"
-#include "ui/investigation/InvestigationIssueSummaryPanel.h"
-#include "ui/investigation/InvestigationReviewPanel.h"
-#include "ui/investigation/InvestigationSessionSummaryPanel.h"
-#include "ui/investigation/InvestigationTimelinePanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
 
@@ -321,8 +292,7 @@ MainWindow::MainWindow(QWidget *parent)
     settings(),
     recentItemsStore(settings),
     filterPresetStore(settings),
-    workspace(new InvestigationWorkspace(this)),
-    investigationController(nullptr)
+    workspace(new InvestigationWorkspace(this))
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
     resize(1100, 760);
@@ -348,7 +318,8 @@ MainWindow::MainWindow(QWidget *parent)
 
             auto *sessionView =
                 new InvestigationSessionView(
-                    session
+                    session,
+                    &filterPresetStore
                     );
 
             /*
@@ -418,18 +389,6 @@ MainWindow::MainWindow(QWidget *parent)
                     continue;
                 }
 
-                /*
-                 * Never destroy the shared surface
-                 * along with a closing session view.
-                 */
-                if (surfaceSessionView
-                    == sessionView) {
-                    sessionView->takeContent();
-
-                    surfaceSessionView =
-                        nullptr;
-                }
-
                 WorkspaceDocument *removed =
                     workspaceDocumentHost
                         ->removeDocument(
@@ -447,71 +406,35 @@ MainWindow::MainWindow(QWidget *parent)
     connect(
         workspace,
         &InvestigationWorkspace::
-            activeSessionChanged,
+        activeSessionChanged,
         this,
         [this](int index) {
-            /*
-             * Release the shared surface from whichever
-             * session document currently owns it.
-             */
-            if (surfaceSessionView
-                != nullptr) {
-                surfaceSessionView
-                    ->takeContent();
-
-                surfaceSessionView =
-                    nullptr;
-            }
-
             InvestigationSession *session =
                 workspace->sessionAt(
                     index
                     );
 
-            if (session != nullptr
+            if (
+                session != nullptr
                 && workspaceDocumentHost
-                       != nullptr) {
-                {
-                    /*
-                     * Keep document selection synchronized
-                     * without feeding the change back into
-                     * InvestigationWorkspace.
-                     */
-                    const QSignalBlocker blocker(
-                        workspaceDocumentHost
-                        );
-
+                       != nullptr
+                ) {
+                const QSignalBlocker blocker(
                     workspaceDocumentHost
-                        ->setCurrentDocument(
-                            session->id()
-                            );
-                }
+                    );
 
-                const int documentIndex =
-                    workspaceDocumentHost
-                        ->indexOfDocument(
-                            session->id()
-                            );
-
-                auto *sessionView =
-                    qobject_cast<
-                        InvestigationSessionView *>(
-                        workspaceDocumentHost
-                            ->documentAt(
-                                documentIndex
-                                )
+                workspaceDocumentHost
+                    ->setCurrentDocument(
+                        session->id()
                         );
-
-                if (sessionView != nullptr
-                    && sessionView->attachContent(
-                        investigationSurface
-                        )) {
-                    surfaceSessionView =
-                        sessionView;
-                }
             }
 
-            bindActiveSession();
+            if (reloadAction != nullptr) {
+                reloadAction->setEnabled(
+                    session != nullptr
+                    && importWatcher == nullptr
+                    );
+            }
         }
         );
 
@@ -520,10 +443,36 @@ MainWindow::MainWindow(QWidget *parent)
         &InvestigationWorkspace::sessionReloaded,
         this,
         [this](int index) {
-            if (index
-                == workspace
-                       ->activeSessionIndex()) {
-                bindActiveSession();
+            InvestigationSession *session =
+                workspace->sessionAt(
+                    index
+                    );
+
+            if (
+                session == nullptr
+                || workspaceDocumentHost
+                       == nullptr
+                ) {
+                return;
+            }
+
+            const int documentIndex =
+                workspaceDocumentHost
+                    ->indexOfDocument(
+                        session->id()
+                        );
+
+            auto *sessionView =
+                qobject_cast<
+                    InvestigationSessionView *>(
+                    workspaceDocumentHost
+                        ->documentAt(
+                            documentIndex
+                            )
+                    );
+
+            if (sessionView != nullptr) {
+                sessionView->refreshSession();
             }
         }
         );
@@ -579,8 +528,6 @@ MainWindow::MainWindow(QWidget *parent)
                 );
         }
         );
-
-    bindActiveSession();
 }
 
 void MainWindow::createMenus()
@@ -694,378 +641,6 @@ void MainWindow::buildLayout()
 
     centralLayout->addWidget(
         workspaceDocumentHost,
-        1
-        );
-
-    /*
-     * During the incremental session-view
-     * migration, the existing investigation UI
-     * remains one shared surface. The active
-     * InvestigationSessionView temporarily owns
-     * this widget.
-     */
-    investigationSurface =
-        new QWidget(this);
-
-    auto *layout =
-        new QVBoxLayout(
-            investigationSurface
-            );
-
-    investigationSurface->hide();
-
-    filterPanel =
-        new InvestigationFilterPanel(
-            &filterPresetStore,
-            this
-            );
-
-    layout->addWidget(
-        filterPanel
-        );
-
-    connect(
-        filterPanel,
-        &InvestigationFilterPanel::
-        filterChangeRequested,
-        this,
-        &MainWindow::applyFilters
-        );
-
-    timelinePanel =
-        new InvestigationTimelinePanel(
-            this
-            );
-
-    connect(
-        timelinePanel,
-        &InvestigationTimelinePanel::
-        bucketDrillDownRequested,
-        this,
-        &MainWindow::
-        applyTimelineDrillDown
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Event list
-     * ---------------------------------------------------------
-     */
-    eventPanel =
-        new InvestigationEventPanel(
-            this
-            );
-
-    connect(
-        eventPanel,
-        &InvestigationEventPanel::
-        selectedRecordChanged,
-        this,
-        &MainWindow::
-        updateEventDetailFromSelection
-        );
-
-    connect(
-        eventPanel,
-        &InvestigationEventPanel::
-        customFieldFilterRequested,
-        this,
-        [this](
-            const QString &fieldName,
-            const QString &value
-            ) {
-            if (
-                filterPanel != nullptr
-                && filterPanel
-                       ->addCustomFieldFilter(
-                           fieldName,
-                           value
-                           )
-                ) {
-                applyFilters();
-            }
-        }
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Investigation review surface
-     * ---------------------------------------------------------
-     *
-     * The review container now owns the Issue
-     * Summary / Findings / Analytics tab structure
-     * and per-session selected-tab state.
-     *
-     * MainWindow retains only the cross-component
-     * orchestration that reaches outside that
-     * container.
-     */
-    reviewPanel =
-        new InvestigationReviewPanel(
-            this
-            );
-
-    issueSummaryPanel =
-        reviewPanel->issueSummaryPanel();
-
-    findingsPanel =
-        reviewPanel->findingsPanel();
-
-    analyticsPanel =
-        reviewPanel->analyticsPanel();
-
-    connect(
-        issueSummaryPanel,
-        &InvestigationIssueSummaryPanel::
-        drillDownRequested,
-        this,
-        &MainWindow::
-        drillDownIssueSummary
-        );
-
-    connect(
-        findingsPanel,
-        &InvestigationFindingsPanel::
-        findingActivated,
-        this,
-        &MainWindow::
-        navigateToFinding
-        );
-
-    connect(
-        analyticsPanel,
-        &InvestigationAnalyticsPanel::
-        burstDrillDownRequested,
-        this,
-        &MainWindow::
-        drillDownBurst
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Selected event detail
-     * ---------------------------------------------------------
-     */
-    eventDetailPanel =
-        new InvestigationEventDetailPanel(
-            this
-            );
-
-    connect(
-        eventDetailPanel,
-        &InvestigationEventDetailPanel::
-        findingStatusChangeRequested,
-        this,
-        &MainWindow::
-        updateSelectedEventFindingStatus
-        );
-
-    connect(
-        eventDetailPanel,
-        &InvestigationEventDetailPanel::
-        noteEditRequested,
-        this,
-        &MainWindow::
-        editSelectedEventNote
-        );
-
-    connect(
-        eventDetailPanel,
-        &InvestigationEventDetailPanel::
-        bookmarkToggleRequested,
-        this,
-        &MainWindow::
-        toggleSelectedEventBookmark
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Review/detail horizontal splitter
-     * ---------------------------------------------------------
-     */
-    auto *bottomSplitter =
-        new QSplitter(
-            Qt::Horizontal,
-            this
-            );
-
-    bottomSplitter->addWidget(
-        reviewPanel
-        );
-
-    bottomSplitter->addWidget(
-        eventDetailPanel
-        );
-
-    bottomSplitter->setStretchFactor(
-        0,
-        0
-        );
-
-    bottomSplitter->setStretchFactor(
-        1,
-        1
-        );
-
-    bottomSplitter->setCollapsible(
-        0,
-        false
-        );
-
-    bottomSplitter->setCollapsible(
-        1,
-        false
-        );
-
-    bottomSplitter->setSizes({
-        issueSummaryPanel
-            ->preferredCompactWidth(),
-        1000
-    });
-
-    /*
-     * Review-tab selection affects only the
-     * surrounding layout proportions.
-     *
-     * Review-tab ownership and persistence now
-     * belong to InvestigationReviewPanel.
-     */
-    connect(
-        reviewPanel,
-        &InvestigationReviewPanel::
-        currentTabChanged,
-        this,
-        [
-            this,
-            bottomSplitter
-    ](
-            InvestigationReviewTab tab
-            ) {
-            const int totalWidth =
-                std::max(
-                    1,
-                    bottomSplitter->width()
-                    );
-
-            const bool wideReviewSelected =
-                tab
-                    == InvestigationReviewTab::
-                    Findings
-                || tab
-                       == InvestigationReviewTab::
-                       Analytics;
-
-            if (wideReviewSelected) {
-                /*
-                 * Findings and Analytics are genuine
-                 * review surfaces and benefit from
-                 * more horizontal space. Selected
-                 * Event Details remains usable at
-                 * roughly forty percent.
-                 */
-                const int reviewWidth =
-                    static_cast<int>(
-                        totalWidth * 0.60
-                        );
-
-                bottomSplitter->setSizes({
-                    reviewWidth,
-                    std::max(
-                        1,
-                        totalWidth - reviewWidth
-                        )
-                });
-
-                return;
-            }
-
-            /*
-             * Issue Summary is naturally compact,
-             * so return most of the horizontal
-             * space to Selected Event Details.
-             */
-            const int issueWidth =
-                std::max(
-                    issueSummaryPanel
-                        ->preferredCompactWidth(),
-                    static_cast<int>(
-                        totalWidth * 0.35
-                        )
-                    );
-
-            bottomSplitter->setSizes({
-                issueWidth,
-                std::max(
-                    1,
-                    totalWidth - issueWidth
-                    )
-            });
-        }
-        );
-
-    /*
-     * ---------------------------------------------------------
-     * Primary investigation layout
-     * ---------------------------------------------------------
-     */
-    auto *mainSplitter =
-        new QSplitter(
-            Qt::Vertical,
-            this
-            );
-
-    mainSplitter->addWidget(
-        timelinePanel
-        );
-
-    mainSplitter->addWidget(
-        eventPanel
-        );
-
-    mainSplitter->addWidget(
-        bottomSplitter
-        );
-
-    mainSplitter->setStretchFactor(
-        0,
-        2
-        );
-
-    mainSplitter->setStretchFactor(
-        1,
-        5
-        );
-
-    mainSplitter->setStretchFactor(
-        2,
-        2
-        );
-
-    mainSplitter->setCollapsible(
-        0,
-        false
-        );
-
-    mainSplitter->setCollapsible(
-        1,
-        false
-        );
-
-    mainSplitter->setCollapsible(
-        2,
-        false
-        );
-
-    mainSplitter->setSizes(
-        QList<int>{
-            220,
-            350,
-            250
-        }
-        );
-
-    layout->addWidget(
-        mainSplitter,
         1
         );
 
@@ -1481,739 +1056,12 @@ void MainWindow::completeLogFileImport(
     }
 }
 
-void MainWindow::updateSummary(
-    const QVector<InvestigationRecord> &records,
-    const QString &
-    )
+void MainWindow::exportFilteredResults()
 {
-    if (surfaceSessionView == nullptr
-        || surfaceSessionView
-               ->summaryPanel()
-               == nullptr) {
-        return;
-    }
-
-    surfaceSessionView
-        ->summaryPanel()
-        ->refresh(
-            records
-            );
-}
-
-void MainWindow::applyFilters()
-{
-    if (investigationController == nullptr
-        || filterPanel == nullptr) {
-        return;
-    }
-
     InvestigationSession *session =
         workspace->activeSession();
 
     if (session == nullptr) {
-        return;
-    }
-
-    const QString selectedRecordId =
-        session->selectedRecordId();
-
-    /*
-     * The filter component owns the editable
-     * filter state; MainWindow owns the coordinated
-     * consequences of changing that state.
-     */
-    filterPanel->applyToSession();
-
-    const int selectedProxyRow =
-        !selectedRecordId.isEmpty()
-            ? investigationController
-                  ->proxyRowForRecordId(
-                      selectedRecordId
-                      )
-            : -1;
-
-    const QVector<InvestigationRecord>
-        visibleRecords =
-        investigationController
-            ->recordsForAnalysis();
-
-    updateSummary(
-        visibleRecords,
-        currentFilePath
-        );
-
-    updateIssueSummary(
-        visibleRecords
-        );
-
-    if (analyticsPanel != nullptr) {
-        analyticsPanel->updateRecords(
-            visibleRecords
-            );
-    }
-
-    if (timelinePanel != nullptr) {
-        timelinePanel->updateRecords(
-            visibleRecords
-            );
-    }
-
-    if (eventPanel != nullptr) {
-        if (selectedProxyRow >= 0) {
-            eventPanel->selectProxyRow(
-                selectedProxyRow
-                );
-        } else {
-            eventPanel->clearSelection();
-
-            clearEventDetail();
-        }
-
-        eventPanel
-            ->refreshNavigationState();
-    }
-}
-
-void MainWindow::updateEventDetailFromSelection()
-{
-    const InvestigationRecord *record =
-        selectedEventRecord();
-
-    if (record == nullptr) {
-        clearEventDetail();
-        return;
-    }
-
-    if (eventDetailPanel != nullptr) {
-        eventDetailPanel->displayRecord(
-            *record
-            );
-    }
-
-    updateInvestigationStateControls();
-}
-
-void MainWindow::clearEventDetail()
-{
-    if (eventDetailPanel != nullptr) {
-        eventDetailPanel->clearRecord();
-    }
-
-    updateInvestigationStateControls();
-}
-
-const InvestigationRecord *
-MainWindow::selectedEventRecord() const
-{
-    return eventPanel != nullptr
-        ? eventPanel->selectedRecord()
-        : nullptr;
-}
-
-void MainWindow::
-    updateInvestigationStateControls()
-{
-    if (eventDetailPanel == nullptr) {
-        return;
-    }
-
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    const InvestigationRecord *record =
-        selectedEventRecord();
-
-    if (session == nullptr
-        || record == nullptr
-        || record->recordId.isEmpty()) {
-        eventDetailPanel
-            ->clearInvestigationState();
-
-        return;
-    }
-
-    const InvestigationRecordState state =
-        session
-            ->investigationStateStore()
-            ->stateForRecord(
-                record->recordId
-                );
-
-    eventDetailPanel
-        ->setInvestigationState(
-            state
-            );
-}
-
-void MainWindow::
-    updateSelectedEventFindingStatus()
-{
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    const InvestigationRecord *record =
-        selectedEventRecord();
-
-    if (session == nullptr
-        || record == nullptr
-        || record->recordId.isEmpty()
-        || eventDetailPanel == nullptr) {
-        return;
-    }
-
-    const FindingStatus status =
-        eventDetailPanel
-            ->selectedFindingStatus();
-
-    session
-        ->investigationStateStore()
-        ->setFindingStatus(
-            record->recordId,
-            status
-            );
-
-    syncInvestigationStatePresentation();
-
-    updateFindingsPanel();
-
-    if (
-        filterPanel != nullptr
-        && filterPanel
-               ->hasFindingStatusFilter()
-        ) {
-        applyFilters();
-    } else {
-        updateInvestigationStateControls();
-    }
-}
-
-void MainWindow::editSelectedEventNote()
-{
-    const InvestigationRecord *record =
-        selectedEventRecord();
-
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (record == nullptr
-        || session == nullptr) {
-        return;
-    }
-
-    const QString recordId =
-        record->recordId;
-
-    const QString sessionId =
-        session->id();
-
-    const InvestigationRecordState state =
-        session
-            ->investigationStateStore()
-            ->stateForRecord(
-                recordId
-                );
-
-    auto *dialog =
-        new QDialog(this);
-
-    dialog->setAttribute(
-        Qt::WA_DeleteOnClose
-        );
-
-    dialog->setWindowModality(
-        Qt::NonModal
-        );
-
-    dialog->setModal(
-        false
-        );
-
-    dialog->setWindowTitle(
-        tr("Analyst Note")
-        );
-
-    dialog->resize(
-        520,
-        300
-        );
-
-    auto *layout =
-        new QVBoxLayout(dialog);
-
-    /*
-     * Make it clear which record this modeless
-     * editor belongs to, since the analyst is free
-     * to select other records while it is open.
-     */
-    QString recordDescription =
-        tr("Source record #%1")
-            .arg(
-                record->source.recordNumber
-                );
-
-    if (record->eventCode.has_value()) {
-        recordDescription +=
-            tr(" — %1")
-                .arg(
-                    record->eventCode.value()
-                    );
-    }
-
-    auto *recordLabel =
-        new QLabel(
-            recordDescription,
-            dialog
-            );
-
-    layout->addWidget(
-        recordLabel
-        );
-
-    auto *noteEdit =
-        new QPlainTextEdit(
-            dialog
-            );
-
-    noteEdit->setPlainText(
-        state.note
-        );
-
-    /*
-     * Wrap only the visual presentation.
-     *
-     * QPlainTextEdit does not insert newline
-     * characters when a line wraps, so resizing
-     * the editor simply reflows the text.
-     */
-    noteEdit->setLineWrapMode(
-        QPlainTextEdit::WidgetWidth
-        );
-
-    noteEdit->setWordWrapMode(
-        QTextOption::WrapAtWordBoundaryOrAnywhere
-        );
-
-    noteEdit->setHorizontalScrollBarPolicy(
-        Qt::ScrollBarAlwaysOff
-        );
-
-    layout->addWidget(
-        noteEdit,
-        1
-        );
-
-    auto *buttonBox =
-        new QDialogButtonBox(
-            QDialogButtonBox::Save
-                | QDialogButtonBox::Cancel,
-            dialog
-            );
-
-    layout->addWidget(
-        buttonBox
-        );
-
-    connect(
-        buttonBox,
-        &QDialogButtonBox::rejected,
-        dialog,
-        &QDialog::close
-        );
-
-    connect(
-        buttonBox,
-        &QDialogButtonBox::accepted,
-        this,
-        [
-            this,
-            dialog,
-            noteEdit,
-            sessionId,
-            recordId
-    ]() {
-            const int sessionIndex =
-                workspace->indexOfSession(
-                    sessionId
-                    );
-
-            if (sessionIndex < 0) {
-                /*
-                 * The source investigation was
-                 * closed while this modeless editor
-                 * was open.
-                 */
-                dialog->close();
-
-                return;
-            }
-
-            InvestigationSession *targetSession =
-                workspace->sessionAt(
-                    sessionIndex
-                    );
-
-            if (targetSession == nullptr) {
-                dialog->close();
-
-                return;
-            }
-
-            const QString note =
-                noteEdit->toPlainText();
-
-            targetSession
-                ->investigationStateStore()
-                ->setNote(
-                    recordId,
-                    note.trimmed().isEmpty()
-                        ? QString()
-                        : note
-                    );
-
-            /*
-             * Only the active session can currently
-             * affect the visible investigation UI.
-             */
-            if (
-                workspace->activeSession()
-                == targetSession
-                ) {
-                updateInvestigationStateControls();
-                updateFindingsPanel();
-            }
-
-            dialog->close();
-        }
-        );
-
-    dialog->show();
-
-    noteEdit->setFocus();
-}
-
-void MainWindow::
-    syncInvestigationStatePresentation()
-{
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (session == nullptr
-        || investigationController
-               == nullptr) {
-        return;
-    }
-
-    updateFindingsPanel();
-
-    InvestigationStateStore *stateStore =
-        session->investigationStateStore();
-
-    investigationController
-        ->proxyModel()
-        ->setInvestigationStateIndicators(
-            stateStore
-                ->bookmarkedRecordIds(),
-            stateStore
-                ->notedRecordIds(),
-            stateStore
-                ->findingStatuses()
-            );
-}
-
-void MainWindow::toggleSelectedEventBookmark()
-{
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    const InvestigationRecord *record =
-        selectedEventRecord();
-
-    if (session == nullptr
-        || record == nullptr
-        || record->recordId.isEmpty()) {
-        return;
-    }
-
-    InvestigationStateStore *stateStore =
-        session->investigationStateStore();
-
-    const bool currentlyBookmarked =
-        stateStore
-            ->stateForRecord(
-                record->recordId
-                )
-            .bookmarked;
-
-    stateStore->setBookmarked(
-        record->recordId,
-        !currentlyBookmarked
-        );
-
-    syncInvestigationStatePresentation();
-
-    if (
-        filterPanel != nullptr
-        && filterPanel->bookmarksOnly()
-        ) {
-        applyFilters();
-    } else {
-        updateInvestigationStateControls();
-    }
-}
-
-void MainWindow::selectProxyRow(
-    int proxyRow
-    )
-{
-    if (eventPanel == nullptr) {
-        return;
-    }
-
-    eventPanel->selectProxyRow(
-        proxyRow
-        );
-}
-
-void MainWindow::updateIssueSummary(
-    const QVector<InvestigationRecord> &records
-    )
-{
-    if (issueSummaryPanel == nullptr) {
-        return;
-    }
-
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (
-        session == nullptr
-        || !session->hasSeverityData()
-        || !session->hasSubsystemData()
-        ) {
-        issueSummaryPanel->clear();
-
-        return;
-    }
-
-    issueSummaryPanel->updateRecords(
-        records
-        );
-}
-
-void MainWindow::updateFindingsPanel()
-{
-    if (findingsPanel == nullptr) {
-        return;
-    }
-
-    findingsPanel->refresh();
-}
-
-void MainWindow::drillDownIssueSummary(
-    const QString &subsystem,
-    InvestigationIssueDrillDownType type
-    )
-{
-    if (investigationController == nullptr
-        || subsystem.isEmpty()) {
-        return;
-    }
-
-    QStringList targetSeverities;
-
-    switch (type) {
-    case InvestigationIssueDrillDownType::
-        Warnings:
-        targetSeverities = {
-            QStringLiteral("WARN")
-        };
-        break;
-
-    case InvestigationIssueDrillDownType::
-        Errors:
-        /*
-         * Existing grouped analysis intentionally
-         * treats CRITICAL as error-class behavior.
-         */
-        targetSeverities = {
-            QStringLiteral("ERROR"),
-            QStringLiteral("CRITICAL")
-        };
-        break;
-
-    case InvestigationIssueDrillDownType::
-        AllElevated:
-        targetSeverities = {
-            QStringLiteral("WARN"),
-            QStringLiteral("ERROR"),
-            QStringLiteral("CRITICAL")
-        };
-        break;
-    }
-
-    if (
-        filterPanel != nullptr
-        && filterPanel
-               ->configureIssueDrillDown(
-                   subsystem,
-                   targetSeverities
-                   )
-        ) {
-        applyFilters();
-    }
-}
-
-void MainWindow::applyTimelineDrillDown(
-    const QDateTime &startTimestamp,
-    const QDateTime &endTimestamp,
-    const QString &severity,
-    const QString &subsystem
-    )
-{
-    if (
-        filterPanel != nullptr
-        && filterPanel
-               ->configureTimelineDrillDown(
-                   startTimestamp,
-                   endTimestamp,
-                   severity,
-                   subsystem
-                   )
-        ) {
-        applyFilters();
-    }
-}
-
-void MainWindow::navigateToFinding(
-    const QString &recordId
-    )
-{
-    if (investigationController == nullptr
-        || recordId.isEmpty()) {
-        return;
-    }
-
-    const QVector<InvestigationRecord> &records =
-        investigationController
-            ->allRecords();
-
-    const InvestigationRecord *targetRecord =
-        nullptr;
-
-    for (const InvestigationRecord &record
-         : records) {
-        if (record.recordId
-            == recordId) {
-            targetRecord =
-                &record;
-
-            break;
-        }
-    }
-
-    if (targetRecord == nullptr) {
-        return;
-    }
-
-    int proxyRow =
-        investigationController
-            ->proxyRowForRecordId(
-                recordId
-                );
-
-    /*
-     * If the record is already visible, navigation
-     * should not disturb the analyst's filters.
-     */
-    if (proxyRow >= 0) {
-        selectProxyRow(
-            proxyRow
-            );
-
-        if (eventPanel != nullptr) {
-            eventPanel->focusTable();
-        }
-
-        return;
-    }
-
-    /*
-     * Otherwise relax only the criteria preventing
-     * this finding's source record from appearing.
-     */
-    revealFindingRecord(
-        *targetRecord
-        );
-
-    proxyRow =
-        investigationController
-            ->proxyRowForRecordId(
-                recordId
-                );
-
-    if (proxyRow < 0) {
-        return;
-    }
-
-    selectProxyRow(
-        proxyRow
-        );
-
-    if (eventPanel != nullptr) {
-        eventPanel->focusTable();
-    }
-}
-
-void MainWindow::revealFindingRecord(
-    const InvestigationRecord &record
-    )
-{
-    if (investigationController == nullptr) {
-        return;
-    }
-
-    InvestigationFilterProxyModel *proxyModel =
-        investigationController
-            ->proxyModel();
-
-    const InvestigationFilterMatch match =
-        proxyModel->filterMatchForRecord(
-            record
-            );
-
-    if (match.allMatch()) {
-        return;
-    }
-
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (session == nullptr
-        || filterPanel == nullptr) {
-        return;
-    }
-
-    const InvestigationRecordState state =
-        session
-            ->investigationStateStore()
-            ->stateForRecord(
-                record.recordId
-                );
-
-    if (
-        filterPanel->revealRecord(
-            record,
-            match,
-            state
-            )
-        ) {
-        applyFilters();
-    }
-}
-
-void MainWindow::exportFilteredResults()
-{
-    if (investigationController == nullptr) {
         QMessageBox::information(
             this,
             "No Records to Export",
@@ -2223,8 +1071,16 @@ void MainWindow::exportFilteredResults()
         return;
     }
 
+    InvestigationController *controller =
+        session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
     const QVector<InvestigationRecord> records =
-        investigationController->visibleRecords();
+        controller->visibleRecords();
 
     if (records.isEmpty()) {
         QMessageBox::information(
@@ -2317,151 +1173,6 @@ void MainWindow::dropEvent(QDropEvent *event)
         );
 
     event->acceptProposedAction();
-}
-
-void MainWindow::bindActiveSession()
-{
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    /*
-     * ---------------------------------------------------------
-     * No active investigation
-     * ---------------------------------------------------------
-     */
-    if (session == nullptr) {
-        if (reloadAction != nullptr) {
-            reloadAction->setEnabled(
-                false
-                );
-        }
-
-        investigationController =
-            nullptr;
-
-        currentFilePath.clear();
-
-        if (filterPanel != nullptr) {
-            filterPanel->setSession(
-                nullptr
-                );
-        }
-
-        if (eventPanel != nullptr) {
-            eventPanel->setSession(
-                nullptr
-                );
-        }
-
-        if (timelinePanel != nullptr) {
-            timelinePanel->setSession(
-                nullptr
-                );
-        }
-
-        if (reviewPanel != nullptr) {
-            reviewPanel->setSession(
-                nullptr
-                );
-
-            reviewPanel
-                ->setIssueSummaryAvailable(
-                    false
-                    );
-
-            reviewPanel->setVisible(
-                false
-                );
-        }
-
-        clearEventDetail();
-
-        if (issueSummaryPanel != nullptr) {
-            issueSummaryPanel->clear();
-        }
-
-        return;
-    }
-
-    /*
-     * ---------------------------------------------------------
-     * Active investigation
-     * ---------------------------------------------------------
-     */
-    if (reloadAction != nullptr) {
-        reloadAction->setEnabled(
-            importWatcher == nullptr
-            );
-    }
-
-    investigationController =
-        session->investigationController();
-
-    currentFilePath =
-        session
-            ->sourceMetadata()
-            .sourcePath;
-
-    if (filterPanel != nullptr) {
-        filterPanel->setSession(
-            session
-            );
-    }
-
-    if (eventPanel != nullptr) {
-        eventPanel->setSession(
-            session
-            );
-    }
-
-    if (timelinePanel != nullptr) {
-        timelinePanel->setSession(
-            session
-            );
-    }
-
-    if (reviewPanel != nullptr) {
-        reviewPanel->setSession(
-            session
-            );
-    }
-
-    /*
-     * Restore bookmark/note/finding indicators
-     * before recalculating the filtered result.
-     */
-    syncInvestigationStatePresentation();
-
-    if (reviewPanel != nullptr) {
-        reviewPanel
-            ->setIssueSummaryAvailable(
-                session->hasSeverityData()
-                && session
-                       ->hasSubsystemData()
-                );
-
-        reviewPanel->setVisible(
-            true
-            );
-
-        reviewPanel
-            ->restoreSelectedTab();
-    }
-
-    /*
-     * InvestigationFilterPanel has already restored
-     * the active session's independent filter
-     * controls from its proxy-model state.
-     *
-     * Apply them once and refresh all dependent
-     * investigation surfaces.
-     */
-    applyFilters();
-
-    if (eventPanel != nullptr) {
-        eventPanel
-            ->refreshNavigationState();
-    }
 }
 
 void MainWindow::reloadActiveSession()
@@ -2568,27 +1279,4 @@ void MainWindow::openRecentFile(
     openLogFile(
         filePath
         );
-}
-
-void MainWindow::drillDownBurst(
-    const QDateTime &startTimestamp,
-    const QDateTime &endTimestamp
-    )
-{
-    if (
-        filterPanel == nullptr
-        || !filterPanel
-                ->configureBurstDrillDown(
-                    startTimestamp,
-                    endTimestamp
-                    )
-        ) {
-        return;
-    }
-
-    applyFilters();
-
-    if (eventPanel != nullptr) {
-        eventPanel->focusTable();
-    }
 }

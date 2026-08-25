@@ -6,8 +6,6 @@
 #include <QFutureWatcher>
 #include <QSettings>
 
-#include "controllers/InvestigationController.h"
-#include "domain/InvestigationRecord.h"
 #include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
@@ -68,44 +66,6 @@ private:
     WorkspaceDocumentHost *workspaceDocumentHost =
         nullptr;
 
-    QWidget *investigationSurface =
-        nullptr;
-
-    /*
-     * Transitional owner of the shared investigation
-     * surface while the session UI is being extracted
-     * into independently renderable components.
-     */
-    InvestigationSessionView *surfaceSessionView =
-        nullptr;
-
-    InvestigationFilterPanel *filterPanel =
-        nullptr;
-
-    InvestigationTimelinePanel *timelinePanel =
-        nullptr;
-
-    InvestigationEventPanel *eventPanel =
-        nullptr;
-
-    InvestigationReviewPanel *reviewPanel =
-        nullptr;
-
-    InvestigationIssueSummaryPanel
-        *issueSummaryPanel = nullptr;
-
-    InvestigationFindingsPanel *findingsPanel =
-        nullptr;
-
-    InvestigationAnalyticsPanel *analyticsPanel =
-        nullptr;
-
-    InvestigationEventDetailPanel
-        *eventDetailPanel = nullptr;
-
-    InvestigationController *investigationController =
-        nullptr;
-
     InvestigationCsvExporter csvExporter;
 
     QAction *openAction = nullptr;
@@ -113,11 +73,6 @@ private:
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
-
-    bool hasSeverityData = false;
-    bool hasSubsystemData = false;
-
-    QString currentFilePath;
 
     void buildLayout();
     void createMenus();
@@ -138,68 +93,13 @@ private:
         const QString &reloadSessionId
         );
 
-    void updateSummary(
-        const QVector<InvestigationRecord> &records,
-        const QString &filePath
-        );
-
-    void applyFilters();
-
-    void updateEventDetailFromSelection();
-    void clearEventDetail();
-
-    const InvestigationRecord *
-    selectedEventRecord() const;
-
-    void toggleSelectedEventBookmark();
-
-    void updateInvestigationStateControls();
-    void updateSelectedEventFindingStatus();
-    void editSelectedEventNote();
-
-    void syncInvestigationStatePresentation();
-
-    void selectProxyRow(
-        int proxyRow
-        );
-
-    void updateIssueSummary(
-        const QVector<InvestigationRecord> &records
-        );
-    void drillDownIssueSummary(
-        const QString &subsystem,
-        InvestigationIssueDrillDownType type
-        );
-    void applyTimelineDrillDown(
-        const QDateTime &startTimestamp,
-        const QDateTime &endTimestamp,
-        const QString &severity,
-        const QString &subsystem
-        );
-
-    void updateFindingsPanel();
-
-    void navigateToFinding(
-        const QString &recordId
-        );
-
-    void revealFindingRecord(
-        const InvestigationRecord &record
-        );
-
     void exportFilteredResults();
 
-    void bindActiveSession();
     void reloadActiveSession();
 
     void refreshRecentFilesMenu();
 
     void openRecentFile(
         const QString &filePath
-        );
-
-    void drillDownBurst(
-        const QDateTime &startTimestamp,
-        const QDateTime &endTimestamp
         );
 };
