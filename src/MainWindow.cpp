@@ -46,7 +46,6 @@
 #include <QClipboard>
 #include <QMenu>
 #include <QInputDialog>
-#include <QTabWidget>
 #include <QDialogButtonBox>
 #include <QTextOption>
 #include <QPainter>
@@ -77,6 +76,7 @@
 #include "ui/investigation/InvestigationEventPanel.h"
 #include "ui/investigation/InvestigationFindingsPanel.h"
 #include "ui/investigation/InvestigationIssueSummaryPanel.h"
+#include "ui/investigation/InvestigationReviewPanel.h"
 #include "ui/investigation/InvestigationSessionSummaryPanel.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
@@ -1079,10 +1079,18 @@ void MainWindow::buildLayout()
 
     investigationSurface->hide();
 
-    buildFilterControls(layout);
+    buildFilterControls(
+        layout
+        );
 
-    auto *timelineGroup = buildTimelinePanel();
+    auto *timelineGroup =
+        buildTimelinePanel();
 
+    /*
+     * ---------------------------------------------------------
+     * Event list
+     * ---------------------------------------------------------
+     */
     eventPanel =
         new InvestigationEventPanel(
             this
@@ -1091,16 +1099,16 @@ void MainWindow::buildLayout()
     connect(
         eventPanel,
         &InvestigationEventPanel::
-            selectedRecordChanged,
+        selectedRecordChanged,
         this,
         &MainWindow::
-            updateEventDetailFromSelection
+        updateEventDetailFromSelection
         );
 
     connect(
         eventPanel,
         &InvestigationEventPanel::
-            customFieldFilterRequested,
+        customFieldFilterRequested,
         this,
         [this](
             const QString &fieldName,
@@ -1114,70 +1122,65 @@ void MainWindow::buildLayout()
         }
         );
 
-    issueSummaryPanel =
-        new InvestigationIssueSummaryPanel(
+    /*
+     * ---------------------------------------------------------
+     * Investigation review surface
+     * ---------------------------------------------------------
+     *
+     * The review container now owns the Issue
+     * Summary / Findings / Analytics tab structure
+     * and per-session selected-tab state.
+     *
+     * MainWindow retains only the cross-component
+     * orchestration that reaches outside that
+     * container.
+     */
+    reviewPanel =
+        new InvestigationReviewPanel(
             this
             );
+
+    issueSummaryPanel =
+        reviewPanel->issueSummaryPanel();
+
+    findingsPanel =
+        reviewPanel->findingsPanel();
+
+    analyticsPanel =
+        reviewPanel->analyticsPanel();
 
     connect(
         issueSummaryPanel,
         &InvestigationIssueSummaryPanel::
-            drillDownRequested,
+        drillDownRequested,
         this,
         &MainWindow::
-            drillDownIssueSummary
+        drillDownIssueSummary
         );
-
-    findingsPanel =
-        new InvestigationFindingsPanel(
-            this
-            );
 
     connect(
         findingsPanel,
         &InvestigationFindingsPanel::
-            findingActivated,
+        findingActivated,
         this,
         &MainWindow::
-            navigateToFinding
+        navigateToFinding
         );
-
-    analyticsPanel =
-        new InvestigationAnalyticsPanel(
-            this
-            );
 
     connect(
         analyticsPanel,
         &InvestigationAnalyticsPanel::
-            burstDrillDownRequested,
+        burstDrillDownRequested,
         this,
         &MainWindow::
-            drillDownBurst
+        drillDownBurst
         );
 
-    investigationReviewTabs =
-        new QTabWidget(this);
-
-    investigationReviewTabs->setDocumentMode(
-        true
-        );
-
-    investigationReviewTabs->addTab(
-        issueSummaryPanel,
-        tr("Issue Summary")
-        );
-
-    investigationReviewTabs->addTab(
-        findingsPanel,
-        tr("Findings")
-        );
-
-    investigationReviewTabs->addTab(
-        analyticsPanel,
-        tr("Analytics")
-        );
-
+    /*
+     * ---------------------------------------------------------
+     * Selected event detail
+     * ---------------------------------------------------------
+     */
     eventDetailPanel =
         new InvestigationEventDetailPanel(
             this
@@ -1186,30 +1189,35 @@ void MainWindow::buildLayout()
     connect(
         eventDetailPanel,
         &InvestigationEventDetailPanel::
-            findingStatusChangeRequested,
+        findingStatusChangeRequested,
         this,
         &MainWindow::
-            updateSelectedEventFindingStatus
+        updateSelectedEventFindingStatus
         );
 
     connect(
         eventDetailPanel,
         &InvestigationEventDetailPanel::
-            noteEditRequested,
+        noteEditRequested,
         this,
         &MainWindow::
-            editSelectedEventNote
+        editSelectedEventNote
         );
 
     connect(
         eventDetailPanel,
         &InvestigationEventDetailPanel::
-            bookmarkToggleRequested,
+        bookmarkToggleRequested,
         this,
         &MainWindow::
-            toggleSelectedEventBookmark
+        toggleSelectedEventBookmark
         );
 
+    /*
+     * ---------------------------------------------------------
+     * Review/detail horizontal splitter
+     * ---------------------------------------------------------
+     */
     auto *bottomSplitter =
         new QSplitter(
             Qt::Horizontal,
@@ -1217,7 +1225,7 @@ void MainWindow::buildLayout()
             );
 
     bottomSplitter->addWidget(
-        investigationReviewTabs
+        reviewPanel
         );
 
     bottomSplitter->addWidget(
@@ -1245,96 +1253,71 @@ void MainWindow::buildLayout()
         );
 
     bottomSplitter->setSizes({
-        350,
-        750
-    });
-
-    bottomSplitter->setStretchFactor(0, 0);
-    bottomSplitter->setStretchFactor(1, 1);
-
-    bottomSplitter->setCollapsible(0, false);
-    bottomSplitter->setCollapsible(1, false);
-
-    bottomSplitter->setSizes({
-        issueSummaryPanel->preferredCompactWidth(),
+        issueSummaryPanel
+            ->preferredCompactWidth(),
         1000
     });
 
-    auto *mainSplitter = new QSplitter(Qt::Vertical, this);
-    mainSplitter->addWidget(timelineGroup);
-    mainSplitter->addWidget(eventPanel);
-    mainSplitter->addWidget(bottomSplitter);
-
+    /*
+     * Review-tab selection affects only the
+     * surrounding layout proportions.
+     *
+     * Review-tab ownership and persistence now
+     * belong to InvestigationReviewPanel.
+     */
     connect(
-        investigationReviewTabs,
-        &QTabWidget::currentChanged,
+        reviewPanel,
+        &InvestigationReviewPanel::
+        currentTabChanged,
         this,
         [
             this,
             bottomSplitter
-        ](int index) {
-        InvestigationSession *session =
-            workspace->activeSession();
-
-            if (session != nullptr) {
-                QWidget *currentPage =
-                    investigationReviewTabs
-                        ->widget(index);
-
-                if (currentPage == issueSummaryPanel) {
-                    session->setReviewTab(
-                        InvestigationReviewTab::
-                            IssueSummary
-                        );
-                } else if (currentPage == findingsPanel) {
-                    session->setReviewTab(
-                        InvestigationReviewTab::
-                            Findings
-                        );
-                } else if (currentPage == analyticsPanel) {
-                    session->setReviewTab(
-                        InvestigationReviewTab::
-                            Analytics
-                        );
-                }
-            }
-
+    ](
+            InvestigationReviewTab tab
+            ) {
             const int totalWidth =
                 std::max(
                     1,
                     bottomSplitter->width()
                     );
 
-            const QString selectedTabText =
-                investigationReviewTabs->tabText(index);
-
             const bool wideReviewSelected =
-                selectedTabText == QObject::tr("Findings")
-                || selectedTabText == QObject::tr("Analytics");
+                tab
+                    == InvestigationReviewTab::
+                    Findings
+                || tab
+                       == InvestigationReviewTab::
+                       Analytics;
 
             if (wideReviewSelected) {
                 /*
-                 * Findings is a genuine review surface
-                 * and benefits from more horizontal space.
-                 * Selected Event Details remains usable
-                 * at roughly forty percent.
+                 * Findings and Analytics are genuine
+                 * review surfaces and benefit from
+                 * more horizontal space. Selected
+                 * Event Details remains usable at
+                 * roughly forty percent.
                  */
-                const int findingsWidth =
+                const int reviewWidth =
                     static_cast<int>(
                         totalWidth * 0.60
                         );
 
                 bottomSplitter->setSizes({
-                    findingsWidth,
-                    totalWidth - findingsWidth
+                    reviewWidth,
+                    std::max(
+                        1,
+                        totalWidth - reviewWidth
+                        )
                 });
 
                 return;
             }
 
             /*
-             * Issue Summary is naturally compact, so
-             * return most of the space to event details.
+             * Issue Summary is naturally compact,
+             * so return most of the horizontal
+             * space to Selected Event Details.
              */
             const int issueWidth =
                 std::max(
@@ -1355,19 +1338,75 @@ void MainWindow::buildLayout()
         }
         );
 
-    mainSplitter->setStretchFactor(0, 2);
-    mainSplitter->setStretchFactor(1, 5);
-    mainSplitter->setStretchFactor(2, 2);
+    /*
+     * ---------------------------------------------------------
+     * Primary investigation layout
+     * ---------------------------------------------------------
+     */
+    auto *mainSplitter =
+        new QSplitter(
+            Qt::Vertical,
+            this
+            );
 
-    mainSplitter->setCollapsible(0, false);
-    mainSplitter->setCollapsible(1, false);
-    mainSplitter->setCollapsible(2, false);
+    mainSplitter->addWidget(
+        timelineGroup
+        );
 
-    mainSplitter->setSizes(QList<int>{220, 350, 250});
+    mainSplitter->addWidget(
+        eventPanel
+        );
 
-    layout->addWidget(mainSplitter, 1);
+    mainSplitter->addWidget(
+        bottomSplitter
+        );
 
-    setCentralWidget(centralWidget);
+    mainSplitter->setStretchFactor(
+        0,
+        2
+        );
+
+    mainSplitter->setStretchFactor(
+        1,
+        5
+        );
+
+    mainSplitter->setStretchFactor(
+        2,
+        2
+        );
+
+    mainSplitter->setCollapsible(
+        0,
+        false
+        );
+
+    mainSplitter->setCollapsible(
+        1,
+        false
+        );
+
+    mainSplitter->setCollapsible(
+        2,
+        false
+        );
+
+    mainSplitter->setSizes(
+        QList<int>{
+            220,
+            350,
+            250
+        }
+        );
+
+    layout->addWidget(
+        mainSplitter,
+        1
+        );
+
+    setCentralWidget(
+        centralWidget
+        );
 }
 
 void MainWindow::openLogFile(const QString &initialFilePath)
@@ -7180,6 +7219,12 @@ void MainWindow::updateDataCapabilities()
             false
             );
 
+        if (reviewPanel != nullptr) {
+            reviewPanel->setIssueSummaryAvailable(
+                false
+                );
+        }
+
         return;
     }
 
@@ -7365,27 +7410,15 @@ void MainWindow::updateDataCapabilities()
      * Warning/error grouping requires both
      * severity and subsystem information.
      *
-     * Issue Summary is a QTabWidget page, so its
-     * visibility must be managed through the tab
-     * widget rather than by showing/hiding the page
-     * widget directly. Direct setVisible() calls can
-     * cause the page to be painted alongside the
-     * currently selected review tab.
+     * The review container owns tab presentation, so
+     * MainWindow only communicates whether the Issue
+     * Summary capability is available for this source.
      */
-    if (investigationReviewTabs != nullptr
-        && issueSummaryPanel != nullptr) {
-        const int issueSummaryIndex =
-            investigationReviewTabs->indexOf(
-                issueSummaryPanel
-                );
-
-        if (issueSummaryIndex >= 0) {
-            investigationReviewTabs->setTabVisible(
-                issueSummaryIndex,
-                hasSeverityData
-                    && hasSubsystemData
-                );
-        }
+    if (reviewPanel != nullptr) {
+        reviewPanel->setIssueSummaryAvailable(
+            hasSeverityData
+            && hasSubsystemData
+            );
     }
 }
 
@@ -7419,14 +7452,8 @@ void MainWindow::bindActiveSession()
                 );
         }
 
-        if (findingsPanel != nullptr) {
-            findingsPanel->setSession(
-                nullptr
-                );
-        }
-
-        if (analyticsPanel != nullptr) {
-            analyticsPanel->setSession(
+        if (reviewPanel != nullptr) {
+            reviewPanel->setSession(
                 nullptr
                 );
         }
@@ -7619,8 +7646,8 @@ void MainWindow::bindActiveSession()
             issueSummaryPanel->clear();
         }
 
-        if (investigationReviewTabs != nullptr) {
-            investigationReviewTabs->setVisible(
+        if (reviewPanel != nullptr) {
+            reviewPanel->setVisible(
                 false
                 );
         }
@@ -7661,14 +7688,8 @@ void MainWindow::bindActiveSession()
             );
     }
 
-    if (findingsPanel != nullptr) {
-        findingsPanel->setSession(
-            session
-            );
-    }
-
-    if (analyticsPanel != nullptr) {
-        analyticsPanel->setSession(
+    if (reviewPanel != nullptr) {
+        reviewPanel->setSession(
             session
             );
     }
@@ -7756,84 +7777,18 @@ void MainWindow::bindActiveSession()
 
     updateTimelineBreakdownControls();
 
-    if (investigationReviewTabs != nullptr) {
-        investigationReviewTabs->setVisible(
+    if (reviewPanel != nullptr) {
+        reviewPanel->setVisible(
             true
             );
-    }
-
-    if (investigationReviewTabs != nullptr) {
-        QWidget *preferredPage =
-            nullptr;
-
-        switch (session->reviewTab()) {
-        case InvestigationReviewTab::IssueSummary:
-            preferredPage =
-                issueSummaryPanel;
-            break;
-
-        case InvestigationReviewTab::Findings:
-            preferredPage =
-                findingsPanel;
-            break;
-
-        case InvestigationReviewTab::Analytics:
-            preferredPage =
-                analyticsPanel;
-            break;
-        }
-
-        int preferredIndex =
-            preferredPage != nullptr
-                ? investigationReviewTabs
-                      ->indexOf(
-                          preferredPage
-                          )
-                : -1;
 
         /*
-         * Restore this investigation's preferred
-         * review surface when it is available.
+         * Capability visibility has now been
+         * synchronized for this source, so it is safe
+         * to restore the session's persisted review
+         * selection.
          */
-        if (preferredIndex >= 0
-            && investigationReviewTabs
-                   ->isTabVisible(
-                       preferredIndex
-                       )) {
-            investigationReviewTabs
-                ->setCurrentIndex(
-                    preferredIndex
-                    );
-        } else {
-            /*
-             * A saved page may not be applicable to
-             * the active source. Issue Summary, for
-             * example, requires severity and subsystem
-             * data. Fall back deterministically to the
-             * first available review surface.
-             */
-            for (
-                int index = 0;
-                index
-                    < investigationReviewTabs
-                          ->count();
-                ++index
-                ) {
-                if (!investigationReviewTabs
-                         ->isTabVisible(
-                             index
-                             )) {
-                    continue;
-                }
-
-                investigationReviewTabs
-                    ->setCurrentIndex(
-                        index
-                        );
-
-                break;
-            }
-        }
+        reviewPanel->restoreSelectedTab();
     }
 
     /*

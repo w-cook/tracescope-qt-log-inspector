@@ -40,7 +40,6 @@ class QCheckBox;
 class QDateTimeEdit;
 class QWidget;
 class QDialog;
-class QTabWidget;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationAnalyticsPanel;
@@ -48,6 +47,7 @@ class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
 class InvestigationFindingsPanel;
 class InvestigationIssueSummaryPanel;
+class InvestigationReviewPanel;
 
 enum class InvestigationIssueDrillDownType;
 
@@ -74,8 +74,6 @@ private:
 
     QMenu *recentFilesMenu = nullptr;
 
-    QTabWidget *investigationReviewTabs = nullptr;
-
     InvestigationWorkspace *workspace;
 
     WorkspaceDocumentHost *workspaceDocumentHost =
@@ -93,6 +91,9 @@ private:
         nullptr;
 
     InvestigationEventPanel *eventPanel =
+        nullptr;
+
+    InvestigationReviewPanel *reviewPanel =
         nullptr;
 
     InvestigationIssueSummaryPanel
