@@ -145,6 +145,8 @@ qt_add_executable(TraceScope
     src/ui/investigation/InvestigationAnalyticsPanel.cpp
     src/ui/investigation/InvestigationReviewPanel.h
     src/ui/investigation/InvestigationReviewPanel.cpp
+    src/ui/investigation/InvestigationTimelinePanel.h
+    src/ui/investigation/InvestigationTimelinePanel.cpp
 
 )
 

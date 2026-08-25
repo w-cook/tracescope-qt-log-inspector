@@ -8,8 +8,6 @@
 #include <QFutureWatcher>
 #include <QSettings>
 
-#include "analysis/EventTimelineAnalyzer.h"
-#include "analysis/InvestigationAnalyticsAnalyzer.h"
 #include "controllers/InvestigationController.h"
 #include "domain/InvestigationRecord.h"
 #include "exporting/InvestigationCsvExporter.h"
@@ -48,6 +46,7 @@ class InvestigationEventPanel;
 class InvestigationFindingsPanel;
 class InvestigationIssueSummaryPanel;
 class InvestigationReviewPanel;
+class InvestigationTimelinePanel;
 
 enum class InvestigationIssueDrillDownType;
 
@@ -90,6 +89,9 @@ private:
     InvestigationSessionView *surfaceSessionView =
         nullptr;
 
+    InvestigationTimelinePanel *timelinePanel =
+        nullptr;
+
     InvestigationEventPanel *eventPanel =
         nullptr;
 
@@ -110,9 +112,6 @@ private:
 
     InvestigationController *investigationController =
         nullptr;
-
-    EventTimelineAnalyzer timelineAnalyzer;
-    InvestigationAnalyticsAnalyzer analyticsAnalyzer;
 
     InvestigationCsvExporter csvExporter;
 
@@ -169,39 +168,7 @@ private:
     std::optional<QDateTime> timelineFirstTimestamp;
     std::optional<QDateTime> timelineLastTimestamp;
 
-    QComboBox *timelineIntervalCombo =
-        nullptr;
-
-    QWidget *timelineBreakdownWidget =
-        nullptr;
-
-    QComboBox *timelineBreakdownCombo =
-        nullptr;
-
-    QWidget *timelineSubsystemShowWidget =
-        nullptr;
-
-    QComboBox *timelineSubsystemLimitCombo =
-        nullptr;
-
-    QScrollBar *timelineScrollBar =
-        nullptr;
-
-    QLabel *timelineRangeLabel =
-        nullptr;
-
-    bool timelineScaleValid =
-        false;
-
-    qint64 timelineScaleIntervalMilliseconds =
-        0;
-
-    int timelineScaleMaximum =
-        1;
-
     QString currentFilePath;
-
-    QChartView *timelineChartView;
 
     void buildLayout();
     void createMenus();
@@ -247,8 +214,6 @@ private:
 
     void updateTimeRangeButton();
 
-    void updateTimelineBreakdownControls();
-
     void updateEventDetailFromSelection();
     void clearEventDetail();
 
@@ -274,8 +239,9 @@ private:
         const QString &subsystem,
         InvestigationIssueDrillDownType type
         );
-    void drillDownTimelineBucket(
-        int visibleBucketIndex,
+    void applyTimelineDrillDown(
+        const QDateTime &startTimestamp,
+        const QDateTime &endTimestamp,
         const QString &severity,
         const QString &subsystem
         );
@@ -291,21 +257,6 @@ private:
         );
 
     void exportFilteredResults();
-
-    QGroupBox *buildTimelinePanel();
-    void updateTimelineChart(
-        const QVector<InvestigationRecord> &records
-        );
-
-    void updateTimelineRangeLabel(
-        int scrollValue
-        );
-
-    std::optional<QDateTime>
-    effectiveTimelineFirstTimestamp() const;
-
-    std::optional<QDateTime>
-    effectiveTimelineLastTimestamp() const;
 
     void updateDataCapabilities();
 
