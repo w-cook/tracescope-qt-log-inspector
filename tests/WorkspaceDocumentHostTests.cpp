@@ -1,7 +1,9 @@
 #include <QtTest/QtTest>
 
 #include <QPointer>
+#include <QSet>
 
+#include "../src/ui/workspace/DetachedWorkspaceDocumentWindow.h"
 #include "../src/ui/workspace/WorkspaceDocument.h"
 #include "../src/ui/workspace/WorkspaceDocumentHost.h"
 
@@ -17,6 +19,11 @@ private slots:
     void documentTitleChangesUpdateDocumentState();
     void removeDocumentTransfersOwnershipWithoutDeleting();
     void closeRequestDoesNotRemoveDocument();
+    void detachesAndRedocksSameDocument();
+    void rejectsDuplicateDocumentIdWhileDetached();
+    void detachedWindowCanContainMultipleDocuments();
+    void removeDetachedDocumentTransfersOwnershipWithoutDeleting();
+    void detachedWindowCloseRequestsAllDocuments();
 };
 
 void WorkspaceDocumentHostTests::
@@ -70,17 +77,24 @@ void WorkspaceDocumentHostTests::
             QStringLiteral("First")
             );
 
-    auto *duplicate =
-        new WorkspaceDocument(
-            QStringLiteral("session-1"),
-            QStringLiteral("Duplicate")
-            );
-
     QVERIFY(
         host.addDocument(
             first
             )
         );
+
+    /*
+     * Create this only after the first document has
+     * been successfully adopted by the host. QTest
+     * assertions return immediately on failure, so
+     * allocating it earlier would create a possible
+     * leak path.
+     */
+    auto *duplicate =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Duplicate")
+            );
 
     QVERIFY(
         !host.addDocument(
@@ -111,17 +125,17 @@ void WorkspaceDocumentHostTests::
             QStringLiteral("First")
             );
 
-    auto *second =
-        new WorkspaceDocument(
-            QStringLiteral("session-2"),
-            QStringLiteral("Second")
-            );
-
     QVERIFY(
         host.addDocument(
             first
             )
         );
+
+    auto *second =
+        new WorkspaceDocument(
+            QStringLiteral("session-2"),
+            QStringLiteral("Second")
+            );
 
     QVERIFY(
         host.addDocument(
@@ -321,6 +335,547 @@ void WorkspaceDocumentHostTests::
     QCOMPARE(
         host.currentDocument(),
         document
+        );
+}
+
+void WorkspaceDocumentHostTests::
+    detachesAndRedocksSameDocument()
+{
+    WorkspaceDocumentHost host;
+
+    auto *document =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Session One")
+            );
+
+    QVERIFY(
+        host.addDocument(
+            document
+            )
+        );
+
+    QSignalSpy detachedSpy(
+        &host,
+        &WorkspaceDocumentHost::
+        documentDetached
+        );
+
+    QSignalSpy redockedSpy(
+        &host,
+        &WorkspaceDocumentHost::
+        documentRedocked
+        );
+
+    QVERIFY(
+        host.detachDocument(
+            document->documentId()
+            )
+        );
+
+    QCOMPARE(
+        host.documentCount(),
+        0
+        );
+
+    QCOMPARE(
+        host.documentById(
+            document->documentId()
+            ),
+        document
+        );
+
+    QVERIFY(
+        host.isDocumentDetached(
+            document->documentId()
+            )
+        );
+
+    const auto windows =
+        host.findChildren<
+            DetachedWorkspaceDocumentWindow *>();
+
+    QCOMPARE(
+        windows.size(),
+        1
+        );
+
+    if (windows.isEmpty()) {
+        QFAIL(
+            "Expected a detached workspace window."
+            );
+
+        return;
+    }
+
+    DetachedWorkspaceDocumentWindow *window =
+        windows.first();
+
+    if (window == nullptr) {
+        QFAIL(
+            "Detached workspace window was null."
+            );
+
+        return;
+    }
+
+    WorkspaceDocumentHost *detachedHost =
+        window->documentHost();
+
+    if (detachedHost == nullptr) {
+        QFAIL(
+            "Detached workspace window had no document host."
+            );
+
+        return;
+    }
+
+    QCOMPARE(
+        detachedHost->documentCount(),
+        1
+        );
+
+    QCOMPARE(
+        detachedHost->documentAt(0),
+        document
+        );
+
+    QCOMPARE(
+        detachedSpy.count(),
+        1
+        );
+
+    QVERIFY(
+        host.redockDocument(
+            document->documentId()
+            )
+        );
+
+    QCOMPARE(
+        host.documentCount(),
+        1
+        );
+
+    QCOMPARE(
+        host.documentAt(0),
+        document
+        );
+
+    QCOMPARE(
+        host.currentDocument(),
+        document
+        );
+
+    QCOMPARE(
+        host.documentById(
+            document->documentId()
+            ),
+        document
+        );
+
+    QVERIFY(
+        !host.isDocumentDetached(
+            document->documentId()
+            )
+        );
+
+    QCOMPARE(
+        redockedSpy.count(),
+        1
+        );
+}
+
+void WorkspaceDocumentHostTests::
+    rejectsDuplicateDocumentIdWhileDetached()
+{
+    WorkspaceDocumentHost host;
+
+    auto *original =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Original")
+            );
+
+    QVERIFY(
+        host.addDocument(
+            original
+            )
+        );
+
+    QVERIFY(
+        host.detachDocument(
+            original->documentId()
+            )
+        );
+
+    auto *duplicate =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Duplicate")
+            );
+
+    QVERIFY(
+        !host.addDocument(
+            duplicate
+            )
+        );
+
+    delete duplicate;
+
+    QCOMPARE(
+        host.documentById(
+            QStringLiteral("session-1")
+            ),
+        original
+        );
+
+    QVERIFY(
+        host.isDocumentDetached(
+            QStringLiteral("session-1")
+            )
+        );
+}
+
+void WorkspaceDocumentHostTests::
+    detachedWindowCanContainMultipleDocuments()
+{
+    WorkspaceDocumentHost host;
+
+    auto *first =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Session One")
+            );
+
+    QVERIFY(
+        host.addDocument(
+            first
+            )
+        );
+
+    QVERIFY(
+        host.detachDocument(
+            first->documentId()
+            )
+        );
+
+    const auto windows =
+        host.findChildren<
+            DetachedWorkspaceDocumentWindow *>();
+
+    QCOMPARE(
+        windows.size(),
+        1
+        );
+
+    if (windows.isEmpty()) {
+        QFAIL(
+            "Expected a detached workspace window."
+            );
+
+        return;
+    }
+
+    DetachedWorkspaceDocumentWindow *window =
+        windows.first();
+
+    if (window == nullptr) {
+        QFAIL(
+            "Detached workspace window was null."
+            );
+
+        return;
+    }
+
+    WorkspaceDocumentHost *detachedHost =
+        window->documentHost();
+
+    if (detachedHost == nullptr) {
+        QFAIL(
+            "Detached workspace window had no document host."
+            );
+
+        return;
+    }
+
+    auto *second =
+        new WorkspaceDocument(
+            QStringLiteral("session-2"),
+            QStringLiteral("Session Two")
+            );
+
+    QVERIFY(
+        detachedHost->addDocument(
+            second
+            )
+        );
+
+    QCOMPARE(
+        detachedHost->documentCount(),
+        2
+        );
+
+    QCOMPARE(
+        detachedHost->documentAt(0),
+        first
+        );
+
+    QCOMPARE(
+        detachedHost->documentAt(1),
+        second
+        );
+
+    QCOMPARE(
+        host.documentById(
+            first->documentId()
+            ),
+        first
+        );
+
+    QCOMPARE(
+        host.documentById(
+            second->documentId()
+            ),
+        second
+        );
+
+    QVERIFY(
+        host.isDocumentDetached(
+            first->documentId()
+            )
+        );
+
+    QVERIFY(
+        host.isDocumentDetached(
+            second->documentId()
+            )
+        );
+
+    const QVector<WorkspaceDocument *>
+        allDocuments =
+        host.documents();
+
+    QCOMPARE(
+        allDocuments.size(),
+        2
+        );
+
+    QVERIFY(
+        allDocuments.contains(
+            first
+            )
+        );
+
+    QVERIFY(
+        allDocuments.contains(
+            second
+            )
+        );
+}
+
+void WorkspaceDocumentHostTests::
+    removeDetachedDocumentTransfersOwnershipWithoutDeleting()
+{
+    WorkspaceDocumentHost host;
+
+    auto *document =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Session One")
+            );
+
+    QPointer<WorkspaceDocument>
+        guardedDocument(
+            document
+            );
+
+    QVERIFY(
+        host.addDocument(
+            document
+            )
+        );
+
+    QVERIFY(
+        host.detachDocument(
+            document->documentId()
+            )
+        );
+
+    WorkspaceDocument *removed =
+        host.removeDocument(
+            document->documentId()
+            );
+
+    QCOMPARE(
+        removed,
+        document
+        );
+
+    QCOMPARE(
+        host.documentById(
+            document->documentId()
+            ),
+        nullptr
+        );
+
+    QVERIFY(
+        !host.isDocumentDetached(
+            document->documentId()
+            )
+        );
+
+    QVERIFY(
+        guardedDocument
+        );
+
+    QCOMPARE(
+        document->parentWidget(),
+        nullptr
+        );
+
+    delete document;
+
+    QVERIFY(
+        guardedDocument.isNull()
+        );
+}
+
+void WorkspaceDocumentHostTests::
+    detachedWindowCloseRequestsAllDocuments()
+{
+    WorkspaceDocumentHost host;
+
+    auto *first =
+        new WorkspaceDocument(
+            QStringLiteral("session-1"),
+            QStringLiteral("Session One")
+            );
+
+    QVERIFY(
+        host.addDocument(
+            first
+            )
+        );
+
+    QVERIFY(
+        host.detachDocument(
+            first->documentId()
+            )
+        );
+
+    const auto windows =
+        host.findChildren<
+            DetachedWorkspaceDocumentWindow *>();
+
+    QCOMPARE(
+        windows.size(),
+        1
+        );
+
+    if (windows.isEmpty()) {
+        QFAIL(
+            "Expected a detached workspace window."
+            );
+
+        return;
+    }
+
+    DetachedWorkspaceDocumentWindow *window =
+        windows.first();
+
+    if (window == nullptr) {
+        QFAIL(
+            "Detached workspace window was null."
+            );
+
+        return;
+    }
+
+    WorkspaceDocumentHost *detachedHost =
+        window->documentHost();
+
+    if (detachedHost == nullptr) {
+        QFAIL(
+            "Detached workspace window had no document host."
+            );
+
+        return;
+    }
+
+    auto *second =
+        new WorkspaceDocument(
+            QStringLiteral("session-2"),
+            QStringLiteral("Session Two")
+            );
+
+    QVERIFY(
+        detachedHost->addDocument(
+            second
+            )
+        );
+
+    QSignalSpy closeSpy(
+        &host,
+        &WorkspaceDocumentHost::
+        documentCloseRequested
+        );
+
+    window->close();
+
+    QCOMPARE(
+        closeSpy.count(),
+        2
+        );
+
+    QSet<QString> requestedIds;
+
+    for (int index = 0;
+         index < closeSpy.count();
+         ++index) {
+        requestedIds.insert(
+            closeSpy.at(index)
+                .at(0)
+                .toString()
+            );
+    }
+
+    QSet<QString> expectedIds;
+
+    expectedIds.insert(
+        QStringLiteral("session-1")
+        );
+
+    expectedIds.insert(
+        QStringLiteral("session-2")
+        );
+
+    QCOMPARE(
+        requestedIds,
+        expectedIds
+        );
+
+    /*
+     * This test has no workspace owner responding
+     * to documentCloseRequested, so close intent
+     * alone must not remove or destroy anything.
+     */
+    QCOMPARE(
+        detachedHost->documentCount(),
+        2
+        );
+
+    QCOMPARE(
+        host.documentById(
+            QStringLiteral("session-1")
+            ),
+        first
+        );
+
+    QCOMPARE(
+        host.documentById(
+            QStringLiteral("session-2")
+            ),
+        second
         );
 }
 

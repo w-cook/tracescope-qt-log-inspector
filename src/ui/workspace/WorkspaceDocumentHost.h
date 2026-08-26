@@ -1,10 +1,12 @@
 #pragma once
 
 #include <QString>
+#include <QVector>
 #include <QWidget>
 
-class QTabWidget;
+class DetachedWorkspaceDocumentWindow;
 class WorkspaceDocument;
+class WorkspaceTabWidget;
 
 class WorkspaceDocumentHost
     : public QWidget
@@ -13,9 +15,13 @@ class WorkspaceDocumentHost
 
 public:
     explicit WorkspaceDocumentHost(
-        QWidget *parent = nullptr
+        QWidget *parent = nullptr,
+        WorkspaceDocumentHost *rootHost = nullptr
         );
 
+    /*
+     * These describe this particular tab group.
+     */
     int documentCount() const;
 
     WorkspaceDocument *documentAt(
@@ -26,6 +32,21 @@ public:
         const;
 
     int indexOfDocument(
+        const QString &documentId
+        ) const;
+
+    /*
+     * These operate across the complete workspace:
+     * the main tab group plus all detached groups.
+     */
+    WorkspaceDocument *documentById(
+        const QString &documentId
+        ) const;
+
+    QVector<WorkspaceDocument *>
+    documents() const;
+
+    bool isDocumentDetached(
         const QString &documentId
         ) const;
 
@@ -42,18 +63,33 @@ public:
         const QString &documentId
         );
 
+    /*
+     * Explicit fallback action. Dragging is the
+     * primary interaction.
+     */
+    bool detachDocument(
+        const QString &documentId
+        );
+
+    bool redockDocument(
+        const QString &documentId,
+        int targetIndex = -1
+        );
+
 signals:
     void currentDocumentChanged(
         const QString &documentId
         );
 
-    /*
-     * The host reports close intent but does not
-     * decide whether the underlying investigation
-     * session/comparison should actually be
-     * destroyed.
-     */
     void documentCloseRequested(
+        const QString &documentId
+        );
+
+    void documentDetached(
+        const QString &documentId
+        );
+
+    void documentRedocked(
         const QString &documentId
         );
 
@@ -63,5 +99,112 @@ private slots:
         );
 
 private:
-    QTabWidget *m_tabs;
+    struct PendingDocumentDrag
+    {
+        WorkspaceDocument *document =
+            nullptr;
+
+        WorkspaceDocumentHost *sourceHost =
+            nullptr;
+
+        int sourceIndex =
+            -1;
+
+        bool active() const
+        {
+            return document != nullptr;
+        }
+
+        void clear()
+        {
+            document = nullptr;
+            sourceHost = nullptr;
+            sourceIndex = -1;
+        }
+    };
+
+    WorkspaceDocument *
+    localDocumentById(
+        const QString &documentId
+        ) const;
+
+    QVector<WorkspaceDocument *>
+    localDocuments() const;
+
+    WorkspaceDocument *
+    takeLocalDocument(
+        const QString &documentId
+        );
+
+    bool insertLocalDocument(
+        WorkspaceDocument *document,
+        int index,
+        bool makeCurrent
+        );
+
+    WorkspaceDocumentHost *
+    owningHost(
+        const QString &documentId
+        ) const;
+
+    void handleDocumentDrop(
+        WorkspaceDocumentHost *targetHost,
+        const QString &documentId,
+        int targetIndex
+        );
+
+    void handleDocumentTearOut(
+        const QString &documentId,
+        const QPoint &globalPosition
+        );
+
+    bool transferDocument(
+        WorkspaceDocumentHost *sourceHost,
+        const QString &documentId,
+        WorkspaceDocumentHost *targetHost,
+        int targetIndex,
+        bool makeCurrent = true,
+        bool cleanupEmptySource = true
+        );
+
+    DetachedWorkspaceDocumentWindow *
+    createDetachedWindow(
+        const QPoint &globalPosition
+        );
+
+    DetachedWorkspaceDocumentWindow *
+    windowForHost(
+        WorkspaceDocumentHost *host
+        ) const;
+
+    void cleanupEmptyDetachedHost(
+        WorkspaceDocumentHost *host
+        );
+
+    void redockDetachedWindow(
+        DetachedWorkspaceDocumentWindow *window
+        );
+
+    void beginDocumentDrag(
+        WorkspaceDocumentHost *sourceHost,
+        const QString &documentId
+        );
+
+    void ensureLocalCurrentDocument(
+        int preferredIndex = -1
+        );
+
+    WorkspaceDocumentHost *m_rootHost =
+        nullptr;
+
+    WorkspaceTabWidget *m_tabs =
+        nullptr;
+
+    /*
+     * Only meaningful on the root host.
+     */
+    QVector<DetachedWorkspaceDocumentWindow *>
+        m_detachedWindows;
+
+    PendingDocumentDrag m_pendingDocumentDrag;
 };

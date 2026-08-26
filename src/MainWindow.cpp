@@ -353,37 +353,40 @@ MainWindow::MainWindow(QWidget *parent)
             }
 
             /*
-             * Tabs are movable, so document position
-             * must never be assumed to match workspace
-             * session index. Stable document/session IDs
-             * are the source of truth.
+             * Document position is independent from
+             * workspace session position, and documents
+             * may now be either docked or detached.
+             *
+             * Take a snapshot before removing anything
+             * so host membership can safely change while
+             * this loop runs.
              */
+            const QVector<WorkspaceDocument *>
+                documents =
+                workspaceDocumentHost
+                    ->documents();
+
             const QSignalBlocker blocker(
                 workspaceDocumentHost
                 );
 
-            for (int documentIndex =
-                     workspaceDocumentHost
-                         ->documentCount()
-                     - 1;
-                 documentIndex >= 0;
-                 --documentIndex) {
+            for (WorkspaceDocument *document
+                 : documents) {
                 auto *sessionView =
                     qobject_cast<
                         InvestigationSessionView *>(
-                        workspaceDocumentHost
-                            ->documentAt(
-                                documentIndex
-                                )
+                        document
                         );
 
                 if (sessionView == nullptr) {
                     continue;
                 }
 
+                const QString documentId =
+                    sessionView->documentId();
+
                 if (workspace->indexOfSession(
-                        sessionView
-                            ->documentId()
+                        documentId
                         )
                     >= 0) {
                     continue;
@@ -392,8 +395,7 @@ MainWindow::MainWindow(QWidget *parent)
                 WorkspaceDocument *removed =
                     workspaceDocumentHost
                         ->removeDocument(
-                            sessionView
-                                ->documentId()
+                            documentId
                             );
 
                 if (removed != nullptr) {
@@ -456,19 +458,16 @@ MainWindow::MainWindow(QWidget *parent)
                 return;
             }
 
-            const int documentIndex =
+            WorkspaceDocument *document =
                 workspaceDocumentHost
-                    ->indexOfDocument(
+                    ->documentById(
                         session->id()
                         );
 
             auto *sessionView =
                 qobject_cast<
                     InvestigationSessionView *>(
-                    workspaceDocumentHost
-                        ->documentAt(
-                            documentIndex
-                            )
+                    document
                     );
 
             if (sessionView != nullptr) {

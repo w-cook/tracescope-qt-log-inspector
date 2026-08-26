@@ -126,10 +126,14 @@ InvestigationSessionView::
         new QVBoxLayout(this);
 
     layout->setContentsMargins(
-        0,
-        0,
-        0,
-        0
+        6,
+        4,
+        6,
+        6
+        );
+
+    layout->setSpacing(
+        4
         );
 
     layout->addWidget(

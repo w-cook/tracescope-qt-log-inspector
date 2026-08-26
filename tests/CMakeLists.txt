@@ -974,11 +974,17 @@ qt_add_executable(
     WorkspaceDocumentHostTests
     WorkspaceDocumentHostTests.cpp
 
+    ../src/ui/workspace/DetachedWorkspaceDocumentWindow.h
+    ../src/ui/workspace/DetachedWorkspaceDocumentWindow.cpp
+
     ../src/ui/workspace/WorkspaceDocument.h
     ../src/ui/workspace/WorkspaceDocument.cpp
 
     ../src/ui/workspace/WorkspaceDocumentHost.h
     ../src/ui/workspace/WorkspaceDocumentHost.cpp
+
+    ../src/ui/workspace/WorkspaceTabBar.h
+    ../src/ui/workspace/WorkspaceTabBar.cpp
 )
 
 target_link_libraries(
