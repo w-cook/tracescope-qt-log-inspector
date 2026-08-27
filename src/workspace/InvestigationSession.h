@@ -85,6 +85,9 @@ public:
     InvestigationController *
     investigationController();
 
+    const InvestigationController *
+    investigationController() const;
+
     InvestigationStateStore *
     investigationStateStore();
 

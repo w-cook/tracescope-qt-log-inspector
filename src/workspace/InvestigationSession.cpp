@@ -107,6 +107,13 @@ InvestigationController *
     return &m_investigationController;
 }
 
+const InvestigationController *
+    InvestigationSession::
+    investigationController() const
+{
+    return &m_investigationController;
+}
+
 InvestigationStateStore *
     InvestigationSession::
     investigationStateStore()

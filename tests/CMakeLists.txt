@@ -224,6 +224,64 @@ add_test(
     COMMAND InvestigationSessionComparisonAnalyzerTests
 )
 
+qt_add_executable(
+    InvestigationComparisonSnapshotBuilderTests
+
+    InvestigationComparisonSnapshotBuilderTests.cpp
+
+    ../src/workspace/InvestigationComparisonSnapshot.h
+    ../src/workspace/InvestigationComparisonSnapshotBuilder.h
+    ../src/workspace/InvestigationComparisonSnapshotBuilder.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportResult.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationComparisonSnapshotBuilderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationComparisonSnapshotBuilderTests
+    COMMAND InvestigationComparisonSnapshotBuilderTests
+)
+
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
     ../src/exporting/InvestigationCsvExporter.h

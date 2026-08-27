@@ -153,6 +153,9 @@ qt_add_executable(TraceScope
     src/ui/workspace/DetachedWorkspaceDocumentWindow.cpp
     src/ui/workspace/WorkspaceTabBar.h
     src/ui/workspace/WorkspaceTabBar.cpp
+    src/workspace/InvestigationComparisonSnapshot.h
+    src/workspace/InvestigationComparisonSnapshotBuilder.h
+    src/workspace/InvestigationComparisonSnapshotBuilder.cpp
 
 )
 
