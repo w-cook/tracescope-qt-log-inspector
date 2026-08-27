@@ -62,6 +62,12 @@ public:
 
     const QString &id() const;
 
+    const QString &selectedRecordId() const;
+
+    void setSelectedRecordId(
+        const QString &recordId
+        );
+
     const InvestigationSessionSourceMetadata &
     sourceMetadata() const;
 
@@ -78,6 +84,9 @@ public:
 
     InvestigationController *
     investigationController();
+
+    const InvestigationController *
+    investigationController() const;
 
     InvestigationStateStore *
     investigationStateStore();
@@ -163,6 +172,8 @@ public:
 
 private:
     QString m_id;
+
+    QString m_selectedRecordId;
 
     InvestigationSessionSourceMetadata
         m_sourceMetadata;

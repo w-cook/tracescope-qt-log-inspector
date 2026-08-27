@@ -704,6 +704,25 @@ void
                 )
             );
 
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.importedRecordCount(),
+        qint64(0)
+        );
+
+    QCOMPARE(
+        result.skippedRecordCount(),
+        qint64(1)
+        );
+
+    QVERIFY(
+        result.hasErrors()
+        );
+
     QVERIFY(
         findDiagnostic(
             result,

@@ -39,6 +39,20 @@ InvestigationSession::id() const
     return m_id;
 }
 
+const QString &
+InvestigationSession::selectedRecordId() const
+{
+    return m_selectedRecordId;
+}
+
+void InvestigationSession::setSelectedRecordId(
+    const QString &recordId
+    )
+{
+    m_selectedRecordId =
+        recordId;
+}
+
 const InvestigationSessionSourceMetadata &
 InvestigationSession::sourceMetadata() const
 {
@@ -89,6 +103,13 @@ bool InvestigationSession::
 InvestigationController *
     InvestigationSession::
     investigationController()
+{
+    return &m_investigationController;
+}
+
+const InvestigationController *
+    InvestigationSession::
+    investigationController() const
 {
     return &m_investigationController;
 }
@@ -311,6 +332,13 @@ void InvestigationSession::installImportResult(
     m_investigationStateStore.retainOnly(
         recordIds
         );
+
+    if (!m_selectedRecordId.isEmpty()
+        && !recordIds.contains(
+            m_selectedRecordId
+            )) {
+        m_selectedRecordId.clear();
+    }
 
     m_investigationController.setRecords(
         result.records

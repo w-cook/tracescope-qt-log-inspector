@@ -192,6 +192,96 @@ add_test(
     COMMAND InvestigationBurstAnalyzerTests
 )
 
+qt_add_executable(
+    InvestigationSessionComparisonAnalyzerTests
+
+    InvestigationSessionComparisonAnalyzerTests.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationSessionComparisonAnalyzerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationSessionComparisonAnalyzerTests
+    COMMAND InvestigationSessionComparisonAnalyzerTests
+)
+
+qt_add_executable(
+    InvestigationComparisonSnapshotBuilderTests
+
+    InvestigationComparisonSnapshotBuilderTests.cpp
+
+    ../src/workspace/InvestigationComparisonSnapshot.h
+    ../src/workspace/InvestigationComparisonSnapshotBuilder.h
+    ../src/workspace/InvestigationComparisonSnapshotBuilder.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.h
+    ../src/analysis/InvestigationSessionComparisonAnalyzer.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportResult.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationComparisonSnapshotBuilderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationComparisonSnapshotBuilderTests
+    COMMAND InvestigationComparisonSnapshotBuilderTests
+)
+
 qt_add_executable(CsvExporterTests
     CsvExporterTests.cpp
     ../src/exporting/InvestigationCsvExporter.h
@@ -939,6 +1029,35 @@ add_test(
 )
 
 qt_add_executable(
+    WorkspaceDocumentHostTests
+    WorkspaceDocumentHostTests.cpp
+
+    ../src/ui/workspace/DetachedWorkspaceDocumentWindow.h
+    ../src/ui/workspace/DetachedWorkspaceDocumentWindow.cpp
+
+    ../src/ui/workspace/WorkspaceDocument.h
+    ../src/ui/workspace/WorkspaceDocument.cpp
+
+    ../src/ui/workspace/WorkspaceDocumentHost.h
+    ../src/ui/workspace/WorkspaceDocumentHost.cpp
+
+    ../src/ui/workspace/WorkspaceTabBar.h
+    ../src/ui/workspace/WorkspaceTabBar.cpp
+)
+
+target_link_libraries(
+    WorkspaceDocumentHostTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Widgets
+)
+
+add_test(
+    NAME WorkspaceDocumentHostTests
+    COMMAND WorkspaceDocumentHostTests
+)
+
+qt_add_executable(
     RecentItemsStoreTests
 
     RecentItemsStoreTests.cpp
@@ -980,4 +1099,62 @@ target_link_libraries(
 add_test(
     NAME FilterPresetStoreTests
     COMMAND FilterPresetStoreTests
+)
+
+qt_add_executable(
+    InvestigationComparisonDialogTests
+
+    InvestigationComparisonDialogTests.cpp
+
+    ../src/ui/InvestigationComparisonDialog.h
+    ../src/ui/InvestigationComparisonDialog.cpp
+
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+    ../src/analysis/BurstDetectionSettings.h
+
+    ../src/workspace/InvestigationWorkspace.h
+    ../src/workspace/InvestigationWorkspace.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationComparisonDialogTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+        Qt6::Widgets
+)
+
+add_test(
+    NAME InvestigationComparisonDialogTests
+    COMMAND InvestigationComparisonDialogTests
 )

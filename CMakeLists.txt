@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.12.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.13.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -122,6 +122,44 @@ qt_add_executable(TraceScope
     src/analysis/InvestigationBurst.h
     src/analysis/InvestigationBurstAnalyzer.h
     src/analysis/InvestigationBurstAnalyzer.cpp
+    src/analysis/InvestigationSessionComparison.h
+    src/analysis/InvestigationSessionComparisonAnalyzer.h
+    src/analysis/InvestigationSessionComparisonAnalyzer.cpp
+    src/ui/workspace/WorkspaceDocument.h
+    src/ui/workspace/WorkspaceDocument.cpp
+    src/ui/workspace/WorkspaceDocumentHost.h
+    src/ui/workspace/WorkspaceDocumentHost.cpp
+    src/ui/workspace/InvestigationSessionView.h
+    src/ui/workspace/InvestigationSessionView.cpp
+    src/ui/investigation/InvestigationSessionSummaryPanel.h
+    src/ui/investigation/InvestigationSessionSummaryPanel.cpp
+    src/ui/investigation/InvestigationEventDetailPanel.h
+    src/ui/investigation/InvestigationEventDetailPanel.cpp
+    src/ui/investigation/InvestigationEventPanel.h
+    src/ui/investigation/InvestigationEventPanel.cpp
+    src/ui/investigation/InvestigationIssueSummaryPanel.h
+    src/ui/investigation/InvestigationIssueSummaryPanel.cpp
+    src/ui/investigation/InvestigationFindingsPanel.h
+    src/ui/investigation/InvestigationFindingsPanel.cpp
+    src/ui/investigation/InvestigationAnalyticsPanel.h
+    src/ui/investigation/InvestigationAnalyticsPanel.cpp
+    src/ui/investigation/InvestigationReviewPanel.h
+    src/ui/investigation/InvestigationReviewPanel.cpp
+    src/ui/investigation/InvestigationTimelinePanel.h
+    src/ui/investigation/InvestigationTimelinePanel.cpp
+    src/ui/investigation/InvestigationFilterPanel.h
+    src/ui/investigation/InvestigationFilterPanel.cpp
+    src/ui/workspace/DetachedWorkspaceDocumentWindow.h
+    src/ui/workspace/DetachedWorkspaceDocumentWindow.cpp
+    src/ui/workspace/WorkspaceTabBar.h
+    src/ui/workspace/WorkspaceTabBar.cpp
+    src/workspace/InvestigationComparisonSnapshot.h
+    src/workspace/InvestigationComparisonSnapshotBuilder.h
+    src/workspace/InvestigationComparisonSnapshotBuilder.cpp
+    src/ui/workspace/InvestigationComparisonDocument.h
+    src/ui/workspace/InvestigationComparisonDocument.cpp
+    src/ui/InvestigationComparisonDialog.h
+    src/ui/InvestigationComparisonDialog.cpp
 
 )
 
