@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
+#include <QSignalBlocker>
 
 #include "../analysis/InvestigationCadenceAnalyzer.h"
 #include "../workspace/InvestigationSession.h"
@@ -153,6 +154,65 @@ InvestigationComparisonDialog::
     sessionsLayout->addRow(
         tr("Comparison:"),
         m_comparisonCombo
+        );
+
+    auto *swapButton =
+        new QPushButton(
+            tr("Swap Baseline / Comparison"),
+            sessionsGroup
+            );
+
+    swapButton->setObjectName(
+        QStringLiteral("swapSessionsButton")
+        );
+
+    sessionsLayout->addRow(
+        QString(),
+        swapButton
+        );
+
+    connect(
+        swapButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            const int baselineIndex =
+                m_baselineCombo->currentIndex();
+
+            const int comparisonIndex =
+                m_comparisonCombo->currentIndex();
+
+            if (baselineIndex < 0
+                || comparisonIndex < 0
+                || baselineIndex
+                       == comparisonIndex) {
+                return;
+            }
+
+            /*
+         * Avoid recalculating shared burst defaults
+         * twice while the two selections are in an
+         * intermediate swapped state.
+         */
+            const QSignalBlocker baselineBlocker(
+                m_baselineCombo
+                );
+
+            const QSignalBlocker comparisonBlocker(
+                m_comparisonCombo
+                );
+
+            m_baselineCombo->setCurrentIndex(
+                comparisonIndex
+                );
+
+            m_comparisonCombo->setCurrentIndex(
+                baselineIndex
+                );
+
+            updateValidation();
+            applySharedBurstDefaults();
+        }
         );
 
     layout->addWidget(
@@ -341,6 +401,22 @@ InvestigationComparisonDialog::
 
     layout->addWidget(
         m_buttons
+        );
+
+    m_baselineCombo->setObjectName(
+        QStringLiteral("baselineSessionCombo")
+        );
+
+    m_comparisonCombo->setObjectName(
+        QStringLiteral("comparisonSessionCombo")
+        );
+
+    m_burstGroup->setObjectName(
+        QStringLiteral("burstComparisonGroup")
+        );
+
+    m_buttons->setObjectName(
+        QStringLiteral("comparisonDialogButtons")
         );
 
     populateSessions(

@@ -1,6 +1,7 @@
 #include "InvestigationComparisonDocument.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <memory>
 #include <utility>
 
@@ -74,6 +75,23 @@ QString documentTitleFor(
                 snapshot.baselineSource()
                 ),
             compactSourceNameFor(
+                snapshot.comparisonSource()
+                )
+            );
+}
+
+QString documentToolTipFor(
+    const InvestigationComparisonSnapshot &snapshot
+    )
+{
+    return QStringLiteral(
+               "Comparison: %1 \u2192 %2"
+               )
+        .arg(
+            sourceNameFor(
+                snapshot.baselineSource()
+                ),
+            sourceNameFor(
                 snapshot.comparisonSource()
                 )
             );
@@ -280,6 +298,102 @@ QString formatDominantValue(
                 value->count
                 )
             );
+}
+
+bool stringLessDeterministically(
+    const QString &left,
+    const QString &right
+    )
+{
+    const int caseInsensitive =
+        QString::compare(
+            left,
+            right,
+            Qt::CaseInsensitive
+            );
+
+    if (caseInsensitive != 0) {
+        return caseInsensitive < 0;
+    }
+
+    return QString::compare(
+               left,
+               right,
+               Qt::CaseSensitive
+               )
+           < 0;
+}
+
+bool valueDifferenceImpactBefore(
+    const InvestigationValueDifference &left,
+    const InvestigationValueDifference &right
+    )
+{
+    const qint64 leftMagnitude =
+        std::abs(
+            left.delta()
+            );
+
+    const qint64 rightMagnitude =
+        std::abs(
+            right.delta()
+            );
+
+    if (leftMagnitude
+        != rightMagnitude) {
+        return leftMagnitude
+               > rightMagnitude;
+    }
+
+    return stringLessDeterministically(
+        left.value,
+        right.value
+        );
+}
+
+bool severityDifferenceImpactBefore(
+    const InvestigationSeverityDifference &left,
+    const InvestigationSeverityDifference &right
+    )
+{
+    const qint64 leftMagnitude =
+        std::abs(
+            left.delta()
+            );
+
+    const qint64 rightMagnitude =
+        std::abs(
+            right.delta()
+            );
+
+    if (leftMagnitude
+        != rightMagnitude) {
+        return leftMagnitude
+               > rightMagnitude;
+    }
+
+    /*
+     * For equally sized changes, surface the more
+     * operationally significant severity first.
+     * RecordSeverity is ordered Trace -> Critical.
+     */
+    return static_cast<int>(
+               left.severity
+               )
+           > static_cast<int>(
+               right.severity
+               );
+}
+
+void sortByImpact(
+    QVector<InvestigationValueDifference> &differences
+    )
+{
+    std::sort(
+        differences.begin(),
+        differences.end(),
+        valueDifferenceImpactBefore
+        );
 }
 
 QLabel *makeHeading(
@@ -718,6 +832,18 @@ QGroupBox *makeEventCodeGroup(
             );
     }
 
+    sortByImpact(
+        appeared
+        );
+
+    sortByImpact(
+        disappeared
+        );
+
+    sortByImpact(
+        changed
+        );
+
     const auto addDifferenceTable =
         [
             layout,
@@ -842,6 +968,16 @@ QGroupBox *makeSeverityGroup(
         return group;
     }
 
+    QVector<InvestigationSeverityDifference>
+        differences =
+        comparison.differences;
+
+    std::sort(
+        differences.begin(),
+        differences.end(),
+        severityDifferenceImpactBefore
+        );
+
     QTableWidget *table =
         makeTable(
             {
@@ -855,7 +991,7 @@ QGroupBox *makeSeverityGroup(
 
     for (const InvestigationSeverityDifference
              &difference
-         : comparison.differences) {
+         : differences) {
         const int row =
             table->rowCount();
 
@@ -955,8 +1091,16 @@ QGroupBox *makeDimensionGroup(
             group
             );
 
+    QVector<InvestigationValueDifference>
+        differences =
+        comparison.differences;
+
+    sortByImpact(
+        differences
+        );
+
     for (const InvestigationValueDifference &difference
-         : comparison.differences) {
+         : std::as_const(differences)) {
         appendValueDifferenceRow(
             table,
             difference
@@ -1047,10 +1191,18 @@ QGroupBox *makeCustomFieldsGroup(
                 &field
             : comparison.categoricalFields
             ) {
+            QVector<InvestigationValueDifference>
+                changedValues =
+                field.changedValues;
+
+            sortByImpact(
+                changedValues
+                );
+
             for (
                 const InvestigationValueDifference
                     &difference
-                : field.changedValues
+                : std::as_const(changedValues)
                 ) {
                 const int row =
                     table->rowCount();
@@ -1726,6 +1878,12 @@ InvestigationComparisonDocument::
         std::move(snapshot)
         )
 {
+    setToolTip(
+        documentToolTipFor(
+            m_snapshot
+            )
+        );
+
     auto *outerLayout =
         new QVBoxLayout(
             this

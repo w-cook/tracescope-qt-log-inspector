@@ -1100,3 +1100,61 @@ add_test(
     NAME FilterPresetStoreTests
     COMMAND FilterPresetStoreTests
 )
+
+qt_add_executable(
+    InvestigationComparisonDialogTests
+
+    InvestigationComparisonDialogTests.cpp
+
+    ../src/ui/InvestigationComparisonDialog.h
+    ../src/ui/InvestigationComparisonDialog.cpp
+
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+    ../src/analysis/BurstDetectionSettings.h
+
+    ../src/workspace/InvestigationWorkspace.h
+    ../src/workspace/InvestigationWorkspace.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationComparisonDialogTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+        Qt6::Widgets
+)
+
+add_test(
+    NAME InvestigationComparisonDialogTests
+    COMMAND InvestigationComparisonDialogTests
+)
