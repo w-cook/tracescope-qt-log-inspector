@@ -122,6 +122,7 @@ Completed release milestones:
 | `v0.10.0` | Advanced Filtering and Navigation | prerelease |
 | `v0.11.0` | Bookmarks, Notes, and Findings | prerelease |
 | `v0.12.0` | Analytics and Burst Detection | prerelease |
+| `v0.13.0` | Session Comparison | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -158,7 +159,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.12.0`:
+Implemented foundations through `v0.13.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -182,6 +183,13 @@ Implemented foundations through `v0.12.0`:
 * scalable event-count timeline rendering with automatic and manual resolutions, windowed fine-resolution navigation, and bounded on-screen bucket materialization
 * multi-session workspace ownership with independent per-session investigation controllers and retained import context
 * session switching, closing, and in-place reload using stable session identities
+* generic workspace-document hosting that supports session and comparison documents in the main window or detachable/re-dockable workspace windows
+* tab reordering, tab tear-out, re-docking, movement between detached windows, multi-document detached windows, and deterministic document closing
+* immutable structured comparison snapshots built from complete imported-session records rather than the sessions' current filtered views
+* directional Baseline → Comparison analysis with explicit Comparison − Baseline deltas and capability-aware unavailable states
+* comparison of event-code appearance/disappearance/change, severity counts, elevated subsystem/entity activity, conservative shared custom fields, session context, and optionally shared-settings burst analysis
+* dedicated comparison documents with impact-first presentation, compact source orientation, and no causal or root-cause claims
+* narrow-workspace hardening for split-screen and portrait use, including summary elision with full tooltips, responsive filter/control layouts, shrinkable review/detail surfaces, and width-aware fine-resolution timeline windows
 * persistent recent-file and recent-profile history backed by local application settings
 * advanced canonical and source-specific filtering with multi-severity, time-range, event-code, entity, and dynamic custom-field criteria
 * persistent named filter presets backed by local application settings
@@ -204,7 +212,7 @@ Reusable import profiles are versioned, human-readable JSON so mappings can be r
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 is now active and shifts the next increment toward structured comparison of related sessions; later phases continue with persistence, live following, reporting, and final display hardening rather than returning to open-ended format expansion.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 is now active and shifts the next increment toward local workspace persistence so investigations, annotations, comparisons, and workspace organization can survive application restarts; later phases continue with live following, reporting, and final UI/documentation hardening rather than returning to open-ended format expansion.
 
 ## Development Phases
 
@@ -603,43 +611,61 @@ Deterministic burst detection is not described as AI anomaly detection, automate
 
 ### Phase 12 — Session Comparison
 
-**Status: In progress; targeted for `v0.13.0`.**
+**Status: Completed in `v0.13.0`.**
 
-Provide structured comparisons between two imported sessions, with particular value for engineering workflows such as comparing a failed or degraded run against a known-good run.
+Added structured, directional comparison between two complete imported sessions, with particular value for practical engineering workflows such as comparing a failed or degraded run against a known-good run.
 
-Comparison should use shared canonical dimensions where they are available while remaining useful when one or both sessions omit particular canonical fields. The feature should surface meaningful differences without claiming causal diagnosis.
+Comparisons use an explicit Baseline → Comparison orientation, with all deltas presented as Comparison − Baseline. Analysis is built from complete imported-session records rather than the sessions' current filtered views, so temporary investigation filters cannot silently change the meaning of an existing comparison.
 
-The matched known-good and degraded field-gateway samples added in `v0.12.0` provide a reusable representative scenario for developing and validating this workflow.
+Canonical and source-specific dimensions remain capability-aware. A missing field is reported as unavailable for the comparison that depends on it rather than being treated as zero, and appearance/disappearance claims are made only when both sessions actually provide the relevant dimension. Comparison output remains deterministic and descriptive rather than claiming causal diagnosis or root cause.
 
-Planned deliverables:
+The matched known-good and degraded field-gateway samples added in `v0.12.0` provide a representative comparison workflow and release demonstration.
 
-* total-record differences
+Completed deliverables:
+
+* dedicated session-comparison creation workflow with explicit Baseline and Comparison selection
+* active-session defaults that orient the currently investigated run as the Comparison while allowing deliberate reversal
+* immutable comparison snapshots with stable comparison identity, copied source metadata, and no live dependency on source-session objects after creation
+* complete-session comparison semantics that remain unchanged when either source session is filtered
+* total-record, duration, and event-rate context with explicit directional deltas
+* event-code comparison that separates appeared, disappeared, and changed values when both sessions provide event-code data
 * severity-count differences when severity is available
-* subsystem differences when subsystem data is available
-* event-code differences when event codes are available
-* values appearing only in one session
-* duration differences
-* event-rate differences
-* burst differences
-* dedicated comparison interface
+* elevated subsystem and entity activity when the corresponding canonical dimensions are available
+* conservative shared custom-field comparison using numeric min/median/max summaries only when both sides are wholly finite numeric, and categorical appearance/disappearance only when that claim is supported
+* optional burst comparison that applies one explicit shared `BurstDetectionSettings` configuration to both sessions rather than deriving independent Auto settings
+* explicit distinction between burst comparison not requested, burst data unavailable, and valid zero-burst results
+* dedicated comparison documents ordered around investigation impact while omitting unchanged/noisy comparable output
+* compact Baseline → Comparison document titles with complete source orientation available through tooltips and document content
+* source-session reload or closure without mutation of already-created comparison snapshots
+* automated coverage for comparison analyzers, immutable snapshot construction, complete-record semantics, source-reload independence, burst-request state, dialog defaults, orientation swapping, validation, and shared burst defaults
+* generalized workspace-document hosting so both investigations and comparison documents can be reordered, detached, re-docked, moved between detached windows, grouped in detached windows, and closed consistently
+* responsive workspace hardening pulled forward from Phase 16 because detachable documents are expected to be used side-by-side and on portrait-oriented secondary displays
+* narrow-layout behavior that elides long session summaries without losing full tooltip context, reflows filter and selected-event controls only when constrained, allows review tables to shrink/scroll instead of forcing window width, gives Findings/Analytics appropriate priority over Selected Event Details, and reduces the visible fine-resolution timeline bucket window as horizontal space decreases
+* manual verification in representative horizontally split and portrait-monitor layouts
+* local full-suite regression verification
+* `v0.13.0` prerelease publication
 
 ### Phase 13 — Workspace and Profile Persistence
 
-Allow investigations to be saved and reopened locally so a useful multi-session investigation does not disappear when the application closes.
+**Status: In progress; targeted for `v0.14.0`.**
 
-Persistence should preserve the local, reproducible nature of TraceScope and should support continued work on investigations without introducing infrastructure that is unnecessary for the target workflow.
+Allow investigations to be saved and reopened locally so a useful multi-session workspace does not disappear when the application closes.
+
+Persistence should preserve the local, reproducible nature of TraceScope and should let users resume a real investigation with its source sessions, annotations, filters, comparison documents, and workspace organization intact. The saved format should retain enough import-profile context to reopen sessions reproducibly without introducing a database, account system, or hosted backend.
 
 Planned deliverables:
 
-* loaded-session persistence
+* loaded-session persistence with the source and import-profile context required to reopen each investigation
 * bookmark persistence
 * note persistence
 * finding-status persistence
 * active per-session filter-state persistence within saved workspaces
-* comparison-selection persistence
+* open comparison-document persistence that preserves immutable Baseline → Comparison snapshot meaning rather than depending on live source-session state
+* workspace document ordering and active-document restoration
+* detached-workspace grouping and window-state restoration sufficient to resume side-by-side investigation layouts
 * versioned workspace schemas
-* missing-source handling
-* serialization round-trip tests
+* clear missing-source handling that preserves the rest of a recoverable workspace instead of silently discarding unrelated investigation state
+* serialization round-trip and compatibility tests
 
 Persistence will use local, versioned JSON unless later requirements demonstrate a practical need for a database.
 
@@ -673,23 +699,20 @@ Planned deliverables:
 * selected-record copy as formatted text
 * offline HTML investigation reports
 
-### Phase 16 — Responsive Display Hardening, Documentation, and 1.0 Release
+### Phase 16 — Final UI Polish, Documentation, and 1.0 Release
 
-Complete the expansion with display hardening, polished documentation, and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
+Complete the expansion with final UI polish, polished documentation, and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
 
-Before `v1.0.0`, the desktop interface must remain practical in constrained layouts that are common during development and engineering investigation, including portrait-oriented monitors and horizontally split workspaces. Long source paths, large summary counts, session switching, and dense timelines must not force the application wider than the available workspace or make important controls inaccessible.
+The foundational constrained-layout work originally planned for this phase was pulled forward and completed during Phase 12 because detachable workspace documents make side-by-side and portrait-oriented use part of the normal investigation workflow rather than a final-release edge case. Phase 16 should build on that responsive foundation instead of reimplementing it.
 
-Final documentation should make the supported-format boundary, optional canonical-field model, profile-driven import architecture, large-file behavior, investigation workflow, and scope exclusions clear enough that both prospective users and employers can understand what the application does without overstating its capabilities.
+Final documentation should make the supported-format boundary, optional canonical-field model, profile-driven import architecture, large-file behavior, multi-session and comparison workflows, persistence behavior, live-following boundary, reporting capabilities, and scope exclusions clear enough that prospective users can decide whether TraceScope fits their workflow. Employer-facing material should remain secondary to that product clarity while still making the architecture, testing, CI/release discipline, and conservative engineering decisions directly verifiable.
 
 Planned deliverables:
 
-* summary-text elision or equivalent truncation that preserves complete context through a tooltip or other explicit affordance without forcing the main window wider
-* practical narrow-window minimum sizing that does not derive from long summary text or other incidental content
-* responsive layout behavior for portrait monitors and horizontally split desktop workspaces
-* preservation of access to important controls and panels when switching between sessions with materially different summary lengths or presentation state
-* adaptive timeline label density or equivalent axis presentation that prevents bucket-label overlap at constrained widths
-* regression verification at representative portrait and split-screen window dimensions
-* final Windows distributable
+* final cross-workflow UI consistency and small visual cleanup across features completed in earlier phases
+* responsive regression verification for the final persistence, live-following, and reporting surfaces introduced after the Phase 12 hardening pass
+* representative full-width, horizontally split, and portrait-layout regression verification before `v1.0.0`
+* final Windows and Linux distributables
 * automated release packaging
 * architecture documentation
 * import-profile specification
