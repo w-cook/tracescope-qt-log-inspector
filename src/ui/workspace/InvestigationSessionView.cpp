@@ -10,6 +10,8 @@
 #include <QSplitter>
 #include <QTextOption>
 #include <QVBoxLayout>
+#include <QResizeEvent>
+#include <QSizePolicy>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -182,6 +184,11 @@ InvestigationSessionView::
             ->preferredCompactWidth(),
         1000
     });
+
+    m_eventDetailPanel->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Preferred
+        );
 
     /*
      * ---------------------------------------------------------
@@ -1114,22 +1121,37 @@ void InvestigationSessionView::
     const int totalWidth =
         std::max(
             1,
-            m_bottomSplitter
-                ->width()
+            m_bottomSplitter->width()
             );
 
     const bool wideReviewSelected =
         tab
-            == InvestigationReviewTab::
-            Findings
+            == InvestigationReviewTab::Findings
         || tab
-               == InvestigationReviewTab::
-               Analytics;
+               == InvestigationReviewTab::Analytics;
 
     if (wideReviewSelected) {
+        /*
+         * Findings and Analytics carry more
+         * investigation-oriented information than
+         * Selected Event Details and need additional
+         * room in narrow detached workspaces.
+         */
+        double reviewFraction =
+            0.60;
+
+        if (totalWidth < 750) {
+            reviewFraction =
+                0.72;
+        } else if (totalWidth < 1100) {
+            reviewFraction =
+                0.68;
+        }
+
         const int reviewWidth =
             static_cast<int>(
-                totalWidth * 0.60
+                totalWidth
+                * reviewFraction
                 );
 
         m_bottomSplitter->setSizes({
@@ -1143,6 +1165,11 @@ void InvestigationSessionView::
         return;
     }
 
+    /*
+     * Issue Summary remains deliberately compact
+     * because its table supports horizontal
+     * scrolling when necessary.
+     */
     const int issueWidth =
         std::max(
             m_issueSummaryPanel
@@ -1159,4 +1186,22 @@ void InvestigationSessionView::
             totalWidth - issueWidth
             )
     });
+}
+
+void InvestigationSessionView::
+    resizeEvent(
+        QResizeEvent *event
+        )
+{
+    QWidget::resizeEvent(
+        event
+        );
+
+    if (m_reviewPanel == nullptr) {
+        return;
+    }
+
+    updateReviewSplitter(
+        m_reviewPanel->currentTab()
+        );
 }

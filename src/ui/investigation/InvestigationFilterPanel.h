@@ -21,6 +21,8 @@ class QLineEdit;
 class QMenu;
 class QPushButton;
 class QTimer;
+class QGridLayout;
+class QResizeEvent;
 
 class InvestigationFilterPanel
     : public QWidget
@@ -97,6 +99,11 @@ signals:
      */
     void filterChangeRequested();
 
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override;
+
 private:
     void syncFromSession();
 
@@ -121,6 +128,10 @@ private:
     void updateTimeRangeButton();
 
     void resizeCustomFiltersDialogToContents();
+
+    void updateResponsiveLayout();
+
+    int secondaryWideLayoutMinimumWidth() const;
 
     FilterPresetStore *m_presetStore =
         nullptr;
@@ -196,4 +207,10 @@ private:
 
     QTimer *m_searchDebounceTimer =
         nullptr;
+
+    QGridLayout *m_secondaryFilterLayout =
+        nullptr;
+
+    bool m_secondaryLayoutCompact =
+        false;
 };

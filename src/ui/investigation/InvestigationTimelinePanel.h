@@ -17,6 +17,8 @@ class QComboBox;
 class QLabel;
 class QScrollBar;
 class QWidget;
+class QResizeEvent;
+class QTimer;
 
 class InvestigationTimelinePanel
     : public QGroupBox
@@ -64,6 +66,11 @@ signals:
         const QString &severity,
         const QString &subsystem
         );
+
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override;
 
 private:
     void rebuildBreakdownControls();
@@ -132,4 +139,7 @@ private:
 
     int m_scaleMaximum =
         1;
+
+    QTimer *m_resizeRenderTimer =
+        nullptr;
 };

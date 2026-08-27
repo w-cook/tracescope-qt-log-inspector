@@ -20,6 +20,8 @@
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QColor>
+#include <QResizeEvent>
+#include <QTimer>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -38,8 +40,18 @@ namespace
 constexpr int TimelineAutoTargetBuckets =
     20;
 
-constexpr int TimelineVisibleBucketCount =
+constexpr int TimelineMaximumVisibleBucketCount =
     20;
+
+constexpr int TimelineMinimumVisibleBucketCount =
+    6;
+
+/*
+ * Approximate horizontal space needed for a
+ * readable bucket label plus some breathing room.
+ */
+constexpr int TimelineMinimumBucketWidth =
+    60;
 
 constexpr int TimelineScaledScrollMaximum =
     1'000'000;
@@ -55,6 +67,21 @@ constexpr qint64 MillisecondsPerHour =
 
 constexpr qint64 MillisecondsPerDay =
     24 * MillisecondsPerHour;
+
+int timelineVisibleBucketCount(
+    int availableWidth
+    )
+{
+    const int widthBasedCount =
+        availableWidth
+        / TimelineMinimumBucketWidth;
+
+    return std::clamp(
+        widthBasedCount,
+        TimelineMinimumVisibleBucketCount,
+        TimelineMaximumVisibleBucketCount
+        );
+}
 
 qint64 automaticTimelineIntervalMilliseconds(
     const QDateTime &firstTimestamp,
@@ -209,14 +236,15 @@ void configureEventCountAxis(
 }
 
 int timelineScrollMaximum(
-    qint64 totalBucketCount
+    qint64 totalBucketCount,
+    int visibleBucketCount
     )
 {
     const qint64 maximumStartBucketIndex =
         std::max<qint64>(
             0,
             totalBucketCount
-                - TimelineVisibleBucketCount
+                - visibleBucketCount
             );
 
     if (maximumStartBucketIndex
@@ -231,14 +259,15 @@ int timelineScrollMaximum(
 
 qint64 timelineStartBucketIndex(
     qint64 totalBucketCount,
-    int scrollValue
+    int scrollValue,
+    int visibleBucketCount
     )
 {
     const qint64 maximumStartBucketIndex =
         std::max<qint64>(
             0,
             totalBucketCount
-                - TimelineVisibleBucketCount
+                - visibleBucketCount
             );
 
     if (maximumStartBucketIndex <= 0) {
@@ -367,6 +396,9 @@ InvestigationTimelinePanel::
             tr("Visible: —"),
             this
             )
+        ),
+    m_resizeRenderTimer(
+        new QTimer(this)
         )
 {
     auto *timelineLayout =
@@ -887,6 +919,30 @@ InvestigationTimelinePanel::
 
             m_scaleValid =
                 false;
+
+            render();
+        }
+        );
+
+    m_resizeRenderTimer->setSingleShot(
+        true
+        );
+
+    m_resizeRenderTimer->setInterval(
+        75
+        );
+
+    connect(
+        m_resizeRenderTimer,
+        &QTimer::timeout,
+        this,
+        [this]() {
+            if (m_session == nullptr
+                || m_intervalCombo
+                           ->currentData()
+                           .toLongLong() <= 0) {
+                return;
+            }
 
             render();
         }
@@ -1420,6 +1476,13 @@ void InvestigationTimelinePanel::render()
         return;
     }
 
+    const int visibleBucketCount =
+        timelineVisibleBucketCount(
+            m_chartView
+                ->viewport()
+                ->width()
+            );
+
     QVector<EventCountBucket> buckets;
 
     QVector<InvestigationValueTrendBucket>
@@ -1469,12 +1532,13 @@ void InvestigationTimelinePanel::render()
             std::max<qint64>(
                 0,
                 totalBucketCount
-                    - TimelineVisibleBucketCount
+                    - visibleBucketCount
                 );
 
         const int scrollMaximum =
             timelineScrollMaximum(
-                totalBucketCount
+                totalBucketCount,
+                visibleBucketCount
                 );
 
         int scrollValue =
@@ -1493,7 +1557,7 @@ void InvestigationTimelinePanel::render()
                 std::max(
                     1,
                     std::min(
-                        TimelineVisibleBucketCount,
+                        visibleBucketCount,
                         std::max(
                             1,
                             scrollMaximum
@@ -1503,7 +1567,7 @@ void InvestigationTimelinePanel::render()
         } else if (scrollMaximum > 0) {
             const long double pageFraction =
                 static_cast<long double>(
-                    TimelineVisibleBucketCount
+                    visibleBucketCount
                     )
                 / static_cast<long double>(
                     totalBucketCount
@@ -1553,7 +1617,8 @@ void InvestigationTimelinePanel::render()
         const qint64 startBucketIndex =
             timelineStartBucketIndex(
                 totalBucketCount,
-                scrollValue
+                scrollValue,
+                visibleBucketCount
                 );
 
         if (subsystemBreakdown) {
@@ -1565,7 +1630,7 @@ void InvestigationTimelinePanel::render()
                         lastTimestamp.value(),
                         intervalMilliseconds,
                         startBucketIndex,
-                        TimelineVisibleBucketCount
+                        visibleBucketCount
                         );
         } else {
             buckets =
@@ -1576,7 +1641,7 @@ void InvestigationTimelinePanel::render()
                         lastTimestamp.value(),
                         intervalMilliseconds,
                         startBucketIndex,
-                        TimelineVisibleBucketCount
+                        visibleBucketCount
                         );
         }
     }
@@ -2280,15 +2345,23 @@ void InvestigationTimelinePanel::
         totalBucketCount;
 
     if (!automaticInterval) {
+        const int responsiveVisibleBucketCount =
+            timelineVisibleBucketCount(
+                m_chartView
+                    ->viewport()
+                    ->width()
+                );
+
         startBucketIndex =
             timelineStartBucketIndex(
                 totalBucketCount,
-                scrollValue
+                scrollValue,
+                responsiveVisibleBucketCount
                 );
 
         visibleBucketCount =
             std::min<qint64>(
-                TimelineVisibleBucketCount,
+                responsiveVisibleBucketCount,
                 totalBucketCount
                     - startBucketIndex
                 );
@@ -2469,10 +2542,18 @@ void InvestigationTimelinePanel::
         0;
 
     if (!automaticInterval) {
+        const int responsiveVisibleBucketCount =
+            timelineVisibleBucketCount(
+                m_chartView
+                    ->viewport()
+                    ->width()
+                );
+
         startBucketIndex =
             timelineStartBucketIndex(
                 totalBucketCount,
-                m_scrollBar->value()
+                m_scrollBar->value(),
+                responsiveVisibleBucketCount
                 );
     }
 
@@ -2571,4 +2652,18 @@ void InvestigationTimelinePanel::
         severity,
         subsystem
         );
+}
+
+void InvestigationTimelinePanel::
+    resizeEvent(
+        QResizeEvent *event
+        )
+{
+    QGroupBox::resizeEvent(
+        event
+        );
+
+    if (m_resizeRenderTimer != nullptr) {
+        m_resizeRenderTimer->start();
+    }
 }

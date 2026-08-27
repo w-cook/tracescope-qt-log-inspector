@@ -2,6 +2,9 @@
 
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QFontMetrics>
+#include <QResizeEvent>
+#include <QSizePolicy>
 
 #include "../../workspace/InvestigationSession.h"
 
@@ -30,7 +33,16 @@ InvestigationSessionSummaryPanel::
         m_label
         );
 
-    m_label->setText(
+    m_label->setMinimumWidth(
+        0
+        );
+
+    m_label->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Preferred
+        );
+
+    setSummaryText(
         tr("No log file loaded.")
         );
 }
@@ -41,7 +53,7 @@ void InvestigationSessionSummaryPanel::refresh(
     )
 {
     if (m_session == nullptr) {
-        m_label->setText(
+        setSummaryText(
             tr("No log file loaded.")
             );
 
@@ -53,7 +65,7 @@ void InvestigationSessionSummaryPanel::refresh(
             ->investigationController();
 
     if (controller == nullptr) {
-        m_label->setText(
+        setSummaryText(
             tr("No log file loaded.")
             );
 
@@ -66,7 +78,7 @@ void InvestigationSessionSummaryPanel::refresh(
             .sourcePath;
 
     if (!m_session->hasSeverityData()) {
-        m_label->setText(
+        setSummaryText(
             QString(
                 "TOTAL: %1 visible of %2 events from %3"
                 )
@@ -125,7 +137,7 @@ void InvestigationSessionSummaryPanel::refresh(
         }
     }
 
-    m_label->setText(
+    setSummaryText(
         QString(
             "Showing %1 of %2 events from %3 | "
             "TRACE: %4 | DEBUG: %5 | INFO: %6 | "
@@ -148,4 +160,62 @@ void InvestigationSessionSummaryPanel::refresh(
             .arg(errorCount)
             .arg(criticalCount)
         );
+}
+
+void InvestigationSessionSummaryPanel::
+    setSummaryText(
+        const QString &text
+        )
+{
+    m_fullText =
+        text;
+
+    m_label->setToolTip(
+        m_fullText
+        );
+
+    updateDisplayedText();
+}
+
+void InvestigationSessionSummaryPanel::
+    updateDisplayedText()
+{
+    if (m_label == nullptr) {
+        return;
+    }
+
+    const int availableWidth =
+        m_label->width();
+
+    if (availableWidth <= 0) {
+        m_label->setText(
+            m_fullText
+            );
+
+        return;
+    }
+
+    const QFontMetrics metrics(
+        m_label->font()
+        );
+
+    m_label->setText(
+        metrics.elidedText(
+            m_fullText,
+            Qt::ElideMiddle,
+            availableWidth
+            )
+        );
+}
+
+void InvestigationSessionSummaryPanel::
+    resizeEvent(
+        QResizeEvent *event
+        )
+{
+    QWidget::resizeEvent(
+        event
+        );
+
+    updateDisplayedText();
 }

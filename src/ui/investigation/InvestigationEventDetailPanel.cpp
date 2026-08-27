@@ -4,13 +4,14 @@
 #include <utility>
 
 #include <QComboBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QStringList>
 #include <QVBoxLayout>
+#include <QGridLayout>
+#include <QResizeEvent>
 
 #include "../../domain/RecordSeverity.h"
 
@@ -59,21 +60,30 @@ InvestigationEventDetailPanel::
         4
         );
 
-    auto *stateLayout =
-        new QHBoxLayout();
+    /*
+     * ---------------------------------------------------------
+     * Investigation-state controls
+     * ---------------------------------------------------------
+     */
+    m_stateLayout =
+        new QGridLayout();
 
-    stateLayout->setContentsMargins(
+    m_stateLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    stateLayout->setSpacing(
+    m_stateLayout->setHorizontalSpacing(
         6
         );
 
-    auto *findingStatusLabel =
+    m_stateLayout->setVerticalSpacing(
+        4
+        );
+
+    m_findingStatusLabel =
         new QLabel(
             tr("Finding status:"),
             this
@@ -107,13 +117,6 @@ InvestigationEventDetailPanel::
             )
         );
 
-    m_findingStatusCombo->setMinimumWidth(
-        m_findingStatusCombo
-            ->sizeHint()
-            .width()
-        + 8
-        );
-
     m_findingStatusCombo->setToolTip(
         tr(
             "Set the investigation finding status "
@@ -135,32 +138,56 @@ InvestigationEventDetailPanel::
             )
         );
 
-    stateLayout->addWidget(
-        findingStatusLabel
+    /*
+     * Start in the normal single-row presentation:
+     *
+     * Finding status: [Status]   [Add Note] [Bookmark Event]
+     *
+     * updateResponsiveControls() moves the action buttons
+     * to a second row only when the panel becomes too narrow.
+     */
+    m_stateLayout->addWidget(
+        m_findingStatusLabel,
+        0,
+        0
         );
 
-    stateLayout->addWidget(
-        m_findingStatusCombo
+    m_stateLayout->addWidget(
+        m_findingStatusCombo,
+        0,
+        1
         );
 
-    stateLayout->addStretch();
-
-    stateLayout->addWidget(
-        m_noteButton
+    m_stateLayout->setColumnStretch(
+        2,
+        1
         );
 
-    stateLayout->addWidget(
-        m_bookmarkButton
+    m_stateLayout->addWidget(
+        m_noteButton,
+        0,
+        3
+        );
+
+    m_stateLayout->addWidget(
+        m_bookmarkButton,
+        0,
+        4
         );
 
     layout->addLayout(
-        stateLayout
+        m_stateLayout
         );
 
     layout->addWidget(
         m_detailText
         );
 
+    /*
+     * ---------------------------------------------------------
+     * Signals
+     * ---------------------------------------------------------
+     */
     connect(
         m_findingStatusCombo,
         &QComboBox::currentIndexChanged,
@@ -187,6 +214,12 @@ InvestigationEventDetailPanel::
         );
 
     clearInvestigationState();
+
+    /*
+     * Apply the appropriate presentation once the
+     * widget receives its initial geometry.
+     */
+    updateResponsiveControls();
 }
 
 void InvestigationEventDetailPanel::
@@ -409,4 +442,151 @@ FindingStatus
             ->currentData()
             .toInt()
         );
+}
+
+void InvestigationEventDetailPanel::
+    updateResponsiveControls()
+{
+    if (m_stateLayout == nullptr) {
+        return;
+    }
+
+    const int requiredWideWidth =
+        m_findingStatusLabel
+            ->sizeHint()
+            .width()
+        + m_findingStatusCombo
+              ->sizeHint()
+              .width()
+        + m_noteButton
+              ->sizeHint()
+              .width()
+        + m_bookmarkButton
+              ->sizeHint()
+              .width()
+        + 6 * 3
+        + 20;
+
+    const bool compact =
+        contentsRect().width()
+        < requiredWideWidth;
+
+    if (compact
+        == m_compactControls) {
+        return;
+    }
+
+    m_compactControls =
+        compact;
+
+    m_stateLayout->removeWidget(
+        m_findingStatusLabel
+        );
+
+    m_stateLayout->removeWidget(
+        m_findingStatusCombo
+        );
+
+    m_stateLayout->removeWidget(
+        m_noteButton
+        );
+
+    m_stateLayout->removeWidget(
+        m_bookmarkButton
+        );
+
+    for (int column = 0;
+         column < 5;
+         ++column) {
+        m_stateLayout->setColumnStretch(
+            column,
+            0
+            );
+    }
+
+    if (!compact) {
+        /*
+         * Normal width:
+         *
+         * Finding status: [Status]
+         *                   ... [Add Note] [Bookmark Event]
+         */
+        m_stateLayout->addWidget(
+            m_findingStatusLabel,
+            0,
+            0
+            );
+
+        m_stateLayout->addWidget(
+            m_findingStatusCombo,
+            0,
+            1
+            );
+
+        m_stateLayout->setColumnStretch(
+            2,
+            1
+            );
+
+        m_stateLayout->addWidget(
+            m_noteButton,
+            0,
+            3
+            );
+
+        m_stateLayout->addWidget(
+            m_bookmarkButton,
+            0,
+            4
+            );
+    } else {
+        /*
+         * Narrow width:
+         *
+         * Finding status: [Status]
+         * [Add Note] [Bookmark Event]
+         */
+        m_stateLayout->addWidget(
+            m_findingStatusLabel,
+            0,
+            0
+            );
+
+        m_stateLayout->addWidget(
+            m_findingStatusCombo,
+            0,
+            1
+            );
+
+        m_stateLayout->addWidget(
+            m_noteButton,
+            1,
+            0
+            );
+
+        m_stateLayout->addWidget(
+            m_bookmarkButton,
+            1,
+            1
+            );
+
+        m_stateLayout->setColumnStretch(
+            1,
+            1
+            );
+    }
+
+    m_stateLayout->invalidate();
+}
+
+void InvestigationEventDetailPanel::
+    resizeEvent(
+        QResizeEvent *event
+        )
+{
+    QGroupBox::resizeEvent(
+        event
+        );
+
+    updateResponsiveControls();
 }

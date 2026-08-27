@@ -8,6 +8,9 @@
 class QComboBox;
 class QPlainTextEdit;
 class QPushButton;
+class QGridLayout;
+class QResizeEvent;
+class QLabel;
 
 class InvestigationEventDetailPanel
     : public QGroupBox
@@ -38,7 +41,23 @@ signals:
     void noteEditRequested();
     void bookmarkToggleRequested();
 
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override;
+
 private:
+    void updateResponsiveControls();
+
+    QGridLayout *m_stateLayout =
+        nullptr;
+
+    QLabel *m_findingStatusLabel =
+        nullptr;
+
+    bool m_compactControls =
+        false;
+
     QPlainTextEdit *m_detailText = nullptr;
 
     QComboBox *m_findingStatusCombo = nullptr;

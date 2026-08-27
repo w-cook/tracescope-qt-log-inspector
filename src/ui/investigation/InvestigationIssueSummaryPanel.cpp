@@ -60,6 +60,10 @@ InvestigationIssueSummaryPanel::
         QAbstractItemView::NoEditTriggers
         );
 
+    m_table->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAsNeeded
+        );
+
     m_table->setToolTip(
         tr(
             "Double-click a summary value to filter "
@@ -266,8 +270,24 @@ void InvestigationIssueSummaryPanel::clear()
 int InvestigationIssueSummaryPanel::
     preferredCompactWidth() const
 {
-    return m_table->minimumWidth()
-    + 30;
+    const int preferredTableWidth =
+        m_table
+            ->verticalHeader()
+            ->width()
+        + m_table
+              ->horizontalHeader()
+              ->length()
+        + m_table
+                  ->frameWidth()
+              * 2
+        + m_table
+              ->verticalScrollBar()
+              ->sizeHint()
+              .width()
+        + 8;
+
+    return preferredTableWidth
+           + 30;
 }
 
 void InvestigationIssueSummaryPanel::
@@ -380,23 +400,15 @@ void InvestigationIssueSummaryPanel::
             QHeaderView::ResizeToContents
             );
 
-    const int requiredTableWidth =
-        m_table
-            ->verticalHeader()
-            ->width()
-        + m_table
-              ->horizontalHeader()
-              ->length()
-        + m_table
-                  ->frameWidth()
-              * 2
-        + m_table
-              ->verticalScrollBar()
-              ->sizeHint()
-              .width()
-        + 8;
-
+    /*
+     * Column contents should influence the preferred
+     * compact width, but must not become a hard
+     * minimum for the entire workspace document.
+     *
+     * In narrow or detached windows the table may
+     * scroll horizontally instead.
+     */
     m_table->setMinimumWidth(
-        requiredTableWidth
+        0
         );
 }

@@ -17,6 +17,7 @@ class InvestigationSession;
 class InvestigationSessionSummaryPanel;
 class InvestigationTimelinePanel;
 class QSplitter;
+class QResizeEvent;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
@@ -44,6 +45,11 @@ public:
      * reloaded in place.
      */
     void refreshSession();
+
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override;
 
 private:
     void applyFilters();

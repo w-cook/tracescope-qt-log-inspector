@@ -21,6 +21,8 @@
 #include <QTimeZone>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QGridLayout>
+#include <QResizeEvent>
 
 #include "../CustomFieldFilterEditor.h"
 #include "../MultiSelectFilterComboBox.h"
@@ -198,12 +200,6 @@ InvestigationFilterPanel::
         4
         );
 
-    auto *eventCodeLabel =
-        new QLabel(
-            tr("Event code:"),
-            m_eventCodeFilterWidget
-            );
-
     m_eventCodeFilterCombo
         ->setEmptySelectionText(
             tr("All event codes")
@@ -213,10 +209,6 @@ InvestigationFilterPanel::
         ->setMinimumWidth(
             170
             );
-
-    eventCodeLayout->addWidget(
-        eventCodeLabel
-        );
 
     eventCodeLayout->addWidget(
         m_eventCodeFilterCombo
@@ -241,12 +233,6 @@ InvestigationFilterPanel::
         4
         );
 
-    auto *entityLabel =
-        new QLabel(
-            tr("Entity:"),
-            m_entityFilterWidget
-            );
-
     m_entityFilterCombo
         ->setEmptySelectionText(
             tr("All entities")
@@ -256,10 +242,6 @@ InvestigationFilterPanel::
         ->setMinimumWidth(
             170
             );
-
-    entityLayout->addWidget(
-        entityLabel
-        );
 
     entityLayout->addWidget(
         m_entityFilterCombo
@@ -281,26 +263,47 @@ InvestigationFilterPanel::
         );
 
     primaryFilterLayout->addWidget(
-        m_levelFilterCombo
+        m_levelFilterCombo,
+        1
         );
 
     primaryFilterLayout->addWidget(
-        m_subsystemFilterCombo
+        m_subsystemFilterCombo,
+        1
         );
 
     primaryFilterLayout->addWidget(
-        m_eventCodeFilterWidget
+        m_eventCodeFilterWidget,
+        1
         );
 
     primaryFilterLayout->addWidget(
-        m_entityFilterWidget
+        m_entityFilterWidget,
+        1
         );
-
-    primaryFilterLayout->addStretch();
 
     layout->addLayout(
         primaryFilterLayout
         );
+
+    for (
+        QWidget *filterWidget
+        : {
+            static_cast<QWidget *>(
+                m_levelFilterCombo
+                ),
+            static_cast<QWidget *>(
+                m_subsystemFilterCombo
+                ),
+            m_eventCodeFilterWidget,
+            m_entityFilterWidget
+        }
+        ) {
+        filterWidget->setSizePolicy(
+            QSizePolicy::Expanding,
+            QSizePolicy::Fixed
+            );
+    }
 
     /*
      * ---------------------------------------------------------
@@ -581,14 +584,14 @@ InvestigationFilterPanel::
         );
 
     /*
-     * ---------------------------------------------------------
-     * Secondary row
-     * ---------------------------------------------------------
-     */
-    auto *secondaryFilterLayout =
-        new QHBoxLayout();
+ * ---------------------------------------------------------
+ * Secondary filter controls
+ * ---------------------------------------------------------
+ */
+    m_secondaryFilterLayout =
+        new QGridLayout();
 
-    secondaryFilterLayout
+    m_secondaryFilterLayout
         ->setContentsMargins(
             0,
             0,
@@ -596,51 +599,93 @@ InvestigationFilterPanel::
             0
             );
 
-    secondaryFilterLayout->setSpacing(
-        8
-        );
+    m_secondaryFilterLayout
+        ->setHorizontalSpacing(
+            8
+            );
 
-    secondaryFilterLayout->addWidget(
-        m_searchInput,
-        1
-        );
-
-    secondaryFilterLayout->addWidget(
-        m_findingStatusFilterCombo,
-        0
-        );
-
-    secondaryFilterLayout->addWidget(
-        m_bookmarksOnlyCheckBox,
-        0
-        );
-
-    secondaryFilterLayout->addWidget(
-        m_timeRangeButton,
-        0
-        );
-
-    secondaryFilterLayout->addWidget(
-        m_customFiltersButton,
-        0
-        );
+    m_secondaryFilterLayout
+        ->setVerticalSpacing(
+            4
+            );
 
     m_filterPresetsButton->setMenu(
         m_filterPresetsMenu
         );
 
-    secondaryFilterLayout->addWidget(
-        m_filterPresetsButton,
+    /*
+     * Start in the normal wide presentation.
+     *
+     * Search | Status | Bookmarks | Time Range |
+     * Custom Filters | Presets | Reset Filters
+     *
+     * updateResponsiveLayout() will move these same
+     * controls to two rows when the panel becomes too
+     * narrow.
+     */
+    m_secondaryFilterLayout->addWidget(
+        m_searchInput,
+        0,
         0
         );
 
-    secondaryFilterLayout->addWidget(
-        m_resetFiltersButton,
-        0
+    m_secondaryFilterLayout->addWidget(
+        m_findingStatusFilterCombo,
+        0,
+        1
         );
+
+    m_secondaryFilterLayout->addWidget(
+        m_bookmarksOnlyCheckBox,
+        0,
+        2
+        );
+
+    m_secondaryFilterLayout->addWidget(
+        m_timeRangeButton,
+        0,
+        3
+        );
+
+    m_secondaryFilterLayout->addWidget(
+        m_customFiltersButton,
+        0,
+        4
+        );
+
+    m_secondaryFilterLayout->addWidget(
+        m_filterPresetsButton,
+        0,
+        5
+        );
+
+    m_secondaryFilterLayout->addWidget(
+        m_resetFiltersButton,
+        0,
+        6
+        );
+
+    /*
+     * Search absorbs the additional horizontal space.
+     * The remaining controls stay near their preferred
+     * widths.
+     */
+    m_secondaryFilterLayout->setColumnStretch(
+        0,
+        1
+        );
+
+    for (int column = 1;
+         column <= 6;
+         ++column) {
+        m_secondaryFilterLayout->setColumnStretch(
+            column,
+            0
+            );
+    }
 
     layout->addLayout(
-        secondaryFilterLayout
+        m_secondaryFilterLayout
         );
 
     /*
@@ -3202,4 +3247,217 @@ bool InvestigationFilterPanel::
 {
     return m_bookmarksOnlyCheckBox
         ->isChecked();
+}
+
+int InvestigationFilterPanel::
+    secondaryWideLayoutMinimumWidth() const
+{
+    const auto controlWidth =
+        [](const QWidget *widget) {
+            if (widget == nullptr) {
+                return 0;
+            }
+
+            return std::max(
+                widget->minimumWidth(),
+                widget->minimumSizeHint()
+                    .width()
+                );
+        };
+
+    /*
+     * Give search a useful minimum amount of room
+     * in the full-width presentation instead of
+     * switching layouts only once it has collapsed
+     * to an impractically tiny field.
+     */
+    constexpr int PreferredSearchWidth =
+        260;
+
+    const int spacing =
+        m_secondaryFilterLayout != nullptr
+            ? std::max(
+                  0,
+                  m_secondaryFilterLayout
+                      ->horizontalSpacing()
+                  )
+            : 8;
+
+    return PreferredSearchWidth
+           + controlWidth(
+               m_findingStatusFilterCombo
+               )
+           + controlWidth(
+               m_bookmarksOnlyCheckBox
+               )
+           + controlWidth(
+               m_timeRangeButton
+               )
+           + controlWidth(
+               m_customFiltersButton
+               )
+           + controlWidth(
+               m_filterPresetsButton
+               )
+           + controlWidth(
+               m_resetFiltersButton
+               )
+           + spacing * 6;
+}
+
+void InvestigationFilterPanel::
+    updateResponsiveLayout()
+{
+    if (m_secondaryFilterLayout
+        == nullptr) {
+        return;
+    }
+
+    const bool compact =
+        contentsRect().width()
+        < secondaryWideLayoutMinimumWidth();
+
+    if (compact
+        == m_secondaryLayoutCompact) {
+        return;
+    }
+
+    m_secondaryLayoutCompact =
+        compact;
+
+    const QList<QWidget *> controls = {
+        m_searchInput,
+        m_findingStatusFilterCombo,
+        m_bookmarksOnlyCheckBox,
+        m_timeRangeButton,
+        m_customFiltersButton,
+        m_filterPresetsButton,
+        m_resetFiltersButton
+    };
+
+    for (QWidget *control
+         : controls) {
+        m_secondaryFilterLayout
+            ->removeWidget(
+                control
+                );
+    }
+
+    if (!compact) {
+        /*
+         * Normal desktop layout:
+         *
+         * Search | Status | Bookmarks | actions...
+         */
+        m_secondaryFilterLayout->addWidget(
+            m_searchInput,
+            0,
+            0
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_findingStatusFilterCombo,
+            0,
+            1
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_bookmarksOnlyCheckBox,
+            0,
+            2
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_timeRangeButton,
+            0,
+            3
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_customFiltersButton,
+            0,
+            4
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_filterPresetsButton,
+            0,
+            5
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_resetFiltersButton,
+            0,
+            6
+            );
+    } else {
+        /*
+         * Narrow detached/split-screen layout:
+         *
+         * Search | Status | Bookmarks
+         * Time | Custom | Presets | Reset
+         */
+        m_secondaryFilterLayout->addWidget(
+            m_searchInput,
+            0,
+            0,
+            1,
+            2
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_findingStatusFilterCombo,
+            0,
+            2
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_bookmarksOnlyCheckBox,
+            0,
+            3
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_timeRangeButton,
+            1,
+            0
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_customFiltersButton,
+            1,
+            1
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_filterPresetsButton,
+            1,
+            2
+            );
+
+        m_secondaryFilterLayout->addWidget(
+            m_resetFiltersButton,
+            1,
+            3
+            );
+    }
+
+    m_secondaryFilterLayout->setColumnStretch(
+        0,
+        1
+        );
+
+    m_secondaryFilterLayout->invalidate();
+}
+
+void InvestigationFilterPanel::
+    resizeEvent(
+        QResizeEvent *event
+        )
+{
+    QWidget::resizeEvent(
+        event
+        );
+
+    updateResponsiveLayout();
 }
