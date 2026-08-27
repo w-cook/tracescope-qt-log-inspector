@@ -70,6 +70,7 @@ private:
 
     QAction *openAction = nullptr;
     QAction *reloadAction = nullptr;
+    QAction *compareAction = nullptr;
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
@@ -96,6 +97,12 @@ private:
     void exportFilteredResults();
 
     void reloadActiveSession();
+
+    void createSessionComparison(
+        const QString &preferredBaselineSessionId =
+        QString()
+        );
+    void updateComparisonActionState();
 
     void refreshRecentFilesMenu();
 

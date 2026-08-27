@@ -4,6 +4,7 @@
 #include <QVector>
 #include <QWidget>
 
+class QMenu;
 class DetachedWorkspaceDocumentWindow;
 class WorkspaceDocument;
 class WorkspaceTabWidget;
@@ -91,6 +92,11 @@ signals:
 
     void documentRedocked(
         const QString &documentId
+        );
+
+    void documentContextMenuAboutToShow(
+        const QString &documentId,
+        QMenu *menu
         );
 
 private slots:

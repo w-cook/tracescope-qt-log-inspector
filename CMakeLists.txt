@@ -156,6 +156,10 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationComparisonSnapshot.h
     src/workspace/InvestigationComparisonSnapshotBuilder.h
     src/workspace/InvestigationComparisonSnapshotBuilder.cpp
+    src/ui/workspace/InvestigationComparisonDocument.h
+    src/ui/workspace/InvestigationComparisonDocument.cpp
+    src/ui/InvestigationComparisonDialog.h
+    src/ui/InvestigationComparisonDialog.cpp
 
 )
 

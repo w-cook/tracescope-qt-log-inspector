@@ -34,8 +34,11 @@
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
+#include "ui/InvestigationComparisonDialog.h"
+#include "ui/workspace/InvestigationComparisonDocument.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
+#include "workspace/InvestigationComparisonSnapshotBuilder.h"
 
 namespace
 {
@@ -307,6 +310,8 @@ MainWindow::MainWindow(QWidget *parent)
         &InvestigationWorkspace::sessionAdded,
         this,
         [this](int index) {
+            updateComparisonActionState();
+
             InvestigationSession *session =
                 workspace->sessionAt(index);
 
@@ -347,6 +352,8 @@ MainWindow::MainWindow(QWidget *parent)
         &InvestigationWorkspace::sessionClosed,
         this,
         [this](int) {
+            updateComparisonActionState();
+
             if (workspaceDocumentHost
                 == nullptr) {
                 return;
@@ -508,7 +515,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(
         workspaceDocumentHost,
         &WorkspaceDocumentHost::
-            documentCloseRequested,
+        documentCloseRequested,
         this,
         [this](
             const QString &documentId
@@ -518,12 +525,92 @@ MainWindow::MainWindow(QWidget *parent)
                     documentId
                     );
 
-            if (sessionIndex < 0) {
+            if (sessionIndex >= 0) {
+                workspace->closeSession(
+                    sessionIndex
+                    );
+
                 return;
             }
 
-            workspace->closeSession(
-                sessionIndex
+            /*
+             * Non-session workspace documents, such as
+             * immutable comparisons, are owned directly
+             * by the document workspace rather than by
+             * InvestigationWorkspace.
+             */
+            WorkspaceDocument *document =
+                workspaceDocumentHost
+                    ->removeDocument(
+                        documentId
+                        );
+
+            if (document != nullptr) {
+                document->deleteLater();
+            }
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        documentContextMenuAboutToShow,
+        this,
+        [this](
+            const QString &documentId,
+            QMenu *menu
+            ) {
+            if (menu == nullptr
+                || workspace == nullptr
+                || workspace->sessionCount()
+                       < 2
+                || workspace->indexOfSession(
+                       documentId
+                       )
+                       < 0) {
+                return;
+            }
+
+            menu->addSeparator();
+
+            QAction *comparisonAction =
+                menu->addAction(
+                    tr(
+                        "Create Comparison..."
+                        )
+                    );
+
+            connect(
+                comparisonAction,
+                &QAction::triggered,
+                menu,
+                [this, documentId]() {
+                    const InvestigationSession
+                        *activeSession =
+                        workspace
+                            ->activeSession();
+
+                    QString preferredBaselineId;
+
+                    if (activeSession != nullptr
+                        && activeSession->id()
+                               != documentId) {
+                        /*
+                     * The user is examining the
+                     * active session and explicitly
+                     * clicked another session:
+                     *
+                     * clicked  -> Baseline
+                     * active   -> Comparison
+                     */
+                        preferredBaselineId =
+                            documentId;
+                    }
+
+                    createSessionComparison(
+                        preferredBaselineId
+                        );
+                }
                 );
         }
         );
@@ -600,6 +687,34 @@ void MainWindow::createMenus()
 
     fileMenu->addSeparator();
     fileMenu->addAction(exportAction);
+
+    auto *investigationMenu =
+        menuBar()->addMenu(
+            tr("&Investigation")
+            );
+
+    compareAction =
+        new QAction(
+            tr("&Compare Sessions..."),
+            this
+            );
+
+    compareAction->setEnabled(
+        false
+        );
+
+    connect(
+        compareAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            createSessionComparison();
+        }
+        );
+
+    investigationMenu->addAction(
+        compareAction
+        );
 
     auto *helpMenu = menuBar()->addMenu("&Help");
 
@@ -1189,6 +1304,144 @@ void MainWindow::reloadActiveSession()
             .sourcePath,
         session->importProfile(),
         session->id()
+        );
+}
+
+void MainWindow::
+    createSessionComparison(
+        const QString &preferredBaselineSessionId
+        )
+{
+    if (workspace == nullptr
+        || workspaceDocumentHost
+               == nullptr
+        || workspace->sessionCount()
+               < 2) {
+        return;
+    }
+
+    const InvestigationSession *activeSession =
+        workspace->activeSession();
+
+    if (activeSession == nullptr) {
+        return;
+    }
+
+    /*
+     * The active investigation is the session the
+     * user is currently examining, so it defaults
+     * to Comparison.
+     */
+    const QString initialComparisonSessionId =
+        activeSession->id();
+
+    QString initialBaselineSessionId =
+        preferredBaselineSessionId;
+
+    /*
+     * A context-clicked inactive session can provide
+     * the tentative Baseline.
+     *
+     * Context-clicking the active session must not
+     * reverse the orientation. Likewise, an invalid
+     * preferred ID is ignored and the dialog chooses
+     * another open session as the Baseline.
+     */
+    if (initialBaselineSessionId
+            == initialComparisonSessionId
+        || workspace->indexOfSession(
+               initialBaselineSessionId
+               )
+               < 0) {
+        initialBaselineSessionId.clear();
+    }
+
+    InvestigationComparisonDialog dialog(
+        workspace,
+        initialBaselineSessionId,
+        initialComparisonSessionId,
+        this
+        );
+
+    if (
+        dialog.exec()
+        != QDialog::Accepted
+        ) {
+        return;
+    }
+
+    const QString baselineSessionId =
+        dialog.baselineSessionId();
+
+    const QString comparisonSessionId =
+        dialog.comparisonSessionId();
+
+    const int baselineIndex =
+        workspace->indexOfSession(
+            baselineSessionId
+            );
+
+    const int comparisonIndex =
+        workspace->indexOfSession(
+            comparisonSessionId
+            );
+
+    if (baselineIndex < 0
+        || comparisonIndex < 0
+        || baselineIndex
+               == comparisonIndex) {
+        return;
+    }
+
+    const InvestigationSession *baselineSession =
+        workspace->sessionAt(
+            baselineIndex
+            );
+
+    const InvestigationSession *comparisonSession =
+        workspace->sessionAt(
+            comparisonIndex
+            );
+
+    if (baselineSession == nullptr
+        || comparisonSession == nullptr) {
+        return;
+    }
+
+    InvestigationComparisonSnapshotBuilder builder;
+
+    InvestigationComparisonSnapshot snapshot =
+        builder.build(
+            *baselineSession,
+            *comparisonSession,
+            dialog.burstSettings()
+            );
+
+    auto *document =
+        new InvestigationComparisonDocument(
+            std::move(snapshot)
+            );
+
+    if (!workspaceDocumentHost
+             ->addDocument(
+                 document,
+                 true
+                 )) {
+        delete document;
+    }
+}
+
+void MainWindow::
+    updateComparisonActionState()
+{
+    if (compareAction == nullptr) {
+        return;
+    }
+
+    compareAction->setEnabled(
+        workspace != nullptr
+        && workspace->sessionCount()
+               >= 2
         );
 }
 

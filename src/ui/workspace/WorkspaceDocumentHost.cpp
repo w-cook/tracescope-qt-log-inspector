@@ -154,6 +154,15 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             &WorkspaceDocumentHost::
             documentCloseRequested
             );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            documentContextMenuAboutToShow,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            documentContextMenuAboutToShow
+            );
     }
 
     connect(
@@ -252,6 +261,11 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
                         "Detach to New Window"
                         )
                     );
+
+            emit documentContextMenuAboutToShow(
+                document->documentId(),
+                &menu
+                );
 
             QAction *selected =
                 menu.exec(
