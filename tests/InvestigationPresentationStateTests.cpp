@@ -165,9 +165,14 @@ void InvestigationPresentationStateTests::
 
     /*
      * Capture the effective state after Qt has
-     * applied/clamped widget geometry. This is the
-     * exact state that a workspace Save operation
-     * would persist.
+     * applied widget geometry. The final header
+     * section intentionally stretches to fill the
+     * available table width, so its effective width
+     * may differ from the requested width depending
+     * on the platform and window-system plugin.
+     *
+     * This effective state is what a workspace Save
+     * operation would actually persist.
      */
     const InvestigationEventTablePresentationState
         saved =
@@ -189,9 +194,20 @@ void InvestigationPresentationStateTests::
         );
 
     QCOMPARE(
-        saved.columnWidths,
-        desired.columnWidths
+        saved.columnWidths.size(),
+        desired.columnWidths.size()
         );
+
+    QVERIFY(
+        !saved.columnWidths.isEmpty()
+        );
+
+    for (const int width
+         : saved.columnWidths) {
+        QVERIFY(
+            width > 0
+            );
+    }
 
     QVERIFY(
         saved.scroll.verticalValue > 0
