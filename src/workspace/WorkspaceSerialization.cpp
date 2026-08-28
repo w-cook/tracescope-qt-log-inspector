@@ -2,12 +2,15 @@
 
 #include <cmath>
 #include <limits>
+#include <utility>
 
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
+
+#include "InvestigationComparisonPersistenceSerialization.h"
 
 #include "../importing/ImportProfileSerialization.h"
 
@@ -434,6 +437,28 @@ QByteArray WorkspaceSerializer::serialize(
     root.insert(
         QStringLiteral("sessions"),
         sessions
+        );
+
+    QJsonArray comparisons;
+
+    const InvestigationComparisonPersistenceSerializer
+        comparisonSerializer;
+
+    for (
+        const PersistedInvestigationComparison
+            &comparison
+        : workspace.comparisons
+        ) {
+        comparisons.append(
+            comparisonSerializer.serialize(
+                comparison
+                )
+            );
+    }
+
+    root.insert(
+        QStringLiteral("comparisons"),
+        comparisons
         );
 
     return QJsonDocument(root).toJson(
@@ -943,6 +968,68 @@ WorkspaceSerializer::deserialize(
         workspace.sessions.append(
             std::move(session)
             );
+    }
+
+    const QJsonValue comparisonsValue =
+        root.value(
+            QStringLiteral("comparisons")
+            );
+
+    if (!comparisonsValue.isUndefined()) {
+        if (!comparisonsValue.isArray()) {
+            return failure(
+                QStringLiteral(
+                    "INVALID_COMPARISONS"
+                    ),
+                QStringLiteral(
+                    "The workspace comparisons field must be an array."
+                    )
+                );
+        }
+
+        const InvestigationComparisonPersistenceSerializer
+            comparisonSerializer;
+
+        for (
+            const QJsonValue &comparisonValue
+            : comparisonsValue.toArray()
+            ) {
+            if (!comparisonValue.isObject()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_COMPARISON"
+                        ),
+                    QStringLiteral(
+                        "Each workspace comparison must be a JSON object."
+                        )
+                    );
+            }
+
+            const ComparisonPersistenceDeserializationResult
+                comparisonResult =
+                comparisonSerializer.deserialize(
+                    comparisonValue.toObject()
+                    );
+
+            if (!comparisonResult.isSuccess()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_COMPARISON"
+                        ),
+                    QStringLiteral(
+                        "A persisted comparison is invalid: %1"
+                        ).arg(
+                            comparisonResult.errorMessage
+                            )
+                    );
+            }
+
+            workspace.comparisons.append(
+                std::move(
+                    *comparisonResult.comparison
+                    )
+                );
+        }
     }
 
     WorkspaceDeserializationResult result;

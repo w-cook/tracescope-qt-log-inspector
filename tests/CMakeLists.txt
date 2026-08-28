@@ -1173,6 +1173,9 @@ qt_add_executable(WorkspaceSerializationTests
     ../src/importing/CanonicalFieldMappings.h
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp
+
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.h
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.cpp
 )
 
 target_link_libraries(

@@ -14,10 +14,12 @@ class WorkspaceSerializationTests
 private slots:
     void serializationProducesVersionedJson();
     void sessionContextRoundTripsThroughJson();
+    void comparisonRoundTripsThroughWorkspaceJson();
     void malformedJsonIsRejected();
     void unsupportedSchemaVersionIsRejected();
     void invalidSessionIsRejected();
     void invalidFindingStatusIsRejected();
+    void invalidComparisonsCollectionIsRejected();
 };
 
 void WorkspaceSerializationTests::
@@ -322,6 +324,267 @@ void WorkspaceSerializationTests::
 }
 
 void WorkspaceSerializationTests::
+    comparisonRoundTripsThroughWorkspaceJson()
+{
+    WorkspacePersistenceState original;
+
+    PersistedInvestigationComparison
+        comparison;
+
+    comparison.comparisonId =
+        QStringLiteral("comparison-123");
+
+    comparison.baselineSource.sessionId =
+        QStringLiteral("baseline-session");
+
+    comparison.baselineSource.sourcePath =
+        QStringLiteral(
+            "/logs/baseline.jsonl"
+            );
+
+    comparison.baselineSource.sourceName =
+        QStringLiteral(
+            "baseline.jsonl"
+            );
+
+    comparison.baselineSource.sourceSizeBytes =
+        12345;
+
+    comparison.baselineSource
+        .sourceLastModified =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-27T12:00:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    comparison.baselineSource.importedAtUtc =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-27T12:05:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    comparison.comparisonSource.sessionId =
+        QStringLiteral(
+            "comparison-session"
+            );
+
+    comparison.comparisonSource.sourcePath =
+        QStringLiteral(
+            "/logs/comparison.jsonl"
+            );
+
+    comparison.comparisonSource.sourceName =
+        QStringLiteral(
+            "comparison.jsonl"
+            );
+
+    comparison.comparisonSource
+        .sourceSizeBytes =
+        23456;
+
+    comparison.comparisonSource
+        .sourceLastModified =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-28T12:00:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    comparison.comparisonSource.importedAtUtc =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-28T12:05:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    comparison.analysis.totalRecords
+        .baselineCount =
+        100;
+
+    comparison.analysis.totalRecords
+        .comparisonCount =
+        135;
+
+    InvestigationSeverityDifference
+        warningDifference;
+
+    warningDifference.severity =
+        RecordSeverity::Warning;
+
+    warningDifference.baselineCount =
+        4;
+
+    warningDifference.comparisonCount =
+        11;
+
+    comparison.analysis.severity
+        .differences
+        .append(
+            warningDifference
+            );
+
+    original.comparisons.append(
+        comparison
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray json =
+        serializer.serialize(
+            original
+            );
+
+    const QJsonDocument document =
+        QJsonDocument::fromJson(
+            json
+            );
+
+    QVERIFY(document.isObject());
+
+    const QJsonObject root =
+        document.object();
+
+    QVERIFY(
+        root.value(
+                QStringLiteral(
+                    "comparisons"
+                    )
+                ).isArray()
+        );
+
+    QCOMPARE(
+        root.value(
+                QStringLiteral(
+                    "comparisons"
+                    )
+                )
+            .toArray()
+            .size(),
+        1
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            json
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.workspace.has_value());
+
+    const WorkspacePersistenceState
+        &restored =
+        *result.workspace;
+
+    QCOMPARE(
+        restored.comparisons.size(),
+        1
+        );
+
+    const PersistedInvestigationComparison
+        &restoredComparison =
+        restored.comparisons.first();
+
+    QCOMPARE(
+        restoredComparison.comparisonId,
+        QStringLiteral(
+            "comparison-123"
+            )
+        );
+
+    /*
+     * Baseline -> Comparison orientation must
+     * survive workspace persistence unchanged.
+     */
+    QCOMPARE(
+        restoredComparison
+            .baselineSource
+            .sessionId,
+        QStringLiteral(
+            "baseline-session"
+            )
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .comparisonSource
+            .sessionId,
+        QStringLiteral(
+            "comparison-session"
+            )
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .baselineSource
+            .sourcePath,
+        QStringLiteral(
+            "/logs/baseline.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .comparisonSource
+            .sourcePath,
+        QStringLiteral(
+            "/logs/comparison.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .analysis
+            .totalRecords
+            .baselineCount,
+        100
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .analysis
+            .totalRecords
+            .comparisonCount,
+        135
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .analysis
+            .severity
+            .differences
+            .size(),
+        1
+        );
+
+    QVERIFY(
+        restoredComparison
+            .analysis
+            .severity
+            .differences
+            .first()
+            .severity
+        == RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        restoredComparison
+            .analysis
+            .severity
+            .differences
+            .first()
+            .comparisonCount,
+        11
+        );
+}
+
+void WorkspaceSerializationTests::
     malformedJsonIsRejected()
 {
     const WorkspaceDeserializationResult
@@ -504,6 +767,54 @@ void WorkspaceSerializationTests::
         result.errorCode,
         QStringLiteral(
             "INVALID_FINDING_STATUS"
+            )
+        );
+}
+
+void WorkspaceSerializationTests::
+    invalidComparisonsCollectionIsRejected()
+{
+    WorkspacePersistenceState workspace;
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray validJson =
+        serializer.serialize(
+            workspace
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            validJson
+            );
+
+    QJsonObject root =
+        document.object();
+
+    root.insert(
+        QStringLiteral("comparisons"),
+        QStringLiteral(
+            "not-an-array"
+            )
+        );
+
+    const QByteArray invalidJson =
+        QJsonDocument(root).toJson(
+            QJsonDocument::Compact
+            );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            invalidJson
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_COMPARISONS"
             )
         );
 }
