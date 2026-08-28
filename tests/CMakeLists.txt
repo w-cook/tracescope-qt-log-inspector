@@ -965,6 +965,9 @@ qt_add_executable(
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp
     ../src/domain/RecordSourceMetadata.h
+
+    ../src/workspace/InvestigationSessionPersistence.h
+    ../src/workspace/InvestigationSessionPersistence.cpp
 )
 
 target_link_libraries(

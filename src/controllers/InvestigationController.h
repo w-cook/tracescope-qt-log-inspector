@@ -24,6 +24,7 @@ public:
 
     InvestigationTableModel *sourceModel();
     InvestigationFilterProxyModel *proxyModel();
+    const InvestigationFilterProxyModel *proxyModel() const;
 
     void setRecords(
         const QVector<InvestigationRecord> &records

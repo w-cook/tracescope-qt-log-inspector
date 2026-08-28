@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "../src/workspace/InvestigationSession.h"
+#include "../src/workspace/InvestigationSessionPersistence.h"
 
 class InvestigationSessionTests : public QObject
 {
@@ -18,6 +19,7 @@ private slots:
     void reloadsContentWithoutChangingSessionIdentity();
     void retainsInvestigationStateForRecordsThatSurviveReload();
     void restoresExplicitSessionIdentity();
+    void capturesAndRestoresPersistedInvestigationState();
 };
 
 void InvestigationSessionTests::
@@ -399,6 +401,252 @@ void InvestigationSessionTests::
     QCOMPARE(
         session.id(),
         persistedId
+        );
+}
+
+void InvestigationSessionTests::
+    capturesAndRestoresPersistedInvestigationState()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Persistence Test");
+
+    ImportResult originalResult;
+
+    InvestigationSession original(
+        QStringLiteral("persisted-session"),
+        QStringLiteral("source.jsonl"),
+        profile,
+        std::move(originalResult)
+        );
+
+    InvestigationStateStore *stateStore =
+        original.investigationStateStore();
+
+    stateStore->setBookmarked(
+        QStringLiteral("record-1"),
+        true
+        );
+
+    stateStore->setNote(
+        QStringLiteral("record-1"),
+        QStringLiteral(
+            "Investigate this event"
+            )
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("record-1"),
+        FindingStatus::Open
+        );
+
+    stateStore->setNote(
+        QStringLiteral("record-2"),
+        QStringLiteral(
+            "Related observation"
+            )
+        );
+
+    CustomFieldFilterMap customFilters;
+
+    customFilters.insert(
+        QStringLiteral("requestId"),
+        {
+            QStringLiteral("req-123"),
+            QStringLiteral("req-456")
+        }
+        );
+
+    const QDateTime startTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-28T12:00:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    const QDateTime endTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-28T13:00:00Z"
+                ),
+            Qt::ISODate
+            );
+
+    original.investigationController()
+        ->setFilterState(
+            {
+                QStringLiteral("Warning"),
+                QStringLiteral("Error")
+            },
+            {
+                QStringLiteral("Backend")
+            },
+            QStringLiteral("timeout"),
+            {
+                QStringLiteral("EVT-100")
+            },
+            {
+                QStringLiteral("node-4")
+            },
+            startTime,
+            endTime,
+            customFilters,
+            {
+                QStringLiteral("Open")
+            },
+            true
+            );
+
+    const PersistedInvestigationSession
+        persisted =
+        InvestigationSessionPersistence::
+        capture(original);
+
+    QCOMPARE(
+        persisted.sessionId,
+        QStringLiteral(
+            "persisted-session"
+            )
+        );
+
+    QCOMPARE(
+        persisted.recordStates.size(),
+        2
+        );
+
+    QCOMPARE(
+        persisted.filterState.searchText,
+        QStringLiteral("timeout")
+        );
+
+    QVERIFY(
+        persisted.filterState.bookmarkedOnly
+        );
+
+    ImportResult restoredResult;
+
+    InvestigationSession restored(
+        persisted.sessionId,
+        persisted.sourcePath,
+        persisted.importProfile,
+        std::move(restoredResult)
+        );
+
+    InvestigationSessionPersistence::
+        restoreState(
+            persisted,
+            restored
+            );
+
+    const InvestigationStateStore
+        *restoredStateStore =
+        restored.investigationStateStore();
+
+    const InvestigationRecordState
+        restoredRecordOne =
+        restoredStateStore->stateForRecord(
+            QStringLiteral("record-1")
+            );
+
+    QVERIFY(
+        restoredRecordOne.bookmarked
+        );
+
+    QCOMPARE(
+        restoredRecordOne.note,
+        QStringLiteral(
+            "Investigate this event"
+            )
+        );
+
+    QVERIFY(
+        restoredRecordOne.findingStatus
+        == FindingStatus::Open
+        );
+
+    const InvestigationRecordState
+        restoredRecordTwo =
+        restoredStateStore->stateForRecord(
+            QStringLiteral("record-2")
+            );
+
+    QCOMPARE(
+        restoredRecordTwo.note,
+        QStringLiteral(
+            "Related observation"
+            )
+        );
+
+    const InvestigationFilterProxyModel
+        *restoredProxy =
+        restored
+            .investigationController()
+            ->proxyModel();
+
+    QCOMPARE(
+        restoredProxy->severityFilters(),
+        QStringList({
+            QStringLiteral("WARNING"),
+            QStringLiteral("ERROR")
+        })
+        );
+
+    QCOMPARE(
+        restoredProxy->subsystemFilters(),
+        QStringList({
+            QStringLiteral("Backend")
+        })
+        );
+
+    QCOMPARE(
+        restoredProxy->searchText(),
+        QStringLiteral("timeout")
+        );
+
+    QCOMPARE(
+        restoredProxy->eventCodeFilters(),
+        QStringList({
+            QStringLiteral("EVT-100")
+        })
+        );
+
+    QCOMPARE(
+        restoredProxy->entityFilters(),
+        QStringList({
+            QStringLiteral("node-4")
+        })
+        );
+
+    QCOMPARE(
+        restoredProxy->timeRangeStart(),
+        std::optional<QDateTime>(
+            startTime
+            )
+        );
+
+    QCOMPARE(
+        restoredProxy->timeRangeEnd(),
+        std::optional<QDateTime>(
+            endTime
+            )
+        );
+
+    QCOMPARE(
+        restoredProxy->customFieldFilters(),
+        customFilters
+        );
+
+    QCOMPARE(
+        restoredProxy->findingStatusFilters(),
+        QStringList({
+            QStringLiteral("OPEN")
+        })
+        );
+
+    QVERIFY(
+        restoredProxy->bookmarkedOnly()
         );
 }
 

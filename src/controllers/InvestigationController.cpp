@@ -48,6 +48,12 @@ InvestigationController::proxyModel()
     return &m_proxyModel;
 }
 
+const InvestigationFilterProxyModel *
+InvestigationController::proxyModel() const
+{
+    return &m_proxyModel;
+}
+
 void InvestigationController::setRecords(
     const QVector<InvestigationRecord> &records
     )
