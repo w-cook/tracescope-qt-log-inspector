@@ -2,6 +2,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 
 #include "../src/workspace/WorkspaceSerialization.h"
 
@@ -16,6 +17,7 @@ private slots:
     void malformedJsonIsRejected();
     void unsupportedSchemaVersionIsRejected();
     void invalidSessionIsRejected();
+    void invalidFindingStatusIsRejected();
 };
 
 void WorkspaceSerializationTests::
@@ -85,6 +87,77 @@ void WorkspaceSerializationTests::
             QStringLiteral("Request ID"),
             QStringLiteral("requestId")
         });
+
+    PersistedInvestigationRecordState
+        recordState;
+
+    recordState.recordId =
+        QStringLiteral("record-123");
+
+    recordState.bookmarked = true;
+
+    recordState.note =
+        QStringLiteral(
+            "Investigate this event"
+            );
+
+    recordState.findingStatus =
+        FindingStatus::Open;
+
+    session.recordStates.append(
+        recordState
+        );
+
+    session.filterState.severities = {
+        QStringLiteral("WARNING"),
+        QStringLiteral("ERROR")
+    };
+
+    session.filterState.subsystems = {
+        QStringLiteral("Backend")
+    };
+
+    session.filterState.searchText =
+        QStringLiteral("timeout");
+
+    session.filterState.eventCodes = {
+        QStringLiteral("EVT-100")
+    };
+
+    session.filterState.entityIds = {
+        QStringLiteral("node-4")
+    };
+
+    session.filterState.startTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-28T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    session.filterState.endTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-28T13:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    session.filterState
+        .customFieldFilters.insert(
+            QStringLiteral("requestId"),
+            {
+                QStringLiteral("req-123"),
+                QStringLiteral("req-456")
+            }
+            );
+
+    session.filterState.findingStatuses = {
+        QStringLiteral("OPEN")
+    };
+
+    session.filterState.bookmarkedOnly = true;
 
     original.sessions.append(
         session
@@ -171,6 +244,81 @@ void WorkspaceSerializationTests::
             .customFields.first().sourcePath,
         QStringLiteral("requestId")
         );
+
+    QCOMPARE(
+        restoredSession.recordStates.size(),
+        1
+        );
+
+    const PersistedInvestigationRecordState
+        &restoredState =
+        restoredSession.recordStates.first();
+
+    QCOMPARE(
+        restoredState.recordId,
+        QStringLiteral("record-123")
+        );
+
+    QVERIFY(restoredState.bookmarked);
+
+    QCOMPARE(
+        restoredState.note,
+        QStringLiteral(
+            "Investigate this event"
+            )
+        );
+
+    QVERIFY(
+        restoredState.findingStatus
+        == FindingStatus::Open
+        );
+
+    QCOMPARE(
+        restoredSession.filterState.severities,
+        QStringList({
+            QStringLiteral("WARNING"),
+            QStringLiteral("ERROR")
+        })
+        );
+
+    QCOMPARE(
+        restoredSession.filterState.searchText,
+        QStringLiteral("timeout")
+        );
+
+    QVERIFY(
+        restoredSession.filterState.startTime
+        == session.filterState.startTime
+        );
+
+    QVERIFY(
+        restoredSession.filterState.endTime
+        == session.filterState.endTime
+        );
+
+    QCOMPARE(
+        restoredSession
+            .filterState
+            .customFieldFilters,
+        session
+            .filterState
+            .customFieldFilters
+        );
+
+    QCOMPARE(
+        restoredSession
+            .filterState
+            .findingStatuses,
+        QStringList({
+            QStringLiteral("OPEN")
+        })
+        );
+
+    QVERIFY(
+        restoredSession
+            .filterState
+            .bookmarkedOnly
+        );
 }
 
 void WorkspaceSerializationTests::
@@ -247,6 +395,115 @@ void WorkspaceSerializationTests::
         result.errorCode,
         QStringLiteral(
             "INVALID_SESSION_ID"
+            )
+        );
+}
+
+void WorkspaceSerializationTests::
+    invalidFindingStatusIsRejected()
+{
+    WorkspacePersistenceState workspace;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral("session-1");
+
+    session.sourcePath =
+        QStringLiteral("source.jsonl");
+
+    session.importProfile.name =
+        QStringLiteral("Test Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("json-lines");
+
+    PersistedInvestigationRecordState
+        recordState;
+
+    recordState.recordId =
+        QStringLiteral("record-1");
+
+    recordState.findingStatus =
+        FindingStatus::Open;
+
+    session.recordStates.append(
+        recordState
+        );
+
+    workspace.sessions.append(
+        session
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray validJson =
+        serializer.serialize(
+            workspace
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            validJson
+            );
+
+    QJsonObject root =
+        document.object();
+
+    QJsonArray sessions =
+        root.value(
+                QStringLiteral("sessions")
+                ).toArray();
+
+    QJsonObject sessionObject =
+        sessions.at(0).toObject();
+
+    QJsonArray recordStates =
+        sessionObject.value(
+                         QStringLiteral("recordStates")
+                         ).toArray();
+
+    QJsonObject stateObject =
+        recordStates.at(0).toObject();
+
+    stateObject.insert(
+        QStringLiteral("findingStatus"),
+        QStringLiteral("banana")
+        );
+
+    recordStates[0] =
+        stateObject;
+
+    sessionObject.insert(
+        QStringLiteral("recordStates"),
+        recordStates
+        );
+
+    sessions[0] =
+        sessionObject;
+
+    root.insert(
+        QStringLiteral("sessions"),
+        sessions
+        );
+
+    const QByteArray corruptedJson =
+        QJsonDocument(root).toJson(
+            QJsonDocument::Compact
+            );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            corruptedJson
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_FINDING_STATUS"
             )
         );
 }
