@@ -469,6 +469,64 @@ void InvestigationSessionView::
         ->refreshNavigationState();
 }
 
+InvestigationSessionPresentationState
+    InvestigationSessionView::
+    capturePresentationState() const
+{
+    InvestigationSessionPresentationState
+        state;
+
+    if (m_eventPanel != nullptr) {
+        state.eventTable =
+            m_eventPanel
+                ->capturePresentationState();
+    }
+
+    if (m_eventDetailPanel != nullptr) {
+        state.eventDetailScroll =
+            m_eventDetailPanel
+                ->capturePresentationState();
+    }
+
+    return state;
+}
+
+void InvestigationSessionView::
+    restorePresentationState(
+        const InvestigationSessionPresentationState
+            &state
+        )
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    /*
+     * Event-table restoration first establishes the
+     * saved sort and selected record.
+     */
+    if (m_eventPanel != nullptr) {
+        m_eventPanel
+            ->restorePresentationState(
+                state.eventTable
+                );
+    }
+
+    /*
+     * Ensure Selected Event Details represents the
+     * final restored selection before applying its
+     * saved text viewport.
+     */
+    updateEventDetailFromSelection();
+
+    if (m_eventDetailPanel != nullptr) {
+        m_eventDetailPanel
+            ->restorePresentationState(
+                state.eventDetailScroll
+                );
+    }
+}
+
 void InvestigationSessionView::
     applyFilters()
 {
@@ -575,6 +633,10 @@ const InvestigationRecord *
     InvestigationSessionView::
     selectedEventRecord() const
 {
+    if (m_eventPanel == nullptr) {
+        return nullptr;
+    }
+
     return m_eventPanel
         ->selectedRecord();
 }

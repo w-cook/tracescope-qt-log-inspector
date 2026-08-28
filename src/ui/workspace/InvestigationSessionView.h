@@ -4,6 +4,8 @@
 
 #include "WorkspaceDocument.h"
 
+#include "../../workspace/InvestigationPresentationState.h"
+
 class FilterPresetStore;
 class InvestigationAnalyticsPanel;
 class InvestigationEventDetailPanel;
@@ -45,6 +47,13 @@ public:
      * reloaded in place.
      */
     void refreshSession();
+
+    InvestigationSessionPresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationSessionPresentationState &state
+        );
 
 protected:
     void resizeEvent(

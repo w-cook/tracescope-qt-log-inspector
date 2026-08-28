@@ -16,6 +16,7 @@
 #include <QSignalBlocker>
 #include <QTableView>
 #include <QVBoxLayout>
+#include <QScrollBar>
 
 #include "../../controllers/InvestigationController.h"
 #include "../../models/InvestigationFilterProxyModel.h"
@@ -818,6 +819,180 @@ void InvestigationEventPanel::
 void InvestigationEventPanel::focusTable()
 {
     m_table->setFocus();
+}
+
+InvestigationEventTablePresentationState
+    InvestigationEventPanel::
+    capturePresentationState() const
+{
+    InvestigationEventTablePresentationState
+        state;
+
+    if (m_session != nullptr) {
+        state.selectedRecordId =
+            m_session->selectedRecordId();
+    }
+
+    const QHeaderView *header =
+        m_table->horizontalHeader();
+
+    if (header != nullptr) {
+        state.sortColumn =
+            header->sortIndicatorSection();
+
+        state.sortOrder =
+            header->sortIndicatorOrder();
+
+        state.columnWidths.reserve(
+            header->count()
+            );
+
+        for (
+            int column = 0;
+            column < header->count();
+            ++column
+            ) {
+            state.columnWidths.append(
+                m_table->columnWidth(column)
+                );
+        }
+    }
+
+    if (m_table->horizontalScrollBar()
+        != nullptr) {
+        state.scroll.horizontalValue =
+            m_table
+                ->horizontalScrollBar()
+                ->value();
+    }
+
+    if (m_table->verticalScrollBar()
+        != nullptr) {
+        state.scroll.verticalValue =
+            m_table
+                ->verticalScrollBar()
+                ->value();
+    }
+
+    return state;
+}
+
+void InvestigationEventPanel::
+    restorePresentationState(
+        const InvestigationEventTablePresentationState
+            &state
+        )
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    /*
+     * Restore widths without allowing the normal
+     * sectionResized handler to record each
+     * intermediate partial state.
+     */
+    QHeaderView *header =
+        m_table->horizontalHeader();
+
+    if (header != nullptr
+        && !state.columnWidths.isEmpty()) {
+        const QSignalBlocker blocker(
+            header
+            );
+
+        const int count =
+            std::min(
+                header->count(),
+                static_cast<int>(
+                    state.columnWidths.size()
+                    )
+                );
+
+        for (
+            int column = 0;
+            column < count;
+            ++column
+            ) {
+            const int width =
+                state.columnWidths.at(
+                    column
+                    );
+
+            if (width > 0) {
+                m_table->setColumnWidth(
+                    column,
+                    width
+                    );
+            }
+        }
+
+        if (m_session != nullptr) {
+            m_session->setColumnWidths(
+                state.columnWidths
+                );
+        }
+    }
+
+    /*
+     * Sorting affects proxy-row order, so restore
+     * it before trying to locate the selected event.
+     */
+    if (m_table->model() != nullptr) {
+        const int columnCount =
+            m_table
+                ->model()
+                ->columnCount();
+
+        if (state.sortColumn >= -1
+            && state.sortColumn
+                   < columnCount) {
+            m_table->sortByColumn(
+                state.sortColumn,
+                state.sortOrder
+                );
+        }
+    }
+
+    /*
+     * Selection restoration can scroll the table
+     * because selectRecordId() ultimately centers
+     * the selected row. Scroll positions therefore
+     * come afterward.
+     */
+    clearSelection();
+
+    if (!state.selectedRecordId.isEmpty()) {
+        selectRecordId(
+            state.selectedRecordId
+            );
+    }
+
+    if (QScrollBar *horizontal =
+        m_table->horizontalScrollBar();
+        horizontal != nullptr) {
+        horizontal->setValue(
+            std::clamp(
+                state.scroll.horizontalValue,
+                horizontal->minimum(),
+                horizontal->maximum()
+                )
+            );
+    }
+
+    if (QScrollBar *vertical =
+        m_table->verticalScrollBar();
+        vertical != nullptr) {
+        vertical->setValue(
+            std::clamp(
+                state.scroll.verticalValue,
+                vertical->minimum(),
+                vertical->maximum()
+                )
+            );
+    }
+
+    refreshNavigationState();
 }
 
 void InvestigationEventPanel::

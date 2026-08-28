@@ -1218,3 +1218,57 @@ add_test(
     NAME InvestigationComparisonPersistenceTests
     COMMAND InvestigationComparisonPersistenceTests
 )
+
+qt_add_executable(
+    InvestigationPresentationStateTests
+
+    InvestigationPresentationStateTests.cpp
+
+    ../src/workspace/InvestigationPresentationState.h
+
+    ../src/ui/investigation/InvestigationEventPanel.h
+    ../src/ui/investigation/InvestigationEventPanel.cpp
+
+    ../src/ui/investigation/InvestigationEventDetailPanel.h
+    ../src/ui/investigation/InvestigationEventDetailPanel.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+)
+
+target_link_libraries(
+    InvestigationPresentationStateTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+        Qt6::Widgets
+)
+
+add_test(
+    NAME InvestigationPresentationStateTests
+    COMMAND InvestigationPresentationStateTests
+)
