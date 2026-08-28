@@ -60,6 +60,13 @@ public:
         ImportResult result
         );
 
+    InvestigationSession(
+        QString sessionId,
+        const QString &filePath,
+        ImportProfile profile,
+        ImportResult result
+        );
+
     const QString &id() const;
 
     const QString &selectedRecordId() const;

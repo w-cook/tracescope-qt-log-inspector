@@ -17,6 +17,7 @@ private slots:
     void assignsDistinctSessionIds();
     void reloadsContentWithoutChangingSessionIdentity();
     void retainsInvestigationStateForRecordsThatSurviveReload();
+    void restoresExplicitSessionIdentity();
 };
 
 void InvestigationSessionTests::
@@ -372,6 +373,32 @@ void InvestigationSessionTests::
         !stateStore->hasStateForRecord(
             QStringLiteral("new")
             )
+        );
+}
+
+void InvestigationSessionTests::
+    restoresExplicitSessionIdentity()
+{
+    ImportProfile profile;
+    ImportResult result;
+
+    const QString persistedId =
+        QStringLiteral(
+            "persisted-session-id"
+            );
+
+    InvestigationSession session(
+        persistedId,
+        QStringLiteral(
+            "restored-session.jsonl"
+            ),
+        profile,
+        std::move(result)
+        );
+
+    QCOMPARE(
+        session.id(),
+        persistedId
         );
 }
 
