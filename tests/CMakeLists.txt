@@ -1186,3 +1186,24 @@ add_test(
     NAME WorkspaceSerializationTests
     COMMAND WorkspaceSerializationTests
 )
+
+qt_add_executable(
+    InvestigationComparisonPersistenceTests
+    InvestigationComparisonPersistenceTests.cpp
+    ../src/workspace/InvestigationComparisonPersistence.h
+    ../src/workspace/InvestigationComparisonPersistence.cpp
+    ../src/workspace/InvestigationComparisonSnapshot.h
+    ../src/workspace/WorkspacePersistenceState.h
+)
+
+target_link_libraries(
+    InvestigationComparisonPersistenceTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationComparisonPersistenceTests
+    COMMAND InvestigationComparisonPersistenceTests
+)

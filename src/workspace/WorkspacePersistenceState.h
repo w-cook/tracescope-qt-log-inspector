@@ -8,6 +8,8 @@
 #include <QMap>
 #include <QStringList>
 
+#include "../analysis/BurstDetectionSettings.h"
+#include "../analysis/InvestigationSessionComparison.h"
 #include "../domain/InvestigationRecordState.h"
 #include "../importing/ImportProfile.h"
 
@@ -42,6 +44,35 @@ struct PersistedInvestigationFilterState
     bool bookmarkedOnly = false;
 };
 
+struct PersistedInvestigationComparisonSource
+{
+    QString sessionId;
+
+    QString sourcePath;
+    QString sourceName;
+
+    qint64 sourceSizeBytes = 0;
+
+    QDateTime sourceLastModified;
+    QDateTime importedAtUtc;
+};
+
+struct PersistedInvestigationComparison
+{
+    QString comparisonId;
+
+    PersistedInvestigationComparisonSource
+        baselineSource;
+
+    PersistedInvestigationComparisonSource
+        comparisonSource;
+
+    std::optional<BurstDetectionSettings>
+        requestedBurstSettings;
+
+    InvestigationSessionComparison analysis;
+};
+
 struct PersistedInvestigationSession
 {
     QString sessionId;
@@ -66,4 +97,7 @@ struct WorkspacePersistenceState
 
     QVector<PersistedInvestigationSession>
         sessions;
+
+    QVector<PersistedInvestigationComparison>
+        comparisons;
 };
