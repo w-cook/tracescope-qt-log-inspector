@@ -1050,6 +1050,136 @@ void InvestigationTimelinePanel::clear()
     showEmptyTimeline();
 }
 
+InvestigationTimelinePresentationState
+    InvestigationTimelinePanel::
+    capturePresentationState() const
+{
+    InvestigationTimelinePresentationState state;
+
+    if (m_intervalCombo != nullptr) {
+        state.intervalMilliseconds =
+            m_intervalCombo
+                ->currentData()
+                .toLongLong();
+    }
+
+    if (m_session != nullptr) {
+        state.breakdown =
+            m_session->timelineBreakdown();
+
+        state.subsystemTrendLimit =
+            m_session->subsystemTrendLimit();
+    }
+
+    if (m_scrollBar != nullptr) {
+        state.horizontalScrollValue =
+            m_scrollBar->value();
+    }
+
+    return state;
+}
+
+void InvestigationTimelinePanel::
+    restorePresentationState(
+        const InvestigationTimelinePresentationState
+            &state
+        )
+{
+    if (m_session == nullptr
+        || m_intervalCombo == nullptr
+        || m_scrollBar == nullptr) {
+        return;
+    }
+
+    /*
+     * Restore the session-backed controls first.
+     * rebuildBreakdownControls() will gracefully
+     * fall back if the saved breakdown or Top-N
+     * option is unavailable for this source.
+     */
+    m_session->setTimelineBreakdown(
+        state.breakdown
+        );
+
+    m_session->setSubsystemTrendLimit(
+        state.subsystemTrendLimit
+        );
+
+    rebuildBreakdownControls();
+
+    /*
+     * Restore the requested bucket interval without
+     * firing the normal user-change handler, which
+     * would reset horizontal navigation to zero.
+     */
+    int intervalIndex =
+        m_intervalCombo->findData(
+            QVariant::fromValue<qint64>(
+                state.intervalMilliseconds
+                )
+            );
+
+    if (intervalIndex < 0) {
+        intervalIndex =
+            m_intervalCombo->findData(
+                QVariant::fromValue<qint64>(
+                    0
+                    )
+                );
+    }
+
+    {
+        const QSignalBlocker blocker(
+            m_intervalCombo
+            );
+
+        m_intervalCombo->setCurrentIndex(
+            intervalIndex
+            );
+    }
+
+    m_scaleValid = false;
+
+    /*
+     * First render establishes the scrollbar range
+     * appropriate to the restored interval, current
+     * filters, and current viewport width.
+     */
+    render();
+
+    const qint64 effectiveInterval =
+        m_intervalCombo
+            ->currentData()
+            .toLongLong();
+
+    /*
+     * Auto has no navigable timeline position.
+     * render() has already reset it to zero.
+     */
+    if (effectiveInterval <= 0) {
+        return;
+    }
+
+    {
+        const QSignalBlocker blocker(
+            m_scrollBar
+            );
+
+        m_scrollBar->setValue(
+            std::clamp(
+                state.horizontalScrollValue,
+                m_scrollBar->minimum(),
+                m_scrollBar->maximum()
+                )
+            );
+    }
+
+    /*
+     * Re-render using the restored starting bucket.
+     */
+    render();
+}
+
 void InvestigationTimelinePanel::
     rebuildBreakdownControls()
 {

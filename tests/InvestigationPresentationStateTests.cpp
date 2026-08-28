@@ -9,6 +9,7 @@
 #include "../src/importing/ImportResult.h"
 #include "../src/ui/investigation/InvestigationEventDetailPanel.h"
 #include "../src/ui/investigation/InvestigationEventPanel.h"
+#include "../src/ui/investigation/InvestigationTimelinePanel.h"
 #include "../src/workspace/InvestigationPresentationState.h"
 #include "../src/workspace/InvestigationSession.h"
 
@@ -101,6 +102,7 @@ class InvestigationPresentationStateTests
 private slots:
     void eventTablePresentationRoundTrips();
     void eventDetailScrollRoundTrips();
+    void timelinePresentationRoundTrips();
 };
 
 void InvestigationPresentationStateTests::
@@ -390,6 +392,205 @@ void InvestigationPresentationStateTests::
     QCOMPARE(
         restored.verticalValue,
         saved.verticalValue
+        );
+}
+
+void InvestigationPresentationStateTests::
+    timelinePresentationRoundTrips()
+{
+    InvestigationSession session =
+        makeSession();
+
+    InvestigationTimelinePanel panel;
+
+    /*
+     * Keep the timeline narrow enough that a
+     * one-second resolution requires horizontal
+     * navigation across this 100-second fixture.
+     */
+    panel.resize(
+        420,
+        240
+        );
+
+    panel.setSession(
+        &session
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    panel.show();
+
+    processUi();
+
+    InvestigationTimelinePresentationState
+        desired;
+
+    desired.intervalMilliseconds =
+        1000;
+
+    desired.breakdown =
+        InvestigationTimelineBreakdown::
+        Subsystem;
+
+    desired.subsystemTrendLimit =
+        10;
+
+    desired.horizontalScrollValue =
+        30;
+
+    panel.restorePresentationState(
+        desired
+        );
+
+    processUi();
+
+    const InvestigationTimelinePresentationState
+        saved =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.intervalMilliseconds,
+        qint64(1000)
+        );
+
+    QCOMPARE(
+        saved.breakdown,
+        InvestigationTimelineBreakdown::
+        Subsystem
+        );
+
+    QCOMPARE(
+        saved.subsystemTrendLimit,
+        10
+        );
+
+    /*
+     * This fixture deliberately contains many more
+     * one-second buckets than can fit in the panel,
+     * so the saved navigation position should be
+     * meaningful rather than clamped to zero.
+     */
+    QCOMPARE(
+        saved.horizontalScrollValue,
+        30
+        );
+
+    /*
+     * Move every persisted timeline control away
+     * from the saved state.
+     */
+    InvestigationTimelinePresentationState
+        disturbed;
+
+    disturbed.intervalMilliseconds =
+        5000;
+
+    disturbed.breakdown =
+        InvestigationTimelineBreakdown::
+        Severity;
+
+    disturbed.subsystemTrendLimit =
+        5;
+
+    disturbed.horizontalScrollValue =
+        0;
+
+    panel.restorePresentationState(
+        disturbed
+        );
+
+    processUi();
+
+    const InvestigationTimelinePresentationState
+        disturbedEffective =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        disturbedEffective.intervalMilliseconds,
+        qint64(5000)
+        );
+
+    QCOMPARE(
+        disturbedEffective.breakdown,
+        InvestigationTimelineBreakdown::
+        Severity
+        );
+
+    QCOMPARE(
+        disturbedEffective.subsystemTrendLimit,
+        5
+        );
+
+    /*
+     * Restore the original timeline snapshot.
+     */
+    panel.restorePresentationState(
+        saved
+        );
+
+    processUi();
+
+    const InvestigationTimelinePresentationState
+        restored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        restored.intervalMilliseconds,
+        saved.intervalMilliseconds
+        );
+
+    QCOMPARE(
+        restored.breakdown,
+        saved.breakdown
+        );
+
+    QCOMPARE(
+        restored.subsystemTrendLimit,
+        saved.subsystemTrendLimit
+        );
+
+    QCOMPARE(
+        restored.horizontalScrollValue,
+        saved.horizontalScrollValue
+        );
+
+    /*
+     * Auto resolution intentionally has no saved
+     * horizontal navigation position.
+     */
+    InvestigationTimelinePresentationState
+        automatic =
+        saved;
+
+    automatic.intervalMilliseconds =
+        0;
+
+    automatic.horizontalScrollValue =
+        50;
+
+    panel.restorePresentationState(
+        automatic
+        );
+
+    processUi();
+
+    const InvestigationTimelinePresentationState
+        automaticEffective =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        automaticEffective.intervalMilliseconds,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        automaticEffective.horizontalScrollValue,
+        0
         );
 }
 

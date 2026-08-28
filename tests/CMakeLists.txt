@@ -1258,6 +1258,18 @@ qt_add_executable(
     ../src/domain/RecordSourceMetadata.h
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp
+
+    ../src/ui/investigation/InvestigationTimelinePanel.h
+    ../src/ui/investigation/InvestigationTimelinePanel.cpp
+
+    ../src/analysis/EventTimelineAnalyzer.h
+    ../src/analysis/EventTimelineAnalyzer.cpp
+
+    ../src/analysis/InvestigationAnalyticsAnalyzer.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.cpp
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
 )
 
 target_link_libraries(
@@ -1266,9 +1278,16 @@ target_link_libraries(
         Qt6::Test
         Qt6::Core
         Qt6::Widgets
+        Qt6::Charts
 )
 
 add_test(
     NAME InvestigationPresentationStateTests
     COMMAND InvestigationPresentationStateTests
+)
+
+set_tests_properties(
+    InvestigationPresentationStateTests
+    PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=minimal"
 )

@@ -10,6 +10,7 @@
 #include "../../analysis/EventTimelineAnalyzer.h"
 #include "../../analysis/InvestigationAnalyticsAnalyzer.h"
 #include "../../domain/InvestigationRecord.h"
+#include "../../workspace/InvestigationPresentationState.h"
 
 class InvestigationSession;
 class QChartView;
@@ -49,6 +50,13 @@ public:
         );
 
     void clear();
+
+    InvestigationTimelinePresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationTimelinePresentationState &state
+        );
 
 signals:
     /*
