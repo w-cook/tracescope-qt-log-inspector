@@ -1158,3 +1158,28 @@ add_test(
     NAME InvestigationComparisonDialogTests
     COMMAND InvestigationComparisonDialogTests
 )
+
+qt_add_executable(WorkspaceSerializationTests
+    WorkspaceSerializationTests.cpp
+    ../src/workspace/WorkspacePersistenceState.h
+    ../src/workspace/WorkspaceSerialization.h
+    ../src/workspace/WorkspaceSerialization.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+)
+
+target_link_libraries(
+    WorkspaceSerializationTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME WorkspaceSerializationTests
+    COMMAND WorkspaceSerializationTests
+)
