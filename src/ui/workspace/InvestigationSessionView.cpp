@@ -487,9 +487,16 @@ InvestigationSessionPresentationState
             m_eventDetailPanel
                 ->capturePresentationState();
     }
+
     if (m_timelinePanel != nullptr) {
         state.timeline =
             m_timelinePanel
+                ->capturePresentationState();
+    }
+
+    if (m_reviewPanel != nullptr) {
+        state.review =
+            m_reviewPanel
                 ->capturePresentationState();
     }
 
@@ -535,6 +542,13 @@ void InvestigationSessionView::
         m_timelinePanel
             ->restorePresentationState(
                 state.timeline
+                );
+    }
+
+    if (m_reviewPanel != nullptr) {
+        m_reviewPanel
+            ->restorePresentationState(
+                state.review
                 );
     }
 }

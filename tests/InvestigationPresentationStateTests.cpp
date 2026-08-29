@@ -2,13 +2,18 @@
 
 #include <QCoreApplication>
 
+#include <memory>
 #include <utility>
 
 #include "../src/domain/InvestigationRecord.h"
 #include "../src/importing/ImportProfile.h"
 #include "../src/importing/ImportResult.h"
+#include "../src/ui/investigation/InvestigationAnalyticsPanel.h"
 #include "../src/ui/investigation/InvestigationEventDetailPanel.h"
 #include "../src/ui/investigation/InvestigationEventPanel.h"
+#include "../src/ui/investigation/InvestigationFindingsPanel.h"
+#include "../src/ui/investigation/InvestigationIssueSummaryPanel.h"
+#include "../src/ui/investigation/InvestigationReviewPanel.h"
 #include "../src/ui/investigation/InvestigationTimelinePanel.h"
 #include "../src/workspace/InvestigationPresentationState.h"
 #include "../src/workspace/InvestigationSession.h"
@@ -87,6 +92,136 @@ InvestigationSession makeSession()
         );
 }
 
+std::unique_ptr<InvestigationSession>
+makeAnalyticsSession()
+{
+    ImportResult result;
+
+    for (int index = 0;
+         index < 150;
+         ++index) {
+        InvestigationRecord record;
+
+        record.recordId =
+            QStringLiteral("analytics-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.timestamp =
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-29T12:00:00Z"
+                    ),
+                Qt::ISODate
+                )
+                .addSecs(index);
+
+        const bool firstBurst =
+            index >= 5
+            && index <= 9;
+
+        const bool secondBurst =
+            index >= 50
+            && index <= 69;
+
+        const bool thirdBurst =
+            index >= 110
+            && index <= 114;
+
+        record.severity =
+            firstBurst
+                    || secondBurst
+                    || thirdBurst
+                ? RecordSeverity::Warning
+                : RecordSeverity::Info;
+
+        record.subsystem =
+            QStringLiteral("Subsystem-%1")
+                .arg(index % 6);
+
+        record.eventCode =
+            QStringLiteral("EVT-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.entityId =
+            QStringLiteral("Entity-%1")
+                .arg(
+                    index % 30,
+                    2,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.message =
+            QStringLiteral("Analytics event %1")
+                .arg(index);
+
+        record.source.sourcePath =
+            QStringLiteral(
+                "analytics-presentation-test.jsonl"
+                );
+
+        record.source.sourceName =
+            QStringLiteral(
+                "analytics-presentation-test.jsonl"
+                );
+
+        record.source.recordNumber =
+            index + 1;
+
+        result.records.append(
+            std::move(record)
+            );
+    }
+
+    result.processedRecordCount =
+        result.records.size();
+
+    ImportProfile profile;
+
+    auto session =
+        std::make_unique<InvestigationSession>(
+            QStringLiteral(
+                "analytics-presentation-test.jsonl"
+                ),
+            std::move(profile),
+            std::move(result)
+            );
+
+    session->setBurstTimingMode(
+        InvestigationBurstTimingMode::Manual
+        );
+
+    BurstDetectionSettings settings;
+
+    settings.windowMilliseconds =
+        4000;
+
+    settings.elevatedEventThreshold =
+        3;
+
+    settings.errorCriticalThreshold =
+        100;
+
+    settings.mergeGapMilliseconds =
+        0;
+
+    session->setBurstDetectionSettings(
+        settings
+        );
+
+    return session;
+}
+
 void processUi()
 {
     QCoreApplication::processEvents();
@@ -103,6 +238,10 @@ private slots:
     void eventTablePresentationRoundTrips();
     void eventDetailScrollRoundTrips();
     void timelinePresentationRoundTrips();
+    void issueSummaryPresentationRoundTrips();
+    void findingsPresentationRoundTrips();
+    void analyticsPresentationRoundTrips();
+    void reviewPresentationRoundTrips();
 };
 
 void InvestigationPresentationStateTests::
@@ -607,6 +746,949 @@ void InvestigationPresentationStateTests::
     QCOMPARE(
         automaticEffective.horizontalScrollValue,
         0
+        );
+}
+
+void InvestigationPresentationStateTests::
+    issueSummaryPresentationRoundTrips()
+{
+    InvestigationIssueSummaryPanel panel;
+
+    panel.resize(
+        360,
+        180
+        );
+
+    QVector<InvestigationRecord> records;
+
+    /*
+     * Give every record its own subsystem so the
+     * grouped summary contains enough rows to make
+     * vertical scrolling meaningful.
+     */
+    for (int index = 0;
+         index < 60;
+         ++index) {
+        InvestigationRecord record;
+
+        record.recordId =
+            QStringLiteral("issue-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.subsystem =
+            QStringLiteral("Subsystem %1")
+                .arg(
+                    index,
+                    2,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.severity =
+            index % 2 == 0
+                ? RecordSeverity::Warning
+                : RecordSeverity::Error;
+
+        records.append(
+            std::move(record)
+            );
+    }
+
+    panel.updateRecords(
+        records
+        );
+
+    panel.show();
+
+    processUi();
+
+    InvestigationTablePresentationState
+        desired;
+
+    desired.currentRow = 40;
+    desired.currentColumn = 2;
+    desired.scroll.verticalValue = 12;
+
+    panel.restorePresentationState(
+        desired
+        );
+
+    processUi();
+
+    /*
+     * Capture the effective state after Qt has applied
+     * widget geometry. Scroll ranges can vary with the
+     * platform and window-system plugin, so this
+     * effective state — rather than the originally
+     * requested values — represents what a real
+     * workspace Save operation would persist.
+     */
+    const InvestigationTablePresentationState
+        saved =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.currentRow,
+        40
+        );
+
+    QCOMPARE(
+        saved.currentColumn,
+        2
+        );
+
+    QVERIFY(
+        saved.scroll.verticalValue > 0
+        );
+
+    InvestigationTablePresentationState
+        disturbed;
+
+    disturbed.currentRow = 1;
+    disturbed.currentColumn = 0;
+    disturbed.scroll.verticalValue = 0;
+
+    panel.restorePresentationState(
+        disturbed
+        );
+
+    processUi();
+
+    const InvestigationTablePresentationState
+        disturbedEffective =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        disturbedEffective.currentRow,
+        1
+        );
+
+    QCOMPARE(
+        disturbedEffective.currentColumn,
+        0
+        );
+
+    /*
+     * Restore the state a workspace Save operation
+     * would have captured.
+     */
+    panel.restorePresentationState(
+        saved
+        );
+
+    processUi();
+
+    const InvestigationTablePresentationState
+        restored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        restored.currentRow,
+        saved.currentRow
+        );
+
+    QCOMPARE(
+        restored.currentColumn,
+        saved.currentColumn
+        );
+
+    QCOMPARE(
+        restored.scroll.horizontalValue,
+        saved.scroll.horizontalValue
+        );
+
+    QCOMPARE(
+        restored.scroll.verticalValue,
+        saved.scroll.verticalValue
+        );
+}
+
+void InvestigationPresentationStateTests::
+    findingsPresentationRoundTrips()
+{
+    InvestigationSession session =
+        makeSession();
+
+    /*
+     * Findings are derived from persistent
+     * InvestigationStateStore classifications rather
+     * than directly from the currently filtered
+     * record collection.
+     */
+    for (int index = 0;
+         index < 100;
+         ++index) {
+        const QString recordId =
+            QStringLiteral("record-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        session
+            .investigationStateStore()
+            ->setFindingStatus(
+                recordId,
+                index % 3 == 0
+                    ? FindingStatus::Resolved
+                    : FindingStatus::Open
+                );
+
+        session
+            .investigationStateStore()
+            ->setNote(
+                recordId,
+                QStringLiteral(
+                    "Finding for record %1"
+                    )
+                    .arg(index)
+                );
+    }
+
+    InvestigationFindingsPanel panel;
+
+    panel.resize(
+        420,
+        180
+        );
+
+    panel.setSession(
+        &session
+        );
+
+    panel.show();
+
+    processUi();
+
+    InvestigationTablePresentationState
+        desired;
+
+    desired.currentRow = 40;
+    desired.currentColumn = 3;
+    desired.scroll.verticalValue = 20;
+
+    panel.restorePresentationState(
+        desired
+        );
+
+    processUi();
+
+    /*
+     * Capture the effective state after Qt has applied
+     * widget geometry. Scroll ranges can vary with the
+     * platform and window-system plugin, so this
+     * effective state — rather than the originally
+     * requested values — represents what a real
+     * workspace Save operation would persist.
+     */
+    const InvestigationTablePresentationState
+        saved =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.currentRow,
+        40
+        );
+
+    QCOMPARE(
+        saved.currentColumn,
+        3
+        );
+
+    QVERIFY(
+        saved.scroll.verticalValue > 0
+        );
+
+    InvestigationTablePresentationState
+        disturbed;
+
+    disturbed.currentRow = 2;
+    disturbed.currentColumn = 0;
+    disturbed.scroll.verticalValue = 0;
+
+    panel.restorePresentationState(
+        disturbed
+        );
+
+    processUi();
+
+    const InvestigationTablePresentationState
+        disturbedEffective =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        disturbedEffective.currentRow,
+        2
+        );
+
+    QCOMPARE(
+        disturbedEffective.currentColumn,
+        0
+        );
+
+    panel.restorePresentationState(
+        saved
+        );
+
+    processUi();
+
+    const InvestigationTablePresentationState
+        restored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        restored.currentRow,
+        saved.currentRow
+        );
+
+    QCOMPARE(
+        restored.currentColumn,
+        saved.currentColumn
+        );
+
+    QCOMPARE(
+        restored.scroll.horizontalValue,
+        saved.scroll.horizontalValue
+        );
+
+    QCOMPARE(
+        restored.scroll.verticalValue,
+        saved.scroll.verticalValue
+        );
+}
+
+void InvestigationPresentationStateTests::
+    analyticsPresentationRoundTrips()
+{
+    auto session =
+        makeAnalyticsSession();
+
+    InvestigationAnalyticsPanel panel;
+
+    panel.resize(
+        520,
+        220
+        );
+
+    panel.setSession(
+        session.get()
+        );
+
+    panel.updateRecords(
+        session
+            ->investigationController()
+            ->recordsForAnalysis()
+        );
+
+    panel.show();
+
+    processUi();
+
+    InvestigationAnalyticsPresentationState
+        desired =
+        panel.capturePresentationState();
+
+    desired.selectedTab =
+        InvestigationAnalyticsTab::Bursts;
+
+    desired.overviewSplitterSizes = {
+        180,
+        320
+    };
+
+    desired.eventCodeTable.currentRow =
+        80;
+
+    desired.eventCodeTable.currentColumn =
+        1;
+
+    desired.eventCodeTable
+        .scroll.verticalValue =
+        50;
+
+    desired.entityTable.currentRow =
+        7;
+
+    desired.entityTable.currentColumn =
+        0;
+
+    desired.entityTable
+        .scroll.verticalValue =
+        4;
+
+    desired.burstSplitterSizes = {
+        300,
+        200
+    };
+
+    desired.burstTable.currentRow =
+        1;
+
+    desired.burstTable.currentColumn =
+        2;
+
+    desired.selectedBurstStartTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:00:50Z"
+                ),
+            Qt::ISODate
+            );
+
+    desired.selectedBurstEndTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:01:09Z"
+                ),
+            Qt::ISODate
+            );
+
+    desired.burstDetailScroll.verticalValue =
+        12;
+
+    panel.restorePresentationState(
+        desired
+        );
+
+    processUi();
+
+    /*
+     * Capture effective Qt state rather than
+     * assuming requested splitter sizes or scroll
+     * positions survive platform-specific layout
+     * normalization unchanged.
+     */
+    const InvestigationAnalyticsPresentationState
+        saved =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.selectedTab,
+        InvestigationAnalyticsTab::Bursts
+        );
+
+    QCOMPARE(
+        saved.eventCodeTable.currentRow,
+        80
+        );
+
+    QCOMPARE(
+        saved.eventCodeTable.currentColumn,
+        1
+        );
+
+    QCOMPARE(
+        saved.entityTable.currentRow,
+        7
+        );
+
+    QCOMPARE(
+        saved.entityTable.currentColumn,
+        0
+        );
+
+    QCOMPARE(
+        saved.burstTable.currentRow,
+        1
+        );
+
+    QVERIFY(
+        saved.selectedBurstStartTimestamp
+            .has_value()
+        );
+
+    QVERIFY(
+        saved.selectedBurstEndTimestamp
+            .has_value()
+        );
+
+    QCOMPARE(
+        saved.selectedBurstStartTimestamp
+            .value(),
+        desired.selectedBurstStartTimestamp
+            .value()
+        );
+
+    QCOMPARE(
+        saved.selectedBurstEndTimestamp
+            .value(),
+        desired.selectedBurstEndTimestamp
+            .value()
+        );
+
+    QCOMPARE(
+        saved.overviewSplitterSizes.size(),
+        2
+        );
+
+    QCOMPARE(
+        saved.burstSplitterSizes.size(),
+        2
+        );
+
+    for (const int size
+         : saved.overviewSplitterSizes) {
+        QVERIFY(size > 0);
+    }
+
+    for (const int size
+         : saved.burstSplitterSizes) {
+        QVERIFY(size > 0);
+    }
+
+    /*
+     * The long middle burst should make this a
+     * genuinely scrollable explanation surface.
+     */
+    QVERIFY(
+        saved.burstDetailScroll
+            .verticalValue
+        > 0
+        );
+
+    InvestigationAnalyticsPresentationState
+        disturbed =
+        saved;
+
+    disturbed.selectedTab =
+        InvestigationAnalyticsTab::Overview;
+
+    disturbed.overviewSplitterSizes = {
+        350,
+        150
+    };
+
+    disturbed.eventCodeTable.currentRow =
+        2;
+
+    disturbed.eventCodeTable.currentColumn =
+        0;
+
+    disturbed.eventCodeTable
+        .scroll.verticalValue =
+        0;
+
+    disturbed.entityTable.currentRow =
+        1;
+
+    disturbed.entityTable.currentColumn =
+        1;
+
+    disturbed.burstSplitterSizes = {
+        150,
+        350
+    };
+
+    disturbed.burstTable.currentRow =
+        0;
+
+    disturbed.burstTable.currentColumn =
+        0;
+
+    disturbed.selectedBurstStartTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:00:05Z"
+                ),
+            Qt::ISODate
+            );
+
+    disturbed.selectedBurstEndTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:00:09Z"
+                ),
+            Qt::ISODate
+            );
+
+    disturbed.burstDetailScroll.verticalValue =
+        0;
+
+    panel.restorePresentationState(
+        disturbed
+        );
+
+    processUi();
+
+    const InvestigationAnalyticsPresentationState
+        disturbedEffective =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        disturbedEffective.selectedTab,
+        InvestigationAnalyticsTab::Overview
+        );
+
+    QCOMPARE(
+        disturbedEffective.burstTable.currentRow,
+        0
+        );
+
+    QCOMPARE(
+        disturbedEffective.burstDetailScroll
+            .verticalValue,
+        0
+        );
+
+    /*
+     * Restore exactly what a workspace Save
+     * operation captured.
+     */
+    panel.restorePresentationState(
+        saved
+        );
+
+    processUi();
+
+    const InvestigationAnalyticsPresentationState
+        restored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        restored.selectedTab,
+        saved.selectedTab
+        );
+
+    QCOMPARE(
+        restored.overviewSplitterSizes,
+        saved.overviewSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.eventCodeTable.currentRow,
+        saved.eventCodeTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.eventCodeTable.currentColumn,
+        saved.eventCodeTable.currentColumn
+        );
+
+    QCOMPARE(
+        restored.eventCodeTable
+            .scroll.horizontalValue,
+        saved.eventCodeTable
+            .scroll.horizontalValue
+        );
+
+    QCOMPARE(
+        restored.eventCodeTable
+            .scroll.verticalValue,
+        saved.eventCodeTable
+            .scroll.verticalValue
+        );
+
+    QCOMPARE(
+        restored.entityTable.currentRow,
+        saved.entityTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.entityTable.currentColumn,
+        saved.entityTable.currentColumn
+        );
+
+    QCOMPARE(
+        restored.entityTable
+            .scroll.horizontalValue,
+        saved.entityTable
+            .scroll.horizontalValue
+        );
+
+    QCOMPARE(
+        restored.entityTable
+            .scroll.verticalValue,
+        saved.entityTable
+            .scroll.verticalValue
+        );
+
+    QCOMPARE(
+        restored.burstSplitterSizes,
+        saved.burstSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.selectedBurstStartTimestamp,
+        saved.selectedBurstStartTimestamp
+        );
+
+    QCOMPARE(
+        restored.selectedBurstEndTimestamp,
+        saved.selectedBurstEndTimestamp
+        );
+
+    QCOMPARE(
+        restored.burstTable.currentRow,
+        saved.burstTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.burstTable.currentColumn,
+        saved.burstTable.currentColumn
+        );
+
+    /*
+     * QPlainTextEdit can slightly normalize its
+     * scrollbar position after tab/splitter geometry
+     * settles. Verify that the saved non-zero viewport
+     * position was meaningfully restored rather than
+     * requiring an identical platform-dependent
+     * scrollbar value.
+     */
+    QVERIFY(
+        restored.burstDetailScroll
+            .verticalValue
+        > 0
+        );
+}
+
+void InvestigationPresentationStateTests::
+    reviewPresentationRoundTrips()
+{
+    auto session =
+        makeAnalyticsSession();
+
+    /*
+     * Populate enough findings for the Findings
+     * child state to be meaningful.
+     */
+    for (int index = 0;
+         index < 30;
+         ++index) {
+        const QString recordId =
+            QStringLiteral("analytics-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        session
+            ->investigationStateStore()
+            ->setFindingStatus(
+                recordId,
+                FindingStatus::Open
+                );
+
+        session
+            ->investigationStateStore()
+            ->setNote(
+                recordId,
+                QStringLiteral(
+                    "Review finding %1"
+                    )
+                    .arg(index)
+                );
+    }
+
+    InvestigationReviewPanel panel;
+
+    panel.resize(
+        620,
+        260
+        );
+
+    panel.setSession(
+        session.get()
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        session
+            ->investigationController()
+            ->recordsForAnalysis();
+
+    panel.issueSummaryPanel()
+        ->updateRecords(
+            records
+            );
+
+    panel.findingsPanel()
+        ->refresh();
+
+    panel.analyticsPanel()
+        ->updateRecords(
+            records
+            );
+
+    panel.setIssueSummaryAvailable(
+        true
+        );
+
+    panel.show();
+
+    processUi();
+
+    InvestigationReviewPresentationState
+        desired =
+        panel.capturePresentationState();
+
+    desired.selectedTab =
+        InvestigationReviewTab::Analytics;
+
+    desired.issueSummaryTable.currentRow =
+        2;
+
+    desired.issueSummaryTable.currentColumn =
+        3;
+
+    desired.findingsTable.currentRow =
+        12;
+
+    desired.findingsTable.currentColumn =
+        3;
+
+    desired.analytics.selectedTab =
+        InvestigationAnalyticsTab::Bursts;
+
+    desired.analytics.burstTable.currentRow =
+        1;
+
+    desired.analytics.burstTable.currentColumn =
+        0;
+
+    desired.analytics
+        .selectedBurstStartTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:00:50Z"
+                ),
+            Qt::ISODate
+            );
+
+    desired.analytics
+        .selectedBurstEndTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:01:09Z"
+                ),
+            Qt::ISODate
+            );
+
+    panel.restorePresentationState(
+        desired
+        );
+
+    processUi();
+
+    const InvestigationReviewPresentationState
+        saved =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.selectedTab,
+        InvestigationReviewTab::Analytics
+        );
+
+    QCOMPARE(
+        saved.issueSummaryTable.currentRow,
+        2
+        );
+
+    QCOMPARE(
+        saved.findingsTable.currentRow,
+        12
+        );
+
+    QCOMPARE(
+        saved.analytics.selectedTab,
+        InvestigationAnalyticsTab::Bursts
+        );
+
+    QVERIFY(
+        saved.analytics
+            .selectedBurstStartTimestamp
+            .has_value()
+        );
+
+    InvestigationReviewPresentationState
+        disturbed =
+        saved;
+
+    disturbed.selectedTab =
+        InvestigationReviewTab::Findings;
+
+    disturbed.issueSummaryTable.currentRow =
+        0;
+
+    disturbed.findingsTable.currentRow =
+        1;
+
+    disturbed.analytics.selectedTab =
+        InvestigationAnalyticsTab::Overview;
+
+    panel.restorePresentationState(
+        disturbed
+        );
+
+    processUi();
+
+    QCOMPARE(
+        panel.capturePresentationState()
+            .selectedTab,
+        InvestigationReviewTab::Findings
+        );
+
+    panel.restorePresentationState(
+        saved
+        );
+
+    processUi();
+
+    const InvestigationReviewPresentationState
+        restored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        restored.selectedTab,
+        saved.selectedTab
+        );
+
+    QCOMPARE(
+        restored.issueSummaryTable.currentRow,
+        saved.issueSummaryTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.issueSummaryTable.currentColumn,
+        saved.issueSummaryTable.currentColumn
+        );
+
+    QCOMPARE(
+        restored.findingsTable.currentRow,
+        saved.findingsTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.findingsTable.currentColumn,
+        saved.findingsTable.currentColumn
+        );
+
+    QCOMPARE(
+        restored.analytics.selectedTab,
+        saved.analytics.selectedTab
+        );
+
+    QCOMPARE(
+        restored.analytics
+            .selectedBurstStartTimestamp,
+        saved.analytics
+            .selectedBurstStartTimestamp
+        );
+
+    QCOMPARE(
+        restored.analytics
+            .selectedBurstEndTimestamp,
+        saved.analytics
+            .selectedBurstEndTimestamp
         );
 }
 

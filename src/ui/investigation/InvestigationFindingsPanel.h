@@ -2,6 +2,8 @@
 
 #include <QWidget>
 
+#include "../../workspace/InvestigationPresentationState.h"
+
 class InvestigationSession;
 class QLabel;
 class QTableWidget;
@@ -25,6 +27,13 @@ public:
     void refresh();
 
     void clear();
+
+    InvestigationTablePresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationTablePresentationState &state
+        );
 
 signals:
     void findingActivated(

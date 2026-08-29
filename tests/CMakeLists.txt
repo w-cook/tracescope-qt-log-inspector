@@ -1270,6 +1270,33 @@ qt_add_executable(
 
     ../src/analysis/AnalysisTimeBucketRange.h
     ../src/analysis/AnalysisTimeBucketRange.cpp
+
+    ../src/ui/investigation/InvestigationIssueSummaryPanel.h
+    ../src/ui/investigation/InvestigationIssueSummaryPanel.cpp
+
+    ../src/ui/investigation/InvestigationFindingsPanel.h
+    ../src/ui/investigation/InvestigationFindingsPanel.cpp
+
+    ../src/analysis/TelemetryIssueGroup.h
+    ../src/analysis/TelemetryIssueAnalyzer.h
+    ../src/analysis/TelemetryIssueAnalyzer.cpp
+
+    ../src/ui/investigation/InvestigationAnalyticsPanel.h
+    ../src/ui/investigation/InvestigationAnalyticsPanel.cpp
+
+    ../src/ui/investigation/InvestigationReviewPanel.h
+    ../src/ui/investigation/InvestigationReviewPanel.cpp
+
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationValueFrequency.h
 )
 
 target_link_libraries(

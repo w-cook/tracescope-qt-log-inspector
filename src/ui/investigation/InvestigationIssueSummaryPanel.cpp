@@ -6,6 +6,9 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
+#include <QSignalBlocker>
+
+#include <algorithm>
 
 #include "../../analysis/TelemetryIssueGroup.h"
 
@@ -288,6 +291,94 @@ int InvestigationIssueSummaryPanel::
 
     return preferredTableWidth
            + 30;
+}
+
+InvestigationTablePresentationState
+    InvestigationIssueSummaryPanel::
+    capturePresentationState() const
+{
+    InvestigationTablePresentationState
+        state;
+
+    if (m_table == nullptr) {
+        return state;
+    }
+
+    const QModelIndex currentIndex =
+        m_table->currentIndex();
+
+    if (currentIndex.isValid()) {
+        state.currentRow =
+            currentIndex.row();
+
+        state.currentColumn =
+            currentIndex.column();
+    }
+
+    if (QScrollBar *horizontal =
+        m_table->horizontalScrollBar();
+        horizontal != nullptr) {
+        state.scroll.horizontalValue =
+            horizontal->value();
+    }
+
+    if (QScrollBar *vertical =
+        m_table->verticalScrollBar();
+        vertical != nullptr) {
+        state.scroll.verticalValue =
+            vertical->value();
+    }
+
+    return state;
+}
+
+void InvestigationIssueSummaryPanel::
+    restorePresentationState(
+        const InvestigationTablePresentationState
+            &state
+        )
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    m_table->clearSelection();
+
+    if (state.currentRow >= 0
+        && state.currentRow
+               < m_table->rowCount()
+        && state.currentColumn >= 0
+        && state.currentColumn
+               < m_table->columnCount()) {
+        m_table->setCurrentCell(
+            state.currentRow,
+            state.currentColumn
+            );
+    }
+
+    if (QScrollBar *horizontal =
+        m_table->horizontalScrollBar();
+        horizontal != nullptr) {
+        horizontal->setValue(
+            std::clamp(
+                state.scroll.horizontalValue,
+                horizontal->minimum(),
+                horizontal->maximum()
+                )
+            );
+    }
+
+    if (QScrollBar *vertical =
+        m_table->verticalScrollBar();
+        vertical != nullptr) {
+        vertical->setValue(
+            std::clamp(
+                state.scroll.verticalValue,
+                vertical->minimum(),
+                vertical->maximum()
+                )
+            );
+    }
 }
 
 void InvestigationIssueSummaryPanel::

@@ -22,6 +22,7 @@
 #include <QTableWidgetItem>
 #include <QTabWidget>
 #include <QVBoxLayout>
+#include <QScrollBar>
 
 #include "../../analysis/BurstDetectionSettings.h"
 #include "../../analysis/InvestigationCadence.h"
@@ -101,6 +102,92 @@ QString formatDurationMilliseconds(
             );
 }
 
+InvestigationTablePresentationState
+captureTablePresentationState(
+    const QTableWidget *table
+    )
+{
+    InvestigationTablePresentationState
+        state;
+
+    if (table == nullptr) {
+        return state;
+    }
+
+    const QModelIndex currentIndex =
+        table->currentIndex();
+
+    if (currentIndex.isValid()) {
+        state.currentRow =
+            currentIndex.row();
+
+        state.currentColumn =
+            currentIndex.column();
+    }
+
+    if (const QScrollBar *horizontal =
+        table->horizontalScrollBar();
+        horizontal != nullptr) {
+        state.scroll.horizontalValue =
+            horizontal->value();
+    }
+
+    if (const QScrollBar *vertical =
+        table->verticalScrollBar();
+        vertical != nullptr) {
+        state.scroll.verticalValue =
+            vertical->value();
+    }
+
+    return state;
+}
+
+void restoreTablePresentationState(
+    QTableWidget *table,
+    const InvestigationTablePresentationState &state
+    )
+{
+    if (table == nullptr) {
+        return;
+    }
+
+    table->clearSelection();
+
+    if (state.currentRow >= 0
+        && state.currentRow < table->rowCount()
+        && state.currentColumn >= 0
+        && state.currentColumn
+               < table->columnCount()) {
+        table->setCurrentCell(
+            state.currentRow,
+            state.currentColumn
+            );
+    }
+
+    if (QScrollBar *horizontal =
+        table->horizontalScrollBar();
+        horizontal != nullptr) {
+        horizontal->setValue(
+            std::clamp(
+                state.scroll.horizontalValue,
+                horizontal->minimum(),
+                horizontal->maximum()
+                )
+            );
+    }
+
+    if (QScrollBar *vertical =
+        table->verticalScrollBar();
+        vertical != nullptr) {
+        vertical->setValue(
+            std::clamp(
+                state.scroll.verticalValue,
+                vertical->minimum(),
+                vertical->maximum()
+                )
+            );
+    }
+}
 }
 
 InvestigationAnalyticsPanel::
@@ -179,7 +266,7 @@ InvestigationAnalyticsPanel::
         m_overviewEmptyLabel
         );
 
-    auto *overviewSplitter =
+    m_overviewSplitter =
         new QSplitter(
             Qt::Horizontal,
             m_overviewPage
@@ -192,7 +279,7 @@ InvestigationAnalyticsPanel::
     m_eventCodeGroup =
         new QGroupBox(
             tr("Event Code Frequencies"),
-            overviewSplitter
+            m_overviewSplitter
             );
 
     auto *eventCodeLayout =
@@ -256,7 +343,7 @@ InvestigationAnalyticsPanel::
     m_entityGroup =
         new QGroupBox(
             tr("Top Entities"),
-            overviewSplitter
+            m_overviewSplitter
             );
 
     auto *entityLayout =
@@ -313,26 +400,26 @@ InvestigationAnalyticsPanel::
         m_entityTable
         );
 
-    overviewSplitter->addWidget(
+    m_overviewSplitter->addWidget(
         m_eventCodeGroup
         );
 
-    overviewSplitter->addWidget(
+    m_overviewSplitter->addWidget(
         m_entityGroup
         );
 
-    overviewSplitter->setStretchFactor(
+    m_overviewSplitter->setStretchFactor(
         0,
         1
         );
 
-    overviewSplitter->setStretchFactor(
+    m_overviewSplitter->setStretchFactor(
         1,
         1
         );
 
     overviewLayout->addWidget(
-        overviewSplitter
+        m_overviewSplitter
         );
 
     /*
@@ -409,7 +496,7 @@ InvestigationAnalyticsPanel::
         burstToolbar
         );
 
-    auto *burstSplitter =
+    m_burstSplitter =
         new QSplitter(
             Qt::Horizontal,
             m_burstsPage
@@ -422,7 +509,7 @@ InvestigationAnalyticsPanel::
     auto *burstListGroup =
         new QGroupBox(
             tr("Detected Bursts"),
-            burstSplitter
+            m_burstSplitter
             );
 
     auto *burstListLayout =
@@ -533,7 +620,7 @@ InvestigationAnalyticsPanel::
     auto *burstDetailGroup =
         new QGroupBox(
             tr("Burst Explanation"),
-            burstSplitter
+            m_burstSplitter
             );
 
     auto *burstDetailLayout =
@@ -572,26 +659,26 @@ InvestigationAnalyticsPanel::
         m_burstDetailText
         );
 
-    burstSplitter->addWidget(
+    m_burstSplitter->addWidget(
         burstListGroup
         );
 
-    burstSplitter->addWidget(
+    m_burstSplitter->addWidget(
         burstDetailGroup
         );
 
-    burstSplitter->setStretchFactor(
+    m_burstSplitter->setStretchFactor(
         0,
         3
         );
 
-    burstSplitter->setStretchFactor(
+    m_burstSplitter->setStretchFactor(
         1,
         2
         );
 
     burstsLayout->addWidget(
-        burstSplitter
+        m_burstSplitter
         );
 
     /*
@@ -727,6 +814,243 @@ void InvestigationAnalyticsPanel::clear()
     setSession(
         nullptr
         );
+}
+
+InvestigationAnalyticsPresentationState
+    InvestigationAnalyticsPanel::
+    capturePresentationState() const
+{
+    InvestigationAnalyticsPresentationState
+        state;
+
+    /*
+     * Capture the actual visible Analytics page
+     * rather than relying only on session state.
+     */
+    if (m_tabs != nullptr
+        && m_tabs->currentWidget()
+               == m_burstsPage) {
+        state.selectedTab =
+            InvestigationAnalyticsTab::Bursts;
+    } else {
+        state.selectedTab =
+            InvestigationAnalyticsTab::Overview;
+    }
+
+    if (m_overviewSplitter != nullptr) {
+        state.overviewSplitterSizes =
+            m_overviewSplitter->sizes();
+    }
+
+    state.eventCodeTable =
+        captureTablePresentationState(
+            m_eventCodeTable
+            );
+
+    state.entityTable =
+        captureTablePresentationState(
+            m_entityTable
+            );
+
+    if (m_burstSplitter != nullptr) {
+        state.burstSplitterSizes =
+            m_burstSplitter->sizes();
+    }
+
+    state.burstTable =
+        captureTablePresentationState(
+            m_burstTable
+            );
+
+    /*
+     * Preserve burst selection using its semantic
+     * identity rather than relying only on a row
+     * number.
+     */
+    if (m_burstTable != nullptr) {
+        const int row =
+            m_burstTable
+                ->currentRow();
+
+        if (row >= 0
+            && row < m_currentBursts.size()) {
+            const InvestigationBurst &burst =
+                m_currentBursts.at(row);
+
+            state.selectedBurstStartTimestamp =
+                burst.startTimestamp;
+
+            state.selectedBurstEndTimestamp =
+                burst.endTimestamp;
+        }
+    }
+
+    if (m_burstDetailText != nullptr) {
+        if (const QScrollBar *horizontal =
+            m_burstDetailText
+                ->horizontalScrollBar();
+            horizontal != nullptr) {
+            state.burstDetailScroll
+                .horizontalValue =
+                horizontal->value();
+        }
+
+        if (const QScrollBar *vertical =
+            m_burstDetailText
+                ->verticalScrollBar();
+            vertical != nullptr) {
+            state.burstDetailScroll
+                .verticalValue =
+                vertical->value();
+        }
+    }
+
+    return state;
+}
+
+void InvestigationAnalyticsPanel::
+    restorePresentationState(
+        const InvestigationAnalyticsPresentationState
+            &state
+        )
+{
+    /*
+     * Preserve the existing InvestigationSession
+     * ownership of the preferred Analytics tab.
+     */
+    if (m_session != nullptr) {
+        m_session->setAnalyticsTab(
+            state.selectedTab
+            );
+
+        restoreSelectedTab();
+    }
+
+    /*
+     * QSplitter may normalize requested sizes based
+     * on its effective geometry. That is expected;
+     * Save captures the resulting effective sizes.
+     */
+    if (m_overviewSplitter != nullptr
+        && state.overviewSplitterSizes.size()
+               == m_overviewSplitter->count()) {
+        m_overviewSplitter->setSizes(
+            state.overviewSplitterSizes
+            );
+    }
+
+    restoreTablePresentationState(
+        m_eventCodeTable,
+        state.eventCodeTable
+        );
+
+    restoreTablePresentationState(
+        m_entityTable,
+        state.entityTable
+        );
+
+    if (m_burstSplitter != nullptr
+        && state.burstSplitterSizes.size()
+               == m_burstSplitter->count()) {
+        m_burstSplitter->setSizes(
+            state.burstSplitterSizes
+            );
+    }
+
+    /*
+     * Restore the generic burst-table state first.
+     * If the saved burst still exists, semantic
+     * identity takes precedence over its old row.
+     */
+    restoreTablePresentationState(
+        m_burstTable,
+        state.burstTable
+        );
+
+    int selectedBurstRow =
+        -1;
+
+    if (state.selectedBurstStartTimestamp
+            .has_value()
+        && state.selectedBurstEndTimestamp
+               .has_value()) {
+        for (int row = 0;
+             row < m_currentBursts.size();
+             ++row) {
+            const InvestigationBurst &burst =
+                m_currentBursts.at(row);
+
+            if (burst.startTimestamp
+                    == state
+                           .selectedBurstStartTimestamp
+                           .value()
+                && burst.endTimestamp
+                       == state
+                              .selectedBurstEndTimestamp
+                              .value()) {
+                selectedBurstRow =
+                    row;
+
+                break;
+            }
+        }
+    }
+
+    if (selectedBurstRow >= 0) {
+        m_burstTable->selectRow(
+            selectedBurstRow
+            );
+
+        updateBurstDetail(
+            selectedBurstRow
+            );
+    } else if (m_burstTable != nullptr) {
+        const int currentRow =
+            m_burstTable->currentRow();
+
+        if (currentRow >= 0
+            && currentRow
+                   < m_currentBursts.size()) {
+            updateBurstDetail(
+                currentRow
+                );
+        }
+    }
+
+    /*
+     * updateBurstDetail() replaces the detail text
+     * and therefore resets its viewport. Restore the
+     * saved text position only afterward.
+     */
+    if (m_burstDetailText != nullptr) {
+        if (QScrollBar *horizontal =
+            m_burstDetailText
+                ->horizontalScrollBar();
+            horizontal != nullptr) {
+            horizontal->setValue(
+                std::clamp(
+                    state.burstDetailScroll
+                        .horizontalValue,
+                    horizontal->minimum(),
+                    horizontal->maximum()
+                    )
+                );
+        }
+
+        if (QScrollBar *vertical =
+            m_burstDetailText
+                ->verticalScrollBar();
+            vertical != nullptr) {
+            vertical->setValue(
+                std::clamp(
+                    state.burstDetailScroll
+                        .verticalValue,
+                    vertical->minimum(),
+                    vertical->maximum()
+                    )
+                );
+        }
+    }
 }
 
 void InvestigationAnalyticsPanel::
