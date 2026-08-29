@@ -9,6 +9,7 @@
 #include <QStringList>
 
 #include "InvestigationPresentationState.h"
+#include "WorkspaceDocumentLayoutState.h"
 
 #include "../analysis/BurstDetectionSettings.h"
 #include "../analysis/InvestigationSessionComparison.h"
@@ -105,4 +106,7 @@ struct WorkspacePersistenceState
 
     QVector<PersistedInvestigationComparison>
         comparisons;
+
+    WorkspaceDocumentLayoutState
+        documentLayout;
 };

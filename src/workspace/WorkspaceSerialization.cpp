@@ -12,6 +12,7 @@
 
 #include "InvestigationComparisonPersistenceSerialization.h"
 #include "InvestigationPresentationStateSerialization.h"
+#include "WorkspaceDocumentLayoutSerialization.h"
 
 #include "../importing/ImportProfileSerialization.h"
 
@@ -470,6 +471,16 @@ QByteArray WorkspaceSerializer::serialize(
     root.insert(
         QStringLiteral("comparisons"),
         comparisons
+        );
+
+    const WorkspaceDocumentLayoutSerializer
+        layoutSerializer;
+
+    root.insert(
+        QStringLiteral("documentLayout"),
+        layoutSerializer.serialize(
+            workspace.documentLayout
+            )
         );
 
     return QJsonDocument(root).toJson(
@@ -1087,6 +1098,52 @@ WorkspaceSerializer::deserialize(
                     )
                 );
         }
+    }
+
+    const QJsonValue layoutValue =
+        root.value(
+            QStringLiteral("documentLayout")
+            );
+
+    if (!layoutValue.isUndefined()) {
+        if (!layoutValue.isObject()) {
+            return failure(
+                QStringLiteral(
+                    "INVALID_DOCUMENT_LAYOUT"
+                    ),
+                QStringLiteral(
+                    "The workspace documentLayout "
+                    "field must be an object."
+                    )
+                );
+        }
+
+        const WorkspaceDocumentLayoutSerializer
+            layoutSerializer;
+
+        const WorkspaceDocumentLayoutDeserializationResult
+            layoutResult =
+            layoutSerializer.deserialize(
+                layoutValue.toObject()
+                );
+
+        if (!layoutResult.isSuccess()) {
+            return failure(
+                QStringLiteral(
+                    "INVALID_DOCUMENT_LAYOUT"
+                    ),
+                QStringLiteral(
+                    "The workspace document layout "
+                    "is invalid: %1"
+                    )
+                    .arg(
+                        layoutResult.errorMessage
+                        )
+                );
+        }
+
+        workspace.documentLayout =
+            *layoutResult.layout;
     }
 
     WorkspaceDeserializationResult result;

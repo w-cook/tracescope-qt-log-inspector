@@ -1182,6 +1182,10 @@ qt_add_executable(WorkspaceSerializationTests
     ../src/workspace/InvestigationPresentationStateSerialization.cpp
 
     ../src/analysis/BurstDetectionSettings.h
+
+    ../src/workspace/WorkspaceDocumentLayoutState.h
+    ../src/workspace/WorkspaceDocumentLayoutSerialization.h
+    ../src/workspace/WorkspaceDocumentLayoutSerialization.cpp
 )
 
 target_link_libraries(

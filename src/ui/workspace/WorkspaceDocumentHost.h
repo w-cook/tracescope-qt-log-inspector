@@ -4,6 +4,8 @@
 #include <QVector>
 #include <QWidget>
 
+#include "../../workspace/WorkspaceDocumentLayoutState.h"
+
 class QMenu;
 class DetachedWorkspaceDocumentWindow;
 class WorkspaceDocument;
@@ -75,6 +77,13 @@ public:
     bool redockDocument(
         const QString &documentId,
         int targetIndex = -1
+        );
+
+    WorkspaceDocumentLayoutState
+    captureLayoutState() const;
+
+    void restoreLayoutState(
+        const WorkspaceDocumentLayoutState &state
         );
 
 signals:
@@ -200,6 +209,11 @@ private:
         int preferredIndex = -1
         );
 
+    bool moveLocalDocumentToIndex(
+        const QString &documentId,
+        int targetIndex
+        );
+
     WorkspaceDocumentHost *m_rootHost =
         nullptr;
 
@@ -213,4 +227,6 @@ private:
         m_detachedWindows;
 
     PendingDocumentDrag m_pendingDocumentDrag;
+
+    QString m_activeDocumentId;
 };

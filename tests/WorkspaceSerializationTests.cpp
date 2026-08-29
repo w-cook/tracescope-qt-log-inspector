@@ -22,6 +22,8 @@ private slots:
     void invalidComparisonsCollectionIsRejected();
     void presentationStateRoundTripsThroughJson();
     void missingPresentationStateUsesDefaults();
+    void documentLayoutRoundTripsThroughJson();
+    void missingDocumentLayoutUsesDefaults();
 };
 
 void WorkspaceSerializationTests::
@@ -1288,6 +1290,282 @@ void WorkspaceSerializationTests::
 
     QVERIFY(
         restored.bottomSplitterSizes.isEmpty()
+        );
+}
+
+void WorkspaceSerializationTests::
+    documentLayoutRoundTripsThroughJson()
+{
+    WorkspacePersistenceState original;
+
+    original.documentLayout
+        .dockedGroup
+        .documentIds = {
+        QStringLiteral("session-1"),
+        QStringLiteral("session-2")
+    };
+
+    original.documentLayout
+        .dockedGroup
+        .currentDocumentId =
+        QStringLiteral("session-2");
+
+    DetachedWorkspaceWindowLayoutState detached;
+
+    detached.group.documentIds = {
+        QStringLiteral("session-3"),
+        QStringLiteral("comparison-1")
+    };
+
+    detached.group.currentDocumentId =
+        QStringLiteral("comparison-1");
+
+    detached.geometry =
+        QRect(
+            120,
+            140,
+            720,
+            480
+            );
+
+    detached.maximized = false;
+
+    original.documentLayout
+        .detachedWindows
+        .append(
+            detached
+            );
+
+    original.documentLayout.activeDocumentId =
+        QStringLiteral("comparison-1");
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray json =
+        serializer.serialize(
+            original
+            );
+
+    const QJsonDocument document =
+        QJsonDocument::fromJson(
+            json
+            );
+
+    QVERIFY(
+        document.isObject()
+        );
+
+    const QJsonObject root =
+        document.object();
+
+    QVERIFY(
+        root.value(
+                QStringLiteral(
+                    "documentLayout"
+                    )
+                )
+            .isObject()
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            json
+            );
+
+    QVERIFY(
+        result.isSuccess()
+        );
+
+    QVERIFY(
+        result.workspace.has_value()
+        );
+
+    const WorkspaceDocumentLayoutState
+        &restored =
+        result.workspace
+            ->documentLayout;
+
+    QCOMPARE(
+        restored
+            .dockedGroup
+            .documentIds,
+        original
+            .documentLayout
+            .dockedGroup
+            .documentIds
+        );
+
+    QCOMPARE(
+        restored
+            .dockedGroup
+            .currentDocumentId,
+        original
+            .documentLayout
+            .dockedGroup
+            .currentDocumentId
+        );
+
+    QCOMPARE(
+        restored.detachedWindows.size(),
+        1
+        );
+
+    const DetachedWorkspaceWindowLayoutState
+        &restoredDetached =
+        restored
+            .detachedWindows
+            .first();
+
+    QCOMPARE(
+        restoredDetached
+            .group
+            .documentIds,
+        detached
+            .group
+            .documentIds
+        );
+
+    QCOMPARE(
+        restoredDetached
+            .group
+            .currentDocumentId,
+        detached
+            .group
+            .currentDocumentId
+        );
+
+    QCOMPARE(
+        restoredDetached.geometry,
+        detached.geometry
+        );
+
+    QCOMPARE(
+        restoredDetached.maximized,
+        detached.maximized
+        );
+
+    QCOMPARE(
+        restored.activeDocumentId,
+        original
+            .documentLayout
+            .activeDocumentId
+        );
+}
+
+void WorkspaceSerializationTests::
+    missingDocumentLayoutUsesDefaults()
+{
+    WorkspacePersistenceState original;
+
+    original.documentLayout
+        .dockedGroup
+        .documentIds = {
+            QStringLiteral("session-1")
+        };
+
+    original.documentLayout
+        .dockedGroup
+        .currentDocumentId =
+        QStringLiteral("session-1");
+
+    DetachedWorkspaceWindowLayoutState detached;
+
+    detached.group.documentIds = {
+        QStringLiteral("comparison-1")
+    };
+
+    detached.group.currentDocumentId =
+        QStringLiteral("comparison-1");
+
+    detached.geometry =
+        QRect(
+            100,
+            120,
+            640,
+            480
+            );
+
+    original.documentLayout
+        .detachedWindows
+        .append(
+            detached
+            );
+
+    original.documentLayout.activeDocumentId =
+        QStringLiteral("comparison-1");
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray serialized =
+        serializer.serialize(
+            original
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serialized
+            );
+
+    QVERIFY(
+        document.isObject()
+        );
+
+    QJsonObject root =
+        document.object();
+
+    /*
+     * Simulate a schema-version-1 workspace written
+     * before document-layout persistence existed.
+     */
+    root.remove(
+        QStringLiteral("documentLayout")
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY(
+        result.isSuccess()
+        );
+
+    QVERIFY(
+        result.workspace.has_value()
+        );
+
+    const WorkspacePersistenceState
+        &restored =
+        *result.workspace;
+
+    QVERIFY(
+        restored.documentLayout
+            .dockedGroup
+            .documentIds
+            .isEmpty()
+        );
+
+    QVERIFY(
+        restored.documentLayout
+            .dockedGroup
+            .currentDocumentId
+            .isEmpty()
+        );
+
+    QVERIFY(
+        restored.documentLayout
+            .detachedWindows
+            .isEmpty()
+        );
+
+    QVERIFY(
+        restored.documentLayout
+            .activeDocumentId
+            .isEmpty()
         );
 }
 
