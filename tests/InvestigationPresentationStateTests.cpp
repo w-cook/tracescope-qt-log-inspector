@@ -15,6 +15,7 @@
 #include "../src/ui/investigation/InvestigationIssueSummaryPanel.h"
 #include "../src/ui/investigation/InvestigationReviewPanel.h"
 #include "../src/ui/investigation/InvestigationTimelinePanel.h"
+#include "../src/ui/workspace/InvestigationSessionView.h"
 #include "../src/workspace/InvestigationPresentationState.h"
 #include "../src/workspace/InvestigationSession.h"
 
@@ -242,6 +243,7 @@ private slots:
     void findingsPresentationRoundTrips();
     void analyticsPresentationRoundTrips();
     void reviewPresentationRoundTrips();
+    void sessionViewPresentationRoundTrips();
 };
 
 void InvestigationPresentationStateTests::
@@ -1689,6 +1691,283 @@ void InvestigationPresentationStateTests::
             .selectedBurstEndTimestamp,
         saved.analytics
             .selectedBurstEndTimestamp
+        );
+}
+
+void InvestigationPresentationStateTests::
+    sessionViewPresentationRoundTrips()
+{
+    auto session =
+        makeAnalyticsSession();
+
+    InvestigationSessionView view(
+        session.get(),
+        nullptr
+        );
+
+    view.resize(
+        1000,
+        800
+        );
+
+    view.show();
+
+    processUi();
+
+    InvestigationSessionPresentationState
+        desired =
+        view.capturePresentationState();
+
+    desired.mainSplitterSizes = {
+        180,
+        360,
+        260
+    };
+
+    desired.bottomSplitterSizes = {
+        520,
+        420
+    };
+
+    desired.burstTimingMode =
+        InvestigationBurstTimingMode::Manual;
+
+    desired.burstDetectionSettings
+        .windowMilliseconds =
+        4000;
+
+    desired.burstDetectionSettings
+        .elevatedEventThreshold =
+        3;
+
+    desired.burstDetectionSettings
+        .errorCriticalThreshold =
+        100;
+
+    desired.burstDetectionSettings
+        .mergeGapMilliseconds =
+        0;
+
+    view.restorePresentationState(
+        desired
+        );
+
+    processUi();
+
+    /*
+     * Capture Qt's effective splitter geometry
+     * rather than assuming the requested pixel
+     * values survive layout normalization exactly.
+     */
+    const InvestigationSessionPresentationState
+        saved =
+        view.capturePresentationState();
+
+    QCOMPARE(
+        saved.mainSplitterSizes.size(),
+        3
+        );
+
+    QCOMPARE(
+        saved.bottomSplitterSizes.size(),
+        2
+        );
+
+    for (const int size
+         : saved.mainSplitterSizes) {
+        QVERIFY(
+            size > 0
+            );
+    }
+
+    for (const int size
+         : saved.bottomSplitterSizes) {
+        QVERIFY(
+            size > 0
+            );
+    }
+
+    QCOMPARE(
+        saved.burstTimingMode,
+        InvestigationBurstTimingMode::Manual
+        );
+
+    QCOMPARE(
+        saved.burstDetectionSettings
+            .windowMilliseconds,
+        qint64(4000)
+        );
+
+    QCOMPARE(
+        saved.burstDetectionSettings
+            .elevatedEventThreshold,
+        3
+        );
+
+    QCOMPARE(
+        saved.burstDetectionSettings
+            .errorCriticalThreshold,
+        100
+        );
+
+    QCOMPARE(
+        saved.burstDetectionSettings
+            .mergeGapMilliseconds,
+        qint64(0)
+        );
+
+    /*
+     * Move the outer workspace geometry and burst
+     * configuration somewhere clearly different.
+     */
+    InvestigationSessionPresentationState
+        disturbed =
+        saved;
+
+    disturbed.mainSplitterSizes = {
+        500,
+        150,
+        150
+    };
+
+    disturbed.bottomSplitterSizes = {
+        220,
+        720
+    };
+
+    disturbed.burstTimingMode =
+        InvestigationBurstTimingMode::Auto;
+
+    disturbed.burstDetectionSettings
+        .windowMilliseconds =
+        15000;
+
+    disturbed.burstDetectionSettings
+        .elevatedEventThreshold =
+        8;
+
+    disturbed.burstDetectionSettings
+        .errorCriticalThreshold =
+        5;
+
+    disturbed.burstDetectionSettings
+        .mergeGapMilliseconds =
+        2500;
+
+    view.restorePresentationState(
+        disturbed
+        );
+
+    processUi();
+
+    const InvestigationSessionPresentationState
+        disturbedEffective =
+        view.capturePresentationState();
+
+    QCOMPARE(
+        disturbedEffective.burstTimingMode,
+        InvestigationBurstTimingMode::Auto
+        );
+
+    QCOMPARE(
+        disturbedEffective
+            .burstDetectionSettings
+            .windowMilliseconds,
+        qint64(15000)
+        );
+
+    QCOMPARE(
+        disturbedEffective
+            .burstDetectionSettings
+            .elevatedEventThreshold,
+        8
+        );
+
+    QCOMPARE(
+        disturbedEffective
+            .burstDetectionSettings
+            .errorCriticalThreshold,
+        5
+        );
+
+    QCOMPARE(
+        disturbedEffective
+            .burstDetectionSettings
+            .mergeGapMilliseconds,
+        qint64(2500)
+        );
+
+    /*
+     * These checks establish that the splitter
+     * fixture was actually disturbed without
+     * requiring any particular platform-specific
+     * effective size.
+     */
+    QVERIFY(
+        disturbedEffective.mainSplitterSizes
+        != saved.mainSplitterSizes
+        );
+
+    QVERIFY(
+        disturbedEffective.bottomSplitterSizes
+        != saved.bottomSplitterSizes
+        );
+
+    /*
+     * Restore exactly the state a workspace Save
+     * operation would have captured.
+     */
+    view.restorePresentationState(
+        saved
+        );
+
+    processUi();
+
+    const InvestigationSessionPresentationState
+        restored =
+        view.capturePresentationState();
+
+    QCOMPARE(
+        restored.mainSplitterSizes,
+        saved.mainSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.bottomSplitterSizes,
+        saved.bottomSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.burstTimingMode,
+        saved.burstTimingMode
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .windowMilliseconds,
+        saved.burstDetectionSettings
+            .windowMilliseconds
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .elevatedEventThreshold,
+        saved.burstDetectionSettings
+            .elevatedEventThreshold
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .errorCriticalThreshold,
+        saved.burstDetectionSettings
+            .errorCriticalThreshold
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .mergeGapMilliseconds,
+        saved.burstDetectionSettings
+            .mergeGapMilliseconds
         );
 }
 

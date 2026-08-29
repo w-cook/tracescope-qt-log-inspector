@@ -11,6 +11,7 @@
 #include <QJsonValue>
 
 #include "InvestigationComparisonPersistenceSerialization.h"
+#include "InvestigationPresentationStateSerialization.h"
 
 #include "../importing/ImportProfileSerialization.h"
 
@@ -286,6 +287,9 @@ QByteArray WorkspaceSerializer::serialize(
     const ImportProfileSerializer
         profileSerializer;
 
+    const InvestigationPresentationStateSerializer
+        presentationSerializer;
+
     for (const PersistedInvestigationSession &session
          : workspace.sessions) {
         QJsonObject sessionObject;
@@ -427,6 +431,13 @@ QByteArray WorkspaceSerializer::serialize(
         sessionObject.insert(
             QStringLiteral("filterState"),
             filterState
+            );
+
+        sessionObject.insert(
+            QStringLiteral("presentationState"),
+            presentationSerializer.serialize(
+                session.presentationState
+                )
             );
 
         sessions.append(
@@ -963,6 +974,52 @@ WorkspaceSerializer::deserialize(
 
             session.filterState.bookmarkedOnly =
                 bookmarkedOnlyValue.toBool();
+        }
+
+        const QJsonValue presentationStateValue =
+            sessionObject.value(
+                QStringLiteral("presentationState")
+                );
+
+        if (!presentationStateValue.isUndefined()) {
+            if (!presentationStateValue.isObject()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_PRESENTATION_STATE"
+                        ),
+                    QStringLiteral(
+                        "The session presentationState "
+                        "field must be an object."
+                        )
+                    );
+            }
+
+            const InvestigationPresentationStateSerializer
+                presentationSerializer;
+
+            const PresentationStateDeserializationResult
+                presentationResult =
+                presentationSerializer.deserialize(
+                    presentationStateValue.toObject()
+                    );
+
+            if (!presentationResult.isSuccess()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_PRESENTATION_STATE"
+                        ),
+                    QStringLiteral(
+                        "A workspace session contains "
+                        "invalid presentation state: %1"
+                        )
+                        .arg(
+                            presentationResult.errorMessage
+                            )
+                    );
+            }
+
+            session.presentationState =
+                *presentationResult.state;
         }
 
         workspace.sessions.append(

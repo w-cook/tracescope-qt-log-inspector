@@ -8,6 +8,8 @@
 #include <QMap>
 #include <QStringList>
 
+#include "InvestigationPresentationState.h"
+
 #include "../analysis/BurstDetectionSettings.h"
 #include "../analysis/InvestigationSessionComparison.h"
 #include "../domain/InvestigationRecordState.h"
@@ -85,6 +87,9 @@ struct PersistedInvestigationSession
 
     PersistedInvestigationFilterState
         filterState;
+
+    InvestigationSessionPresentationState
+        presentationState;
 };
 
 struct WorkspacePersistenceState

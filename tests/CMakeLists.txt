@@ -1176,6 +1176,12 @@ qt_add_executable(WorkspaceSerializationTests
 
     ../src/workspace/InvestigationComparisonPersistenceSerialization.h
     ../src/workspace/InvestigationComparisonPersistenceSerialization.cpp
+
+    ../src/workspace/InvestigationPresentationState.h
+    ../src/workspace/InvestigationPresentationStateSerialization.h
+    ../src/workspace/InvestigationPresentationStateSerialization.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
 )
 
 target_link_libraries(
@@ -1297,6 +1303,29 @@ qt_add_executable(
 
     ../src/analysis/BurstDetectionSettings.h
     ../src/analysis/InvestigationValueFrequency.h
+
+    ../src/ui/workspace/WorkspaceDocument.h
+    ../src/ui/workspace/WorkspaceDocument.cpp
+
+    ../src/ui/workspace/InvestigationSessionView.h
+    ../src/ui/workspace/InvestigationSessionView.cpp
+
+    ../src/ui/investigation/InvestigationSessionSummaryPanel.h
+    ../src/ui/investigation/InvestigationSessionSummaryPanel.cpp
+
+    ../src/ui/investigation/InvestigationFilterPanel.h
+    ../src/ui/investigation/InvestigationFilterPanel.cpp
+
+    ../src/ui/MultiSelectFilterComboBox.h
+    ../src/ui/MultiSelectFilterComboBox.cpp
+
+    ../src/ui/CustomFieldFilterEditor.h
+    ../src/ui/CustomFieldFilterEditor.cpp
+
+    ../src/filtering/InvestigationFilterPreset.h
+
+    ../src/preferences/FilterPresetStore.h
+    ../src/preferences/FilterPresetStore.cpp
 )
 
 target_link_libraries(

@@ -20,6 +20,8 @@ private slots:
     void invalidSessionIsRejected();
     void invalidFindingStatusIsRejected();
     void invalidComparisonsCollectionIsRejected();
+    void presentationStateRoundTripsThroughJson();
+    void missingPresentationStateUsesDefaults();
 };
 
 void WorkspaceSerializationTests::
@@ -816,6 +818,476 @@ void WorkspaceSerializationTests::
         QStringLiteral(
             "INVALID_COMPARISONS"
             )
+        );
+}
+
+void WorkspaceSerializationTests::
+    presentationStateRoundTripsThroughJson()
+{
+    WorkspacePersistenceState original;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral("presentation-session");
+
+    session.sourcePath =
+        QStringLiteral("/logs/presentation.jsonl");
+
+    session.importProfile.name =
+        QStringLiteral("Presentation Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("json-lines");
+
+    InvestigationSessionPresentationState
+        &state =
+        session.presentationState;
+
+    state.eventTable.selectedRecordId =
+        QStringLiteral("record-42");
+
+    state.eventTable.columnWidths = {
+        120,
+        180,
+        240
+    };
+
+    state.eventTable.sortColumn =
+        2;
+
+    state.eventTable.sortOrder =
+        Qt::DescendingOrder;
+
+    state.eventTable.scroll.horizontalValue =
+        17;
+
+    state.eventTable.scroll.verticalValue =
+        31;
+
+    state.eventDetailScroll.verticalValue =
+        9;
+
+    state.timeline.intervalMilliseconds =
+        1000;
+
+    state.timeline.breakdown =
+        InvestigationTimelineBreakdown::Subsystem;
+
+    state.timeline.subsystemTrendLimit =
+        7;
+
+    state.timeline.horizontalScrollValue =
+        24;
+
+    state.review.selectedTab =
+        InvestigationReviewTab::Analytics;
+
+    state.review.issueSummaryTable.currentRow =
+        3;
+
+    state.review.issueSummaryTable.currentColumn =
+        2;
+
+    state.review.findingsTable.currentRow =
+        8;
+
+    state.review.findingsTable.currentColumn =
+        3;
+
+    state.review.analytics.selectedTab =
+        InvestigationAnalyticsTab::Bursts;
+
+    state.review.analytics.overviewSplitterSizes = {
+        250,
+        350
+    };
+
+    state.review.analytics.eventCodeTable.currentRow =
+        6;
+
+    state.review.analytics.entityTable.currentRow =
+        4;
+
+    state.review.analytics.burstSplitterSizes = {
+        400,
+        300
+    };
+
+    state.review.analytics
+        .selectedBurstStartTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:00:50.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    state.review.analytics
+        .selectedBurstEndTimestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-29T12:01:09.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    state.review.analytics.burstTable.currentRow =
+        1;
+
+    state.review.analytics.burstTable.currentColumn =
+        2;
+
+    state.review.analytics
+        .burstDetailScroll.verticalValue =
+        14;
+
+    state.mainSplitterSizes = {
+        180,
+        360,
+        260
+    };
+
+    state.bottomSplitterSizes = {
+        520,
+        420
+    };
+
+    state.burstTimingMode =
+        InvestigationBurstTimingMode::Manual;
+
+    state.burstDetectionSettings
+        .windowMilliseconds =
+        4000;
+
+    state.burstDetectionSettings
+        .elevatedEventThreshold =
+        3;
+
+    state.burstDetectionSettings
+        .errorCriticalThreshold =
+        100;
+
+    state.burstDetectionSettings
+        .mergeGapMilliseconds =
+        0;
+
+    original.sessions.append(
+        session
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray json =
+        serializer.serialize(
+            original
+            );
+
+    /*
+     * Verify that presentation state is an explicit
+     * part of the human-readable workspace format,
+     * not merely reconstructed from defaults.
+     */
+    const QJsonDocument document =
+        QJsonDocument::fromJson(
+            json
+            );
+
+    QVERIFY(document.isObject());
+
+    const QJsonArray sessions =
+        document
+            .object()
+            .value(
+                QStringLiteral("sessions")
+                )
+            .toArray();
+
+    QCOMPARE(
+        sessions.size(),
+        1
+        );
+
+    QVERIFY(
+        sessions
+            .first()
+            .toObject()
+            .value(
+                QStringLiteral(
+                    "presentationState"
+                    )
+                )
+            .isObject()
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            json
+            );
+
+    QVERIFY(result.isSuccess());
+
+    const InvestigationSessionPresentationState
+        &restored =
+        result
+            .workspace
+            ->sessions
+            .first()
+            .presentationState;
+
+    QCOMPARE(
+        restored.eventTable.selectedRecordId,
+        state.eventTable.selectedRecordId
+        );
+
+    QCOMPARE(
+        restored.eventTable.columnWidths,
+        state.eventTable.columnWidths
+        );
+
+    QCOMPARE(
+        restored.eventTable.sortColumn,
+        state.eventTable.sortColumn
+        );
+
+    QCOMPARE(
+        restored.eventTable.sortOrder,
+        state.eventTable.sortOrder
+        );
+
+    QCOMPARE(
+        restored.eventTable.scroll.verticalValue,
+        state.eventTable.scroll.verticalValue
+        );
+
+    QCOMPARE(
+        restored.eventDetailScroll.verticalValue,
+        state.eventDetailScroll.verticalValue
+        );
+
+    QCOMPARE(
+        restored.timeline.intervalMilliseconds,
+        state.timeline.intervalMilliseconds
+        );
+
+    QCOMPARE(
+        restored.timeline.breakdown,
+        state.timeline.breakdown
+        );
+
+    QCOMPARE(
+        restored.timeline.subsystemTrendLimit,
+        state.timeline.subsystemTrendLimit
+        );
+
+    QCOMPARE(
+        restored.timeline.horizontalScrollValue,
+        state.timeline.horizontalScrollValue
+        );
+
+    QCOMPARE(
+        restored.review.selectedTab,
+        state.review.selectedTab
+        );
+
+    QCOMPARE(
+        restored.review.issueSummaryTable.currentRow,
+        state.review.issueSummaryTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.review.findingsTable.currentRow,
+        state.review.findingsTable.currentRow
+        );
+
+    QCOMPARE(
+        restored.review.analytics.selectedTab,
+        state.review.analytics.selectedTab
+        );
+
+    QCOMPARE(
+        restored.review.analytics
+            .overviewSplitterSizes,
+        state.review.analytics
+            .overviewSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.review.analytics
+            .burstSplitterSizes,
+        state.review.analytics
+            .burstSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.review.analytics
+            .selectedBurstStartTimestamp,
+        state.review.analytics
+            .selectedBurstStartTimestamp
+        );
+
+    QCOMPARE(
+        restored.review.analytics
+            .selectedBurstEndTimestamp,
+        state.review.analytics
+            .selectedBurstEndTimestamp
+        );
+
+    QCOMPARE(
+        restored.review.analytics
+            .burstDetailScroll.verticalValue,
+        state.review.analytics
+            .burstDetailScroll.verticalValue
+        );
+
+    QCOMPARE(
+        restored.mainSplitterSizes,
+        state.mainSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.bottomSplitterSizes,
+        state.bottomSplitterSizes
+        );
+
+    QCOMPARE(
+        restored.burstTimingMode,
+        state.burstTimingMode
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .windowMilliseconds,
+        state.burstDetectionSettings
+            .windowMilliseconds
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .elevatedEventThreshold,
+        state.burstDetectionSettings
+            .elevatedEventThreshold
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .errorCriticalThreshold,
+        state.burstDetectionSettings
+            .errorCriticalThreshold
+        );
+
+    QCOMPARE(
+        restored.burstDetectionSettings
+            .mergeGapMilliseconds,
+        state.burstDetectionSettings
+            .mergeGapMilliseconds
+        );
+}
+
+void WorkspaceSerializationTests::
+    missingPresentationStateUsesDefaults()
+{
+    WorkspacePersistenceState workspace;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral("legacy-session");
+
+    session.sourcePath =
+        QStringLiteral("legacy.jsonl");
+
+    session.importProfile.name =
+        QStringLiteral("Legacy Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("json-lines");
+
+    workspace.sessions.append(
+        session
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray serialized =
+        serializer.serialize(
+            workspace
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serialized
+            );
+
+    QJsonObject root =
+        document.object();
+
+    QJsonArray sessions =
+        root.value(
+                QStringLiteral("sessions")
+                )
+            .toArray();
+
+    QJsonObject sessionObject =
+        sessions.first().toObject();
+
+    sessionObject.remove(
+        QStringLiteral("presentationState")
+        );
+
+    sessions[0] =
+        sessionObject;
+
+    root.insert(
+        QStringLiteral("sessions"),
+        sessions
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY(result.isSuccess());
+
+    const InvestigationSessionPresentationState
+        &restored =
+        result
+            .workspace
+            ->sessions
+            .first()
+            .presentationState;
+
+    QCOMPARE(
+        restored.eventTable.sortColumn,
+        -1
+        );
+
+    QCOMPARE(
+        restored.timeline.intervalMilliseconds,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        restored.review.selectedTab,
+        InvestigationReviewTab::IssueSummary
+        );
+
+    QCOMPARE(
+        restored.burstTimingMode,
+        InvestigationBurstTimingMode::Auto
+        );
+
+    QVERIFY(
+        restored.mainSplitterSizes.isEmpty()
+        );
+
+    QVERIFY(
+        restored.bottomSplitterSizes.isEmpty()
         );
 }
 

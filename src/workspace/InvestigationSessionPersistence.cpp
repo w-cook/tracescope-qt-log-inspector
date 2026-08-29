@@ -4,7 +4,9 @@
 
 PersistedInvestigationSession
 InvestigationSessionPersistence::capture(
-    const InvestigationSession &session
+    const InvestigationSession &session,
+    const InvestigationSessionPresentationState
+        &presentationState
     )
 {
     PersistedInvestigationSession persisted;
@@ -89,6 +91,9 @@ InvestigationSessionPersistence::capture(
 
     persisted.filterState.bookmarkedOnly =
         proxy->bookmarkedOnly();
+
+    persisted.presentationState =
+        presentationState;
 
     return persisted;
 }

@@ -7,7 +7,9 @@ class InvestigationSessionPersistence
 {
 public:
     static PersistedInvestigationSession capture(
-        const InvestigationSession &session
+        const InvestigationSession &session,
+        const InvestigationSessionPresentationState
+            &presentationState = {}
         );
 
     static void restoreState(

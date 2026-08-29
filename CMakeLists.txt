@@ -170,6 +170,8 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationComparisonPersistenceSerialization.h
     src/workspace/InvestigationComparisonPersistenceSerialization.cpp
     src/workspace/InvestigationPresentationState.h
+    src/workspace/InvestigationPresentationStateSerialization.h
+    src/workspace/InvestigationPresentationStateSerialization.cpp
 
 )
 
