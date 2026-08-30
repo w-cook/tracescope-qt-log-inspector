@@ -869,8 +869,41 @@ void MainWindow::loadLogFile(
     const QString &reloadSessionId
     )
 {
+    startLogFileImport(
+        filePath,
+        profile,
+        [
+            this,
+            filePath,
+            profile,
+            reloadSessionId
+    ](
+            std::optional<ImportResult> result
+            ) {
+            if (!result.has_value()) {
+                return;
+            }
+
+            completeLogFileImport(
+                filePath,
+                profile,
+                std::move(
+                    result.value()
+                    ),
+                reloadSessionId
+                );
+        }
+        );
+}
+
+bool MainWindow::startLogFileImport(
+    const QString &filePath,
+    const ImportProfile &profile,
+    ImportCompletionHandler completion
+    )
+{
     if (importWatcher != nullptr) {
-        return;
+        return false;
     }
 
     if (reloadAction != nullptr) {
@@ -898,7 +931,7 @@ void MainWindow::loadLogFile(
                 )
             );
 
-        return;
+        return false;
     }
 
     auto *watcher =
@@ -982,7 +1015,10 @@ void MainWindow::loadLogFile(
         &QFutureWatcher<ImportResult>::
         progressTextChanged,
         this,
-        [progressDialog, displayFileName](
+        [
+            progressDialog,
+            displayFileName
+        ](
             const QString &progressText
             ) {
             QString label =
@@ -1013,10 +1049,8 @@ void MainWindow::loadLogFile(
             this,
             watcher,
             progressDialog,
-            filePath,
-            profile,
-            reloadSessionId
-        ]() {
+            completion
+        ]() mutable {
             const bool cancelled =
                 watcher->isCanceled();
 
@@ -1034,8 +1068,28 @@ void MainWindow::loadLogFile(
 
             setAcceptDrops(true);
 
+            /*
+             * Restore normal session-reload
+             * availability regardless of whether the
+             * import completed or was cancelled.
+             */
+            if (reloadAction != nullptr) {
+                reloadAction->setEnabled(
+                    workspace != nullptr
+                    && workspace->activeSession()
+                           != nullptr
+                    );
+            }
+
             if (cancelled) {
                 watcher->deleteLater();
+
+                if (completion) {
+                    completion(
+                        std::nullopt
+                        );
+                }
+
                 return;
             }
 
@@ -1044,19 +1098,13 @@ void MainWindow::loadLogFile(
 
             watcher->deleteLater();
 
-            if (reloadAction != nullptr) {
-                reloadAction->setEnabled(
-                    workspace->activeSession()
-                    != nullptr
+            if (completion) {
+                completion(
+                    std::optional<ImportResult>(
+                        std::move(result)
+                        )
                     );
             }
-
-            completeLogFileImport(
-                filePath,
-                profile,
-                std::move(result),
-                reloadSessionId
-                );
         }
         );
 
@@ -1067,7 +1115,7 @@ void MainWindow::loadLogFile(
                 filePath
             ](
                 QPromise<ImportResult> &promise
-            ) {
+                ) {
                 /*
                  * Stay indeterminate until the
                  * importer reports measurable
@@ -1096,8 +1144,9 @@ void MainWindow::loadLogFile(
                         &determinateProgress
                     ](
                         const ImportProgress &progress
-                    ) {
-                        if (progress.totalBytes <= 0) {
+                        ) {
+                        if (progress.totalBytes
+                            <= 0) {
                             return;
                         }
 
@@ -1111,13 +1160,16 @@ void MainWindow::loadLogFile(
                                 true;
                         }
 
-                        const double percentageValue =
+                        const double
+                            percentageValue =
                             100.0
                             * static_cast<double>(
-                                progress.bytesProcessed
+                                progress
+                                    .bytesProcessed
                                 )
                             / static_cast<double>(
-                                progress.totalBytes
+                                progress
+                                    .totalBytes
                                 );
 
                         const int percentage =
@@ -1181,6 +1233,8 @@ void MainWindow::loadLogFile(
             }
             )
         );
+
+    return true;
 }
 
 void MainWindow::completeLogFileImport(

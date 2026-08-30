@@ -6,6 +6,9 @@
 #include <QFutureWatcher>
 #include <QSettings>
 
+#include <functional>
+#include <optional>
+
 #include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
@@ -13,6 +16,13 @@
 #include "preferences/RecentItemsStore.h"
 #include "workspace/InvestigationWorkspace.h"
 #include "workspace/WorkspacePersistenceState.h"
+
+using ImportCompletionHandler =
+    std::function<
+        void(
+            std::optional<ImportResult>
+            )
+        >;
 
 class QLabel;
 class QTableWidget;
@@ -91,6 +101,11 @@ private:
         const ImportProfile &profile,
         const QString &reloadSessionId =
         QString()
+        );
+    bool startLogFileImport(
+        const QString &filePath,
+        const ImportProfile &profile,
+        ImportCompletionHandler completion
         );
     void completeLogFileImport(
         const QString &filePath,
