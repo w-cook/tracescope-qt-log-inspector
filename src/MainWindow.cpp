@@ -699,6 +699,26 @@ void MainWindow::createMenus()
 
     refreshRecentFilesMenu();
 
+    recentWorkspacesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Workspaces")
+            );
+
+    recentWorkspacesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        recentWorkspacesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            refreshRecentWorkspacesMenu();
+        }
+        );
+
+    refreshRecentWorkspacesMenu();
+
     reloadAction =
         new QAction(
             tr("&Reload Current Session"),
@@ -1693,6 +1713,64 @@ void MainWindow::refreshRecentFilesMenu()
         );
 }
 
+void MainWindow::refreshRecentWorkspacesMenu()
+{
+    if (recentWorkspacesMenu == nullptr) {
+        return;
+    }
+
+    recentWorkspacesMenu->clear();
+
+    const QStringList recentWorkspaces =
+        recentItemsStore.recentWorkspaces();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentWorkspaces) {
+        const QFileInfo fileInfo(
+            filePath
+            );
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentWorkspace(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            recentWorkspacesMenu
+                ->addAction(
+                    fileInfo.fileName()
+                    );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [this, filePath]() {
+                openRecentWorkspace(
+                    filePath
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    recentWorkspacesMenu->setEnabled(
+        validItemCount > 0
+        );
+}
+
 void MainWindow::openRecentFile(
     const QString &filePath
     )
@@ -1722,6 +1800,45 @@ void MainWindow::openRecentFile(
     }
 
     openLogFile(
+        filePath
+        );
+}
+
+void MainWindow::openRecentWorkspace(
+    const QString &filePath
+    )
+{
+    const QFileInfo fileInfo(
+        filePath
+        );
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        recentItemsStore
+            .removeRecentWorkspace(
+                filePath
+                );
+
+        refreshRecentWorkspacesMenu();
+
+        QMessageBox::warning(
+            this,
+            tr(
+                "Recent Workspace Not Found"
+                ),
+            tr(
+                "The recent TraceScope workspace "
+                "no longer exists at:\n%1"
+                )
+                .arg(
+                    filePath
+                    )
+            );
+
+        return;
+    }
+
+    openWorkspace(
         filePath
         );
 }
@@ -1878,7 +1995,14 @@ bool MainWindow::saveWorkspaceToFile(
     }
 
     currentWorkspacePath =
-        filePath;
+        QFileInfo(filePath)
+            .absoluteFilePath();
+
+    recentItemsStore.addRecentWorkspace(
+        currentWorkspacePath
+        );
+
+    refreshRecentWorkspacesMenu();
 
     return true;
 }
@@ -2108,7 +2232,7 @@ bool MainWindow::resolveWorkspaceSourcePaths(
     return true;
 }
 
-void MainWindow::openWorkspace()
+void MainWindow::openWorkspace(const QString &initialFilePath)
 {
     if (importWatcher != nullptr) {
         QMessageBox::information(
@@ -2124,16 +2248,21 @@ void MainWindow::openWorkspace()
         return;
     }
 
-    const QString filePath =
-        QFileDialog::getOpenFileName(
-            this,
-            tr("Open TraceScope Workspace"),
-            currentWorkspacePath,
-            tr(
-                "TraceScope Workspace (*.json);;"
-                "All Files (*)"
-                )
-            );
+    QString filePath =
+        initialFilePath;
+
+    if (filePath.isEmpty()) {
+        filePath =
+            QFileDialog::getOpenFileName(
+                this,
+                tr("Open TraceScope Workspace"),
+                currentWorkspacePath,
+                tr(
+                    "TraceScope Workspace (*.json);;"
+                    "All Files (*)"
+                    )
+                );
+    }
 
     if (filePath.isEmpty()) {
         return;
@@ -2642,6 +2771,12 @@ void MainWindow::installOpenedWorkspace(
 
     currentWorkspacePath =
         operation->workspacePath;
+
+    recentItemsStore.addRecentWorkspace(
+        currentWorkspacePath
+        );
+
+    refreshRecentWorkspacesMenu();
 
     if (operation->skippedSessionCount > 0
         || operation->emptySessionCount > 0) {

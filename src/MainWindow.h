@@ -77,6 +77,7 @@ private:
     FilterPresetStore filterPresetStore;
 
     QMenu *recentFilesMenu = nullptr;
+    QMenu *recentWorkspacesMenu = nullptr;
 
     InvestigationWorkspace *workspace;
 
@@ -133,7 +134,13 @@ private:
 
     void refreshRecentFilesMenu();
 
+    void refreshRecentWorkspacesMenu();
+
     void openRecentFile(
+        const QString &filePath
+        );
+
+    void openRecentWorkspace(
         const QString &filePath
         );
 
@@ -153,7 +160,10 @@ private:
 
     struct WorkspaceOpenOperation;
 
-    void openWorkspace();
+    void openWorkspace(
+        const QString &initialFilePath =
+        QString()
+        );
 
     void continueWorkspaceOpen(
         const std::shared_ptr<
