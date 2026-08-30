@@ -2724,6 +2724,14 @@ void MainWindow::installOpenedWorkspace(
         }
     }
 
+    /*
+     * All documents must exist before restoring
+     * tab order, detached groups, window geometry,
+     * local current tabs, and global active document.
+     *
+     * Missing document IDs are already deliberately
+     * ignored by WorkspaceDocumentHost.
+     */
     workspaceDocumentHost
         ->restoreLayoutState(
             layoutState
@@ -2755,19 +2763,6 @@ void MainWindow::installOpenedWorkspace(
                     );
         }
     }
-
-    /*
-     * All documents must exist before restoring
-     * tab order, detached groups, window geometry,
-     * local current tabs, and global active document.
-     *
-     * Missing document IDs are already deliberately
-     * ignored by WorkspaceDocumentHost.
-     */
-    workspaceDocumentHost
-        ->restoreLayoutState(
-            layoutState
-            );
 
     currentWorkspacePath =
         operation->workspacePath;
