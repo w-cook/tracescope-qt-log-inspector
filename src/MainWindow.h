@@ -12,6 +12,7 @@
 #include "preferences/FilterPresetStore.h"
 #include "preferences/RecentItemsStore.h"
 #include "workspace/InvestigationWorkspace.h"
+#include "workspace/WorkspacePersistenceState.h"
 
 class QLabel;
 class QTableWidget;
@@ -71,6 +72,10 @@ private:
     QAction *openAction = nullptr;
     QAction *reloadAction = nullptr;
     QAction *compareAction = nullptr;
+    QAction *saveWorkspaceAction = nullptr;
+    QAction *saveWorkspaceAsAction = nullptr;
+
+    QString currentWorkspacePath;
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
@@ -109,4 +114,14 @@ private:
     void openRecentFile(
         const QString &filePath
         );
+
+    WorkspacePersistenceState
+    captureWorkspaceState() const;
+
+    bool saveWorkspaceToFile(
+        const QString &filePath
+        );
+
+    void saveWorkspace();
+    void saveWorkspaceAs();
 };

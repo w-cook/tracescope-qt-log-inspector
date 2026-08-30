@@ -25,6 +25,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QStyledItemDelegate>
+#include <QSaveFile>
 
 #include <algorithm>
 #include <cmath>
@@ -38,7 +39,10 @@
 #include "ui/workspace/InvestigationComparisonDocument.h"
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
+#include "workspace/InvestigationComparisonPersistence.h"
 #include "workspace/InvestigationComparisonSnapshotBuilder.h"
+#include "workspace/InvestigationSessionPersistence.h"
+#include "workspace/WorkspaceSerialization.h"
 
 namespace
 {
@@ -678,15 +682,74 @@ void MainWindow::createMenus()
         reloadAction
         );
 
-    auto *exportAction = new QAction("&Export Filtered Results...", this);
-    exportAction->setShortcut(QKeySequence::Save);
+    fileMenu->addSeparator();
 
-    connect(exportAction, &QAction::triggered, this, [this]() {
-        exportFilteredResults();
-    });
+    saveWorkspaceAction =
+        new QAction(
+            tr("&Save Workspace"),
+            this
+            );
+
+    saveWorkspaceAction->setShortcut(
+        QKeySequence::Save
+        );
+
+    connect(
+        saveWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            saveWorkspace();
+        }
+        );
+
+    fileMenu->addAction(
+        saveWorkspaceAction
+        );
+
+    saveWorkspaceAsAction =
+        new QAction(
+            tr("Save Workspace &As..."),
+            this
+            );
+
+    saveWorkspaceAsAction->setShortcut(
+        QKeySequence::SaveAs
+        );
+
+    connect(
+        saveWorkspaceAsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            saveWorkspaceAs();
+        }
+        );
+
+    fileMenu->addAction(
+        saveWorkspaceAsAction
+        );
 
     fileMenu->addSeparator();
-    fileMenu->addAction(exportAction);
+
+    auto *exportAction =
+        new QAction(
+            tr("&Export Filtered Results..."),
+            this
+            );
+
+    connect(
+        exportAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFilteredResults();
+        }
+        );
+
+    fileMenu->addAction(
+        exportAction
+        );
 
     auto *investigationMenu =
         menuBar()->addMenu(
@@ -1529,6 +1592,191 @@ void MainWindow::openRecentFile(
     }
 
     openLogFile(
+        filePath
+        );
+}
+
+WorkspacePersistenceState
+MainWindow::captureWorkspaceState() const
+{
+    WorkspacePersistenceState state;
+
+    if (workspace == nullptr
+        || workspaceDocumentHost
+               == nullptr) {
+        return state;
+    }
+
+    for (int index = 0;
+         index < workspace->sessionCount();
+         ++index) {
+        const InvestigationSession *session =
+            workspace->sessionAt(
+                index
+                );
+
+        if (session == nullptr) {
+            continue;
+        }
+
+        InvestigationSessionPresentationState
+            presentationState;
+
+        WorkspaceDocument *document =
+            workspaceDocumentHost
+                ->documentById(
+                    session->id()
+                    );
+
+        const auto *sessionView =
+            qobject_cast<
+                const InvestigationSessionView *>(
+                document
+                );
+
+        if (sessionView != nullptr) {
+            presentationState =
+                sessionView
+                    ->capturePresentationState();
+        }
+
+        state.sessions.append(
+            InvestigationSessionPersistence
+            ::capture(
+                *session,
+                presentationState
+                )
+            );
+    }
+
+    const QVector<WorkspaceDocument *>
+        documents =
+        workspaceDocumentHost->documents();
+
+    for (WorkspaceDocument *document
+         : documents) {
+        const auto *comparisonDocument =
+            qobject_cast<
+                const InvestigationComparisonDocument *>(
+                document
+                );
+
+        if (comparisonDocument == nullptr) {
+            continue;
+        }
+
+        state.comparisons.append(
+            InvestigationComparisonPersistence
+            ::capture(
+                comparisonDocument
+                    ->snapshot()
+                )
+            );
+    }
+
+    state.documentLayout =
+        workspaceDocumentHost
+            ->captureLayoutState();
+
+    return state;
+}
+
+bool MainWindow::saveWorkspaceToFile(
+    const QString &filePath
+    )
+{
+    const WorkspacePersistenceState state =
+        captureWorkspaceState();
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray json =
+        serializer.serialize(
+            state
+            );
+
+    QSaveFile file(
+        filePath
+        );
+
+    if (!file.open(
+            QIODevice::WriteOnly
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Save Workspace Failed"),
+            tr(
+                "TraceScope could not open the "
+                "selected workspace file for writing."
+                )
+            );
+
+        return false;
+    }
+
+    if (file.write(json)
+            != json.size()
+        || !file.commit()) {
+        file.cancelWriting();
+
+        QMessageBox::warning(
+            this,
+            tr("Save Workspace Failed"),
+            tr(
+                "TraceScope could not save the "
+                "workspace successfully."
+                )
+            );
+
+        return false;
+    }
+
+    currentWorkspacePath =
+        filePath;
+
+    return true;
+}
+
+void MainWindow::saveWorkspace()
+{
+    if (currentWorkspacePath.isEmpty()) {
+        saveWorkspaceAs();
+        return;
+    }
+
+    saveWorkspaceToFile(
+        currentWorkspacePath
+        );
+}
+
+void MainWindow::saveWorkspaceAs()
+{
+    QString initialPath =
+        currentWorkspacePath;
+
+    if (initialPath.isEmpty()) {
+        initialPath =
+            QStringLiteral(
+                "tracescope-workspace.json"
+                );
+    }
+
+    const QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            tr("Save TraceScope Workspace"),
+            initialPath,
+            tr(
+                "TraceScope Workspace (*.json);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    saveWorkspaceToFile(
         filePath
         );
 }
