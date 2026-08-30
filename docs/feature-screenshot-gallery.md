@@ -114,9 +114,9 @@ Measured large-file behavior and its interpretation limits are documented separa
 
 ![TraceScope Large-File Import](screenshots/tracescope-large-file-import.png)
 
-## Recent Files
+## Recent Files and Workspaces
 
-Bounded recent-file and recent-profile histories are stored in local application settings. Recent files reopen through the normal Import Configuration workflow rather than bypassing profile review and validation.
+Bounded recent-file, recent-profile, and recent-workspace histories are stored in local application settings. Recent files reopen through the normal Import Configuration workflow rather than bypassing profile review and validation, while recent workspaces reopen saved investigations through the workspace-restoration workflow.
 
 ![TraceScope Recent Files](screenshots/tracescope-recent-files.png)
 
