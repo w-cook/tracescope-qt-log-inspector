@@ -17,6 +17,11 @@ struct InvestigationScrollState
     int verticalValue = 0;
 };
 
+struct InvestigationComparisonPresentationState
+{
+    InvestigationScrollState scroll;
+};
+
 struct InvestigationTablePresentationState
 {
     int currentRow = -1;

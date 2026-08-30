@@ -286,6 +286,18 @@ QJsonObject
     QJsonObject object;
 
     object.insert(
+        QStringLiteral("mainWindowGeometry"),
+        geometryToJson(
+            state.mainWindowGeometry
+            )
+        );
+
+    object.insert(
+        QStringLiteral("mainWindowMaximized"),
+        state.mainWindowMaximized
+        );
+
+    object.insert(
         QStringLiteral("dockedGroup"),
         groupToJson(
             state.dockedGroup
@@ -345,6 +357,47 @@ WorkspaceDocumentLayoutDeserializationResult
         ) const
 {
     WorkspaceDocumentLayoutState state;
+
+    const QJsonValue mainGeometryValue =
+        object.value(
+            QStringLiteral(
+                "mainWindowGeometry"
+                )
+            );
+
+    if (!mainGeometryValue.isUndefined()) {
+        if (!geometryFromJson(
+                mainGeometryValue,
+                state.mainWindowGeometry
+                )) {
+            return failure(
+                QStringLiteral(
+                    "mainWindowGeometry is invalid."
+                    )
+                );
+        }
+    }
+
+    const QJsonValue mainMaximizedValue =
+        object.value(
+            QStringLiteral(
+                "mainWindowMaximized"
+                )
+            );
+
+    if (!mainMaximizedValue.isUndefined()) {
+        if (!mainMaximizedValue.isBool()) {
+            return failure(
+                QStringLiteral(
+                    "mainWindowMaximized must be "
+                    "boolean."
+                    )
+                );
+        }
+
+        state.mainWindowMaximized =
+            mainMaximizedValue.toBool();
+    }
 
     if (!groupFromJson(
             object.value(

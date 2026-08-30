@@ -27,15 +27,19 @@ struct DetachedWorkspaceWindowLayoutState
 
 struct WorkspaceDocumentLayoutState
 {
+    /*
+     * Store normal geometry even when the main
+     * window is maximized so restoring/unmaximizing
+     * returns to the saved useful size and position.
+     */
+    QRect mainWindowGeometry;
+
+    bool mainWindowMaximized = false;
+
     WorkspaceDocumentGroupLayoutState dockedGroup;
 
     QVector<DetachedWorkspaceWindowLayoutState>
         detachedWindows;
 
-    /*
-     * The current tab of each group is independent
-     * from which workspace document/window was most
-     * recently active.
-     */
     QString activeDocumentId;
 };

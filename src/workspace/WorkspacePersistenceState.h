@@ -74,6 +74,9 @@ struct PersistedInvestigationComparison
         requestedBurstSettings;
 
     InvestigationSessionComparison analysis;
+
+    InvestigationComparisonPresentationState
+        presentationState;
 };
 
 struct PersistedInvestigationSession

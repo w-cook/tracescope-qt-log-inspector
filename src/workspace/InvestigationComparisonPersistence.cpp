@@ -67,7 +67,9 @@ restoreSource(
 PersistedInvestigationComparison
 InvestigationComparisonPersistence::capture(
     const InvestigationComparisonSnapshot
-        &snapshot
+        &snapshot,
+    const InvestigationComparisonPresentationState
+        &presentationState
     )
 {
     PersistedInvestigationComparison persisted;
@@ -90,6 +92,9 @@ InvestigationComparisonPersistence::capture(
 
     persisted.analysis =
         snapshot.analysis();
+
+    persisted.presentationState =
+        presentationState;
 
     return persisted;
 }

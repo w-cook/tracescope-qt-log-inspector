@@ -17,6 +17,7 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 #include <QFileInfo>
+#include <QTimer>
 
 #include "../../domain/RecordSeverity.h"
 
@@ -1896,10 +1897,13 @@ InvestigationComparisonDocument::
         6
         );
 
-    auto *scrollArea =
+    m_scrollArea =
         new QScrollArea(
             this
             );
+
+    QScrollArea *scrollArea =
+        m_scrollArea;
 
     scrollArea->setWidgetResizable(
         true
@@ -2156,4 +2160,85 @@ const InvestigationComparisonSnapshot &
     snapshot() const
 {
     return m_snapshot;
+}
+
+InvestigationComparisonPresentationState
+    InvestigationComparisonDocument::
+    capturePresentationState() const
+{
+    InvestigationComparisonPresentationState
+        state;
+
+    if (m_scrollArea == nullptr) {
+        return state;
+    }
+
+    state.scroll.horizontalValue =
+        m_scrollArea
+            ->horizontalScrollBar()
+            ->value();
+
+    state.scroll.verticalValue =
+        m_scrollArea
+            ->verticalScrollBar()
+            ->value();
+
+    return state;
+}
+
+void InvestigationComparisonDocument::
+    restorePresentationState(
+        const InvestigationComparisonPresentationState
+            &state
+        )
+{
+    if (m_scrollArea == nullptr) {
+        return;
+    }
+
+    m_scrollArea
+        ->horizontalScrollBar()
+        ->setValue(
+            state.scroll.horizontalValue
+            );
+
+    m_scrollArea
+        ->verticalScrollBar()
+        ->setValue(
+            state.scroll.verticalValue
+            );
+
+    /*
+     * The document may have just been added to a
+     * restored tab group or detached window. Apply
+     * the values again after Qt has completed the
+     * pending layout pass so scrollbar ranges reflect
+     * the restored document geometry.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [
+            this,
+            state
+        ]() {
+            if (m_scrollArea == nullptr) {
+                return;
+            }
+
+            m_scrollArea
+                ->horizontalScrollBar()
+                ->setValue(
+                    state.scroll
+                        .horizontalValue
+                    );
+
+            m_scrollArea
+                ->verticalScrollBar()
+                ->setValue(
+                    state.scroll
+                        .verticalValue
+                    );
+        }
+        );
 }

@@ -3,6 +3,9 @@
 #include "WorkspaceDocument.h"
 
 #include "../../workspace/InvestigationComparisonSnapshot.h"
+#include "../../workspace/InvestigationPresentationState.h"
+
+class QScrollArea;
 
 class InvestigationComparisonDocument
     : public WorkspaceDocument
@@ -18,6 +21,16 @@ public:
     const InvestigationComparisonSnapshot &
     snapshot() const;
 
+    InvestigationComparisonPresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationComparisonPresentationState
+            &state
+        );
+
 private:
     InvestigationComparisonSnapshot m_snapshot;
+
+    QScrollArea *m_scrollArea = nullptr;
 };

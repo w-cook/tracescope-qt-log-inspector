@@ -1369,6 +1369,74 @@ bool sourceFromJson(
                source.importedAtUtc
                );
 }
+
+QJsonObject comparisonPresentationStateToJson(
+    const InvestigationComparisonPresentationState
+        &state
+    )
+{
+    QJsonObject object;
+
+    object.insert(
+        QStringLiteral(
+            "horizontalScrollValue"
+            ),
+        state.scroll.horizontalValue
+        );
+
+    object.insert(
+        QStringLiteral(
+            "verticalScrollValue"
+            ),
+        state.scroll.verticalValue
+        );
+
+    return object;
+}
+
+bool comparisonPresentationStateFromJson(
+    const QJsonValue &value,
+    InvestigationComparisonPresentationState
+        &state
+    )
+{
+    if (!value.isObject()) {
+        return false;
+    }
+
+    const QJsonObject object =
+        value.toObject();
+
+    int horizontalValue = 0;
+    int verticalValue = 0;
+
+    if (!readInteger(
+            object,
+            QStringLiteral(
+                "horizontalScrollValue"
+                ),
+            horizontalValue
+            )
+        || !readInteger(
+            object,
+            QStringLiteral(
+                "verticalScrollValue"
+                ),
+            verticalValue
+            )
+        || horizontalValue < 0
+        || verticalValue < 0) {
+        return false;
+    }
+
+    state.scroll.horizontalValue =
+        horizontalValue;
+
+    state.scroll.verticalValue =
+        verticalValue;
+
+    return true;
+}
 }
 
 QJsonObject
@@ -1545,6 +1613,13 @@ QJsonObject
     object.insert(
         QStringLiteral("analysis"),
         analysis
+        );
+
+    object.insert(
+        QStringLiteral("presentationState"),
+        comparisonPresentationStateToJson(
+            comparison.presentationState
+            )
         );
 
     return object;
@@ -1797,6 +1872,25 @@ ComparisonPersistenceDeserializationResult
 
         comparison.analysis.bursts =
             std::move(burstComparison);
+    }
+
+    const QJsonValue presentationValue =
+        object.value(
+            QStringLiteral(
+                "presentationState"
+                )
+            );
+
+    if (!presentationValue.isUndefined()
+        && !comparisonPresentationStateFromJson(
+            presentationValue,
+            comparison.presentationState
+            )) {
+        return failure(
+            QStringLiteral(
+                "Comparison presentation state is invalid."
+                )
+            );
     }
 
     ComparisonPersistenceDeserializationResult

@@ -13,6 +13,7 @@ class InvestigationComparisonPersistenceTests
 private slots:
     void comparisonSnapshotRoundTrips();
     void comparisonJsonRoundTrips();
+    void missingPresentationStateUsesDefaults();
 };
 
 void InvestigationComparisonPersistenceTests::
@@ -768,10 +769,22 @@ void InvestigationComparisonPersistenceTests::
         std::move(analysis)
         );
 
+    InvestigationComparisonPresentationState
+        presentationState;
+
+    presentationState.scroll.horizontalValue =
+        17;
+
+    presentationState.scroll.verticalValue =
+        340;
+
     const PersistedInvestigationComparison
         persisted =
         InvestigationComparisonPersistence::
-        capture(original);
+        capture(
+            original,
+            presentationState
+            );
 
     const InvestigationComparisonPersistenceSerializer
         serializer;
@@ -789,6 +802,25 @@ void InvestigationComparisonPersistenceTests::
 
     QVERIFY(result.isSuccess());
     QVERIFY(result.comparison.has_value());
+
+    /*
+     * Comparison presentation state.
+     */
+    QCOMPARE(
+        result.comparison
+            ->presentationState
+            .scroll
+            .horizontalValue,
+        17
+        );
+
+    QCOMPARE(
+        result.comparison
+            ->presentationState
+            .scroll
+            .verticalValue,
+        340
+        );
 
     const InvestigationComparisonSnapshot
         restored =
@@ -1171,6 +1203,120 @@ void InvestigationComparisonPersistenceTests::
             .dominantEntity
             ->value,
         QStringLiteral("node-4")
+        );
+}
+
+void InvestigationComparisonPersistenceTests::
+    missingPresentationStateUsesDefaults()
+{
+    PersistedInvestigationComparison
+        comparison;
+
+    comparison.comparisonId =
+        QStringLiteral(
+            "comparison-legacy"
+            );
+
+    comparison.baselineSource.sessionId =
+        QStringLiteral(
+            "baseline-session"
+            );
+
+    comparison.baselineSource.sourcePath =
+        QStringLiteral(
+            "/logs/baseline.jsonl"
+            );
+
+    comparison.baselineSource.sourceName =
+        QStringLiteral(
+            "baseline.jsonl"
+            );
+
+    comparison.comparisonSource.sessionId =
+        QStringLiteral(
+            "comparison-session"
+            );
+
+    comparison.comparisonSource.sourcePath =
+        QStringLiteral(
+            "/logs/comparison.jsonl"
+            );
+
+    comparison.comparisonSource.sourceName =
+        QStringLiteral(
+            "comparison.jsonl"
+            );
+
+    /*
+     * Give the current-format object non-default
+     * presentation state so removing the JSON field
+     * genuinely tests the legacy/default path.
+     */
+    comparison.presentationState
+        .scroll
+        .horizontalValue =
+        17;
+
+    comparison.presentationState
+        .scroll
+        .verticalValue =
+        340;
+
+    const InvestigationComparisonPersistenceSerializer
+        serializer;
+
+    QJsonObject json =
+        serializer.serialize(
+            comparison
+            );
+
+    QVERIFY(
+        json.contains(
+            QStringLiteral(
+                "presentationState"
+                )
+            )
+        );
+
+    /*
+     * Simulate a schema-version-1 comparison written
+     * before comparison presentation-state
+     * persistence existed.
+     */
+    json.remove(
+        QStringLiteral(
+            "presentationState"
+            )
+        );
+
+    const ComparisonPersistenceDeserializationResult
+        result =
+        serializer.deserialize(
+            json
+            );
+
+    QVERIFY(
+        result.isSuccess()
+        );
+
+    QVERIFY(
+        result.comparison.has_value()
+        );
+
+    QCOMPARE(
+        result.comparison
+            ->presentationState
+            .scroll
+            .horizontalValue,
+        0
+        );
+
+    QCOMPARE(
+        result.comparison
+            ->presentationState
+            .scroll
+            .verticalValue,
+        0
         );
 }
 

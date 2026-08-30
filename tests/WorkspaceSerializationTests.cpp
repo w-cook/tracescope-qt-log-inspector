@@ -24,6 +24,7 @@ private slots:
     void missingPresentationStateUsesDefaults();
     void documentLayoutRoundTripsThroughJson();
     void missingDocumentLayoutUsesDefaults();
+    void missingMainWindowStateUsesDefaults();
 };
 
 void WorkspaceSerializationTests::
@@ -1310,6 +1311,19 @@ void WorkspaceSerializationTests::
         .currentDocumentId =
         QStringLiteral("session-2");
 
+    original.documentLayout
+        .mainWindowGeometry =
+        QRect(
+            80,
+            60,
+            1280,
+            820
+            );
+
+    original.documentLayout
+        .mainWindowMaximized =
+        true;
+
     DetachedWorkspaceWindowLayoutState detached;
 
     detached.group.documentIds = {
@@ -1385,6 +1399,20 @@ void WorkspaceSerializationTests::
         &restored =
         result.workspace
             ->documentLayout;
+
+    QCOMPARE(
+        restored.mainWindowGeometry,
+        original
+            .documentLayout
+            .mainWindowGeometry
+        );
+
+    QCOMPARE(
+        restored.mainWindowMaximized,
+        original
+            .documentLayout
+            .mainWindowMaximized
+        );
 
     QCOMPARE(
         restored
@@ -1566,6 +1594,102 @@ void WorkspaceSerializationTests::
         restored.documentLayout
             .activeDocumentId
             .isEmpty()
+        );
+}
+
+void WorkspaceSerializationTests::
+    missingMainWindowStateUsesDefaults()
+{
+    WorkspacePersistenceState original;
+
+    original.documentLayout
+        .mainWindowGeometry =
+        QRect(
+            80,
+            60,
+            1280,
+            820
+            );
+
+    original.documentLayout
+        .mainWindowMaximized =
+        true;
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray serialized =
+        serializer.serialize(
+            original
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serialized
+            );
+
+    QVERIFY(
+        document.isObject()
+        );
+
+    QJsonObject root =
+        document.object();
+
+    QJsonObject documentLayout =
+        root.value(
+                QStringLiteral(
+                    "documentLayout"
+                    )
+                )
+            .toObject();
+
+    /*
+     * Simulate a schema-version-1 workspace written
+     * after document-layout persistence existed but
+     * before primary-window geometry was added.
+     */
+    documentLayout.remove(
+        QStringLiteral(
+            "mainWindowGeometry"
+            )
+        );
+
+    documentLayout.remove(
+        QStringLiteral(
+            "mainWindowMaximized"
+            )
+        );
+
+    root.insert(
+        QStringLiteral("documentLayout"),
+        documentLayout
+        );
+
+    const WorkspaceDeserializationResult result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY(
+        result.isSuccess()
+        );
+
+    QVERIFY(
+        result.workspace.has_value()
+        );
+
+    QVERIFY(
+        !result.workspace
+             ->documentLayout
+             .mainWindowGeometry
+             .isValid()
+        );
+
+    QVERIFY(
+        !result.workspace
+             ->documentLayout
+             .mainWindowMaximized
         );
 }
 

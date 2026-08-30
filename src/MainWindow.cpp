@@ -26,11 +26,15 @@
 #include <QPainter>
 #include <QStyledItemDelegate>
 #include <QSaveFile>
+#include <QPushButton>
+#include <QFile>
+#include <QCloseEvent>
 
 #include <algorithm>
 #include <cmath>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
@@ -293,6 +297,21 @@ public:
     }
 };
 }
+
+struct MainWindow::WorkspaceOpenOperation
+{
+    QString workspacePath;
+
+    WorkspacePersistenceState state;
+
+    int nextSessionIndex = 0;
+    int skippedSessionCount = 0;
+    int emptySessionCount = 0;
+
+    std::vector<
+        std::unique_ptr<InvestigationSession>
+        > stagedSessions;
+};
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -631,11 +650,34 @@ void MainWindow::createMenus()
             );
     openAction->setShortcut(QKeySequence::Open);
 
+    openAction->setShortcutContext(
+        Qt::ApplicationShortcut
+        );
+
     connect(openAction, &QAction::triggered, this, [this]() {
         openLogFile();
     });
 
     fileMenu->addAction(openAction);
+
+    openWorkspaceAction =
+        new QAction(
+            tr("Open &Workspace..."),
+            this
+            );
+
+    connect(
+        openWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            openWorkspace();
+        }
+        );
+
+    fileMenu->addAction(
+        openWorkspaceAction
+        );
 
     recentFilesMenu =
         fileMenu->addMenu(
@@ -694,6 +736,10 @@ void MainWindow::createMenus()
         QKeySequence::Save
         );
 
+    saveWorkspaceAction->setShortcutContext(
+        Qt::ApplicationShortcut
+        );
+
     connect(
         saveWorkspaceAction,
         &QAction::triggered,
@@ -715,6 +761,10 @@ void MainWindow::createMenus()
 
     saveWorkspaceAsAction->setShortcut(
         QKeySequence::SaveAs
+        );
+
+    saveWorkspaceAsAction->setShortcutContext(
+        Qt::ApplicationShortcut
         );
 
     connect(
@@ -985,6 +1035,10 @@ bool MainWindow::startLogFileImport(
         openAction->setEnabled(false);
     }
 
+    if (openWorkspaceAction != nullptr) {
+        openWorkspaceAction->setEnabled(false);
+    }
+
     setAcceptDrops(false);
 
     connect(
@@ -1064,6 +1118,10 @@ bool MainWindow::startLogFileImport(
 
             if (openAction != nullptr) {
                 openAction->setEnabled(true);
+            }
+
+            if (openWorkspaceAction != nullptr) {
+                openWorkspaceAction->setEnabled(true);
             }
 
             setAcceptDrops(true);
@@ -1406,6 +1464,24 @@ void MainWindow::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
 }
 
+void MainWindow::closeEvent(
+    QCloseEvent *event
+    )
+{
+    /*
+     * Detached workspace windows are independent
+     * top-level windows. Tear down the complete
+     * document workspace before accepting closure
+     * of the primary application window so no
+     * detached TraceScope windows remain alive.
+     */
+    clearCurrentWorkspace();
+
+    QMainWindow::closeEvent(
+        event
+        );
+}
+
 void MainWindow::reloadActiveSession()
 {
     InvestigationSession *session =
@@ -1720,10 +1796,12 @@ MainWindow::captureWorkspaceState() const
         }
 
         state.comparisons.append(
-            InvestigationComparisonPersistence
-            ::capture(
+            InvestigationComparisonPersistence::
+            capture(
                 comparisonDocument
-                    ->snapshot()
+                    ->snapshot(),
+                comparisonDocument
+                    ->capturePresentationState()
                 )
             );
     }
@@ -1731,6 +1809,20 @@ MainWindow::captureWorkspaceState() const
     state.documentLayout =
         workspaceDocumentHost
             ->captureLayoutState();
+
+    const QRect normalMainGeometry =
+        normalGeometry();
+
+    state.documentLayout
+        .mainWindowGeometry =
+        isMaximized()
+                && normalMainGeometry.isValid()
+            ? normalMainGeometry
+            : geometry();
+
+    state.documentLayout
+        .mainWindowMaximized =
+        isMaximized();
 
     return state;
 }
@@ -1833,4 +1925,762 @@ void MainWindow::saveWorkspaceAs()
     saveWorkspaceToFile(
         filePath
         );
+}
+
+bool MainWindow::resolveWorkspaceSourcePaths(
+    WorkspacePersistenceState &state
+    )
+{
+    QVector<PersistedInvestigationSession>
+        recoverableSessions;
+
+    recoverableSessions.reserve(
+        state.sessions.size()
+        );
+
+    for (PersistedInvestigationSession
+             persistedSession
+         : std::as_const(state.sessions)) {
+        const QFileInfo sourceInfo(
+            persistedSession.sourcePath
+            );
+
+        if (sourceInfo.exists()
+            && sourceInfo.isFile()) {
+            recoverableSessions.append(
+                std::move(
+                    persistedSession
+                    )
+                );
+
+            continue;
+        }
+
+        bool resolved =
+            false;
+
+        bool skipped =
+            false;
+
+        while (!resolved
+               && !skipped) {
+            QMessageBox prompt(
+                this
+                );
+
+            prompt.setIcon(
+                QMessageBox::Warning
+                );
+
+            prompt.setWindowTitle(
+                tr(
+                    "Workspace Source File Missing"
+                    )
+                );
+
+            prompt.setText(
+                tr(
+                    "A source file used by this "
+                    "workspace could not be found."
+                    )
+                );
+
+            prompt.setInformativeText(
+                tr(
+                    "Saved location:\n%1\n\n"
+                    "Locate the file to restore this "
+                    "session, or skip the session and "
+                    "continue opening the rest of the "
+                    "workspace."
+                    )
+                    .arg(
+                        persistedSession
+                            .sourcePath
+                        )
+                );
+
+            QPushButton *locateButton =
+                prompt.addButton(
+                    tr("Locate File..."),
+                    QMessageBox::AcceptRole
+                    );
+
+            QPushButton *skipButton =
+                prompt.addButton(
+                    tr("Skip Session"),
+                    QMessageBox::ActionRole
+                    );
+
+            QPushButton *cancelButton =
+                prompt.addButton(
+                    QMessageBox::Cancel
+                    );
+
+            prompt.setDefaultButton(
+                locateButton
+                );
+
+            prompt.exec();
+
+            if (prompt.clickedButton()
+                == cancelButton) {
+                return false;
+            }
+
+            if (prompt.clickedButton()
+                == skipButton) {
+                skipped =
+                    true;
+
+                continue;
+            }
+
+            if (prompt.clickedButton()
+                != locateButton) {
+                continue;
+            }
+
+            const QFileInfo missingInfo(
+                persistedSession.sourcePath
+                );
+
+            const QString replacementPath =
+                QFileDialog::getOpenFileName(
+                    this,
+                    tr(
+                        "Locate Workspace Source File"
+                        ),
+                    missingInfo.absolutePath(),
+                    tr("All Files (*)")
+                    );
+
+            /*
+             * Cancelling the picker returns to the
+             * recovery prompt instead of silently
+             * treating the source as skipped.
+             */
+            if (replacementPath.isEmpty()) {
+                continue;
+            }
+
+            const QFileInfo replacementInfo(
+                replacementPath
+                );
+
+            if (!replacementInfo.exists()
+                || !replacementInfo.isFile()) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Source File Not Found"
+                        ),
+                    tr(
+                        "The selected source file "
+                        "could not be opened. Choose "
+                        "another file or skip this "
+                        "session."
+                        )
+                    );
+
+                continue;
+            }
+
+            persistedSession.sourcePath =
+                replacementInfo
+                    .absoluteFilePath();
+
+            recoverableSessions.append(
+                std::move(
+                    persistedSession
+                    )
+                );
+
+            resolved =
+                true;
+        }
+    }
+
+    state.sessions =
+        std::move(
+            recoverableSessions
+            );
+
+    return true;
+}
+
+void MainWindow::openWorkspace()
+{
+    if (importWatcher != nullptr) {
+        QMessageBox::information(
+            this,
+            tr("Import In Progress"),
+            tr(
+                "A log file is already being imported. "
+                "Wait for the current import to finish "
+                "before opening a workspace."
+                )
+            );
+
+        return;
+    }
+
+    const QString filePath =
+        QFileDialog::getOpenFileName(
+            this,
+            tr("Open TraceScope Workspace"),
+            currentWorkspacePath,
+            tr(
+                "TraceScope Workspace (*.json);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QFile file(
+        filePath
+        );
+
+    if (!file.open(
+            QIODevice::ReadOnly
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Open Workspace Failed"),
+            tr(
+                "TraceScope could not open the "
+                "selected workspace file."
+                )
+            );
+
+        return;
+    }
+
+    const QByteArray json =
+        file.readAll();
+
+    file.close();
+
+    const WorkspaceSerializer serializer;
+
+    WorkspaceDeserializationResult result =
+        serializer.deserialize(
+            json
+            );
+
+    if (!result.isSuccess()) {
+        const QString reason =
+            result.errorMessage.isEmpty()
+                ? tr(
+                      "The selected file is not a "
+                      "valid TraceScope workspace."
+                      )
+                : result.errorMessage;
+
+        QMessageBox::warning(
+            this,
+            tr("Open Workspace Failed"),
+            tr(
+                "TraceScope was unable to load the "
+                "selected workspace.\n\n"
+                "Reason:\n%1"
+                )
+                .arg(
+                    reason
+                    )
+            );
+
+        return;
+    }
+
+    WorkspacePersistenceState state =
+        std::move(
+            result.workspace.value()
+            );
+
+    /*
+     * Don't silently destroy the investigation the
+     * user is currently working in.
+     */
+    if (workspaceDocumentHost != nullptr
+        && !workspaceDocumentHost
+                ->documents()
+                .isEmpty()) {
+        const QMessageBox::StandardButton choice =
+            QMessageBox::question(
+                this,
+                tr("Replace Current Workspace"),
+                tr(
+                    "Opening this workspace will "
+                    "replace the workspace that is "
+                    "currently open.\n\n"
+                    "Save the current workspace first "
+                    "if you want to keep any changes.\n\n"
+                    "Continue?"
+                    ),
+                QMessageBox::Yes
+                    | QMessageBox::Cancel,
+                QMessageBox::Cancel
+                );
+
+        if (choice != QMessageBox::Yes) {
+            return;
+        }
+    }
+
+    const int originalSessionCount =
+        state.sessions.size();
+
+    /*
+     * Missing paths are resolved before any import
+     * begins. Cancelling recovery leaves the current
+     * workspace completely untouched.
+     */
+    if (!resolveWorkspaceSourcePaths(
+            state
+            )) {
+        return;
+    }
+
+    auto operation =
+        std::make_shared<
+            WorkspaceOpenOperation
+            >();
+
+    operation->workspacePath =
+        QFileInfo(filePath)
+            .absoluteFilePath();
+
+    operation->skippedSessionCount =
+        originalSessionCount
+        - state.sessions.size();
+
+    operation->state =
+        std::move(
+            state
+            );
+
+    operation->stagedSessions.reserve(
+        static_cast<std::size_t>(
+            operation->state
+                .sessions
+                .size()
+            )
+        );
+
+    continueWorkspaceOpen(
+        operation
+        );
+}
+
+void MainWindow::continueWorkspaceOpen(
+    const std::shared_ptr<
+        WorkspaceOpenOperation
+        > &operation
+    )
+{
+    if (operation == nullptr) {
+        return;
+    }
+
+    if (operation->nextSessionIndex
+        >= operation->state
+               .sessions
+               .size()) {
+        installOpenedWorkspace(
+            operation
+            );
+
+        return;
+    }
+
+    const int sessionIndex =
+        operation->nextSessionIndex;
+
+    const PersistedInvestigationSession
+        &persistedSession =
+        operation->state
+            .sessions
+            .at(
+                sessionIndex
+                );
+
+    const bool started =
+        startLogFileImport(
+            persistedSession.sourcePath,
+            persistedSession.importProfile,
+            [
+                this,
+                operation,
+                sessionIndex
+            ](
+                std::optional<ImportResult>
+                    result
+                ) {
+                /*
+                 * A cancelled import aborts the open
+                 * operation. Nothing live has been
+                 * replaced yet.
+                 */
+                if (!result.has_value()
+                    || result->cancelled) {
+                    return;
+                }
+
+                const PersistedInvestigationSession
+                    &persistedSession =
+                    operation->state
+                        .sessions
+                        .at(
+                            sessionIndex
+                            );
+
+                if (result->records.isEmpty()) {
+                    ++operation
+                          ->emptySessionCount;
+                }
+
+                auto session =
+                    std::make_unique<
+                        InvestigationSession
+                        >(
+                        persistedSession
+                            .sessionId,
+                        persistedSession
+                            .sourcePath,
+                        persistedSession
+                            .importProfile,
+                        std::move(
+                            result.value()
+                            )
+                        );
+
+                /*
+                 * Restore bookmarks, notes, findings,
+                 * filters, selected record, and other
+                 * session/domain persistence before
+                 * the session ever enters the live
+                 * workspace.
+                 */
+                InvestigationSessionPersistence::
+                    restoreState(
+                        persistedSession,
+                        *session
+                        );
+
+                operation->stagedSessions
+                    .push_back(
+                        std::move(
+                            session
+                            )
+                        );
+
+                ++operation
+                      ->nextSessionIndex;
+
+                continueWorkspaceOpen(
+                    operation
+                    );
+            }
+            );
+
+    /*
+     * An unsupported importer, or another inability
+     * to start the import, aborts restoration while
+     * preserving the currently open workspace.
+     *
+     * startLogFileImport() already presents the
+     * appropriate error message.
+     */
+    if (!started) {
+        return;
+    }
+}
+
+void MainWindow::clearCurrentWorkspace()
+{
+    if (workspace == nullptr
+        || workspaceDocumentHost
+               == nullptr) {
+        return;
+    }
+
+    /*
+     * Closing sessions through InvestigationWorkspace
+     * lets the existing sessionClosed connection
+     * remove their InvestigationSessionView documents
+     * correctly, including detached ones.
+     */
+    while (workspace->sessionCount() > 0) {
+        workspace->closeSession(
+            workspace->sessionCount()
+            - 1
+            );
+    }
+
+    /*
+     * Session documents are now gone. Remove any
+     * remaining non-session documents, currently
+     * immutable comparison documents.
+     */
+    const QVector<WorkspaceDocument *>
+        remainingDocuments =
+        workspaceDocumentHost
+            ->documents();
+
+    for (WorkspaceDocument *document
+         : remainingDocuments) {
+        if (document == nullptr) {
+            continue;
+        }
+
+        WorkspaceDocument *removed =
+            workspaceDocumentHost
+                ->removeDocument(
+                    document->documentId()
+                    );
+
+        if (removed != nullptr) {
+            removed->deleteLater();
+        }
+    }
+}
+
+void MainWindow::installOpenedWorkspace(
+    const std::shared_ptr<
+        WorkspaceOpenOperation
+        > &operation
+    )
+{
+    if (operation == nullptr
+        || workspace == nullptr
+        || workspaceDocumentHost
+               == nullptr) {
+        return;
+    }
+
+    /*
+     * Every recoverable source has now completed its
+     * import. This is the first point where replacing
+     * the existing workspace is safe.
+     */
+    clearCurrentWorkspace();
+
+    for (int index = 0;
+         index < operation->state
+                     .sessions
+                     .size();
+         ++index) {
+        if (index
+            >= static_cast<int>(
+                operation->stagedSessions
+                    .size()
+                )) {
+            break;
+        }
+
+        const PersistedInvestigationSession
+            &persistedSession =
+            operation->state
+                .sessions
+                .at(index);
+
+        std::unique_ptr<InvestigationSession>
+            session =
+            std::move(
+                operation->stagedSessions[
+                    static_cast<
+                        std::size_t
+                        >(index)
+                ]
+                );
+
+        if (!session) {
+            continue;
+        }
+
+        const QString sessionId =
+            session->id();
+
+        workspace->addSession(
+            std::move(
+                session
+                )
+            );
+
+        /*
+         * sessionAdded has synchronously constructed
+         * the InvestigationSessionView, so visual
+         * presentation state can now be restored.
+         */
+        WorkspaceDocument *document =
+            workspaceDocumentHost
+                ->documentById(
+                    sessionId
+                    );
+
+        auto *sessionView =
+            qobject_cast<
+                InvestigationSessionView *>(
+                document
+                );
+
+        if (sessionView != nullptr) {
+            sessionView
+                ->restorePresentationState(
+                    persistedSession
+                        .presentationState
+                    );
+        }
+    }
+
+    /*
+     * Comparison snapshots are persisted independently
+     * of the live sessions. Restore them even when one
+     * of their original source sessions was skipped
+     * because its source file is unavailable.
+     */
+    for (
+        const PersistedInvestigationComparison
+            &persistedComparison
+        : std::as_const(operation->state.comparisons)
+        ) {
+        InvestigationComparisonSnapshot snapshot =
+            InvestigationComparisonPersistence::
+            restore(
+                persistedComparison
+                );
+
+        auto *document =
+            new InvestigationComparisonDocument(
+                std::move(
+                    snapshot
+                    )
+                );
+
+        if (!workspaceDocumentHost
+                 ->addDocument(
+                     document,
+                     false
+                     )) {
+            delete document;
+        }
+    }
+
+    const WorkspaceDocumentLayoutState
+        &layoutState =
+        operation->state.documentLayout;
+
+    if (layoutState
+            .mainWindowGeometry
+            .isValid()) {
+        /*
+         * Normalize first so setGeometry() establishes
+         * the saved normal position/size even if the
+         * currently running window happens to be
+         * maximized.
+         */
+        showNormal();
+
+        setGeometry(
+            layoutState
+                .mainWindowGeometry
+            );
+
+        if (layoutState
+                .mainWindowMaximized) {
+            showMaximized();
+        }
+    }
+
+    workspaceDocumentHost
+        ->restoreLayoutState(
+            layoutState
+            );
+
+    for (
+        const PersistedInvestigationComparison
+            &persistedComparison
+        : std::as_const(operation->state.comparisons)
+        ) {
+        WorkspaceDocument *document =
+            workspaceDocumentHost
+                ->documentById(
+                    persistedComparison
+                        .comparisonId
+                    );
+
+        auto *comparisonDocument =
+            qobject_cast<
+                InvestigationComparisonDocument *>(
+                document
+                );
+
+        if (comparisonDocument != nullptr) {
+            comparisonDocument
+                ->restorePresentationState(
+                    persistedComparison
+                        .presentationState
+                    );
+        }
+    }
+
+    /*
+     * All documents must exist before restoring
+     * tab order, detached groups, window geometry,
+     * local current tabs, and global active document.
+     *
+     * Missing document IDs are already deliberately
+     * ignored by WorkspaceDocumentHost.
+     */
+    workspaceDocumentHost
+        ->restoreLayoutState(
+            layoutState
+            );
+
+    currentWorkspacePath =
+        operation->workspacePath;
+
+    if (operation->skippedSessionCount > 0
+        || operation->emptySessionCount > 0) {
+        QStringList messages;
+
+        if (operation->skippedSessionCount > 0) {
+            messages.append(
+                tr(
+                    "%1 unavailable source session(s) "
+                    "were skipped."
+                    )
+                    .arg(
+                        operation
+                            ->skippedSessionCount
+                        )
+                );
+        }
+
+        if (operation->emptySessionCount > 0) {
+            messages.append(
+                tr(
+                    "%1 restored source session(s) "
+                    "loaded no events."
+                    )
+                    .arg(
+                        operation
+                            ->emptySessionCount
+                        )
+                );
+        }
+
+        QMessageBox::warning(
+            this,
+            tr(
+                "Workspace Partially Restored"
+                ),
+            messages.join(
+                QStringLiteral("\n")
+                )
+            );
+    }
 }

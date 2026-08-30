@@ -8,7 +8,9 @@ class InvestigationComparisonPersistence
 public:
     static PersistedInvestigationComparison capture(
         const InvestigationComparisonSnapshot
-            &snapshot
+            &snapshot,
+        const InvestigationComparisonPresentationState
+            &presentationState = {}
         );
 
     static InvestigationComparisonSnapshot restore(

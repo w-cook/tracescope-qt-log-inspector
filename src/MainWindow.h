@@ -7,6 +7,7 @@
 #include <QSettings>
 
 #include <functional>
+#include <memory>
 #include <optional>
 
 #include "exporting/InvestigationCsvExporter.h"
@@ -36,6 +37,7 @@ class QAction;
 class QScrollBar;
 class QMenu;
 class QWidget;
+class QCloseEvent;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationAnalyticsPanel;
@@ -65,6 +67,10 @@ protected:
         QDropEvent *event
         ) override;
 
+    void closeEvent(
+        QCloseEvent *event
+        ) override;
+
 private:
     QSettings settings;
     RecentItemsStore recentItemsStore;
@@ -84,6 +90,7 @@ private:
     QAction *compareAction = nullptr;
     QAction *saveWorkspaceAction = nullptr;
     QAction *saveWorkspaceAsAction = nullptr;
+    QAction *openWorkspaceAction = nullptr;
 
     QString currentWorkspacePath;
 
@@ -139,4 +146,26 @@ private:
 
     void saveWorkspace();
     void saveWorkspaceAs();
+
+    bool resolveWorkspaceSourcePaths(
+        WorkspacePersistenceState &state
+        );
+
+    struct WorkspaceOpenOperation;
+
+    void openWorkspace();
+
+    void continueWorkspaceOpen(
+        const std::shared_ptr<
+            WorkspaceOpenOperation
+            > &operation
+        );
+
+    void installOpenedWorkspace(
+        const std::shared_ptr<
+            WorkspaceOpenOperation
+            > &operation
+        );
+
+    void clearCurrentWorkspace();
 };
