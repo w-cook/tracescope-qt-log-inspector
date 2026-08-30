@@ -4,6 +4,7 @@
 
 #include "../../domain/InvestigationRecord.h"
 #include "../../domain/InvestigationRecordState.h"
+#include "../../workspace/InvestigationPresentationState.h"
 
 class QComboBox;
 class QPlainTextEdit;
@@ -35,6 +36,13 @@ public:
         );
 
     FindingStatus selectedFindingStatus() const;
+
+    InvestigationScrollState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationScrollState &state
+        );
 
 signals:
     void findingStatusChangeRequested();

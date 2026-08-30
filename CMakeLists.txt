@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.13.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.14.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -160,6 +160,21 @@ qt_add_executable(TraceScope
     src/ui/workspace/InvestigationComparisonDocument.cpp
     src/ui/InvestigationComparisonDialog.h
     src/ui/InvestigationComparisonDialog.cpp
+    src/workspace/WorkspacePersistenceState.h
+    src/workspace/WorkspaceSerialization.h
+    src/workspace/WorkspaceSerialization.cpp
+    src/workspace/InvestigationSessionPersistence.h
+    src/workspace/InvestigationSessionPersistence.cpp
+    src/workspace/InvestigationComparisonPersistence.h
+    src/workspace/InvestigationComparisonPersistence.cpp
+    src/workspace/InvestigationComparisonPersistenceSerialization.h
+    src/workspace/InvestigationComparisonPersistenceSerialization.cpp
+    src/workspace/InvestigationPresentationState.h
+    src/workspace/InvestigationPresentationStateSerialization.h
+    src/workspace/InvestigationPresentationStateSerialization.cpp
+    src/workspace/WorkspaceDocumentLayoutState.h
+    src/workspace/WorkspaceDocumentLayoutSerialization.h
+    src/workspace/WorkspaceDocumentLayoutSerialization.cpp
 
 )
 

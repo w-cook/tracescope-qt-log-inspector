@@ -12,10 +12,25 @@ InvestigationSession::InvestigationSession(
     ImportProfile profile,
     ImportResult result
     )
-    : m_id(
+    : InvestigationSession(
           QUuid::createUuid().toString(
               QUuid::WithoutBraces
-              )
+              ),
+          filePath,
+          std::move(profile),
+          std::move(result)
+          )
+{
+}
+
+InvestigationSession::InvestigationSession(
+    QString sessionId,
+    const QString &filePath,
+    ImportProfile profile,
+    ImportResult result
+    )
+    : m_id(
+          std::move(sessionId)
           ),
     m_importProfile(
         std::move(profile)

@@ -40,6 +40,39 @@ QString documentIdFor(
                : QString();
 }
 
+void restoreSplitterSizes(
+    QSplitter *splitter,
+    const QVector<int> &sizes
+    )
+{
+    if (splitter == nullptr
+        || sizes.size() != splitter->count()) {
+        return;
+    }
+
+    bool hasPositiveSize =
+        false;
+
+    for (const int size : sizes) {
+        if (size < 0) {
+            return;
+        }
+
+        if (size > 0) {
+            hasPositiveSize =
+                true;
+        }
+    }
+
+    if (!hasPositiveSize) {
+        return;
+    }
+
+    splitter->setSizes(
+        sizes
+        );
+}
+
 QString documentTitleFor(
     const InvestigationSession *session
     )
@@ -469,6 +502,146 @@ void InvestigationSessionView::
         ->refreshNavigationState();
 }
 
+InvestigationSessionPresentationState
+    InvestigationSessionView::
+    capturePresentationState() const
+{
+    InvestigationSessionPresentationState
+        state;
+
+    if (m_eventPanel != nullptr) {
+        state.eventTable =
+            m_eventPanel
+                ->capturePresentationState();
+    }
+
+    if (m_eventDetailPanel != nullptr) {
+        state.eventDetailScroll =
+            m_eventDetailPanel
+                ->capturePresentationState();
+    }
+
+    if (m_timelinePanel != nullptr) {
+        state.timeline =
+            m_timelinePanel
+                ->capturePresentationState();
+    }
+
+    if (m_reviewPanel != nullptr) {
+        state.review =
+            m_reviewPanel
+                ->capturePresentationState();
+    }
+
+    if (m_mainSplitter != nullptr) {
+        state.mainSplitterSizes =
+            m_mainSplitter->sizes();
+    }
+
+    if (m_bottomSplitter != nullptr) {
+        state.bottomSplitterSizes =
+            m_bottomSplitter->sizes();
+    }
+
+    if (m_session != nullptr) {
+        state.burstTimingMode =
+            m_session->burstTimingMode();
+
+        state.burstDetectionSettings =
+            m_session->burstDetectionSettings();
+    }
+
+    return state;
+}
+
+void InvestigationSessionView::
+    restorePresentationState(
+        const InvestigationSessionPresentationState
+            &state
+        )
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    /*
+     * Burst configuration affects the actual Analytics
+     * data model, so restore it before attempting to
+     * restore Analytics selection/presentation state.
+     */
+    m_session->setBurstTimingMode(
+        state.burstTimingMode
+        );
+
+    m_session->setBurstDetectionSettings(
+        state.burstDetectionSettings
+        );
+
+    if (m_analyticsPanel != nullptr) {
+        m_analyticsPanel->updateRecords(
+            m_session
+                ->investigationController()
+                ->recordsForAnalysis()
+            );
+    }
+
+    /*
+     * Event-table restoration first establishes the
+     * saved sort and selected record.
+     */
+    if (m_eventPanel != nullptr) {
+        m_eventPanel
+            ->restorePresentationState(
+                state.eventTable
+                );
+    }
+
+    /*
+     * Ensure Selected Event Details represents the
+     * final restored selection before applying its
+     * saved text viewport.
+     */
+    updateEventDetailFromSelection();
+
+    if (m_eventDetailPanel != nullptr) {
+        m_eventDetailPanel
+            ->restorePresentationState(
+                state.eventDetailScroll
+                );
+    }
+
+    if (m_timelinePanel != nullptr) {
+        m_timelinePanel
+            ->restorePresentationState(
+                state.timeline
+                );
+    }
+
+    if (m_reviewPanel != nullptr) {
+        m_reviewPanel
+            ->restorePresentationState(
+                state.review
+                );
+    }
+
+    /*
+     * Review-tab restoration deliberately updates the
+     * adaptive Review/Detail layout. Apply the exact
+     * saved splitter presentation only after that
+     * capability-aware/tab-aware synchronization has
+     * finished.
+     */
+    restoreSplitterSizes(
+        m_bottomSplitter,
+        state.bottomSplitterSizes
+        );
+
+    restoreSplitterSizes(
+        m_mainSplitter,
+        state.mainSplitterSizes
+        );
+}
+
 void InvestigationSessionView::
     applyFilters()
 {
@@ -575,6 +748,10 @@ const InvestigationRecord *
     InvestigationSessionView::
     selectedEventRecord() const
 {
+    if (m_eventPanel == nullptr) {
+        return nullptr;
+    }
+
     return m_eventPanel
         ->selectedRecord();
 }

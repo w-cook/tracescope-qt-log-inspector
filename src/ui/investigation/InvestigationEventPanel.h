@@ -4,6 +4,8 @@
 #include <QMetaObject>
 #include <QString>
 
+#include "../../workspace/InvestigationPresentationState.h"
+
 class InvestigationRecord;
 class InvestigationSession;
 class QLabel;
@@ -44,6 +46,13 @@ public:
     void refreshPresentation();
 
     void focusTable();
+
+    InvestigationEventTablePresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationEventTablePresentationState &state
+        );
 
 signals:
     void selectedRecordChanged();

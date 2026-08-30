@@ -33,6 +33,16 @@ public:
         const QString &filePath
         );
 
+    QStringList recentWorkspaces() const;
+
+    void addRecentWorkspace(
+        const QString &filePath
+        );
+
+    void removeRecentWorkspace(
+        const QString &filePath
+        );
+
 private:
     QSettings &m_settings;
 

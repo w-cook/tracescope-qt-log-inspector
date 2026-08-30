@@ -6,12 +6,24 @@
 #include <QFutureWatcher>
 #include <QSettings>
 
+#include <functional>
+#include <memory>
+#include <optional>
+
 #include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
 #include "preferences/FilterPresetStore.h"
 #include "preferences/RecentItemsStore.h"
 #include "workspace/InvestigationWorkspace.h"
+#include "workspace/WorkspacePersistenceState.h"
+
+using ImportCompletionHandler =
+    std::function<
+        void(
+            std::optional<ImportResult>
+            )
+        >;
 
 class QLabel;
 class QTableWidget;
@@ -25,6 +37,7 @@ class QAction;
 class QScrollBar;
 class QMenu;
 class QWidget;
+class QCloseEvent;
 class WorkspaceDocumentHost;
 class InvestigationSessionView;
 class InvestigationAnalyticsPanel;
@@ -54,12 +67,17 @@ protected:
         QDropEvent *event
         ) override;
 
+    void closeEvent(
+        QCloseEvent *event
+        ) override;
+
 private:
     QSettings settings;
     RecentItemsStore recentItemsStore;
     FilterPresetStore filterPresetStore;
 
     QMenu *recentFilesMenu = nullptr;
+    QMenu *recentWorkspacesMenu = nullptr;
 
     InvestigationWorkspace *workspace;
 
@@ -71,6 +89,11 @@ private:
     QAction *openAction = nullptr;
     QAction *reloadAction = nullptr;
     QAction *compareAction = nullptr;
+    QAction *saveWorkspaceAction = nullptr;
+    QAction *saveWorkspaceAsAction = nullptr;
+    QAction *openWorkspaceAction = nullptr;
+
+    QString currentWorkspacePath;
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
@@ -86,6 +109,11 @@ private:
         const ImportProfile &profile,
         const QString &reloadSessionId =
         QString()
+        );
+    bool startLogFileImport(
+        const QString &filePath,
+        const ImportProfile &profile,
+        ImportCompletionHandler completion
         );
     void completeLogFileImport(
         const QString &filePath,
@@ -106,7 +134,48 @@ private:
 
     void refreshRecentFilesMenu();
 
+    void refreshRecentWorkspacesMenu();
+
     void openRecentFile(
         const QString &filePath
         );
+
+    void openRecentWorkspace(
+        const QString &filePath
+        );
+
+    WorkspacePersistenceState
+    captureWorkspaceState() const;
+
+    bool saveWorkspaceToFile(
+        const QString &filePath
+        );
+
+    void saveWorkspace();
+    void saveWorkspaceAs();
+
+    bool resolveWorkspaceSourcePaths(
+        WorkspacePersistenceState &state
+        );
+
+    struct WorkspaceOpenOperation;
+
+    void openWorkspace(
+        const QString &initialFilePath =
+        QString()
+        );
+
+    void continueWorkspaceOpen(
+        const std::shared_ptr<
+            WorkspaceOpenOperation
+            > &operation
+        );
+
+    void installOpenedWorkspace(
+        const std::shared_ptr<
+            WorkspaceOpenOperation
+            > &operation
+        );
+
+    void clearCurrentWorkspace();
 };

@@ -5,6 +5,7 @@
 
 #include "../../analysis/TelemetryIssueAnalyzer.h"
 #include "../../domain/InvestigationRecord.h"
+#include "../../workspace/InvestigationPresentationState.h"
 
 class QTableWidget;
 
@@ -32,6 +33,13 @@ public:
     void clear();
 
     int preferredCompactWidth() const;
+
+    InvestigationTablePresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationTablePresentationState &state
+        );
 
 signals:
     void drillDownRequested(

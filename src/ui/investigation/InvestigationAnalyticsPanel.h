@@ -9,6 +9,7 @@
 #include "../../analysis/InvestigationBurstAnalyzer.h"
 #include "../../analysis/InvestigationCadenceAnalyzer.h"
 #include "../../domain/InvestigationRecord.h"
+#include "../../workspace/InvestigationPresentationState.h"
 
 class InvestigationSession;
 class QLabel;
@@ -17,6 +18,7 @@ class QPlainTextEdit;
 class QPushButton;
 class QTableWidget;
 class QTabWidget;
+class QSplitter;
 
 class InvestigationAnalyticsPanel
     : public QWidget
@@ -39,6 +41,13 @@ public:
         );
 
     void clear();
+
+    InvestigationAnalyticsPresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationAnalyticsPresentationState &state
+        );
 
 signals:
     void burstDrillDownRequested(
@@ -112,5 +121,11 @@ private:
         nullptr;
 
     QPlainTextEdit *m_burstDetailText =
+        nullptr;
+
+    QSplitter *m_overviewSplitter =
+        nullptr;
+
+    QSplitter *m_burstSplitter =
         nullptr;
 };

@@ -105,10 +105,18 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             WorkspaceDocument *document =
                 documentAt(index);
 
-            emit currentDocumentChanged(
+            const QString documentId =
                 document != nullptr
                     ? document->documentId()
-                    : QString()
+                    : QString();
+
+            if (!documentId.isEmpty()) {
+                m_rootHost->m_activeDocumentId =
+                    documentId;
+            }
+
+            emit currentDocumentChanged(
+                documentId
                 );
         }
         );
@@ -775,6 +783,17 @@ bool WorkspaceDocumentHost::setCurrentDocument(
         index
         );
 
+    /*
+     * QTabWidget::currentChanged is not emitted if
+     * this document is already the current tab in
+     * its local group. An explicit
+     * setCurrentDocument() call nevertheless means
+     * this document is now the globally active
+     * workspace document.
+     */
+    root->m_activeDocumentId =
+        documentId;
+
     if (host != root) {
         DetachedWorkspaceDocumentWindow *window =
             root->windowForHost(
@@ -1047,6 +1066,254 @@ bool WorkspaceDocumentHost::redockDocument(
     }
 
     return moved;
+}
+
+WorkspaceDocumentLayoutState
+    WorkspaceDocumentHost::
+    captureLayoutState() const
+{
+    const WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    WorkspaceDocumentLayoutState state;
+
+    for (WorkspaceDocument *document
+         : root->localDocuments()) {
+        if (document != nullptr) {
+            state.dockedGroup.documentIds.append(
+                document->documentId()
+                );
+        }
+    }
+
+    if (WorkspaceDocument *current =
+        root->currentDocument();
+        current != nullptr) {
+        state.dockedGroup.currentDocumentId =
+            current->documentId();
+    }
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : root->m_detachedWindows) {
+        if (window == nullptr
+            || window->documentHost() == nullptr) {
+            continue;
+        }
+
+        WorkspaceDocumentHost *host =
+            window->documentHost();
+
+        if (host->documentCount() <= 0) {
+            continue;
+        }
+
+        DetachedWorkspaceWindowLayoutState
+            windowState;
+
+        for (WorkspaceDocument *document
+             : host->localDocuments()) {
+            if (document != nullptr) {
+                windowState
+                    .group
+                    .documentIds
+                    .append(
+                        document->documentId()
+                        );
+            }
+        }
+
+        if (WorkspaceDocument *current =
+            host->currentDocument();
+            current != nullptr) {
+            windowState.group.currentDocumentId =
+                current->documentId();
+        }
+
+        windowState.maximized =
+            window->isMaximized();
+
+        windowState.geometry =
+            windowState.maximized
+                ? window->normalGeometry()
+                : window->geometry();
+
+        state.detachedWindows.append(
+            windowState
+            );
+    }
+
+    state.activeDocumentId =
+        root->m_activeDocumentId;
+
+    return state;
+}
+
+void WorkspaceDocumentHost::
+    restoreLayoutState(
+        const WorkspaceDocumentLayoutState &state
+        )
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    if (root != this) {
+        root->restoreLayoutState(
+            state
+            );
+
+        return;
+    }
+
+    /*
+     * Restore the root tab order first. Missing
+     * documents are intentionally ignored so a
+     * partially recovered workspace remains usable.
+     */
+    int targetIndex = 0;
+
+    for (const QString &documentId
+         : state.dockedGroup.documentIds) {
+        if (root->owningHost(documentId)
+            != root) {
+            continue;
+        }
+
+        if (root->moveLocalDocumentToIndex(
+                documentId,
+                targetIndex
+                )) {
+            ++targetIndex;
+        }
+    }
+
+    /*
+     * Recreate detached groups from documents that
+     * currently exist in the root host. A group
+     * whose documents could not be restored is
+     * simply omitted.
+     */
+    for (const DetachedWorkspaceWindowLayoutState
+             &windowState
+         : state.detachedWindows) {
+        QStringList availableIds;
+
+        for (const QString &documentId
+             : windowState.group.documentIds) {
+            if (root->owningHost(documentId)
+                == root) {
+                availableIds.append(
+                    documentId
+                    );
+            }
+        }
+
+        if (availableIds.isEmpty()) {
+            continue;
+        }
+
+        const QPoint initialPosition =
+            windowState.geometry.isValid()
+                ? windowState.geometry.topLeft()
+                      + QPoint(80, 20)
+                : QCursor::pos();
+
+        DetachedWorkspaceDocumentWindow *window =
+            root->createDetachedWindow(
+                initialPosition
+                );
+
+        if (window == nullptr
+            || window->documentHost()
+                   == nullptr) {
+            continue;
+        }
+
+        WorkspaceDocumentHost *targetHost =
+            window->documentHost();
+
+        int detachedIndex = 0;
+
+        for (const QString &documentId
+             : availableIds) {
+            if (root->transferDocument(
+                    root,
+                    documentId,
+                    targetHost,
+                    detachedIndex,
+                    false,
+                    false
+                    )) {
+                ++detachedIndex;
+            }
+        }
+
+        if (targetHost->documentCount() <= 0) {
+            root->cleanupEmptyDetachedHost(
+                targetHost
+                );
+
+            continue;
+        }
+
+        const int currentIndex =
+            targetHost->indexOfDocument(
+                windowState
+                    .group
+                    .currentDocumentId
+                );
+
+        targetHost->ensureLocalCurrentDocument(
+            currentIndex >= 0
+                ? currentIndex
+                : 0
+            );
+
+        if (windowState.geometry.isValid()) {
+            window->setGeometry(
+                windowState.geometry
+                );
+        }
+
+        if (windowState.maximized) {
+            window->showMaximized();
+        } else {
+            window->show();
+        }
+    }
+
+    /*
+     * Restore the root group's current tab without
+     * disturbing the independently saved globally
+     * active workspace document.
+     */
+    const int dockedCurrentIndex =
+        root->indexOfDocument(
+            state.dockedGroup.currentDocumentId
+            );
+
+    if (dockedCurrentIndex >= 0) {
+        root->ensureLocalCurrentDocument(
+            dockedCurrentIndex
+            );
+    } else if (root->documentCount() > 0) {
+        root->ensureLocalCurrentDocument(
+            0
+            );
+    }
+
+    /*
+     * Make the globally active document last. This
+     * also raises its detached window when needed.
+     */
+    if (!state.activeDocumentId.isEmpty()
+        && root->documentById(
+               state.activeDocumentId
+               )
+               != nullptr) {
+        root->setCurrentDocument(
+            state.activeDocumentId
+            );
+    }
 }
 
 void WorkspaceDocumentHost::
@@ -1468,4 +1735,40 @@ void WorkspaceDocumentHost::
 
     m_tabs->tabBar()->update();
     m_tabs->update();
+}
+
+bool WorkspaceDocumentHost::
+    moveLocalDocumentToIndex(
+        const QString &documentId,
+        int targetIndex
+        )
+{
+    const int sourceIndex =
+        indexOfDocument(
+            documentId
+            );
+
+    if (sourceIndex < 0
+        || m_tabs == nullptr
+        || m_tabs->count() <= 0) {
+        return false;
+    }
+
+    const int boundedTarget =
+        qBound(
+            0,
+            targetIndex,
+            m_tabs->count() - 1
+            );
+
+    if (sourceIndex == boundedTarget) {
+        return true;
+    }
+
+    m_tabs->tabBar()->moveTab(
+        sourceIndex,
+        boundedTarget
+        );
+
+    return true;
 }

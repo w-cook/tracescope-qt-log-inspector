@@ -965,6 +965,9 @@ qt_add_executable(
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp
     ../src/domain/RecordSourceMetadata.h
+
+    ../src/workspace/InvestigationSessionPersistence.h
+    ../src/workspace/InvestigationSessionPersistence.cpp
 )
 
 target_link_libraries(
@@ -1157,4 +1160,194 @@ target_link_libraries(
 add_test(
     NAME InvestigationComparisonDialogTests
     COMMAND InvestigationComparisonDialogTests
+)
+
+qt_add_executable(WorkspaceSerializationTests
+    WorkspaceSerializationTests.cpp
+    ../src/workspace/WorkspacePersistenceState.h
+    ../src/workspace/WorkspaceSerialization.h
+    ../src/workspace/WorkspaceSerialization.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.h
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.cpp
+
+    ../src/workspace/InvestigationPresentationState.h
+    ../src/workspace/InvestigationPresentationStateSerialization.h
+    ../src/workspace/InvestigationPresentationStateSerialization.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+
+    ../src/workspace/WorkspaceDocumentLayoutState.h
+    ../src/workspace/WorkspaceDocumentLayoutSerialization.h
+    ../src/workspace/WorkspaceDocumentLayoutSerialization.cpp
+)
+
+target_link_libraries(
+    WorkspaceSerializationTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME WorkspaceSerializationTests
+    COMMAND WorkspaceSerializationTests
+)
+
+qt_add_executable(
+    InvestigationComparisonPersistenceTests
+    InvestigationComparisonPersistenceTests.cpp
+
+    ../src/workspace/InvestigationComparisonPersistence.h
+    ../src/workspace/InvestigationComparisonPersistence.cpp
+
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.h
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.cpp
+
+    ../src/workspace/InvestigationComparisonSnapshot.h
+    ../src/workspace/WorkspacePersistenceState.h
+
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+)
+
+target_link_libraries(
+    InvestigationComparisonPersistenceTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationComparisonPersistenceTests
+    COMMAND InvestigationComparisonPersistenceTests
+)
+
+qt_add_executable(
+    InvestigationPresentationStateTests
+
+    InvestigationPresentationStateTests.cpp
+
+    ../src/workspace/InvestigationPresentationState.h
+
+    ../src/ui/investigation/InvestigationEventPanel.h
+    ../src/ui/investigation/InvestigationEventPanel.cpp
+
+    ../src/ui/investigation/InvestigationEventDetailPanel.h
+    ../src/ui/investigation/InvestigationEventDetailPanel.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+
+    ../src/ui/investigation/InvestigationTimelinePanel.h
+    ../src/ui/investigation/InvestigationTimelinePanel.cpp
+
+    ../src/analysis/EventTimelineAnalyzer.h
+    ../src/analysis/EventTimelineAnalyzer.cpp
+
+    ../src/analysis/InvestigationAnalyticsAnalyzer.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.cpp
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+
+    ../src/ui/investigation/InvestigationIssueSummaryPanel.h
+    ../src/ui/investigation/InvestigationIssueSummaryPanel.cpp
+
+    ../src/ui/investigation/InvestigationFindingsPanel.h
+    ../src/ui/investigation/InvestigationFindingsPanel.cpp
+
+    ../src/analysis/TelemetryIssueGroup.h
+    ../src/analysis/TelemetryIssueAnalyzer.h
+    ../src/analysis/TelemetryIssueAnalyzer.cpp
+
+    ../src/ui/investigation/InvestigationAnalyticsPanel.h
+    ../src/ui/investigation/InvestigationAnalyticsPanel.cpp
+
+    ../src/ui/investigation/InvestigationReviewPanel.h
+    ../src/ui/investigation/InvestigationReviewPanel.cpp
+
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationValueFrequency.h
+
+    ../src/ui/workspace/WorkspaceDocument.h
+    ../src/ui/workspace/WorkspaceDocument.cpp
+
+    ../src/ui/workspace/InvestigationSessionView.h
+    ../src/ui/workspace/InvestigationSessionView.cpp
+
+    ../src/ui/investigation/InvestigationSessionSummaryPanel.h
+    ../src/ui/investigation/InvestigationSessionSummaryPanel.cpp
+
+    ../src/ui/investigation/InvestigationFilterPanel.h
+    ../src/ui/investigation/InvestigationFilterPanel.cpp
+
+    ../src/ui/MultiSelectFilterComboBox.h
+    ../src/ui/MultiSelectFilterComboBox.cpp
+
+    ../src/ui/CustomFieldFilterEditor.h
+    ../src/ui/CustomFieldFilterEditor.cpp
+
+    ../src/filtering/InvestigationFilterPreset.h
+
+    ../src/preferences/FilterPresetStore.h
+    ../src/preferences/FilterPresetStore.cpp
+)
+
+target_link_libraries(
+    InvestigationPresentationStateTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+        Qt6::Widgets
+        Qt6::Charts
+)
+
+add_test(
+    NAME InvestigationPresentationStateTests
+    COMMAND InvestigationPresentationStateTests
+)
+
+set_tests_properties(
+    InvestigationPresentationStateTests
+    PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=minimal"
 )

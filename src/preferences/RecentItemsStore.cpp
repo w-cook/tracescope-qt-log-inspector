@@ -15,6 +15,9 @@ const QString RecentProfilesKey =
     QStringLiteral("recent/profiles");
 }
 
+const QString RecentWorkspacesKey =
+    QStringLiteral("recent/workspaces");
+
 RecentItemsStore::RecentItemsStore(
     QSettings &settings
     )
@@ -201,4 +204,34 @@ bool RecentItemsStore::pathsEqual(
 #else
     return left == right;
 #endif
+}
+
+QStringList RecentItemsStore::
+    recentWorkspaces() const
+{
+    return recentItems(
+        RecentWorkspacesKey
+        );
+}
+
+void RecentItemsStore::
+    addRecentWorkspace(
+        const QString &filePath
+        )
+{
+    addRecentItem(
+        RecentWorkspacesKey,
+        filePath
+        );
+}
+
+void RecentItemsStore::
+    removeRecentWorkspace(
+        const QString &filePath
+        )
+{
+    removeRecentItem(
+        RecentWorkspacesKey,
+        filePath
+        );
 }

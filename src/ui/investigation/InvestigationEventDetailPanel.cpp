@@ -12,6 +12,7 @@
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QResizeEvent>
+#include <QScrollBar>
 
 #include "../../domain/RecordSeverity.h"
 
@@ -442,6 +443,71 @@ FindingStatus
             ->currentData()
             .toInt()
         );
+}
+
+InvestigationScrollState
+    InvestigationEventDetailPanel::
+    capturePresentationState() const
+{
+    InvestigationScrollState state;
+
+    if (m_detailText == nullptr) {
+        return state;
+    }
+
+    if (m_detailText->horizontalScrollBar()
+        != nullptr) {
+        state.horizontalValue =
+            m_detailText
+                ->horizontalScrollBar()
+                ->value();
+    }
+
+    if (m_detailText->verticalScrollBar()
+        != nullptr) {
+        state.verticalValue =
+            m_detailText
+                ->verticalScrollBar()
+                ->value();
+    }
+
+    return state;
+}
+
+void InvestigationEventDetailPanel::
+    restorePresentationState(
+        const InvestigationScrollState &state
+        )
+{
+    if (m_detailText == nullptr) {
+        return;
+    }
+
+    if (QScrollBar *horizontal =
+        m_detailText
+            ->horizontalScrollBar();
+        horizontal != nullptr) {
+        horizontal->setValue(
+            std::clamp(
+                state.horizontalValue,
+                horizontal->minimum(),
+                horizontal->maximum()
+                )
+            );
+    }
+
+    if (QScrollBar *vertical =
+        m_detailText
+            ->verticalScrollBar();
+        vertical != nullptr) {
+        vertical->setValue(
+            std::clamp(
+                state.verticalValue,
+                vertical->minimum(),
+                vertical->maximum()
+                )
+            );
+    }
 }
 
 void InvestigationEventDetailPanel::

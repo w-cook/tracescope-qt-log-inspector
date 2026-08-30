@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include "../../workspace/InvestigationPresentationState.h"
 #include "../../workspace/InvestigationSession.h"
 
 class InvestigationAnalyticsPanel;
@@ -50,6 +51,13 @@ public:
     void restoreSelectedTab();
 
     InvestigationReviewTab currentTab() const;
+
+    InvestigationReviewPresentationState
+    capturePresentationState() const;
+
+    void restorePresentationState(
+        const InvestigationReviewPresentationState &state
+        );
 
 signals:
     /*

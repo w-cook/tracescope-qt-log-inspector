@@ -288,6 +288,87 @@ InvestigationReviewPanel::currentTab() const
         IssueSummary;
 }
 
+InvestigationReviewPresentationState
+    InvestigationReviewPanel::
+    capturePresentationState() const
+{
+    InvestigationReviewPresentationState
+        state;
+
+    state.selectedTab =
+        currentTab();
+
+    if (m_issueSummaryPanel != nullptr) {
+        state.issueSummaryTable =
+            m_issueSummaryPanel
+                ->capturePresentationState();
+    }
+
+    if (m_findingsPanel != nullptr) {
+        state.findingsTable =
+            m_findingsPanel
+                ->capturePresentationState();
+    }
+
+    if (m_analyticsPanel != nullptr) {
+        state.analytics =
+            m_analyticsPanel
+                ->capturePresentationState();
+    }
+
+    return state;
+}
+
+void InvestigationReviewPanel::
+    restorePresentationState(
+        const InvestigationReviewPresentationState
+            &state
+        )
+{
+    /*
+     * Review-tab selection historically lives on
+     * InvestigationSession. Synchronize the saved
+     * presentation preference back through that
+     * existing path so capability-aware fallback
+     * behavior remains centralized in
+     * restoreSelectedTab().
+     */
+    if (m_session != nullptr) {
+        m_session->setReviewTab(
+            state.selectedTab
+            );
+    }
+
+    restoreSelectedTab();
+
+    /*
+     * Restore child presentation only after the
+     * correct review surface has been selected and
+     * source-dependent tab visibility has already
+     * been synchronized.
+     */
+    if (m_issueSummaryPanel != nullptr) {
+        m_issueSummaryPanel
+            ->restorePresentationState(
+                state.issueSummaryTable
+                );
+    }
+
+    if (m_findingsPanel != nullptr) {
+        m_findingsPanel
+            ->restorePresentationState(
+                state.findingsTable
+                );
+    }
+
+    if (m_analyticsPanel != nullptr) {
+        m_analyticsPanel
+            ->restorePresentationState(
+                state.analytics
+                );
+    }
+}
+
 QWidget *
 InvestigationReviewPanel::pageForTab(
     InvestigationReviewTab tab

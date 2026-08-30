@@ -14,7 +14,7 @@ private slots:
     void startsEmpty();
     void storesMostRecentFileFirst();
     void movesDuplicateFileToFront();
-    void keepsFilesAndProfilesSeparate();
+    void keepsFilesProfilesAndWorkspacesSeparate();
     void limitsRecentItems();
     void removesItems();
     void persistsAcrossStoreInstances();
@@ -41,6 +41,10 @@ void RecentItemsStoreTests::startsEmpty()
 
     QVERIFY(
         store.recentProfiles().isEmpty()
+        );
+
+    QVERIFY(
+        store.recentWorkspaces().isEmpty()
         );
 }
 
@@ -142,7 +146,7 @@ void RecentItemsStoreTests::
 }
 
 void RecentItemsStoreTests::
-    keepsFilesAndProfilesSeparate()
+    keepsFilesProfilesAndWorkspacesSeparate()
 {
     QTemporaryDir directory;
 
@@ -169,11 +173,22 @@ void RecentItemsStoreTests::
             )
         );
 
+    store.addRecentWorkspace(
+        directory.filePath(
+            QStringLiteral(
+                "investigation-workspace.json"
+                )
+            )
+        );
+
     const QStringList recentFiles =
         store.recentFiles();
 
     const QStringList recentProfiles =
         store.recentProfiles();
+
+    const QStringList recentWorkspaces =
+        store.recentWorkspaces();
 
     QCOMPARE(
         recentFiles.size(),
@@ -182,6 +197,11 @@ void RecentItemsStoreTests::
 
     QCOMPARE(
         recentProfiles.size(),
+        1
+        );
+
+    QCOMPARE(
+        recentWorkspaces.size(),
         1
         );
 
@@ -197,6 +217,15 @@ void RecentItemsStoreTests::
             recentProfiles.first()
             ).fileName(),
         QStringLiteral("profile.json")
+        );
+
+    QCOMPARE(
+        QFileInfo(
+            recentWorkspaces.first()
+            ).fileName(),
+        QStringLiteral(
+            "investigation-workspace.json"
+            )
         );
 }
 
@@ -272,11 +301,36 @@ void RecentItemsStoreTests::removesItems()
             QStringLiteral("profile.json")
             );
 
-    store.addRecentFile(filePath);
-    store.addRecentProfile(profilePath);
+    const QString workspacePath =
+        directory.filePath(
+            QStringLiteral(
+                "workspace.json"
+                )
+            );
 
-    store.removeRecentFile(filePath);
-    store.removeRecentProfile(profilePath);
+    store.addRecentFile(
+        filePath
+        );
+
+    store.addRecentProfile(
+        profilePath
+        );
+
+    store.addRecentWorkspace(
+        workspacePath
+        );
+
+    store.removeRecentFile(
+        filePath
+        );
+
+    store.removeRecentProfile(
+        profilePath
+        );
+
+    store.removeRecentWorkspace(
+        workspacePath
+        );
 
     QVERIFY(
         store.recentFiles().isEmpty()
@@ -284,6 +338,10 @@ void RecentItemsStoreTests::removesItems()
 
     QVERIFY(
         store.recentProfiles().isEmpty()
+        );
+
+    QVERIFY(
+        store.recentWorkspaces().isEmpty()
         );
 }
 
@@ -315,6 +373,14 @@ void RecentItemsStoreTests::
         store.addRecentFile(
             recentPath
             );
+
+        store.addRecentWorkspace(
+            directory.filePath(
+                QStringLiteral(
+                    "workspace.json"
+                    )
+                )
+            );
     }
 
     {
@@ -338,6 +404,23 @@ void RecentItemsStoreTests::
                 recentFiles.first()
                 ).fileName(),
             QStringLiteral("session.jsonl")
+            );
+
+        const QStringList recentWorkspaces =
+            store.recentWorkspaces();
+
+        QCOMPARE(
+            recentWorkspaces.size(),
+            1
+            );
+
+        QCOMPARE(
+            QFileInfo(
+                recentWorkspaces.first()
+                ).fileName(),
+            QStringLiteral(
+                "workspace.json"
+                )
             );
     }
 }
