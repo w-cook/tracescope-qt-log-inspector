@@ -49,6 +49,9 @@ signals:
     void noteEditRequested();
     void bookmarkToggleRequested();
 
+    void copyStructuredJsonRequested();
+    void copyFormattedTextRequested();
+
 protected:
     void resizeEvent(
         QResizeEvent *event

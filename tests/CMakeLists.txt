@@ -1337,6 +1337,9 @@ qt_add_executable(
     ../src/ui/workspace/WorkspaceDocument.h
     ../src/ui/workspace/WorkspaceDocument.cpp
 
+    ../src/exporting/InvestigationRecordExportFormatter.h
+    ../src/exporting/InvestigationRecordExportFormatter.cpp
+
     ../src/ui/workspace/InvestigationSessionView.h
     ../src/ui/workspace/InvestigationSessionView.cpp
 

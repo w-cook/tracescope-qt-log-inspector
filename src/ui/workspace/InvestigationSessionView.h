@@ -79,6 +79,10 @@ private:
 
     void toggleSelectedEventBookmark();
 
+    void copySelectedEventAsStructuredJson();
+
+    void copySelectedEventAsFormattedText();
+
     void updateIssueSummary();
 
     void updateFindingsPanel();

@@ -12,6 +12,8 @@
 #include <QVBoxLayout>
 #include <QResizeEvent>
 #include <QSizePolicy>
+#include <QApplication>
+#include <QClipboard>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -24,6 +26,7 @@
 #include "../investigation/InvestigationTimelinePanel.h"
 
 #include "../../domain/InvestigationRecord.h"
+#include "../../exporting/InvestigationRecordExportFormatter.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../preferences/FilterPresetStore.h"
 #include "../../workspace/InvestigationSession.h"
@@ -418,6 +421,24 @@ InvestigationSessionView::
         this,
         &InvestigationSessionView::
         toggleSelectedEventBookmark
+        );
+
+    connect(
+        m_eventDetailPanel,
+        &InvestigationEventDetailPanel::
+        copyStructuredJsonRequested,
+        this,
+        &InvestigationSessionView::
+        copySelectedEventAsStructuredJson
+        );
+
+    connect(
+        m_eventDetailPanel,
+        &InvestigationEventDetailPanel::
+        copyFormattedTextRequested,
+        this,
+        &InvestigationSessionView::
+        copySelectedEventAsFormattedText
         );
 
     /*
@@ -862,6 +883,60 @@ void InvestigationSessionView::
     } else {
         updateInvestigationStateControls();
     }
+}
+
+void InvestigationSessionView::
+    copySelectedEventAsStructuredJson()
+{
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (record == nullptr) {
+        return;
+    }
+
+    QClipboard *clipboard =
+        QApplication::clipboard();
+
+    if (clipboard == nullptr) {
+        return;
+    }
+
+    const InvestigationRecordExportFormatter
+        formatter;
+
+    clipboard->setText(
+        formatter.toStructuredJson(
+            *record
+            )
+        );
+}
+
+void InvestigationSessionView::
+    copySelectedEventAsFormattedText()
+{
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (record == nullptr) {
+        return;
+    }
+
+    QClipboard *clipboard =
+        QApplication::clipboard();
+
+    if (clipboard == nullptr) {
+        return;
+    }
+
+    const InvestigationRecordExportFormatter
+        formatter;
+
+    clipboard->setText(
+        formatter.toFormattedText(
+            *record
+            )
+        );
 }
 
 void InvestigationSessionView::

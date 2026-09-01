@@ -13,6 +13,8 @@
 #include <QGridLayout>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QAction>
+#include <QMenu>
 
 #include "../../domain/RecordSeverity.h"
 
@@ -52,6 +54,83 @@ InvestigationEventDetailPanel::
             "Select a telemetry event to "
             "view its details."
             )
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Selected-event context menu
+     * ---------------------------------------------------------
+     *
+     * Preserve the standard QPlainTextEdit context menu
+     * so users can still copy selected text normally,
+     * then append whole-record export actions.
+     */
+    m_detailText->setContextMenuPolicy(
+        Qt::CustomContextMenu
+        );
+
+    connect(
+        m_detailText,
+        &QPlainTextEdit::
+        customContextMenuRequested,
+        this,
+        [this](const QPoint &position) {
+            QMenu *menu =
+                m_detailText
+                    ->createStandardContextMenu();
+
+            menu->addSeparator();
+
+            QAction *copyJsonAction =
+                menu->addAction(
+                    tr("Copy Event as JSON")
+                    );
+
+            QAction *copyTextAction =
+                menu->addAction(
+                    tr(
+                        "Copy Event as "
+                        "Formatted Text"
+                        )
+                    );
+
+            const bool hasRecord =
+                !m_detailText
+                     ->toPlainText()
+                     .isEmpty();
+
+            copyJsonAction->setEnabled(
+                hasRecord
+                );
+
+            copyTextAction->setEnabled(
+                hasRecord
+                );
+
+            connect(
+                copyJsonAction,
+                &QAction::triggered,
+                this,
+                &InvestigationEventDetailPanel::
+                copyStructuredJsonRequested
+                );
+
+            connect(
+                copyTextAction,
+                &QAction::triggered,
+                this,
+                &InvestigationEventDetailPanel::
+                copyFormattedTextRequested
+                );
+
+            menu->exec(
+                m_detailText->mapToGlobal(
+                    position
+                    )
+                );
+
+            delete menu;
+        }
         );
 
     auto *layout =
@@ -142,10 +221,12 @@ InvestigationEventDetailPanel::
     /*
      * Start in the normal single-row presentation:
      *
-     * Finding status: [Status]   [Add Note] [Bookmark Event]
+     * Finding status: [Status]
+     *                   ... [Add Note] [Bookmark Event]
      *
-     * updateResponsiveControls() moves the action buttons
-     * to a second row only when the panel becomes too narrow.
+     * updateResponsiveControls() moves the action
+     * buttons to a second row only when the panel
+     * becomes too narrow.
      */
     m_stateLayout->addWidget(
         m_findingStatusLabel,
@@ -186,7 +267,7 @@ InvestigationEventDetailPanel::
 
     /*
      * ---------------------------------------------------------
-     * Signals
+     * Investigation-state signals
      * ---------------------------------------------------------
      */
     connect(
