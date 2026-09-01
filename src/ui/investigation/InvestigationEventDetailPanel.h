@@ -60,6 +60,8 @@ protected:
 private:
     void updateResponsiveControls();
 
+    void updateMinimumUsableWidth();
+
     QGridLayout *m_stateLayout =
         nullptr;
 

@@ -14,6 +14,7 @@
 #include <QSizePolicy>
 #include <QApplication>
 #include <QClipboard>
+#include <QTimer>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -1366,15 +1367,48 @@ void InvestigationSessionView::
         InvestigationReviewTab tab
         )
 {
-    if (m_bottomSplitter == nullptr) {
+    if (
+        m_bottomSplitter == nullptr
+        || m_eventDetailPanel == nullptr
+        ) {
         return;
     }
 
-    const int totalWidth =
-        std::max(
-            1,
-            m_bottomSplitter->width()
-            );
+    /*
+     * QSplitter::sizes() describes the widget areas
+     * without the splitter handle itself, so base the
+     * adaptive sizing on the same usable space.
+     *
+     * During initial session construction the review
+     * tab can be restored before the splitter has been
+     * assigned real geometry. Do not manufacture a
+     * one-pixel layout in that transient state.
+     */
+    const int availableWidth =
+        m_bottomSplitter->width()
+        - m_bottomSplitter->handleWidth();
+
+    if (availableWidth <= 0) {
+        return;
+    }
+
+    /*
+     * Selected Event Details has a content-derived
+     * minimum width based on its actual controls.
+     * Respect that constraint explicitly when
+     * calculating adaptive splitter proportions.
+     */
+    const int detailMinimumWidth =
+        m_eventDetailPanel->minimumWidth();
+
+    if (availableWidth
+        <= detailMinimumWidth) {
+        return;
+    }
+
+    const int maximumReviewWidth =
+        availableWidth
+        - detailMinimumWidth;
 
     const bool wideReviewSelected =
         tab
@@ -1392,26 +1426,32 @@ void InvestigationSessionView::
         double reviewFraction =
             0.60;
 
-        if (totalWidth < 750) {
+        if (availableWidth < 750) {
             reviewFraction =
                 0.72;
-        } else if (totalWidth < 1100) {
+        } else if (
+            availableWidth < 1100
+            ) {
             reviewFraction =
                 0.68;
         }
 
-        const int reviewWidth =
+        const int desiredReviewWidth =
             static_cast<int>(
-                totalWidth
+                availableWidth
                 * reviewFraction
+                );
+
+        const int reviewWidth =
+            std::clamp(
+                desiredReviewWidth,
+                1,
+                maximumReviewWidth
                 );
 
         m_bottomSplitter->setSizes({
             reviewWidth,
-            std::max(
-                1,
-                totalWidth - reviewWidth
-                )
+            availableWidth - reviewWidth
         });
 
         return;
@@ -1422,21 +1462,26 @@ void InvestigationSessionView::
      * because its table supports horizontal
      * scrolling when necessary.
      */
-    const int issueWidth =
+    const int desiredIssueWidth =
         std::max(
             m_issueSummaryPanel
                 ->preferredCompactWidth(),
             static_cast<int>(
-                totalWidth * 0.35
+                availableWidth
+                * 0.35
                 )
+            );
+
+    const int issueWidth =
+        std::clamp(
+            desiredIssueWidth,
+            1,
+            maximumReviewWidth
             );
 
     m_bottomSplitter->setSizes({
         issueWidth,
-        std::max(
-            1,
-            totalWidth - issueWidth
-            )
+        availableWidth - issueWidth
     });
 }
 
@@ -1453,7 +1498,30 @@ void InvestigationSessionView::
         return;
     }
 
-    updateReviewSplitter(
-        m_reviewPanel->currentTab()
+    /*
+     * QWidget receives its resize before the child
+     * layout necessarily finishes assigning geometry
+     * to the nested splitter.
+     *
+     * Defer the adaptive split until the current
+     * event-loop turn has completed so calculations
+     * use the splitter's settled width.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (
+                m_reviewPanel == nullptr
+                || m_bottomSplitter == nullptr
+                ) {
+                return;
+            }
+
+            updateReviewSplitter(
+                m_reviewPanel
+                    ->currentTab()
+                );
+        }
         );
 }

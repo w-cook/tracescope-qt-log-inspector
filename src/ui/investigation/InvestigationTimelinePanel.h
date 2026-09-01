@@ -103,6 +103,17 @@ private:
     std::optional<QDateTime>
     effectiveLastTimestamp() const;
 
+    qint64 effectiveTimelineIntervalMilliseconds(
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp
+        ) const;
+
+    int responsiveVisibleBucketCount(
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp,
+        qint64 intervalMilliseconds
+        ) const;
+
     InvestigationSession *m_session =
         nullptr;
 

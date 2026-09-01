@@ -15,6 +15,7 @@
 #include <QScrollBar>
 #include <QAction>
 #include <QMenu>
+#include <QMargins>
 
 #include "../../domain/RecordSeverity.h"
 
@@ -448,6 +449,8 @@ void InvestigationEventDetailPanel::
     m_bookmarkButton->setText(
         tr("Bookmark Event")
         );
+
+    updateMinimumUsableWidth();
 }
 
 void InvestigationEventDetailPanel::
@@ -507,6 +510,8 @@ void InvestigationEventDetailPanel::
             ? tr("Remove Bookmark")
             : tr("Bookmark Event")
         );
+
+    updateMinimumUsableWidth();
 }
 
 FindingStatus
@@ -597,6 +602,8 @@ void InvestigationEventDetailPanel::
     if (m_stateLayout == nullptr) {
         return;
     }
+
+    updateMinimumUsableWidth();
 
     const int requiredWideWidth =
         m_findingStatusLabel
@@ -724,6 +731,97 @@ void InvestigationEventDetailPanel::
     }
 
     m_stateLayout->invalidate();
+}
+
+void InvestigationEventDetailPanel::
+    updateMinimumUsableWidth()
+{
+    if (
+        m_stateLayout == nullptr
+        || m_findingStatusLabel == nullptr
+        || m_findingStatusCombo == nullptr
+        || m_noteButton == nullptr
+        || m_bookmarkButton == nullptr
+        ) {
+        return;
+    }
+
+    const int horizontalSpacing =
+        std::max(
+            0,
+            m_stateLayout
+                ->horizontalSpacing()
+            );
+
+    /*
+     * The compact layout has two rows:
+     *
+     * Finding status: [Status]
+     * [Note action]   [Bookmark action]
+     *
+     * The panel must remain wide enough for whichever
+     * of those rows requires more horizontal space.
+     *
+     * sizeHint() deliberately comes from Qt rather
+     * than from fixed pixel assumptions so font,
+     * platform style, and display scaling are
+     * reflected automatically.
+     */
+    m_noteButton->setMinimumWidth(
+        m_noteButton
+            ->sizeHint()
+            .width()
+        );
+
+    m_bookmarkButton->setMinimumWidth(
+        m_bookmarkButton
+            ->sizeHint()
+            .width()
+        );
+
+    const int statusRowWidth =
+        m_findingStatusLabel
+            ->sizeHint()
+            .width()
+        + horizontalSpacing
+        + m_findingStatusCombo
+              ->sizeHint()
+              .width();
+
+    const int actionRowWidth =
+        m_noteButton
+            ->minimumWidth()
+        + horizontalSpacing
+        + m_bookmarkButton
+            ->minimumWidth();
+
+    const int controlWidth =
+        std::max(
+            statusRowWidth,
+            actionRowWidth
+            );
+
+    int horizontalMargins = 0;
+
+    if (layout() != nullptr) {
+        const QMargins margins =
+            layout()->contentsMargins();
+
+        horizontalMargins =
+            margins.left()
+            + margins.right();
+    }
+
+    const int requiredWidth =
+        controlWidth
+        + horizontalMargins;
+
+    if (minimumWidth()
+        != requiredWidth) {
+        setMinimumWidth(
+            requiredWidth
+            );
+    }
 }
 
 void InvestigationEventDetailPanel::
