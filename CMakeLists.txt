@@ -175,6 +175,8 @@ qt_add_executable(TraceScope
     src/workspace/WorkspaceDocumentLayoutState.h
     src/workspace/WorkspaceDocumentLayoutSerialization.h
     src/workspace/WorkspaceDocumentLayoutSerialization.cpp
+    src/exporting/InvestigationRecordExportFormatter.h
+    src/exporting/InvestigationRecordExportFormatter.cpp
 
 )
 
