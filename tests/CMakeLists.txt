@@ -301,6 +301,34 @@ target_link_libraries(CsvExporterTests
 add_test(NAME CsvExporterTests COMMAND CsvExporterTests)
 
 qt_add_executable(
+    InvestigationFindingsCsvExporterTests
+
+    InvestigationFindingsCsvExporterTests.cpp
+
+    ../src/exporting/InvestigationFindingExport.h
+    ../src/exporting/InvestigationFindingsCsvExporter.h
+    ../src/exporting/InvestigationFindingsCsvExporter.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationFindingsCsvExporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationFindingsCsvExporterTests
+    COMMAND InvestigationFindingsCsvExporterTests
+)
+
+qt_add_executable(
     InvestigationRecordExportFormatterTests
 
     InvestigationRecordExportFormatterTests.cpp

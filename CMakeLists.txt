@@ -180,6 +180,8 @@ qt_add_executable(TraceScope
     src/exporting/InvestigationFindingExport.h
     src/exporting/InvestigationFindingExportSnapshotBuilder.h
     src/exporting/InvestigationFindingExportSnapshotBuilder.cpp
+    src/exporting/InvestigationFindingsCsvExporter.h
+    src/exporting/InvestigationFindingsCsvExporter.cpp
 
 )
 
