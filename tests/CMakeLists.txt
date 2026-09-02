@@ -1009,6 +1009,54 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationFindingExportSnapshotBuilderTests
+
+    InvestigationFindingExportSnapshotBuilderTests.cpp
+
+    ../src/exporting/InvestigationFindingExport.h
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.h
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportResult.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationFindingExportSnapshotBuilderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationFindingExportSnapshotBuilderTests
+    COMMAND InvestigationFindingExportSnapshotBuilderTests
+)
+
+qt_add_executable(
     InvestigationWorkspaceTests
 
     InvestigationWorkspaceTests.cpp
