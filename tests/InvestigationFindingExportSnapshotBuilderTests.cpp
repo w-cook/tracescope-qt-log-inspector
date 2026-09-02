@@ -83,6 +83,8 @@ private slots:
     void preservesCompleteInvestigationRecord();
     void preservesSourceRecordOrder();
     void snapshotDoesNotChangeAfterSessionStateChanges();
+    void filteredScopeIncludesOnlyFindingsMatchingCurrentFilters();
+    void bookmarkedScopeIgnoresCurrentFilters();
 };
 
 void
@@ -504,6 +506,201 @@ void
         snapshot[0].record.message.value(),
         QStringLiteral("Original message")
         );
+}
+
+void
+    InvestigationFindingExportSnapshotBuilderTests::
+    filteredScopeIncludesOnlyFindingsMatchingCurrentFilters()
+{
+    InvestigationRecord first =
+        makeRecord(
+            QStringLiteral("first"),
+            10
+            );
+
+    first.severity =
+        RecordSeverity::Error;
+
+    InvestigationRecord second =
+        makeRecord(
+            QStringLiteral("second"),
+            20
+            );
+
+    second.severity =
+        RecordSeverity::Info;
+
+    InvestigationRecord third =
+        makeRecord(
+            QStringLiteral("third"),
+            30
+            );
+
+    third.severity =
+        RecordSeverity::Error;
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        makeSession({
+            first,
+            second,
+            third
+        });
+
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    stateStore->setFindingStatus(
+        QStringLiteral("first"),
+        FindingStatus::Open
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("second"),
+        FindingStatus::Resolved
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("third"),
+        FindingStatus::Dismissed
+        );
+
+    session
+        ->investigationController()
+        ->setFilters(
+            QStringLiteral("ERROR"),
+            QString(),
+            QString()
+            );
+
+    InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const QVector<InvestigationFindingExport>
+        findings =
+        builder.build(
+            *session,
+            InvestigationFindingExportScope::
+            Filtered
+            );
+
+    QCOMPARE(findings.size(), 2);
+
+    QCOMPARE(
+        findings[0].record.recordId,
+        QStringLiteral("first")
+        );
+
+    QCOMPARE(
+        findings[1].record.recordId,
+        QStringLiteral("third")
+        );
+}
+
+void
+    InvestigationFindingExportSnapshotBuilderTests::
+    bookmarkedScopeIgnoresCurrentFilters()
+{
+    InvestigationRecord first =
+        makeRecord(
+            QStringLiteral("first"),
+            10
+            );
+
+    first.severity =
+        RecordSeverity::Error;
+
+    InvestigationRecord second =
+        makeRecord(
+            QStringLiteral("second"),
+            20
+            );
+
+    second.severity =
+        RecordSeverity::Info;
+
+    InvestigationRecord third =
+        makeRecord(
+            QStringLiteral("third"),
+            30
+            );
+
+    third.severity =
+        RecordSeverity::Error;
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        makeSession({
+            first,
+            second,
+            third
+        });
+
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    stateStore->setFindingStatus(
+        QStringLiteral("first"),
+        FindingStatus::Open
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("second"),
+        FindingStatus::Resolved
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("third"),
+        FindingStatus::Dismissed
+        );
+
+    stateStore->setBookmarked(
+        QStringLiteral("first"),
+        true
+        );
+
+    stateStore->setBookmarked(
+        QStringLiteral("second"),
+        true
+        );
+
+    /*
+     * This filter hides "second", but Bookmarked
+     * scope deliberately ignores active filters.
+     */
+    session
+        ->investigationController()
+        ->setFilters(
+            QStringLiteral("ERROR"),
+            QString(),
+            QString()
+            );
+
+    InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const QVector<InvestigationFindingExport>
+        findings =
+        builder.build(
+            *session,
+            InvestigationFindingExportScope::
+            Bookmarked
+            );
+
+    QCOMPARE(findings.size(), 2);
+
+    QCOMPARE(
+        findings[0].record.recordId,
+        QStringLiteral("first")
+        );
+
+    QCOMPARE(
+        findings[1].record.recordId,
+        QStringLiteral("second")
+        );
+
+    QVERIFY(findings[0].bookmarked);
+    QVERIFY(findings[1].bookmarked);
 }
 
 QTEST_MAIN(

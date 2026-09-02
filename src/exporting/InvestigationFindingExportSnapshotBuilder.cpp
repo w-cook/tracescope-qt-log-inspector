@@ -4,7 +4,8 @@
 
 QVector<InvestigationFindingExport>
 InvestigationFindingExportSnapshotBuilder::build(
-    const InvestigationSession &session
+    const InvestigationSession &session,
+    InvestigationFindingExportScope scope
     ) const
 {
     QVector<InvestigationFindingExport>
@@ -27,6 +28,42 @@ InvestigationFindingExportSnapshotBuilder::build(
 
         if (state.findingStatus
             == FindingStatus::None) {
+            continue;
+        }
+
+        bool include = false;
+
+        switch (scope) {
+        case InvestigationFindingExportScope::All:
+            include = true;
+            break;
+
+        case InvestigationFindingExportScope::Filtered:
+            /*
+             * Membership comes from the active proxy
+             * filter state, but iteration remains over
+             * source records so export order remains
+             * deterministic and independent of the
+             * event table's current sort order.
+             */
+            include =
+                controller->proxyRowForRecordId(
+                    record.recordId
+                    )
+                >= 0;
+            break;
+
+        case InvestigationFindingExportScope::Bookmarked:
+            /*
+             * Bookmark scope is deliberately independent
+             * of the current investigation filters.
+             */
+            include =
+                state.bookmarked;
+            break;
+        }
+
+        if (!include) {
             continue;
         }
 

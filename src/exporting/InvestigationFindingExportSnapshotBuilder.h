@@ -10,6 +10,8 @@ class InvestigationFindingExportSnapshotBuilder
 {
 public:
     QVector<InvestigationFindingExport> build(
-        const InvestigationSession &session
+        const InvestigationSession &session,
+        InvestigationFindingExportScope scope =
+        InvestigationFindingExportScope::All
         ) const;
 };
