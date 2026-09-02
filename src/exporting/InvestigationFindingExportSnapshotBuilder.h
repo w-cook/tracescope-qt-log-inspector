@@ -14,4 +14,8 @@ public:
         InvestigationFindingExportScope scope =
         InvestigationFindingExportScope::All
         ) const;
+
+    InvestigationFindingExportCounts counts(
+        const InvestigationSession &session
+        ) const;
 };

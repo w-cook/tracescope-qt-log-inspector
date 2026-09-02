@@ -85,6 +85,7 @@ private slots:
     void snapshotDoesNotChangeAfterSessionStateChanges();
     void filteredScopeIncludesOnlyFindingsMatchingCurrentFilters();
     void bookmarkedScopeIgnoresCurrentFilters();
+    void countsMatchAvailableExportScopes();
 };
 
 void
@@ -701,6 +702,121 @@ void
 
     QVERIFY(findings[0].bookmarked);
     QVERIFY(findings[1].bookmarked);
+}
+
+void
+    InvestigationFindingExportSnapshotBuilderTests::
+    countsMatchAvailableExportScopes()
+{
+    InvestigationRecord first =
+        makeRecord(
+            QStringLiteral("first"),
+            10
+            );
+
+    first.severity =
+        RecordSeverity::Error;
+
+    InvestigationRecord second =
+        makeRecord(
+            QStringLiteral("second"),
+            20
+            );
+
+    second.severity =
+        RecordSeverity::Info;
+
+    InvestigationRecord third =
+        makeRecord(
+            QStringLiteral("third"),
+            30
+            );
+
+    third.severity =
+        RecordSeverity::Error;
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        makeSession({
+            first,
+            second,
+            third
+        });
+
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    stateStore->setFindingStatus(
+        QStringLiteral("first"),
+        FindingStatus::Open
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("second"),
+        FindingStatus::Resolved
+        );
+
+    stateStore->setFindingStatus(
+        QStringLiteral("third"),
+        FindingStatus::Dismissed
+        );
+
+    stateStore->setBookmarked(
+        QStringLiteral("first"),
+        true
+        );
+
+    stateStore->setBookmarked(
+        QStringLiteral("second"),
+        true
+        );
+
+    session
+        ->investigationController()
+        ->setFilters(
+            QStringLiteral("ERROR"),
+            QString(),
+            QString()
+            );
+
+    InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const InvestigationFindingExportCounts counts =
+        builder.counts(*session);
+
+    QCOMPARE(counts.all, 3);
+    QCOMPARE(counts.filtered, 2);
+    QCOMPARE(counts.bookmarked, 2);
+
+    QCOMPARE(
+        counts.all,
+        builder.build(
+                   *session,
+                   InvestigationFindingExportScope::All
+                   )
+            .size()
+        );
+
+    QCOMPARE(
+        counts.filtered,
+        builder.build(
+                   *session,
+                   InvestigationFindingExportScope::
+                   Filtered
+                   )
+            .size()
+        );
+
+    QCOMPARE(
+        counts.bookmarked,
+        builder.build(
+                   *session,
+                   InvestigationFindingExportScope::
+                   Bookmarked
+                   )
+            .size()
+        );
 }
 
 QTEST_MAIN(

@@ -23,6 +23,7 @@ class QResizeEvent;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
+enum class InvestigationFindingExportScope;
 
 class InvestigationSessionView
     : public WorkspaceDocument
@@ -86,6 +87,12 @@ private:
     void updateIssueSummary();
 
     void updateFindingsPanel();
+
+    void updateFindingsExportState();
+
+    void exportFindings(
+        InvestigationFindingExportScope scope
+        );
 
     void drillDownIssueSummary(
         const QString &subsystem,

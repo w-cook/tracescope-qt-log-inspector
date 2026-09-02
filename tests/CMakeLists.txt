@@ -1416,6 +1416,14 @@ qt_add_executable(
     ../src/exporting/InvestigationRecordExportFormatter.h
     ../src/exporting/InvestigationRecordExportFormatter.cpp
 
+    ../src/exporting/InvestigationFindingExport.h
+
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.h
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.cpp
+
+    ../src/exporting/InvestigationFindingsCsvExporter.h
+    ../src/exporting/InvestigationFindingsCsvExporter.cpp
+
     ../src/ui/workspace/InvestigationSessionView.h
     ../src/ui/workspace/InvestigationSessionView.cpp
 

@@ -10,6 +10,13 @@ enum class InvestigationFindingExportScope
     Bookmarked
 };
 
+struct InvestigationFindingExportCounts
+{
+    int all = 0;
+    int filtered = 0;
+    int bookmarked = 0;
+};
+
 struct InvestigationFindingExport
 {
     InvestigationRecord record;

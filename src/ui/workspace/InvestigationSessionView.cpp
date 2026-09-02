@@ -15,6 +15,9 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QTimer>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QMessageBox>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -27,6 +30,8 @@
 #include "../investigation/InvestigationTimelinePanel.h"
 
 #include "../../domain/InvestigationRecord.h"
+#include "../../exporting/InvestigationFindingExportSnapshotBuilder.h"
+#include "../../exporting/InvestigationFindingsCsvExporter.h"
 #include "../../exporting/InvestigationRecordExportFormatter.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../preferences/FilterPresetStore.h"
@@ -88,6 +93,80 @@ QString documentTitleFor(
     return session
         ->sourceMetadata()
         .sourceName;
+}
+
+QString findingsExportTitle(
+    InvestigationFindingExportScope scope
+    )
+{
+    switch (scope) {
+    case InvestigationFindingExportScope::All:
+        return QObject::tr(
+            "Export All Findings"
+            );
+
+    case InvestigationFindingExportScope::Filtered:
+        return QObject::tr(
+            "Export Filtered Findings"
+            );
+
+    case InvestigationFindingExportScope::Bookmarked:
+        return QObject::tr(
+            "Export Bookmarked Findings"
+            );
+    }
+
+    return QObject::tr(
+        "Export Findings"
+        );
+}
+
+QString findingsExportFileName(
+    const InvestigationSession *session,
+    InvestigationFindingExportScope scope
+    )
+{
+    QString baseName;
+
+    if (session != nullptr) {
+        baseName =
+            QFileInfo(
+                session
+                    ->sourceMetadata()
+                    .sourceName
+                )
+                .completeBaseName();
+    }
+
+    if (baseName.trimmed().isEmpty()) {
+        baseName =
+            QStringLiteral("investigation");
+    }
+
+    QString suffix;
+
+    switch (scope) {
+    case InvestigationFindingExportScope::All:
+        suffix =
+            QStringLiteral("-findings.csv");
+        break;
+
+    case InvestigationFindingExportScope::Filtered:
+        suffix =
+            QStringLiteral(
+                "-filtered-findings.csv"
+                );
+        break;
+
+    case InvestigationFindingExportScope::Bookmarked:
+        suffix =
+            QStringLiteral(
+                "-bookmarked-findings.csv"
+                );
+        break;
+    }
+
+    return baseName + suffix;
 }
 }
 
@@ -362,6 +441,15 @@ InvestigationSessionView::
         this,
         &InvestigationSessionView::
         navigateToFinding
+        );
+
+    connect(
+        m_findingsPanel,
+        &InvestigationFindingsPanel::
+        exportRequested,
+        this,
+        &InvestigationSessionView::
+        exportFindings
         );
 
     /*
@@ -735,6 +823,8 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
+
+    updateFindingsExportState();
 }
 
 void InvestigationSessionView::
@@ -964,12 +1054,118 @@ void InvestigationSessionView::
             stateStore
                 ->findingStatuses()
             );
+
+    updateFindingsExportState();
 }
 
 void InvestigationSessionView::
     updateFindingsPanel()
 {
     m_findingsPanel->refresh();
+}
+
+void InvestigationSessionView::
+    updateFindingsExportState()
+{
+    if (m_findingsPanel == nullptr) {
+        return;
+    }
+
+    if (m_session == nullptr) {
+        m_findingsPanel->setExportCounts(
+            InvestigationFindingExportCounts{}
+            );
+
+        return;
+    }
+
+    const InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    m_findingsPanel->setExportCounts(
+        builder.counts(
+            *m_session
+            )
+        );
+}
+
+void InvestigationSessionView::
+    exportFindings(
+        InvestigationFindingExportScope scope
+        )
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    /*
+     * Capture the immutable export state first.
+     * The subsequent save dialog and filesystem
+     * operation work only from this frozen snapshot.
+     */
+    const InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const QVector<InvestigationFindingExport>
+        findings =
+        builder.build(
+            *m_session,
+            scope
+            );
+
+    if (findings.isEmpty()) {
+        return;
+    }
+
+    const QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            findingsExportTitle(
+                scope
+                ),
+            findingsExportFileName(
+                m_session,
+                scope
+                ),
+            tr(
+                "CSV Files (*.csv);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const InvestigationFindingsCsvExporter
+        exporter;
+
+    if (!exporter.exportToFile(
+            findings,
+            filePath
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Findings Export Failed"),
+            tr(
+                "TraceScope could not write "
+                "the findings export to:\n\n%1"
+                )
+                .arg(filePath)
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tr("Findings Exported"),
+        tr(
+            "Exported %1 findings to:\n\n%2"
+            )
+            .arg(findings.size())
+            .arg(filePath)
+        );
 }
 
 void InvestigationSessionView::
