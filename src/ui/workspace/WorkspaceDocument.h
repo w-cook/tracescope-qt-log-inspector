@@ -3,6 +3,8 @@
 #include <QString>
 #include <QWidget>
 
+class QMenu;
+
 class WorkspaceDocument
     : public QWidget
 {
@@ -21,6 +23,10 @@ public:
 
     void setDocumentTitle(
         const QString &title
+        );
+
+    virtual void populateExportMenu(
+        QMenu *menu
         );
 
 signals:

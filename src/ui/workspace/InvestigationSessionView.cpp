@@ -18,6 +18,8 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QAction>
+#include <QMenu>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -30,6 +32,7 @@
 #include "../investigation/InvestigationTimelinePanel.h"
 
 #include "../../domain/InvestigationRecord.h"
+#include "../../exporting/InvestigationCsvExporter.h"
 #include "../../exporting/InvestigationFindingExportSnapshotBuilder.h"
 #include "../../exporting/InvestigationFindingsCsvExporter.h"
 #include "../../exporting/InvestigationRecordExportFormatter.h"
@@ -167,6 +170,33 @@ QString findingsExportFileName(
     }
 
     return baseName + suffix;
+}
+
+QString filteredResultsExportFileName(
+    const InvestigationSession *session
+    )
+{
+    QString baseName;
+
+    if (session != nullptr) {
+        baseName =
+            QFileInfo(
+                session
+                    ->sourceMetadata()
+                    .sourceName
+                )
+                .completeBaseName();
+    }
+
+    if (baseName.trimmed().isEmpty()) {
+        baseName =
+            QStringLiteral("investigation");
+    }
+
+    return baseName
+           + QStringLiteral(
+               "-filtered-records.csv"
+               );
 }
 }
 
@@ -749,6 +779,171 @@ void InvestigationSessionView::
     restoreSplitterSizes(
         m_mainSplitter,
         state.mainSplitterSizes
+        );
+}
+
+void InvestigationSessionView::
+    populateExportMenu(
+        QMenu *menu
+        )
+{
+    if (menu == nullptr
+        || m_session == nullptr) {
+        return;
+    }
+
+    menu->setToolTipsVisible(
+        true
+        );
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    QAction *filteredResultsAction =
+        menu->addAction(
+            tr(
+                "Export Filtered Results..."
+                )
+            );
+
+    filteredResultsAction->setToolTip(
+        tr(
+            "Export the records matching the "
+            "current investigation filters"
+            )
+        );
+
+    filteredResultsAction->setEnabled(
+        controller != nullptr
+        && controller
+                   ->proxyModel()
+                   ->rowCount()
+               > 0
+        );
+
+    connect(
+        filteredResultsAction,
+        &QAction::triggered,
+        this,
+        &InvestigationSessionView::
+        exportFilteredResults
+        );
+
+    menu->addSeparator();
+
+    /*
+     * Findings remain available here as a second
+     * document-level access path in addition to the
+     * contextual Export control on the Findings tab.
+     */
+    QMenu *findingsMenu =
+        menu->addMenu(
+            tr("Findings")
+            );
+
+    findingsMenu->setToolTipsVisible(
+        true
+        );
+
+    const InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const InvestigationFindingExportCounts counts =
+        builder.counts(
+            *m_session
+            );
+
+    QAction *allFindingsAction =
+        findingsMenu->addAction(
+            tr(
+                "Export All Findings (%1)"
+                )
+                .arg(counts.all)
+            );
+
+    QAction *filteredFindingsAction =
+        findingsMenu->addAction(
+            tr(
+                "Export Filtered Findings (%1)"
+                )
+                .arg(counts.filtered)
+            );
+
+    QAction *bookmarkedFindingsAction =
+        findingsMenu->addAction(
+            tr(
+                "Export Bookmarked Findings (%1)"
+                )
+                .arg(counts.bookmarked)
+            );
+
+    allFindingsAction->setEnabled(
+        counts.all > 0
+        );
+
+    filteredFindingsAction->setEnabled(
+        counts.filtered > 0
+        );
+
+    bookmarkedFindingsAction->setEnabled(
+        counts.bookmarked > 0
+        );
+
+    allFindingsAction->setToolTip(
+        tr(
+            "Export every explicitly classified "
+            "finding in this investigation"
+            )
+        );
+
+    filteredFindingsAction->setToolTip(
+        tr(
+            "Export findings whose source records "
+            "match the current investigation filters"
+            )
+        );
+
+    bookmarkedFindingsAction->setToolTip(
+        tr(
+            "Export bookmarked findings regardless "
+            "of the current investigation filters"
+            )
+        );
+
+    connect(
+        allFindingsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFindings(
+                InvestigationFindingExportScope::All
+                );
+        }
+        );
+
+    connect(
+        filteredFindingsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFindings(
+                InvestigationFindingExportScope::
+                Filtered
+                );
+        }
+        );
+
+    connect(
+        bookmarkedFindingsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFindings(
+                InvestigationFindingExportScope::
+                Bookmarked
+                );
+        }
         );
 }
 
@@ -1719,5 +1914,87 @@ void InvestigationSessionView::
                     ->currentTab()
                 );
         }
+        );
+}
+
+void InvestigationSessionView::
+    exportFilteredResults()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    /*
+     * Capture the current filtered record collection
+     * before opening the save dialog. The export then
+     * has the same immutable point-in-time semantics
+     * as the Phase 14 findings exports.
+     */
+    const QVector<InvestigationRecord> records =
+        controller->visibleRecords();
+
+    if (records.isEmpty()) {
+        QMessageBox::information(
+            this,
+            tr("No Records to Export"),
+            tr(
+                "There are no currently visible "
+                "records to export."
+                )
+            );
+
+        return;
+    }
+
+    const QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            tr("Export Filtered Records"),
+            filteredResultsExportFileName(
+                m_session
+                ),
+            tr(
+                "CSV Files (*.csv);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const InvestigationCsvExporter exporter;
+
+    if (!exporter.exportToFile(
+            records,
+            filePath
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Export Failed"),
+            tr(
+                "TraceScope could not export "
+                "the filtered records."
+                )
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tr("Export Complete"),
+        tr(
+            "Exported %1 records."
+            )
+            .arg(records.size())
         );
 }

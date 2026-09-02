@@ -10,7 +10,6 @@
 #include <memory>
 #include <optional>
 
-#include "exporting/InvestigationCsvExporter.h"
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
 #include "preferences/FilterPresetStore.h"
@@ -84,8 +83,6 @@ private:
     WorkspaceDocumentHost *workspaceDocumentHost =
         nullptr;
 
-    InvestigationCsvExporter csvExporter;
-
     QAction *openAction = nullptr;
     QAction *reloadAction = nullptr;
     QAction *compareAction = nullptr;
@@ -121,8 +118,6 @@ private:
         ImportResult result,
         const QString &reloadSessionId
         );
-
-    void exportFilteredResults();
 
     void reloadActiveSession();
 

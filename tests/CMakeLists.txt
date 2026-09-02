@@ -1443,6 +1443,9 @@ qt_add_executable(
 
     ../src/preferences/FilterPresetStore.h
     ../src/preferences/FilterPresetStore.cpp
+
+    ../src/exporting/InvestigationCsvExporter.h
+    ../src/exporting/InvestigationCsvExporter.cpp
 )
 
 target_link_libraries(

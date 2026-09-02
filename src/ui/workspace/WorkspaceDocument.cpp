@@ -57,3 +57,10 @@ void WorkspaceDocument::setDocumentTitle(
         m_documentTitle
         );
 }
+
+void WorkspaceDocument::populateExportMenu(
+    QMenu *menu
+    )
+{
+    Q_UNUSED(menu);
+}

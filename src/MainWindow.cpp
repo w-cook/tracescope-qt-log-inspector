@@ -42,6 +42,7 @@
 #include "ui/InvestigationComparisonDialog.h"
 #include "ui/workspace/InvestigationComparisonDocument.h"
 #include "ui/workspace/InvestigationSessionView.h"
+#include "ui/workspace/WorkspaceDocument.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
 #include "workspace/InvestigationComparisonPersistence.h"
 #include "workspace/InvestigationComparisonSnapshotBuilder.h"
@@ -800,25 +801,47 @@ void MainWindow::createMenus()
         saveWorkspaceAsAction
         );
 
-    fileMenu->addSeparator();
-
-    auto *exportAction =
-        new QAction(
-            tr("&Export Filtered Results..."),
-            this
+    auto *exportingMenu =
+        menuBar()->addMenu(
+            tr("&Exporting")
             );
 
     connect(
-        exportAction,
-        &QAction::triggered,
+        exportingMenu,
+        &QMenu::aboutToShow,
         this,
-        [this]() {
-            exportFilteredResults();
-        }
-        );
+        [this, exportingMenu]() {
+            exportingMenu->clear();
 
-    fileMenu->addAction(
-        exportAction
+            WorkspaceDocument *document =
+                workspaceDocumentHost != nullptr
+                    ? workspaceDocumentHost
+                          ->currentDocument()
+                    : nullptr;
+
+            if (document != nullptr) {
+                document->populateExportMenu(
+                    exportingMenu
+                    );
+            }
+
+            if (
+                exportingMenu
+                    ->actions()
+                    .isEmpty()
+                ) {
+                QAction *unavailableAction =
+                    exportingMenu->addAction(
+                        tr(
+                            "No export actions available"
+                            )
+                        );
+
+                unavailableAction->setEnabled(
+                    false
+                    );
+            }
+        }
         );
 
     auto *investigationMenu =
@@ -1363,79 +1386,6 @@ void MainWindow::completeLogFileImport(
             "or unsupported."
             );
     }
-}
-
-void MainWindow::exportFilteredResults()
-{
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (session == nullptr) {
-        QMessageBox::information(
-            this,
-            "No Records to Export",
-            "There are no currently visible records to export."
-            );
-
-        return;
-    }
-
-    InvestigationController *controller =
-        session
-            ->investigationController();
-
-    if (controller == nullptr) {
-        return;
-    }
-
-    const QVector<InvestigationRecord> records =
-        controller->visibleRecords();
-
-    if (records.isEmpty()) {
-        QMessageBox::information(
-            this,
-            "No Records to Export",
-            "There are no currently visible records to export."
-            );
-
-        return;
-    }
-
-    const QString filePath =
-        QFileDialog::getSaveFileName(
-            this,
-            "Export Filtered Records",
-            "filtered-investigation-records.csv",
-            "CSV Files (*.csv);;All Files (*)"
-            );
-
-    if (filePath.isEmpty()) {
-        return;
-    }
-
-    const bool exported =
-        csvExporter.exportToFile(
-            records,
-            filePath
-            );
-
-    if (!exported) {
-        QMessageBox::warning(
-            this,
-            "Export Failed",
-            "TraceScope could not export the filtered records."
-            );
-
-        return;
-    }
-
-    QMessageBox::information(
-        this,
-        "Export Complete",
-        QString(
-            "Exported %1 records."
-            ).arg(records.size())
-        );
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)

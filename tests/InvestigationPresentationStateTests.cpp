@@ -5,6 +5,7 @@
 #include <QBarCategoryAxis>
 #include <QChartView>
 #include <QScrollBar>
+#include <QMenu>
 
 #include <memory>
 #include <utility>
@@ -285,6 +286,7 @@ private slots:
     void newSessionKeepsEventDetailsVisible();
     void autoTimelineDensityAdaptsToWidth();
     void manualTimelineDensityAdaptsToWidth();
+    void sessionViewPopulatesExportMenu();
 };
 
 void InvestigationPresentationStateTests::
@@ -2446,6 +2448,104 @@ void InvestigationPresentationStateTests::
 
     QVERIFY(
         scrollBar->maximum() > 0
+        );
+}
+
+void InvestigationPresentationStateTests::
+    sessionViewPopulatesExportMenu()
+{
+    InvestigationSession session =
+        makeSession();
+
+    session
+        .investigationStateStore()
+        ->setFindingStatus(
+            QStringLiteral("record-000"),
+            FindingStatus::Open
+            );
+
+    session
+        .investigationStateStore()
+        ->setFindingStatus(
+            QStringLiteral("record-001"),
+            FindingStatus::Resolved
+            );
+
+    session
+        .investigationStateStore()
+        ->setBookmarked(
+            QStringLiteral("record-000"),
+            true
+            );
+
+    InvestigationSessionView view(
+        &session,
+        nullptr
+        );
+
+    QMenu menu;
+
+    view.populateExportMenu(
+        &menu
+        );
+
+    const QList<QAction *> actions =
+        menu.actions();
+
+    QCOMPARE(
+        actions.size(),
+        3
+        );
+
+    QCOMPARE(
+        actions[0]->text(),
+        QStringLiteral(
+            "Export Filtered Results..."
+            )
+        );
+
+    QVERIFY(
+        actions[0]->isEnabled()
+        );
+
+    QVERIFY(
+        actions[1]->isSeparator()
+        );
+
+    QMenu *findingsMenu =
+        actions[2]->menu();
+
+    QVERIFY(
+        findingsMenu != nullptr
+        );
+
+    const QList<QAction *> findingsActions =
+        findingsMenu->actions();
+
+    QCOMPARE(
+        findingsActions.size(),
+        3
+        );
+
+    QCOMPARE(
+        findingsActions[0]->text(),
+        QStringLiteral(
+            "Export All Findings (2)"
+            )
+        );
+
+    QCOMPARE(
+        findingsActions[1]->text(),
+        QStringLiteral(
+            "Export Filtered Findings (2)"
+            )
+        );
+
+    QCOMPARE(
+        findingsActions[2]->text(),
+        QStringLiteral(
+            "Export Bookmarked Findings (1)"
+            )
         );
 }
 

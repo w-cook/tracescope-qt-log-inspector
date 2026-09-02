@@ -56,6 +56,10 @@ public:
         const InvestigationSessionPresentationState &state
         );
 
+    void populateExportMenu(
+        QMenu *menu
+        ) override;
+
 protected:
     void resizeEvent(
         QResizeEvent *event
@@ -122,6 +126,8 @@ private:
     void updateReviewSplitter(
         InvestigationReviewTab tab
         );
+
+    void exportFilteredResults();
 
     InvestigationSession *m_session =
         nullptr;
