@@ -792,6 +792,12 @@ void InvestigationSessionView::
         return;
     }
 
+    WorkspaceDocument::populateExportMenu(
+        menu
+        );
+
+    menu->addSeparator();
+
     menu->setToolTipsVisible(
         true
         );

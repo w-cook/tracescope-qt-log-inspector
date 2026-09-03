@@ -196,6 +196,8 @@ qt_add_executable(TraceScope
     src/ui/workspace/InvestigationReportWorkspaceContext.cpp
     src/exporting/InvestigationReportHtmlRenderer.h
     src/exporting/InvestigationReportHtmlRenderer.cpp
+    src/exporting/InvestigationReportHtmlExporter.h
+    src/exporting/InvestigationReportHtmlExporter.cpp
 
 )
 

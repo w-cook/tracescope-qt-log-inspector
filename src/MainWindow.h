@@ -173,4 +173,8 @@ private:
         );
 
     void clearCurrentWorkspace();
+
+    void exportInvestigationReport(
+        const QString &originDocumentId
+        );
 };

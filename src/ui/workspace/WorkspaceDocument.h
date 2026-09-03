@@ -34,6 +34,10 @@ signals:
         const QString &title
         );
 
+    void investigationReportExportRequested(
+        const QString &documentId
+        );
+
 private:
     QString m_documentId;
     QString m_documentTitle;

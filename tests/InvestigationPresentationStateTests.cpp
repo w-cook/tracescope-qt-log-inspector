@@ -2446,6 +2446,10 @@ void InvestigationPresentationStateTests::
         scrollBar != nullptr
         );
 
+    if (scrollBar == nullptr) {
+        return;
+    }
+
     QVERIFY(
         scrollBar->maximum() > 0
         );
@@ -2492,15 +2496,21 @@ void InvestigationPresentationStateTests::
     const QList<QAction *> actions =
         menu.actions();
 
+    /*
+     * Session export menus now begin with the
+     * workspace-level investigation report action,
+     * followed by the existing session-specific
+     * record and findings exports.
+     */
     QCOMPARE(
         actions.size(),
-        3
+        5
         );
 
     QCOMPARE(
         actions[0]->text(),
         QStringLiteral(
-            "Export Filtered Results..."
+            "Export Investigation Report..."
             )
         );
 
@@ -2512,8 +2522,28 @@ void InvestigationPresentationStateTests::
         actions[1]->isSeparator()
         );
 
+    QCOMPARE(
+        actions[2]->text(),
+        QStringLiteral(
+            "Export Filtered Results..."
+            )
+        );
+
+    QVERIFY(
+        actions[2]->isEnabled()
+        );
+
+    QVERIFY(
+        actions[3]->isSeparator()
+        );
+
+    QCOMPARE(
+        actions[4]->text(),
+        QStringLiteral("Findings")
+        );
+
     QMenu *findingsMenu =
-        actions[2]->menu();
+        actions[4]->menu();
 
     QVERIFY(
         findingsMenu != nullptr
@@ -2546,6 +2576,37 @@ void InvestigationPresentationStateTests::
         QStringLiteral(
             "Export Bookmarked Findings (1)"
             )
+        );
+
+    /*
+     * The common report action should delegate the
+     * actual workflow through the document request
+     * signal rather than owning report generation.
+     */
+    QSignalSpy reportExportSpy(
+        &view,
+        &WorkspaceDocument::
+        investigationReportExportRequested
+        );
+
+    actions[0]->trigger();
+
+    QCOMPARE(
+        reportExportSpy.count(),
+        1
+        );
+
+    const QList<QVariant> arguments =
+        reportExportSpy.takeFirst();
+
+    QCOMPARE(
+        arguments.size(),
+        1
+        );
+
+    QCOMPARE(
+        arguments.at(0).toString(),
+        view.documentId()
         );
 }
 
