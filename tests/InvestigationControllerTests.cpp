@@ -25,6 +25,8 @@ private slots:
     void navigatesAdjacentVisibleEvents();
     void issueNavigationRespectsFiltering();
     void findsProxyRowByStableRecordId();
+    void analysisIgnoresBookmarkFilter();
+    void analysisIgnoresFindingStatusFilter();
 };
 
 static QVector<InvestigationRecord> sampleRecords()
@@ -1102,6 +1104,153 @@ void InvestigationControllerTests::
             QString()
             ),
         -1
+        );
+}
+
+void InvestigationControllerTests::
+    analysisIgnoresBookmarkFilter()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    /*
+     * node-a contains:
+     *
+     * record-startup
+     * record-comms
+     */
+    controller.setEntityFilters(
+        QStringList {
+            QStringLiteral("node-a")
+        }
+        );
+
+    controller
+        .proxyModel()
+        ->setBookmarkedRecordIds(
+            QSet<QString> {
+                QStringLiteral(
+                    "record-startup"
+                    )
+            }
+            );
+
+    controller
+        .proxyModel()
+        ->setBookmarkedOnly(
+            true
+            );
+
+    /*
+     * The visible table honors both the entity and
+     * bookmark filters.
+     */
+    const QVector<InvestigationRecord> visible =
+        controller.visibleRecords();
+
+    QCOMPARE(
+        visible.size(),
+        1
+        );
+
+    QCOMPARE(
+        visible.front().recordId,
+        QStringLiteral("record-startup")
+        );
+
+    /*
+     * Analytics honors the entity filter but not the
+     * annotation-only bookmark filter.
+     */
+    const QVector<InvestigationRecord> analysis =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        analysis.size(),
+        2
+        );
+
+    QCOMPARE(
+        analysis.at(0).recordId,
+        QStringLiteral("record-startup")
+        );
+
+    QCOMPARE(
+        analysis.at(1).recordId,
+        QStringLiteral("record-comms")
+        );
+}
+
+void InvestigationControllerTests::
+    analysisIgnoresFindingStatusFilter()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setEntityFilters(
+        QStringList {
+            QStringLiteral("node-a")
+        }
+        );
+
+    controller
+        .proxyModel()
+        ->setInvestigationStateIndicators(
+            QSet<QString>(),
+            QSet<QString>(),
+            QHash<QString, FindingStatus> {
+                {
+                    QStringLiteral(
+                        "record-startup"
+                        ),
+                    FindingStatus::Open
+                }
+            }
+            );
+
+    controller
+        .proxyModel()
+        ->setFindingStatusFilters(
+            QStringList {
+                QStringLiteral("OPEN")
+            }
+            );
+
+    const QVector<InvestigationRecord> visible =
+        controller.visibleRecords();
+
+    QCOMPARE(
+        visible.size(),
+        1
+        );
+
+    QCOMPARE(
+        visible.front().recordId,
+        QStringLiteral("record-startup")
+        );
+
+    const QVector<InvestigationRecord> analysis =
+        controller.recordsForAnalysis();
+
+    QCOMPARE(
+        analysis.size(),
+        2
+        );
+
+    QCOMPARE(
+        analysis.at(0).recordId,
+        QStringLiteral("record-startup")
+        );
+
+    QCOMPARE(
+        analysis.at(1).recordId,
+        QStringLiteral("record-comms")
         );
 }
 
