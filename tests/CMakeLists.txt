@@ -479,6 +479,67 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationReportSelectionModelTests
+
+    InvestigationReportSelectionModelTests.cpp
+
+    ../src/exporting/InvestigationReportSelectionModel.h
+    ../src/exporting/InvestigationReportSelectionModel.cpp
+)
+
+target_link_libraries(
+    InvestigationReportSelectionModelTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportSelectionModelTests
+    COMMAND InvestigationReportSelectionModelTests
+)
+
+qt_add_executable(
+    InvestigationReportHtmlRendererTests
+
+    InvestigationReportHtmlRendererTests.cpp
+
+    ../src/exporting/InvestigationReportHtmlRenderer.h
+    ../src/exporting/InvestigationReportHtmlRenderer.cpp
+    ../src/exporting/InvestigationReportSnapshot.h
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/EventCountBucket.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationValueTrendBucket.h
+    ../src/analysis/TelemetryIssueGroup.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+)
+
+target_link_libraries(
+    InvestigationReportHtmlRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportHtmlRendererTests
+    COMMAND InvestigationReportHtmlRendererTests
+)
+
+qt_add_executable(
     InvestigationRecordExportFormatterTests
 
     InvestigationRecordExportFormatterTests.cpp

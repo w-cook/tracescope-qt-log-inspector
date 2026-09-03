@@ -188,6 +188,14 @@ qt_add_executable(TraceScope
     src/exporting/InvestigationReportSessionSnapshotBuilder.cpp
     src/exporting/InvestigationReportSnapshotBuilder.h
     src/exporting/InvestigationReportSnapshotBuilder.cpp
+    src/exporting/InvestigationReportSelectionModel.h
+    src/exporting/InvestigationReportSelectionModel.cpp
+    src/ui/InvestigationReportExportDialog.h
+    src/ui/InvestigationReportExportDialog.cpp
+    src/ui/workspace/InvestigationReportWorkspaceContext.h
+    src/ui/workspace/InvestigationReportWorkspaceContext.cpp
+    src/exporting/InvestigationReportHtmlRenderer.h
+    src/exporting/InvestigationReportHtmlRenderer.cpp
 
 )
 
