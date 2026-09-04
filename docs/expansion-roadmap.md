@@ -124,6 +124,7 @@ Completed release milestones:
 | `v0.12.0` | Analytics and Burst Detection | prerelease |
 | `v0.13.0` | Session Comparison | prerelease |
 | `v0.14.0` | Workspace and Profile Persistence | prerelease |
+| `v0.15.0` | Reporting and Export | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -160,7 +161,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.14.0`:
+Implemented foundations through `v0.15.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -216,12 +217,25 @@ Implemented foundations through `v0.14.0`:
 * missing-source recovery with locate, skip-session, and cancel-open choices so unavailable source files do not force unrelated persisted investigation state to be discarded
 * persistent recent-workspace history alongside recent files and profiles, including stale-path cleanup and reopening through the normal workspace-loading path
 * workspace serialization round-trip and compatibility coverage for versioned schemas and later-added optional presentation/layout fields
+* document-scoped export actions that keep investigation and comparison export workflows available from the document the user is actually working in
+* selected-record copy as structured JSON or formatted human-readable text for direct use in issue trackers, notes, chat, documentation, or other downstream workflows
+* structured findings CSV export built from captured finding state rather than live table presentation
+* configurable report creation with editable title/context, explicit investigation/comparison document selection, and optional supporting-evidence and technical-appendix inclusion
+* immutable point-in-time report snapshots that capture selected session, source, filter, analysis, finding, evidence, and comparison state before rendering begins
+* self-contained offline HTML reports that require no hosted backend, external stylesheet, script, font, CDN, or companion resource
+* investigation-report sections for source/session context, captured record and time-span scope, deterministic timeline/analytics output, burst analysis, investigator findings, supporting evidence, and optional import/profile details
+* comparison-report sections that preserve Baseline → Comparison orientation and the immutable Phase 12 comparison result across total-record/timing context, severity, event codes, elevated subsystems/entities, shared custom fields, and shared-settings burst analysis
+* capability-aware unavailable-state handling so unsupported dimensions are explained rather than silently rendered as zero or omitted without context
+* escaped report content and deliberate omission of local source paths from generated HTML, while preserving user-facing source names and source-record context
+* responsive persistent report navigation, compact evidence linking, print-oriented styling, and deterministic evidence anchors inside the generated document
+* atomic HTML writing through `QSaveFile`
+* automated coverage for report configuration/resolution, immutable snapshot construction, findings export, selected-record formatting, HTML escaping/privacy, comparison rendering, sparse-data behavior, report structure/navigation, and end-to-end export integration
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 completed local workspace persistence in `v0.14.0`, allowing source/profile context, investigation state, immutable comparison snapshots, document organization, and detached-window layouts to survive application restarts with explicit missing-source recovery. Phase 14 is now active and completes the current investigation workflow with reporting and export before Phase 15 extends the same file-oriented model to live-followed sessions and future live comparisons. Final UI/documentation hardening remains reserved for Phase 16 rather than returning to open-ended format expansion.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 completed local workspace persistence in `v0.14.0`, allowing source/profile context, investigation state, immutable comparison snapshots, document organization, and detached-window layouts to survive application restarts with explicit missing-source recovery. Phase 14 completed the current static investigation handoff workflow in `v0.15.0` with selected-record copy, structured findings export, and self-contained HTML investigation/comparison reporting built from immutable point-in-time capture. Phase 15 is now in active development and extends the same file-oriented model to logs that continue growing while an investigation is open, while preserving the stable capture boundaries established for persisted comparisons and reports. Final UI/documentation hardening remains reserved for Phase 16 rather than returning to open-ended format expansion.
 
 ## Development Phases
 
@@ -690,36 +704,51 @@ Persistence uses local, versioned JSON. A database remains unnecessary for the c
 
 ### Phase 14 — Reporting and Export
 
-**Status: In progress; targeted for `v0.15.0`.**
+**Status: Completed in `v0.15.0`.**
 
-Expand investigation output beyond the existing investigation-record CSV workflow so findings, deterministic analysis, comparison results, and supporting evidence can leave TraceScope and be shared with other engineers, QA, field support, or downstream issue/documentation workflows.
+Expanded investigation output beyond the existing visible-record CSV workflow so records, findings, deterministic analysis, comparison results, and supporting evidence can leave TraceScope and be shared with other engineers, QA, field support, or downstream issue/documentation workflows.
 
-Reporting should complete the existing investigation workflow rather than become a configurable report designer or collaborative case-management system. Exported reports should be deterministic, self-contained, and understandable without requiring TraceScope or a hosted backend.
+Reporting completes the static investigation workflow without turning TraceScope into a configurable report designer or collaborative case-management system. Exported reports remain deterministic, self-contained, offline, and understandable without requiring TraceScope or a hosted backend.
 
-Report generation should capture immutable export state at the moment export begins. Generated output must not depend on mutable widgets or later changes to an investigation, and this capture boundary should remain valid when Phase 15 introduces live-followed sessions and potentially continuously updating live comparisons.
+Report generation captures immutable export state before rendering begins. Generated output does not depend on later widget changes, filter changes, session navigation, or comparison-document mutation. That point-in-time boundary is also the foundation Phase 15 can reuse when live-followed sessions introduce continuously changing source state.
 
-Planned deliverables:
+Completed deliverables:
 
 * selected-record copy as structured JSON
 * selected-record copy as formatted human-readable text
-* structured findings export suitable for downstream QA, issue-tracking, spreadsheet, or documentation workflows
-* offline HTML investigation reports that summarize source/session context, investigation findings, deterministic analytics, burst analysis when available, and relevant supporting records without claiming automated diagnosis
-* offline HTML comparison reports that preserve explicit Baseline → Comparison orientation, source context, comparison settings, and deterministic comparison results
-* explicit report-generation timestamps and captured record/time-span context so exported output has a stable point-in-time meaning
-* immutable report/export models separated from live investigation and presentation widgets
-* deterministic, capability-aware omission or unavailable-state handling when a report dimension is not supported by the underlying source data
-* automated coverage for report-model capture, escaping/serialization, deterministic output, and representative investigation/comparison exports
-* local full-suite and UI regression verification
+* structured findings CSV export for downstream QA, issue-tracking, spreadsheet, and documentation workflows
+* document-scoped export menus so actions remain tied to the investigation or comparison document being worked in
+* configurable report creation with editable title and investigation context
+* explicit selection of one or more investigation and comparison documents for a generated report
+* optional inclusion of supporting evidence and a technical import/profile appendix
+* immutable report configuration and snapshot models separated from live investigation and presentation widgets
+* point-in-time capture of selected source/session metadata, record counts, visible/filter context, time coverage, deterministic analysis, burst results, findings, evidence, and immutable comparison results
+* offline self-contained HTML investigation reports with source/session context, captured scope, timeline/analytics summaries, burst analysis when available, findings, supporting records, and optional technical details
+* offline self-contained HTML comparison reports that preserve Baseline → Comparison orientation, source context, comparison settings, total-record/timing context, severity differences, event-code changes, elevated subsystem/entity activity, shared custom-field differences, and shared-settings burst comparison when available
+* direct reuse of immutable Phase 12 comparison analysis rather than recalculating comparison meaning from current source-session state
+* deterministic, capability-aware unavailable-state handling when a report dimension is unsupported by the captured source data
+* persistent in-report navigation across report-level, session, comparison, finding, and supporting-evidence sections
+* direct links from investigator annotations to the corresponding supporting-evidence entry, including automatic expansion of the targeted evidence record
+* responsive report navigation and compact table layouts that remain usable in full-width, portrait, and constrained browser windows
+* print-oriented styling so browser printing provides a practical PDF path without adding a dedicated PDF-generation dependency
+* HTML escaping for user/source content and deliberate exclusion of local source paths from generated report output
+* atomic HTML file writing through `QSaveFile`
+* automated coverage for selected-record formatting, findings export, report selection/resolution, immutable snapshot capture, escaping/privacy, deterministic session and comparison rendering, sparse/unavailable dimensions, evidence navigation, responsive report structure, and end-to-end export integration
+* local full-suite and manual report/export regression verification
+* representative self-contained Field Gateway investigation report included with the release documentation
+* `v0.15.0` prerelease publication and downloadable package verification
 
-HTML reporting should remain offline and self-contained. Browser printing may provide a practical PDF path without introducing a dedicated PDF-generation dependency unless later requirements demonstrate a clear need.
+The generated HTML contains its own styling and small navigation behavior and does not require external web resources. Browser printing remains the preferred PDF path unless later user requirements demonstrate a clear need for a dedicated PDF-generation dependency.
 
 ### Phase 15 — Live File Following
 
-Support files that are actively receiving appended records so TraceScope can be used during application runs, QA execution, simulations, engineering tests, and other situations where investigators need to observe a diagnostic log as it grows.
+**Status: In progress.**
+
+Extend TraceScope to support files that are actively receiving appended records so TraceScope can be used during application runs, QA execution, simulations, engineering tests, and other situations where investigators need to observe a diagnostic log as it grows.
 
 Live following should extend the existing investigation model rather than create a separate monitoring product. TraceScope will remain file-oriented and offline rather than becoming a centralized collection service.
 
-The existing Phase 12/13 comparison documents remain immutable comparison snapshots: they preserve the meaning of a Baseline → Comparison analysis at the time it was created and can survive later source-session reload, closure, or workspace restoration. Live following introduces a separate need for comparisons that can update as their source sessions receive appended records. Phase 15 should evaluate that behavior explicitly rather than silently changing existing snapshot semantics.
+The existing Phase 12/13 comparison documents and Phase 14 report snapshots establish stable point-in-time semantics. An immutable comparison preserves the meaning of a Baseline → Comparison analysis at the moment the comparison is created, while an exported report preserves the selected investigation/comparison state captured when report generation begins. Neither artifact should silently change because a source session is later filtered, reloaded, closed, restored, or—once this phase is implemented—continues receiving appended records. Live following therefore introduces a separate need for comparisons that can update as their source sessions change. Phase 15 should evaluate that behavior explicitly rather than weakening existing snapshot semantics.
 
 A likely model is to keep immutable comparison snapshots as stable evidence while allowing a live comparison document to reference active sessions, recompute as new records arrive, and be frozen into an immutable comparison snapshot for persistence, reporting, or later review. The exact live-comparison UI and comparison-window semantics should be finalized during Phase 15 implementation, including how unequal observed record counts or timestamp coverage are communicated.
 

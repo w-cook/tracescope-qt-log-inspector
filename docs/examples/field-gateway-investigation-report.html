@@ -1,0 +1,808 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Field Gateway Degraded Session Investigation</title>
+<style>
+:root {
+    color-scheme: light;
+    --page: #f4f6f8;
+    --surface: #ffffff;
+    --surface-muted: #f8fafc;
+    --border: #d7dde5;
+    --text: #17202a;
+    --muted: #5f6b78;
+    --accent: #245b87;
+    --accent-soft: #eaf2f8;
+    --nav: #18232e;
+    --nav-text: #e8eef4;
+    --report-nav-offset: 18px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    font-size: 14.5px;
+}
+
+body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+    line-height: 1.5;
+}
+
+.report-shell {
+    display: grid;
+    grid-template-columns: 215px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.report-nav {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 20px 12px;
+    background: var(--nav);
+    color: var(--nav-text);
+}
+
+.nav-brand {
+    margin-bottom: 22px;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.nav-label {
+    margin: 14px 6px 5px;
+    opacity: 0.65;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.report-nav a {
+    display: block;
+    padding: 6px 6px;
+    border-radius: 5px;
+    color: var(--nav-text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+.report-nav a:hover {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.report-main {
+    width: min(1400px, 100%);
+    padding: 28px 16px 52px;
+}
+
+.report-header,
+.report-section {
+    margin-bottom: 24px;
+    padding: 20px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.report-header h1 {
+    margin: 0 0 8px;
+    font-size: 2rem;
+    line-height: 1.2;
+}
+
+.report-header,
+.report-section,
+.evidence-record {
+    scroll-margin-top: var(--report-nav-offset);
+}
+
+.report-context {
+    white-space: pre-wrap;
+}
+
+.section-kicker {
+    margin-bottom: 4px;
+    color: var(--accent);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+h2 {
+    margin: 0 0 8px;
+}
+
+h3 {
+    margin-top: 26px;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.metrics {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.metric {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-muted);
+}
+
+.metric-label {
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.metric-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.table-wrap {
+    overflow-x: auto;
+    margin: 14px 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+
+thead th {
+    background: var(--surface-muted);
+    font-size: 0.82rem;
+}
+
+td.number {
+    text-align: start;
+    font-variant-numeric: tabular-nums;
+}
+
+.note {
+    padding: 12px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    color: #29465f;
+}
+
+details {
+    margin: 14px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+summary {
+    padding: 12px 14px;
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.details-body {
+    padding: 0 14px 14px;
+}
+
+.definition-grid {
+    display: grid;
+    grid-template-columns: minmax(140px, 220px) 1fr;
+    gap: 8px 18px;
+}
+
+.definition-grid dt {
+    color: var(--muted);
+    font-weight: 650;
+}
+
+.definition-grid dd {
+    margin: 0;
+}
+
+.comparison-route {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 16px;
+    align-items: center;
+    margin: 20px 0;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-muted);
+}
+
+.comparison-route > div:not(.route-arrow) {
+    display: flex;
+    flex-direction: column;
+}
+
+.route-label {
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 650;
+    text-transform: uppercase;
+}
+
+.route-arrow {
+    color: var(--accent);
+    font-size: 1.5rem;
+}
+
+footer {
+    padding: 12px 4px;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.timeline-chart {
+    margin: 14px 0 22px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-muted);
+}
+
+.timeline-meta {
+    margin-bottom: 10px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.timeline-scroll {
+    overflow-x: auto;
+}
+
+.timeline-svg {
+    display: block;
+    min-width: 100%;
+    height: 220px;
+}
+
+.timeline-axis {
+    stroke: #8995a3;
+    stroke-width: 1;
+}
+
+.timeline-axis-label {
+    fill: #5f6b78;
+    font-size: 10px;
+}
+
+.timeline-trace,
+.timeline-debug,
+.timeline-info {
+    fill: #6c8eaa;
+}
+
+.timeline-unspecified {
+    fill: #a8b0b8;
+}
+
+.timeline-warning {
+    fill: #d5a72d;
+}
+
+.timeline-error {
+    fill: #c45b45;
+}
+
+.timeline-critical {
+    fill: #853c4a;
+}
+
+.timeline-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.timeline-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.timeline-legend i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.legend-info {
+    background: #6c8eaa;
+}
+
+.legend-warning {
+    background: #d5a72d;
+}
+
+.legend-error {
+    background: #c45b45;
+}
+
+.legend-critical {
+    background: #853c4a;
+}
+
+.legend-unspecified {
+    background: #a8b0b8;
+}
+
+.preserve-whitespace {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.burst-table {
+    min-width: 800px;
+    table-layout: fixed;
+    line-height: 1.35;
+}
+
+.burst-table th,
+.burst-table td {
+    padding: 4px 5px;
+}
+
+.burst-table th {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.burst-table th:nth-child(1),
+.burst-table td:nth-child(1) {
+    width: 125px;
+}
+
+.burst-table th:nth-child(2),
+.burst-table td:nth-child(2) {
+    width: 125px;
+}
+
+.burst-table th:nth-child(3),
+.burst-table td:nth-child(3) {
+    width: 70px;
+}
+
+.burst-table th:nth-child(4),
+.burst-table td:nth-child(4) {
+    width: 60px;
+}
+
+.burst-table th:nth-child(5),
+.burst-table td:nth-child(5) {
+    width: 50px;
+}
+
+.burst-table th:nth-child(6),
+.burst-table td:nth-child(6) {
+    width: 60px;
+}
+
+.burst-table th:nth-child(7),
+.burst-table td:nth-child(7) {
+    width: 80px;
+}
+
+.burst-table th:nth-child(8),
+.burst-table td:nth-child(8) {
+    width: 190px;
+}
+
+.burst-table th:nth-child(1),
+.burst-table th:nth-child(2),
+.burst-table th:nth-child(3),
+.burst-table th:nth-child(4),
+.burst-table th:nth-child(5),
+.burst-table th:nth-child(6) {
+    white-space: nowrap;
+}
+
+.burst-table td:nth-child(1),
+.burst-table td:nth-child(2) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    line-height: 1.25;
+}
+
+.annotation-table {
+    width: 100%;
+    min-width: 840px;
+    table-layout: fixed;
+    line-height: 1.35;
+}
+
+.annotation-table th,
+.annotation-table td {
+    padding: 3px 4px;
+}
+
+.annotation-table th {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.annotation-table th:nth-child(1),
+.annotation-table td:nth-child(1) {
+    width: 68px;
+}
+
+.annotation-table th:nth-child(2),
+.annotation-table td:nth-child(2) {
+    width: 62px;
+}
+
+.annotation-table th:nth-child(3),
+.annotation-table td:nth-child(3) {
+    width: 220px;
+}
+
+.annotation-table th:nth-child(4),
+.annotation-table td:nth-child(4) {
+    width: 220px;
+}
+
+.annotation-table th:nth-child(5),
+.annotation-table td:nth-child(5) {
+    width: 74px;
+}
+
+.annotation-table th:nth-child(6),
+.annotation-table td:nth-child(6) {
+    width: 130px;
+}
+
+.annotation-table th:nth-child(7),
+.annotation-table td:nth-child(7) {
+    width: 66px;
+}
+
+.annotation-table th:nth-child(1),
+.annotation-table th:nth-child(2),
+.annotation-table th:nth-child(5),
+.annotation-table th:nth-child(6) {
+    white-space: nowrap;
+}
+
+.annotation-message,
+.annotation-note-cell {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.annotation-table td:nth-child(7) {
+    font-variant-numeric: tabular-nums;
+}
+
+.annotation-link {
+    display: block;
+    margin: -3px -4px;
+    padding: 3px 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.annotation-link:hover,
+.annotation-link:focus-visible {
+    background: var(--accent-soft);
+    text-decoration: underline;
+}
+
+.annotation-table tbody tr:hover {
+    background: var(--surface-muted);
+}
+
+.evidence-record {
+    scroll-margin-top: 18px;
+}
+
+.evidence-record:target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.annotation-message,
+.annotation-note-cell {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.record-id {
+    color: var(--muted);
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+}
+
+.evidence-record > summary {
+    overflow-wrap: anywhere;
+}
+
+.evidence-record {
+    margin: 10px 0;
+}
+
+.evidence-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.evidence-tag {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: #29465f;
+    font-size: 0.75rem;
+    font-weight: 650;
+}
+
+.annotation-note {
+    padding: 12px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--surface-muted);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.raw-source {
+    max-height: 420px;
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #f6f8fa;
+    color: #1f2933;
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+h4,
+h5 {
+    margin-bottom: 8px;
+}
+
+.technical-code {
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #f6f8fa;
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+    .report-shell {
+        display: block;
+    }
+
+    .report-nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: block;
+        height: auto;
+        max-height: none;
+        padding: 6px 10px 7px;
+        overflow: visible;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .nav-brand {
+        margin: 0 0 4px;
+        font-size: 0.86rem;
+        line-height: 1.2;
+    }
+
+    .report-nav nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px 4px;
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .report-nav a {
+        flex: 0 0 auto;
+        padding: 3px 6px;
+        font-size: 0.8rem;
+        line-height: 1.25;
+        white-space: nowrap;
+    }
+
+    .nav-label {
+        display: none;
+    }
+
+    .report-main {
+        padding: 18px 10px 40px;
+    }
+
+    .report-header,
+    .report-section {
+        padding: 18px 12px;
+    }
+}
+
+@media print {
+    body {
+        background: white;
+    }
+
+    .report-shell {
+        display: block;
+    }
+
+    .report-nav {
+        display: none;
+    }
+
+    .report-main {
+        width: auto;
+        padding: 0;
+    }
+
+    .report-header,
+    .report-section {
+        break-inside: avoid;
+        border: 0;
+        border-bottom: 1px solid #cccccc;
+        border-radius: 0;
+        padding: 18px 0;
+    }
+
+    details {
+        break-inside: avoid;
+    }
+
+    details > * {
+        display: block;
+    }
+}
+</style>
+</head><body><div class="report-shell"><aside class="report-nav"><div class="nav-brand">TraceScope Investigation Report</div><nav><a href="#overview">Overview</a><a href="#sources">Sources</a><a href="#time-coverage">Time Coverage</a><a href="#chronology">Evidence Chronology</a><div class="nav-label">Comparisons</div><a href="#comparison-1">field-gateway-known-good → field-gateway-degraded</a><div class="nav-label">Sources</div><a href="#session-1">field-gateway-known-good.log</a><a href="#session-2">field-gateway-degraded.log</a></nav></aside><main class="report-main"><header class="report-header" id="overview"><div class="section-kicker">TraceScope Investigation Report</div><h1>Field Gateway Degraded Session Investigation</h1><p class="report-context">Comparison of a known-good field gateway support session against a degraded session showing cellular link instability, telemetry backlog, upload failures, and downstream processing delays.</p><p class="muted">Generated 2026-09-04T20:44:04.705Z</p><div class="metrics"><div class="metric"><div class="metric-label">Sources</div><div class="metric-value">2</div></div><div class="metric"><div class="metric-label">Comparisons</div><div class="metric-value">1</div></div><div class="metric"><div class="metric-label">Chronology entries</div><div class="metric-value">21</div></div><div class="metric"><div class="metric-label">Technical appendix</div><div class="metric-value">Included</div></div></div></header><section class="report-section" id="sources"><div class="section-kicker">Investigation Overview</div><h2>Sources</h2><p class="muted">Local workstation source paths are intentionally omitted from the shareable report snapshot.</p><div class="table-wrap"><table><thead><tr><th>Source</th><th>Importer</th><th>Processed</th><th>Imported</th><th>Skipped</th><th>Truncated</th></tr></thead><tbody><tr><td>field-gateway-known-good.log</td><td>key-value</td><td class="number">203</td><td class="number">203</td><td class="number">0</td><td>No</td></tr><tr><td>field-gateway-degraded.log</td><td>key-value</td><td class="number">222</td><td class="number">222</td><td class="number">0</td><td>No</td></tr></tbody></table></div></section><section class="report-section" id="time-coverage"><div class="section-kicker">Cross-Source Context</div><h2>Time Coverage</h2><p class="note">Cross-source chronology reflects timestamps as imported by TraceScope. Clock synchronization or clock skew between independent sources is not inferred.</p><div class="table-wrap"><table><thead><tr><th>Source</th><th>Timestamped records</th><th>First timestamp</th><th>Last timestamp</th></tr></thead><tbody><tr><td>field-gateway-known-good.log</td><td class="number">203</td><td>2026-08-20T16:00:00.000Z</td><td>2026-08-20T16:40:00.000Z</td></tr><tr><td>field-gateway-degraded.log</td><td class="number">222</td><td>2026-08-20T16:00:00.000Z</td><td>2026-08-20T16:40:00.000Z</td></tr></tbody></table></div></section><section class="report-section" id="chronology"><div class="section-kicker">Cross-Source Evidence</div><h2>Evidence Chronology</h2><p class="muted">Only timestamped report evidence appears here. Untimestamped evidence remains with its source section.</p><details><summary>Show 21 chronology entries</summary><div class="details-body table-wrap"><table><thead><tr><th>Timestamp</th><th>Source</th><th>Severity</th><th>Message</th><th>Context</th></tr></thead><tbody><tr><td>2026-08-20T16:11:03.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Cellular signal dropped below operating margin</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:11:21.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Cellular uplink reconnect attempt started</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:11:39.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Flow meter register read timed out</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:11:57.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Telemetry upload retry scheduled</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:12:15.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Cellular uplink disconnected</td><td>Bookmarked, Finding: Open, Note, Burst evidence</td></tr><tr><td>2026-08-20T16:12:33.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Local telemetry buffer depth exceeded target</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:12:51.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Second flow meter read timed out</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:13:09.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Upstream synchronization delayed by link instability</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:13:27.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Gateway began another reconnect attempt</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:13:45.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Reconnect attempt failed and link dropped again</td><td>Bookmarked, Finding: Open, Note, Burst evidence</td></tr><tr><td>2026-08-20T16:14:03.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Buffered flow telemetry queued for retry</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:28:03.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Residual telemetry backlog began growing again</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:28:21.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Buffered telemetry upload retry scheduled</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:28:39.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Buffered telemetry upload timed out</td><td>Bookmarked, Finding: Open, Note, Burst evidence</td></tr><tr><td>2026-08-20T16:28:57.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Local buffer write latency exceeded target</td><td>Finding: Dismissed, Note, Burst evidence</td></tr><tr><td>2026-08-20T16:29:15.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Telemetry worker exceeded watchdog timing target</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:29:33.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Second buffered upload timed out</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:29:51.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Telemetry buffer continued growing during retries</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:30:09.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Flow telemetry batch queued behind backlog</td><td>Burst evidence</td></tr><tr><td>2026-08-20T16:30:27.000Z</td><td>field-gateway-degraded.log</td><td>Error</td><td>Telemetry worker stalled during backlog drain</td><td>Finding: Open, Note, Burst evidence</td></tr><tr><td>2026-08-20T16:30:45.000Z</td><td>field-gateway-degraded.log</td><td>Warning</td><td>Buffer persistence remained slower than target</td><td>Burst evidence</td></tr></tbody></table></div></details></section><article class="report-section comparison-section" id="comparison-1"><div class="section-kicker">Immutable Session Comparison</div><h2>field-gateway-known-good → field-gateway-degraded</h2><div class="comparison-route"><div><span class="route-label">Baseline</span><strong>field-gateway-known-good.log</strong></div><div class="route-arrow">→</div><div><span class="route-label">Comparison</span><strong>field-gateway-degraded.log</strong></div></div><div class="metrics"><div class="metric"><div class="metric-label">Baseline records</div><div class="metric-value">203</div></div><div class="metric"><div class="metric-label">Comparison records</div><div class="metric-value">222</div></div><div class="metric"><div class="metric-label">Record delta</div><div class="metric-value">+19</div></div></div><h3>Captured Timing</h3><div class="table-wrap"><table><thead><tr><th></th><th>Baseline</th><th>Comparison</th></tr></thead><tbody><tr><th>Timestamped records</th><td class="number">203</td><td class="number">222</td></tr><tr><th>First timestamp</th><td>2026-08-20T16:00:00.000Z</td><td>2026-08-20T16:00:00.000Z</td></tr><tr><th>Last timestamp</th><td>2026-08-20T16:40:00.000Z</td><td>2026-08-20T16:40:00.000Z</td></tr><tr><th>Duration</th><td>40.0 min</td><td>40.0 min</td></tr><tr><th>Record rate</th><td>5.08 records/min</td><td>5.55 records/min</td></tr></tbody></table></div><h3>Severity Changes</h3><div class="table-wrap"><table><thead><tr><th>Severity</th><th>Baseline</th><th>Comparison</th><th>Delta</th></tr></thead><tbody><tr><td>Warning</td><td class="number">2</td><td class="number">14</td><td class="number">+12</td></tr><tr><td>Error</td><td class="number">0</td><td class="number">7</td><td class="number">+7</td></tr></tbody></table></div><h3>Event-Code Changes</h3><div class="table-wrap"><table><thead><tr><th>Value</th><th>Baseline</th><th>Comparison</th><th>Delta</th></tr></thead><tbody><tr><td>BUFFER_GROWING</td><td class="number">0</td><td class="number">3</td><td class="number">+3</td></tr><tr><td>LINK_DROP</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr><tr><td>LINK_RETRY</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr><tr><td>MODBUS_TIMEOUT</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr><tr><td>PROCESS_STALL</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr><tr><td>SIGNAL_LOW</td><td class="number">0</td><td class="number">1</td><td class="number">+1</td></tr><tr><td>SYNC_DELAYED</td><td class="number">0</td><td class="number">1</td><td class="number">+1</td></tr><tr><td>TRANSIENT_RECOVERY</td><td class="number">2</td><td class="number">0</td><td class="number">-2</td></tr><tr><td>UPLOAD_RETRY</td><td class="number">0</td><td class="number">4</td><td class="number">+4</td></tr><tr><td>UPLOAD_TIMEOUT</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr><tr><td>WRITE_SLOW</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr></tbody></table></div><h3>Elevated Subsystem Changes</h3><div class="table-wrap"><table><thead><tr><th>Value</th><th>Baseline</th><th>Comparison</th><th>Delta</th></tr></thead><tbody><tr><td>Modbus</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr><tr><td>Network</td><td class="number">2</td><td class="number">5</td><td class="number">+3</td></tr><tr><td>Storage</td><td class="number">0</td><td class="number">5</td><td class="number">+5</td></tr><tr><td>Sync</td><td class="number">0</td><td class="number">1</td><td class="number">+1</td></tr><tr><td>Telemetry</td><td class="number">0</td><td class="number">6</td><td class="number">+6</td></tr><tr><td>Watchdog</td><td class="number">0</td><td class="number">2</td><td class="number">+2</td></tr></tbody></table></div><h3>Elevated Entity Changes</h3><div class="table-wrap"><table><thead><tr><th>Value</th><th>Baseline</th><th>Comparison</th><th>Delta</th></tr></thead><tbody><tr><td>FLOW-12</td><td class="number">0</td><td class="number">4</td><td class="number">+4</td></tr><tr><td>PLC-03</td><td class="number">0</td><td class="number">13</td><td class="number">+13</td></tr><tr><td>PUMP-01</td><td class="number">1</td><td class="number">0</td><td class="number">-1</td></tr><tr><td>PUMP-02</td><td class="number">1</td><td class="number">0</td><td class="number">-1</td></tr><tr><td>RTU-07</td><td class="number">0</td><td class="number">4</td><td class="number">+4</td></tr></tbody></table></div><h3>Custom-Field Changes</h3><h4>Categorical Fields</h4><div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th><th>Baseline</th><th>Comparison</th><th>Change</th></tr></thead><tbody><tr><td>Firmware</td><td>3.14.7</td><td class="number">203</td><td class="number">0</td><td>Disappeared</td></tr><tr><td>Firmware</td><td>3.14.8-rc1</td><td class="number">0</td><td class="number">222</td><td>Appeared</td></tr></tbody></table></div><h4>Numeric Fields</h4><div class="table-wrap"><table><thead><tr><th>Field</th><th>Baseline</th><th>Comparison</th></tr></thead><tbody><tr><td>Disk Usage (%)</td><td>min 41 · median 43 · max 46 · n=203</td><td>min 41 · median 44 · max 46 · n=222</td></tr><tr><td>Latency (ms)</td><td>min 18 · median 34 · max 86 · n=203</td><td>min 18 · median 34 · max 850 · n=222</td></tr><tr><td>Queue Depth</td><td>min 2 · median 4 · max 6 · n=203</td><td>min 2 · median 4 · max 46 · n=222</td></tr><tr><td>Reconnect Count</td><td>min 0 · median 0 · max 0 · n=203</td><td>min 0 · median 0 · max 3 · n=222</td></tr><tr><td>RSSI (dBm)</td><td>min -74 · median -65 · max -63 · n=203</td><td>min -92 · median -65 · max -63 · n=222</td></tr></tbody></table></div><h3>Burst Comparison</h3><details><summary>Shared burst-detection settings</summary><div class="details-body"><dl class="definition-grid"><dt>Window</dt><dd>5.0 min</dd><dt>Elevated-event threshold</dt><dd>5</dd><dt>Error/Critical threshold</dt><dd>3</dd><dt>Merge gap</dt><dd>1.0 min</dd></dl></div></details><div class="table-wrap"><table><thead><tr><th>Session</th><th>Bursts</th><th>Elevated records in bursts</th><th>Peak elevated</th><th>Longest burst</th><th>Dominant subsystem</th><th>Dominant event code</th><th>Dominant entity</th></tr></thead><tbody><tr><th>Baseline</th><td class="number">0</td><td class="number">0</td><td class="number">0</td><td>0 ms</td><td>Unavailable</td><td>Unavailable</td><td>Unavailable</td></tr><tr><th>Comparison</th><td class="number">2</td><td class="number">21</td><td class="number">11</td><td>3.0 min</td><td>Telemetry (6)</td><td>UPLOAD_RETRY (4)</td><td>PLC-03 (13)</td></tr></tbody></table></div><p class="note">This comparison is the immutable analysis captured by the TraceScope comparison document. It was not recalculated from current session state during report generation.</p></article><article class="report-section source-section" id="session-1"><div class="section-kicker">Source Investigation</div><h2>field-gateway-known-good.log</h2><p class="muted">field-gateway-known-good.log · key-value</p><div class="metrics"><div class="metric"><div class="metric-label">Source records</div><div class="metric-value">203</div></div><div class="metric"><div class="metric-label">Visible records</div><div class="metric-value">203</div></div><div class="metric"><div class="metric-label">Analysis records</div><div class="metric-value">203</div></div><div class="metric"><div class="metric-label">Evidence records</div><div class="metric-value">0</div></div></div><h3>Investigation Scope</h3><div class="table-wrap"><table><tbody><tr><th>Total imported population</th><td class="number">203</td></tr><tr><th>Visible population</th><td class="number">203</td></tr><tr><th>Visible timestamped records</th><td class="number">203</td></tr><tr><th>Visible first timestamp</th><td>2026-08-20T16:00:00.000Z</td></tr><tr><th>Visible last timestamp</th><td>2026-08-20T16:40:00.000Z</td></tr><tr><th>Analysis population</th><td class="number">203</td></tr><tr><th>Analysis timestamped records</th><td class="number">203</td></tr><tr><th>Analysis first timestamp</th><td>2026-08-20T16:00:00.000Z</td></tr><tr><th>Analysis last timestamp</th><td>2026-08-20T16:40:00.000Z</td></tr></tbody></table></div><p class="note">Analysis populations intentionally ignore annotation-only bookmark and finding-status filters. The visible population preserves the complete current table filter state.</p><h3>Severity Summary</h3><div class="table-wrap"><table><thead><tr><th>Severity</th><th>Visible</th><th>Analysis</th></tr></thead><tbody><tr><td>Trace</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Debug</td><td class="number">67</td><td class="number">67</td></tr><tr><td>Info</td><td class="number">134</td><td class="number">134</td></tr><tr><td>Warning</td><td class="number">2</td><td class="number">2</td></tr><tr><td>Error</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Critical</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Unspecified</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Total</td><td class="number">203</td><td class="number">203</td></tr></tbody></table></div><h3>Event Activity Timeline</h3><p class="muted">The timeline represents the deterministic analysis population captured at export time.</p><div class="timeline-chart"><div class="timeline-meta">Analysis population · 1.0 min buckets</div><div class="timeline-scroll"><svg class="timeline-svg" viewBox="0 0 804 220" role="img" aria-label="Event activity timeline"><line class="timeline-axis" x1="48" y1="178" x2="786" y2="178"/><text class="timeline-axis-label" x="6" y="23">6</text><g><title>16:00 — 5 records</title><rect class="timeline-debug" x="48.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="48.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="54.0" y="202" text-anchor="middle">16:00</text><g><title>16:01 — 5 records</title><rect class="timeline-debug" x="66.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="66.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:02 — 5 records</title><rect class="timeline-debug" x="84.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="84.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:03 — 5 records</title><rect class="timeline-debug" x="102.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="102.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:04 — 5 records</title><rect class="timeline-debug" x="120.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="120.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:05 — 5 records</title><rect class="timeline-debug" x="138.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="138.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:06 — 5 records</title><rect class="timeline-debug" x="156.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="156.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="162.0" y="202" text-anchor="middle">16:06</text><g><title>16:07 — 5 records</title><rect class="timeline-debug" x="174.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="174.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:08 — 5 records</title><rect class="timeline-debug" x="192.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="192.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:09 — 5 records</title><rect class="timeline-debug" x="210.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="210.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:10 — 6 records</title><rect class="timeline-debug" x="228.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="228.0" y="44.7" width="12.0" height="80.0"/><rect class="timeline-warning" x="228.0" y="18.0" width="12.0" height="26.7"/></g><g><title>16:11 — 5 records</title><rect class="timeline-debug" x="246.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="246.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:12 — 5 records</title><rect class="timeline-debug" x="264.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="264.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="270.0" y="202" text-anchor="middle">16:12</text><g><title>16:13 — 5 records</title><rect class="timeline-debug" x="282.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="282.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:14 — 5 records</title><rect class="timeline-debug" x="300.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="300.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:15 — 5 records</title><rect class="timeline-debug" x="318.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="318.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:16 — 5 records</title><rect class="timeline-debug" x="336.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="336.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:17 — 5 records</title><rect class="timeline-debug" x="354.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="354.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:18 — 5 records</title><rect class="timeline-debug" x="372.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="372.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="378.0" y="202" text-anchor="middle">16:18</text><g><title>16:19 — 5 records</title><rect class="timeline-debug" x="390.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="390.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:20 — 5 records</title><rect class="timeline-debug" x="408.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="408.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:21 — 5 records</title><rect class="timeline-debug" x="426.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="426.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:22 — 5 records</title><rect class="timeline-debug" x="444.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="444.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:23 — 5 records</title><rect class="timeline-debug" x="462.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="462.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:24 — 5 records</title><rect class="timeline-debug" x="480.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="480.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="486.0" y="202" text-anchor="middle">16:24</text><g><title>16:25 — 6 records</title><rect class="timeline-debug" x="498.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="498.0" y="44.7" width="12.0" height="80.0"/><rect class="timeline-warning" x="498.0" y="18.0" width="12.0" height="26.7"/></g><g><title>16:26 — 5 records</title><rect class="timeline-debug" x="516.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="516.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:27 — 5 records</title><rect class="timeline-debug" x="534.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="534.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:28 — 5 records</title><rect class="timeline-debug" x="552.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="552.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:29 — 5 records</title><rect class="timeline-debug" x="570.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="570.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:30 — 5 records</title><rect class="timeline-debug" x="588.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="588.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="594.0" y="202" text-anchor="middle">16:30</text><g><title>16:31 — 5 records</title><rect class="timeline-debug" x="606.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="606.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:32 — 5 records</title><rect class="timeline-debug" x="624.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="624.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:33 — 5 records</title><rect class="timeline-debug" x="642.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="642.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:34 — 5 records</title><rect class="timeline-debug" x="660.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="660.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:35 — 5 records</title><rect class="timeline-debug" x="678.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="678.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:36 — 5 records</title><rect class="timeline-debug" x="696.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="696.0" y="44.7" width="12.0" height="80.0"/></g><text class="timeline-axis-label" x="702.0" y="202" text-anchor="middle">16:36</text><g><title>16:37 — 5 records</title><rect class="timeline-debug" x="714.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="714.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:38 — 5 records</title><rect class="timeline-debug" x="732.0" y="151.3" width="12.0" height="26.7"/><rect class="timeline-info" x="732.0" y="44.7" width="12.0" height="106.7"/></g><g><title>16:39 — 5 records</title><rect class="timeline-debug" x="750.0" y="124.7" width="12.0" height="53.3"/><rect class="timeline-info" x="750.0" y="44.7" width="12.0" height="80.0"/></g><g><title>16:40 — 1 records</title><rect class="timeline-info" x="768.0" y="151.3" width="12.0" height="26.7"/></g><text class="timeline-axis-label" x="774.0" y="202" text-anchor="middle">16:40</text></svg></div><div class="timeline-legend"><span><i class="legend-info"></i>Info / lower</span><span><i class="legend-warning"></i>Warning</span><span><i class="legend-error"></i>Error</span><span><i class="legend-critical"></i>Critical</span><span><i class="legend-unspecified"></i>Unspecified</span></div></div><h3>Grouped Warning/Error Analysis</h3><details open><summary>Subsystem Issue Groups (1)</summary><div class="details-body table-wrap"><table><thead><tr><th>Subsystem</th><th>Warnings</th><th>Errors / Critical</th><th>Total elevated</th></tr></thead><tbody><tr><td>Network</td><td class="number">2</td><td class="number">0</td><td class="number">2</td></tr></tbody></table></div></details><h3>Deterministic Analytics</h3><p class="muted">These frequency summaries describe populated canonical values in the captured analysis population.</p><details><summary>Event Codes (7)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Value</th><th>Count</th></tr></thead><tbody><tr><td>LINK_HEALTH</td><td class="number">34</td></tr><tr><td>MODBUS_READ_OK</td><td class="number">34</td></tr><tr><td>UPLOAD_OK</td><td class="number">34</td></tr><tr><td>BUFFER_STABLE</td><td class="number">33</td></tr><tr><td>SYNC_OK</td><td class="number">33</td></tr><tr><td>WORKER_HEALTH</td><td class="number">33</td></tr><tr><td>TRANSIENT_RECOVERY</td><td class="number">2</td></tr></tbody></table></div></div></details><details><summary>Entities (6)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Value</th><th>Count</th></tr></thead><tbody><tr><td>PUMP-01</td><td class="number">35</td></tr><tr><td>PUMP-02</td><td class="number">35</td></tr><tr><td>RTU-07</td><td class="number">34</td></tr><tr><td>FLOW-12</td><td class="number">33</td></tr><tr><td>PLC-03</td><td class="number">33</td></tr><tr><td>PRESS-04</td><td class="number">33</td></tr></tbody></table></div></div></details><details><summary>Subsystems (6)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Value</th><th>Count</th></tr></thead><tbody><tr><td>Network</td><td class="number">36</td></tr><tr><td>Modbus</td><td class="number">34</td></tr><tr><td>Telemetry</td><td class="number">34</td></tr><tr><td>Storage</td><td class="number">33</td></tr><tr><td>Sync</td><td class="number">33</td></tr><tr><td>Watchdog</td><td class="number">33</td></tr></tbody></table></div></div></details><h3>Timestamp Cadence</h3><div class="metrics"><div class="metric"><div class="metric-label">Timestamped records</div><div class="metric-value">203</div></div><div class="metric"><div class="metric-label">Positive gaps</div><div class="metric-value">202</div></div><div class="metric"><div class="metric-label">Zero gaps</div><div class="metric-value">0</div></div><div class="metric"><div class="metric-label">Median gap</div><div class="metric-value">12.0 s</div></div></div><details><summary>Cadence statistics</summary><div class="details-body"><dl class="definition-grid"><dt>Minimum positive gap</dt><dd>1.0 s</dd><dt>Median positive gap</dt><dd>12.0 s</dd><dt>Mean positive gap</dt><dd>11.9 s</dd><dt>90th percentile gap</dt><dd>12.0 s</dd><dt>Maximum positive gap</dt><dd>12.0 s</dd><dt>Recommended burst window</dt><dd>5.0 min</dd><dt>Recommended merge gap</dt><dd>1.0 min</dd><dt>Recommendation basis</dt><dd>Observed timestamp cadence</dd></dl></div></details><h3>Burst Analysis</h3><div class="metrics"><div class="metric"><div class="metric-label">Detected bursts</div><div class="metric-value">0</div></div><div class="metric"><div class="metric-label">Timing mode</div><div class="metric-value">Auto</div></div><div class="metric"><div class="metric-label">Effective window</div><div class="metric-value">5.0 min</div></div><div class="metric"><div class="metric-label">Effective merge gap</div><div class="metric-value">1.0 min</div></div></div><details><summary>Burst detection settings</summary><div class="details-body"><h4>Configured</h4><dl class="definition-grid"><dt>Window</dt><dd>30.0 s</dd><dt>Elevated-event threshold</dt><dd>5</dd><dt>Error/Critical threshold</dt><dd>3</dd><dt>Merge gap</dt><dd>5.0 s</dd></dl><h4>Effective</h4><dl class="definition-grid"><dt>Window</dt><dd>5.0 min</dd><dt>Elevated-event threshold</dt><dd>5</dd><dt>Error/Critical threshold</dt><dd>3</dd><dt>Merge gap</dt><dd>1.0 min</dd></dl></div></details><p class="muted">Burst analysis was available, but no bursts met the captured detection thresholds.</p><h3>Findings and Investigator Annotations</h3><p class="muted">No bookmarks, analyst notes, or finding classifications were captured for this source.</p><h3>Supporting Evidence</h3><p class="muted">No investigation evidence records were captured.</p><h3>Import and Data-Quality Context</h3><div class="table-wrap"><table><tbody><tr><th>Source name</th><td>field-gateway-known-good.log</td></tr><tr><th>Source size</th><td>57.9 KiB</td></tr><tr><th>Source last modified</th><td>2026-08-23T15:27:44.261Z</td></tr><tr><th>Imported at</th><td>2026-09-04T20:20:22.405Z</td></tr><tr><th>Importer</th><td>key-value</td></tr><tr><th>Import profile</th><td>Field Gateway Support Session</td></tr><tr><th>Processed records</th><td class="number">203</td></tr><tr><th>Imported records</th><td class="number">203</td></tr><tr><th>Skipped records</th><td class="number">0</td></tr><tr><th>Source truncated</th><td>No</td></tr></tbody></table></div><details><summary>Import Diagnostics (0)</summary><div class="details-body"><p class="muted">No import diagnostics were captured.</p></div></details><details><summary>Complete Import Profile</summary><div class="details-body"><dl class="definition-grid"><dt>Schema version</dt><dd>1</dd><dt>Profile name</dt><dd>Field Gateway Support Session</dd><dt>Importer</dt><dd>key-value</dd><dt>Preserve unmapped fields</dt><dd>Yes</dd></dl><h4>Canonical Field Mappings</h4><div class="table-wrap"><table><thead><tr><th>Canonical field</th><th>Source path</th></tr></thead><tbody><tr><td>Timestamp</td><td>timestamp</td></tr><tr><td>Severity</td><td>level</td></tr><tr><td>Subsystem</td><td>subsystem</td></tr><tr><td>Event code</td><td>eventCode</td></tr><tr><td>Entity ID</td><td>entityId</td></tr><tr><td>Message</td><td>message</td></tr></tbody></table></div><details><summary>Custom Field Mappings (9)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Source path</th></tr></thead><tbody><tr><td>Site</td><td>site</td></tr><tr><td>Gateway</td><td>gateway</td></tr><tr><td>Firmware</td><td>firmware</td></tr><tr><td>Interface</td><td>interface</td></tr><tr><td>Latency (ms)</td><td>latencyMs</td></tr><tr><td>Queue Depth</td><td>queueDepth</td></tr><tr><td>Reconnect Count</td><td>reconnectCount</td></tr><tr><td>RSSI (dBm)</td><td>rssiDbm</td></tr><tr><td>Disk Usage (%)</td><td>diskUsagePct</td></tr></tbody></table></div></div></details><details><summary>Severity Aliases (0)</summary><div class="details-body"><p class="muted">No severity aliases were configured.</p></div></details><details><summary>Timestamp Rules (1)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Priority</th><th>Type</th><th>Format</th></tr></thead><tbody><tr><td class="number">1</td><td>ISO 8601</td><td>Default</td></tr></tbody></table></div></div></details></div></details><details><summary>Captured investigation filters</summary><div class="details-body"><p class="muted">No investigation filters were active when this report snapshot was captured.</p></div></details><details><summary>Source capabilities</summary><div class="details-body"><dl class="definition-grid"><dt>Timestamps</dt><dd>Available</dd><dt>Severity</dt><dd>Available</dd><dt>Subsystem</dt><dd>Available</dd><dt>Event code</dt><dd>Available</dd><dt>Entity</dt><dd>Available</dd><dt>Custom fields</dt><dd>Available</dd></dl></div></details></article><article class="report-section source-section" id="session-2"><div class="section-kicker">Source Investigation</div><h2>field-gateway-degraded.log</h2><p class="muted">field-gateway-degraded.log · key-value</p><div class="metrics"><div class="metric"><div class="metric-label">Source records</div><div class="metric-value">222</div></div><div class="metric"><div class="metric-label">Visible records</div><div class="metric-value">222</div></div><div class="metric"><div class="metric-label">Analysis records</div><div class="metric-value">222</div></div><div class="metric"><div class="metric-label">Evidence records</div><div class="metric-value">21</div></div></div><h3>Investigation Scope</h3><div class="table-wrap"><table><tbody><tr><th>Total imported population</th><td class="number">222</td></tr><tr><th>Visible population</th><td class="number">222</td></tr><tr><th>Visible timestamped records</th><td class="number">222</td></tr><tr><th>Visible first timestamp</th><td>2026-08-20T16:00:00.000Z</td></tr><tr><th>Visible last timestamp</th><td>2026-08-20T16:40:00.000Z</td></tr><tr><th>Analysis population</th><td class="number">222</td></tr><tr><th>Analysis timestamped records</th><td class="number">222</td></tr><tr><th>Analysis first timestamp</th><td>2026-08-20T16:00:00.000Z</td></tr><tr><th>Analysis last timestamp</th><td>2026-08-20T16:40:00.000Z</td></tr></tbody></table></div><p class="note">Analysis populations intentionally ignore annotation-only bookmark and finding-status filters. The visible population preserves the complete current table filter state.</p><h3>Severity Summary</h3><div class="table-wrap"><table><thead><tr><th>Severity</th><th>Visible</th><th>Analysis</th></tr></thead><tbody><tr><td>Trace</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Debug</td><td class="number">67</td><td class="number">67</td></tr><tr><td>Info</td><td class="number">134</td><td class="number">134</td></tr><tr><td>Warning</td><td class="number">14</td><td class="number">14</td></tr><tr><td>Error</td><td class="number">7</td><td class="number">7</td></tr><tr><td>Critical</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Unspecified</td><td class="number">0</td><td class="number">0</td></tr><tr><td>Total</td><td class="number">222</td><td class="number">222</td></tr></tbody></table></div><h3>Event Activity Timeline</h3><p class="muted">The timeline represents the deterministic analysis population captured at export time.</p><div class="timeline-chart"><div class="timeline-meta">Analysis population · 1.0 min buckets</div><div class="timeline-scroll"><svg class="timeline-svg" viewBox="0 0 804 220" role="img" aria-label="Event activity timeline"><line class="timeline-axis" x1="48" y1="178" x2="786" y2="178"/><text class="timeline-axis-label" x="6" y="23">9</text><g><title>16:00 — 5 records</title><rect class="timeline-debug" x="48.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="48.0" y="89.1" width="12.0" height="53.3"/></g><text class="timeline-axis-label" x="54.0" y="202" text-anchor="middle">16:00</text><g><title>16:01 — 5 records</title><rect class="timeline-debug" x="66.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="66.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:02 — 5 records</title><rect class="timeline-debug" x="84.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="84.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:03 — 5 records</title><rect class="timeline-debug" x="102.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="102.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:04 — 5 records</title><rect class="timeline-debug" x="120.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="120.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:05 — 5 records</title><rect class="timeline-debug" x="138.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="138.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:06 — 5 records</title><rect class="timeline-debug" x="156.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="156.0" y="89.1" width="12.0" height="53.3"/></g><text class="timeline-axis-label" x="162.0" y="202" text-anchor="middle">16:06</text><g><title>16:07 — 5 records</title><rect class="timeline-debug" x="174.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="174.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:08 — 5 records</title><rect class="timeline-debug" x="192.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="192.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:09 — 5 records</title><rect class="timeline-debug" x="210.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="210.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:10 — 5 records</title><rect class="timeline-debug" x="228.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="228.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:11 — 9 records</title><rect class="timeline-debug" x="246.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="246.0" y="89.1" width="12.0" height="71.1"/><rect class="timeline-warning" x="246.0" y="35.8" width="12.0" height="53.3"/><rect class="timeline-error" x="246.0" y="18.0" width="12.0" height="17.8"/></g><g><title>16:12 — 8 records</title><rect class="timeline-debug" x="264.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="264.0" y="89.1" width="12.0" height="53.3"/><rect class="timeline-warning" x="264.0" y="71.3" width="12.0" height="17.8"/><rect class="timeline-error" x="264.0" y="35.8" width="12.0" height="35.6"/></g><text class="timeline-axis-label" x="270.0" y="202" text-anchor="middle">16:12</text><g><title>16:13 — 8 records</title><rect class="timeline-debug" x="282.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="282.0" y="89.1" width="12.0" height="53.3"/><rect class="timeline-warning" x="282.0" y="53.6" width="12.0" height="35.6"/><rect class="timeline-error" x="282.0" y="35.8" width="12.0" height="17.8"/></g><g><title>16:14 — 6 records</title><rect class="timeline-debug" x="300.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="300.0" y="89.1" width="12.0" height="71.1"/><rect class="timeline-warning" x="300.0" y="71.3" width="12.0" height="17.8"/></g><g><title>16:15 — 5 records</title><rect class="timeline-debug" x="318.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="318.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:16 — 5 records</title><rect class="timeline-debug" x="336.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="336.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:17 — 5 records</title><rect class="timeline-debug" x="354.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="354.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:18 — 5 records</title><rect class="timeline-debug" x="372.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="372.0" y="89.1" width="12.0" height="53.3"/></g><text class="timeline-axis-label" x="378.0" y="202" text-anchor="middle">16:18</text><g><title>16:19 — 5 records</title><rect class="timeline-debug" x="390.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="390.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:20 — 5 records</title><rect class="timeline-debug" x="408.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="408.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:21 — 5 records</title><rect class="timeline-debug" x="426.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="426.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:22 — 5 records</title><rect class="timeline-debug" x="444.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="444.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:23 — 5 records</title><rect class="timeline-debug" x="462.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="462.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:24 — 5 records</title><rect class="timeline-debug" x="480.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="480.0" y="89.1" width="12.0" height="53.3"/></g><text class="timeline-axis-label" x="486.0" y="202" text-anchor="middle">16:24</text><g><title>16:25 — 5 records</title><rect class="timeline-debug" x="498.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="498.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:26 — 5 records</title><rect class="timeline-debug" x="516.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="516.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:27 — 5 records</title><rect class="timeline-debug" x="534.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="534.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:28 — 9 records</title><rect class="timeline-debug" x="552.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="552.0" y="89.1" width="12.0" height="53.3"/><rect class="timeline-warning" x="552.0" y="35.8" width="12.0" height="53.3"/><rect class="timeline-error" x="552.0" y="18.0" width="12.0" height="17.8"/></g><g><title>16:29 — 8 records</title><rect class="timeline-debug" x="570.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="570.0" y="89.1" width="12.0" height="71.1"/><rect class="timeline-warning" x="570.0" y="53.6" width="12.0" height="35.6"/><rect class="timeline-error" x="570.0" y="35.8" width="12.0" height="17.8"/></g><g><title>16:30 — 8 records</title><rect class="timeline-debug" x="588.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="588.0" y="89.1" width="12.0" height="53.3"/><rect class="timeline-warning" x="588.0" y="53.6" width="12.0" height="35.6"/><rect class="timeline-error" x="588.0" y="35.8" width="12.0" height="17.8"/></g><text class="timeline-axis-label" x="594.0" y="202" text-anchor="middle">16:30</text><g><title>16:31 — 5 records</title><rect class="timeline-debug" x="606.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="606.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:32 — 5 records</title><rect class="timeline-debug" x="624.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="624.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:33 — 5 records</title><rect class="timeline-debug" x="642.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="642.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:34 — 5 records</title><rect class="timeline-debug" x="660.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="660.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:35 — 5 records</title><rect class="timeline-debug" x="678.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="678.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:36 — 5 records</title><rect class="timeline-debug" x="696.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="696.0" y="89.1" width="12.0" height="53.3"/></g><text class="timeline-axis-label" x="702.0" y="202" text-anchor="middle">16:36</text><g><title>16:37 — 5 records</title><rect class="timeline-debug" x="714.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="714.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:38 — 5 records</title><rect class="timeline-debug" x="732.0" y="160.2" width="12.0" height="17.8"/><rect class="timeline-info" x="732.0" y="89.1" width="12.0" height="71.1"/></g><g><title>16:39 — 5 records</title><rect class="timeline-debug" x="750.0" y="142.4" width="12.0" height="35.6"/><rect class="timeline-info" x="750.0" y="89.1" width="12.0" height="53.3"/></g><g><title>16:40 — 1 records</title><rect class="timeline-info" x="768.0" y="160.2" width="12.0" height="17.8"/></g><text class="timeline-axis-label" x="774.0" y="202" text-anchor="middle">16:40</text></svg></div><div class="timeline-legend"><span><i class="legend-info"></i>Info / lower</span><span><i class="legend-warning"></i>Warning</span><span><i class="legend-error"></i>Error</span><span><i class="legend-critical"></i>Critical</span><span><i class="legend-unspecified"></i>Unspecified</span></div></div><h3>Grouped Warning/Error Analysis</h3><details open><summary>Subsystem Issue Groups (6)</summary><div class="details-body table-wrap"><table><thead><tr><th>Subsystem</th><th>Warnings</th><th>Errors / Critical</th><th>Total elevated</th></tr></thead><tbody><tr><td>Telemetry</td><td class="number">4</td><td class="number">2</td><td class="number">6</td></tr><tr><td>Network</td><td class="number">3</td><td class="number">2</td><td class="number">5</td></tr><tr><td>Storage</td><td class="number">5</td><td class="number">0</td><td class="number">5</td></tr><tr><td>Modbus</td><td class="number">0</td><td class="number">2</td><td class="number">2</td></tr><tr><td>Watchdog</td><td class="number">1</td><td class="number">1</td><td class="number">2</td></tr><tr><td>Sync</td><td class="number">1</td><td class="number">0</td><td class="number">1</td></tr></tbody></table></div></details><h3>Deterministic Analytics</h3><p class="muted">These frequency summaries describe populated canonical values in the captured analysis population.</p><details><summary>Event Codes (16)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Value</th><th>Count</th></tr></thead><tbody><tr><td>LINK_HEALTH</td><td class="number">34</td></tr><tr><td>MODBUS_READ_OK</td><td class="number">34</td></tr><tr><td>UPLOAD_OK</td><td class="number">34</td></tr><tr><td>BUFFER_STABLE</td><td class="number">33</td></tr><tr><td>SYNC_OK</td><td class="number">33</td></tr><tr><td>WORKER_HEALTH</td><td class="number">33</td></tr><tr><td>UPLOAD_RETRY</td><td class="number">4</td></tr><tr><td>BUFFER_GROWING</td><td class="number">3</td></tr><tr><td>LINK_DROP</td><td class="number">2</td></tr><tr><td>LINK_RETRY</td><td class="number">2</td></tr><tr><td>MODBUS_TIMEOUT</td><td class="number">2</td></tr><tr><td>PROCESS_STALL</td><td class="number">2</td></tr><tr><td>UPLOAD_TIMEOUT</td><td class="number">2</td></tr><tr><td>WRITE_SLOW</td><td class="number">2</td></tr><tr><td>SIGNAL_LOW</td><td class="number">1</td></tr><tr><td>SYNC_DELAYED</td><td class="number">1</td></tr></tbody></table></div></div></details><details><summary>Entities (6)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Value</th><th>Count</th></tr></thead><tbody><tr><td>PLC-03</td><td class="number">46</td></tr><tr><td>RTU-07</td><td class="number">38</td></tr><tr><td>FLOW-12</td><td class="number">37</td></tr><tr><td>PUMP-01</td><td class="number">34</td></tr><tr><td>PUMP-02</td><td class="number">34</td></tr><tr><td>PRESS-04</td><td class="number">33</td></tr></tbody></table></div></div></details><details><summary>Subsystems (6)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Value</th><th>Count</th></tr></thead><tbody><tr><td>Telemetry</td><td class="number">40</td></tr><tr><td>Network</td><td class="number">39</td></tr><tr><td>Storage</td><td class="number">38</td></tr><tr><td>Modbus</td><td class="number">36</td></tr><tr><td>Watchdog</td><td class="number">35</td></tr><tr><td>Sync</td><td class="number">34</td></tr></tbody></table></div></div></details><h3>Timestamp Cadence</h3><div class="metrics"><div class="metric"><div class="metric-label">Timestamped records</div><div class="metric-value">222</div></div><div class="metric"><div class="metric-label">Positive gaps</div><div class="metric-value">221</div></div><div class="metric"><div class="metric-label">Zero gaps</div><div class="metric-value">0</div></div><div class="metric"><div class="metric-label">Median gap</div><div class="metric-value">12.0 s</div></div></div><details><summary>Cadence statistics</summary><div class="details-body"><dl class="definition-grid"><dt>Minimum positive gap</dt><dd>3.0 s</dd><dt>Median positive gap</dt><dd>12.0 s</dd><dt>Mean positive gap</dt><dd>10.9 s</dd><dt>90th percentile gap</dt><dd>12.0 s</dd><dt>Maximum positive gap</dt><dd>12.0 s</dd><dt>Recommended burst window</dt><dd>5.0 min</dd><dt>Recommended merge gap</dt><dd>1.0 min</dd><dt>Recommendation basis</dt><dd>Observed timestamp cadence</dd></dl></div></details><h3>Burst Analysis</h3><div class="metrics"><div class="metric"><div class="metric-label">Detected bursts</div><div class="metric-value">2</div></div><div class="metric"><div class="metric-label">Timing mode</div><div class="metric-value">Auto</div></div><div class="metric"><div class="metric-label">Effective window</div><div class="metric-value">5.0 min</div></div><div class="metric"><div class="metric-label">Effective merge gap</div><div class="metric-value">1.0 min</div></div></div><details><summary>Burst detection settings</summary><div class="details-body"><h4>Configured</h4><dl class="definition-grid"><dt>Window</dt><dd>30.0 s</dd><dt>Elevated-event threshold</dt><dd>5</dd><dt>Error/Critical threshold</dt><dd>3</dd><dt>Merge gap</dt><dd>5.0 s</dd></dl><h4>Effective</h4><dl class="definition-grid"><dt>Window</dt><dd>5.0 min</dd><dt>Elevated-event threshold</dt><dd>5</dd><dt>Error/Critical threshold</dt><dd>3</dd><dt>Merge gap</dt><dd>1.0 min</dd></dl></div></details><details open><summary>Detected Bursts (2)</summary><div class="details-body table-wrap"><table class="burst-table"><thead><tr><th>Start</th><th>End</th><th>Duration</th><th>Warning</th><th>Error</th><th>Critical</th><th>Total elevated</th><th>Trigger</th></tr></thead><tbody><tr><td>2026-08-20T16:11:03.000Z</td><td>2026-08-20T16:14:03.000Z</td><td>3.0 min</td><td class="number">7</td><td class="number">4</td><td class="number">0</td><td class="number">11</td><td>Elevated-event threshold, Error/Critical threshold</td></tr><tr><td>2026-08-20T16:28:03.000Z</td><td>2026-08-20T16:30:45.000Z</td><td>2.7 min</td><td class="number">7</td><td class="number">3</td><td class="number">0</td><td class="number">10</td><td>Elevated-event threshold, Error/Critical threshold</td></tr></tbody></table></div></details><h3>Findings and Investigator Annotations</h3><div class="table-wrap"><table class="annotation-table"><thead><tr><th>Finding</th><th>Severity</th><th>Message</th><th>Note</th><th>Bookmark</th><th>Timestamp</th><th>Source Record</th></tr></thead><tbody><tr><td><a class="annotation-link" href="#session-2-evidence-5">Open</a></td><td><a class="annotation-link" href="#session-2-evidence-5">Error</a></td><td class="annotation-message preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-5">Cellular uplink disconnected</a></td><td class="annotation-note-cell preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-5">Cellular uplink disconnected after reconnect attempts; RSSI fell to -91 dBm while queue depth reached 15.</a></td><td><a class="annotation-link" href="#session-2-evidence-5">Yes</a></td><td><a class="annotation-link" href="#session-2-evidence-5">2026-08-20T16:12:15.000Z</a></td><td><a class="annotation-link" href="#session-2-evidence-5">67</a></td></tr><tr><td><a class="annotation-link" href="#session-2-evidence-10">Open</a></td><td><a class="annotation-link" href="#session-2-evidence-10">Error</a></td><td class="annotation-message preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-10">Reconnect attempt failed and link dropped again</a></td><td class="annotation-note-cell preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-10">Second link drop followed another reconnect attempt; RSSI reached -92 dBm while queue depth increased to 34.</a></td><td><a class="annotation-link" href="#session-2-evidence-10">Yes</a></td><td><a class="annotation-link" href="#session-2-evidence-10">2026-08-20T16:13:45.000Z</a></td><td><a class="annotation-link" href="#session-2-evidence-10">79</a></td></tr><tr><td><a class="annotation-link" href="#session-2-evidence-14">Open</a></td><td><a class="annotation-link" href="#session-2-evidence-14">Error</a></td><td class="annotation-message preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-14">Buffered telemetry upload timed out</a></td><td class="annotation-note-cell preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-14">Buffered telemetry upload timed out while residual backlog was growing; queue depth had reached 28.</a></td><td><a class="annotation-link" href="#session-2-evidence-14">Yes</a></td><td><a class="annotation-link" href="#session-2-evidence-14">2026-08-20T16:28:39.000Z</a></td><td><a class="annotation-link" href="#session-2-evidence-14">158</a></td></tr><tr><td><a class="annotation-link" href="#session-2-evidence-15">Dismissed</a></td><td><a class="annotation-link" href="#session-2-evidence-15">Warning</a></td><td class="annotation-message preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-15">Local buffer write latency exceeded target</a></td><td class="annotation-note-cell preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-15">Storage write latency increased during the backlog; retained as supporting context rather than a primary finding.</a></td><td><a class="annotation-link" href="#session-2-evidence-15">No</a></td><td><a class="annotation-link" href="#session-2-evidence-15">2026-08-20T16:28:57.000Z</a></td><td><a class="annotation-link" href="#session-2-evidence-15">160</a></td></tr><tr><td><a class="annotation-link" href="#session-2-evidence-20">Open</a></td><td><a class="annotation-link" href="#session-2-evidence-20">Error</a></td><td class="annotation-message preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-20">Telemetry worker stalled during backlog drain</a></td><td class="annotation-note-cell preserve-whitespace"><a class="annotation-link" href="#session-2-evidence-20">Telemetry worker stalled during backlog drain with queue depth at 46.</a></td><td><a class="annotation-link" href="#session-2-evidence-20">No</a></td><td><a class="annotation-link" href="#session-2-evidence-20">2026-08-20T16:30:27.000Z</a></td><td><a class="annotation-link" href="#session-2-evidence-20">173</a></td></tr></tbody></table></div><h3>Supporting Evidence</h3><p class="muted">Includes investigator-state records and additional captured burst evidence where applicable.</p><details class="evidence-record" id="session-2-evidence-1"><summary>Warning · Cellular signal dropped below operating margin</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:11:03.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Network</dd><dt>Event code</dt><dd>SIGNAL_LOW</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Cellular signal dropped below operating margin</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>57</dd><dt>Record ID</dt><dd class="record-id">4c9dd7a8771b7d36f59e099df6a216703d0cfb166b6a45d8d22cd0a899f55cbe</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">6</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">1</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-84</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:11:03.000Z level=WARN subsystem=Network eventCode=SIGNAL_LOW entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=6 reconnectCount=1 rssiDbm=-84 diskUsagePct=46 message=&quot;Cellular signal dropped below operating margin&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-2"><summary>Warning · Cellular uplink reconnect attempt started</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:11:21.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Network</dd><dt>Event code</dt><dd>LINK_RETRY</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Cellular uplink reconnect attempt started</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>59</dd><dt>Record ID</dt><dd class="record-id">5d54a0ae39ed6c7d59e186a0b29f9095eee418cc4123b4461bce94e885c7af9e</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">8</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">1</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-86</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:11:21.000Z level=WARN subsystem=Network eventCode=LINK_RETRY entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=8 reconnectCount=1 rssiDbm=-86 diskUsagePct=46 message=&quot;Cellular uplink reconnect attempt started&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-3"><summary>Error · Flow meter register read timed out</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:11:39.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Modbus</dd><dt>Event code</dt><dd>MODBUS_TIMEOUT</dd><dt>Entity ID</dt><dd>FLOW-12</dd><dt>Message</dt><dd class="preserve-whitespace">Flow meter register read timed out</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>62</dd><dt>Record ID</dt><dd class="record-id">babf7b4996a9035c9a5fcb61cc34a5ab10f361675cfdabf8a426ec7ad365229c</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">9</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">1</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-82</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:11:39.000Z level=ERROR subsystem=Modbus eventCode=MODBUS_TIMEOUT entityId=FLOW-12 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=850 queueDepth=9 reconnectCount=1 rssiDbm=-82 diskUsagePct=46 message=&quot;Flow meter register read timed out&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-4"><summary>Warning · Telemetry upload retry scheduled</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:11:57.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Telemetry</dd><dt>Event code</dt><dd>UPLOAD_RETRY</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Telemetry upload retry scheduled</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>64</dd><dt>Record ID</dt><dd class="record-id">bd209e356e9a5ddc01412e84f2482439c2dd78136abe6c21d6978f56558ae0b2</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">12</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">2</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-85</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:11:57.000Z level=WARN subsystem=Telemetry eventCode=UPLOAD_RETRY entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=12 reconnectCount=2 rssiDbm=-85 diskUsagePct=46 message=&quot;Telemetry upload retry scheduled&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-5"><summary>Error · Cellular uplink disconnected</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Bookmarked</span><span class="evidence-tag">Finding: Open</span><span class="evidence-tag">Note</span><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:12:15.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Network</dd><dt>Event code</dt><dd>LINK_DROP</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Cellular uplink disconnected</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>67</dd><dt>Record ID</dt><dd class="record-id">c8752bffcf19a0cb0f2bc0ee4f5401a74329eb3eef7c85489cb6c8b7e6aac9f3</dd></dl><h5>Analyst Note</h5><div class="annotation-note">Cellular uplink disconnected after reconnect attempts; RSSI fell to -91 dBm while queue depth reached 15.</div><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">15</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">2</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-91</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:12:15.000Z level=ERROR subsystem=Network eventCode=LINK_DROP entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=850 queueDepth=15 reconnectCount=2 rssiDbm=-91 diskUsagePct=46 message=&quot;Cellular uplink disconnected&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-6"><summary>Warning · Local telemetry buffer depth exceeded target</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:12:33.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Storage</dd><dt>Event code</dt><dd>BUFFER_GROWING</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Local telemetry buffer depth exceeded target</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>69</dd><dt>Record ID</dt><dd class="record-id">f89aa2c25dc7edd0266a52e3f0da2a32d3d7b891b064efc9c740678b7ace12e9</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">21</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">2</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-89</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:12:33.000Z level=WARN subsystem=Storage eventCode=BUFFER_GROWING entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=180 queueDepth=21 reconnectCount=2 rssiDbm=-89 diskUsagePct=46 message=&quot;Local telemetry buffer depth exceeded target&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-7"><summary>Error · Second flow meter read timed out</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:12:51.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Modbus</dd><dt>Event code</dt><dd>MODBUS_TIMEOUT</dd><dt>Entity ID</dt><dd>FLOW-12</dd><dt>Message</dt><dd class="preserve-whitespace">Second flow meter read timed out</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>72</dd><dt>Record ID</dt><dd class="record-id">41bd20bac47579634384d744c58610152ab571cb3ad2198cd5da835c6d621cdd</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">24</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">2</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-86</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:12:51.000Z level=ERROR subsystem=Modbus eventCode=MODBUS_TIMEOUT entityId=FLOW-12 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=850 queueDepth=24 reconnectCount=2 rssiDbm=-86 diskUsagePct=46 message=&quot;Second flow meter read timed out&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-8"><summary>Warning · Upstream synchronization delayed by link instability</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:13:09.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Sync</dd><dt>Event code</dt><dd>SYNC_DELAYED</dd><dt>Entity ID</dt><dd>RTU-07</dd><dt>Message</dt><dd class="preserve-whitespace">Upstream synchronization delayed by link instability</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>74</dd><dt>Record ID</dt><dd class="record-id">e5900adb93cf63a62776955a144bb890ad6ca57a211541f5c344490e8010f5ab</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">27</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">2</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-84</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:13:09.000Z level=WARN subsystem=Sync eventCode=SYNC_DELAYED entityId=RTU-07 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=27 reconnectCount=2 rssiDbm=-84 diskUsagePct=46 message=&quot;Upstream synchronization delayed by link instability&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-9"><summary>Warning · Gateway began another reconnect attempt</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:13:27.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Network</dd><dt>Event code</dt><dd>LINK_RETRY</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Gateway began another reconnect attempt</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>77</dd><dt>Record ID</dt><dd class="record-id">d3e85ef43972cfabcce9b0ec0bcba0fda9cc07b9fe37d06b797dae2133bc58be</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">30</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-88</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:13:27.000Z level=WARN subsystem=Network eventCode=LINK_RETRY entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=30 reconnectCount=3 rssiDbm=-88 diskUsagePct=46 message=&quot;Gateway began another reconnect attempt&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-10"><summary>Error · Reconnect attempt failed and link dropped again</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Bookmarked</span><span class="evidence-tag">Finding: Open</span><span class="evidence-tag">Note</span><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:13:45.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Network</dd><dt>Event code</dt><dd>LINK_DROP</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Reconnect attempt failed and link dropped again</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>79</dd><dt>Record ID</dt><dd class="record-id">0984f388b33f174c135d8a6536e9efae7c09b107de886c05c386c1e4c4ff151f</dd></dl><h5>Analyst Note</h5><div class="annotation-note">Second link drop followed another reconnect attempt; RSSI reached -92 dBm while queue depth increased to 34.</div><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">34</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-92</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:13:45.000Z level=ERROR subsystem=Network eventCode=LINK_DROP entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=850 queueDepth=34 reconnectCount=3 rssiDbm=-92 diskUsagePct=46 message=&quot;Reconnect attempt failed and link dropped again&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-11"><summary>Warning · Buffered flow telemetry queued for retry</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:14:03.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Telemetry</dd><dt>Event code</dt><dd>UPLOAD_RETRY</dd><dt>Entity ID</dt><dd>FLOW-12</dd><dt>Message</dt><dd class="preserve-whitespace">Buffered flow telemetry queued for retry</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>82</dd><dt>Record ID</dt><dd class="record-id">59a394bef9bb5bef3efd6d086302d38682d79d342e2cdfb5b45961f54cf97955</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">37</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-85</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:14:03.000Z level=WARN subsystem=Telemetry eventCode=UPLOAD_RETRY entityId=FLOW-12 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=37 reconnectCount=3 rssiDbm=-85 diskUsagePct=46 message=&quot;Buffered flow telemetry queued for retry&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-12"><summary>Warning · Residual telemetry backlog began growing again</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:28:03.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Storage</dd><dt>Event code</dt><dd>BUFFER_GROWING</dd><dt>Entity ID</dt><dd>RTU-07</dd><dt>Message</dt><dd class="preserve-whitespace">Residual telemetry backlog began growing again</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>153</dd><dt>Record ID</dt><dd class="record-id">394c1af394c2026d76b1cc3dd2304b191df95369a94ebe443e7cbc36810c4162</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">18</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-70</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:28:03.000Z level=WARN subsystem=Storage eventCode=BUFFER_GROWING entityId=RTU-07 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=180 queueDepth=18 reconnectCount=3 rssiDbm=-70 diskUsagePct=46 message=&quot;Residual telemetry backlog began growing again&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-13"><summary>Warning · Buffered telemetry upload retry scheduled</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:28:21.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Telemetry</dd><dt>Event code</dt><dd>UPLOAD_RETRY</dd><dt>Entity ID</dt><dd>RTU-07</dd><dt>Message</dt><dd class="preserve-whitespace">Buffered telemetry upload retry scheduled</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>155</dd><dt>Record ID</dt><dd class="record-id">1bd2728d5b3eefec60691a6398d42de9301905409dedb50b62e2062c9229a77a</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">22</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-72</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:28:21.000Z level=WARN subsystem=Telemetry eventCode=UPLOAD_RETRY entityId=RTU-07 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=22 reconnectCount=3 rssiDbm=-72 diskUsagePct=46 message=&quot;Buffered telemetry upload retry scheduled&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-14"><summary>Error · Buffered telemetry upload timed out</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Bookmarked</span><span class="evidence-tag">Finding: Open</span><span class="evidence-tag">Note</span><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:28:39.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Telemetry</dd><dt>Event code</dt><dd>UPLOAD_TIMEOUT</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Buffered telemetry upload timed out</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>158</dd><dt>Record ID</dt><dd class="record-id">0da4926a710fe3020deecae9cc81a6929e567db78b2047fad72895700b3c19c0</dd></dl><h5>Analyst Note</h5><div class="annotation-note">Buffered telemetry upload timed out while residual backlog was growing; queue depth had reached 28.</div><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">28</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-74</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:28:39.000Z level=ERROR subsystem=Telemetry eventCode=UPLOAD_TIMEOUT entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=850 queueDepth=28 reconnectCount=3 rssiDbm=-74 diskUsagePct=46 message=&quot;Buffered telemetry upload timed out&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-15"><summary>Warning · Local buffer write latency exceeded target</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Finding: Dismissed</span><span class="evidence-tag">Note</span><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:28:57.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Storage</dd><dt>Event code</dt><dd>WRITE_SLOW</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Local buffer write latency exceeded target</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>160</dd><dt>Record ID</dt><dd class="record-id">0a3365890ef12872df0589b34ce32ae5b692ad6dc7343f88ebde1cc401030763</dd></dl><h5>Analyst Note</h5><div class="annotation-note">Storage write latency increased during the backlog; retained as supporting context rather than a primary finding.</div><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">31</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-72</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:28:57.000Z level=WARN subsystem=Storage eventCode=WRITE_SLOW entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=180 queueDepth=31 reconnectCount=3 rssiDbm=-72 diskUsagePct=46 message=&quot;Local buffer write latency exceeded target&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-16"><summary>Warning · Telemetry worker exceeded watchdog timing target</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:29:15.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Watchdog</dd><dt>Event code</dt><dd>PROCESS_STALL</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Telemetry worker exceeded watchdog timing target</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>163</dd><dt>Record ID</dt><dd class="record-id">89a675b233e19d9dc8e4aeeb60e1d54477e1810380b4bd9418e4ace114133c5c</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">34</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-73</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:29:15.000Z level=WARN subsystem=Watchdog eventCode=PROCESS_STALL entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=180 queueDepth=34 reconnectCount=3 rssiDbm=-73 diskUsagePct=46 message=&quot;Telemetry worker exceeded watchdog timing target&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-17"><summary>Error · Second buffered upload timed out</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:29:33.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Telemetry</dd><dt>Event code</dt><dd>UPLOAD_TIMEOUT</dd><dt>Entity ID</dt><dd>RTU-07</dd><dt>Message</dt><dd class="preserve-whitespace">Second buffered upload timed out</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>165</dd><dt>Record ID</dt><dd class="record-id">e8f06365d3b72a58605b520a88a06b953b70ee70f716f116b7f25b7212dd9fa7</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">37</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-75</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:29:33.000Z level=ERROR subsystem=Telemetry eventCode=UPLOAD_TIMEOUT entityId=RTU-07 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=850 queueDepth=37 reconnectCount=3 rssiDbm=-75 diskUsagePct=46 message=&quot;Second buffered upload timed out&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-18"><summary>Warning · Telemetry buffer continued growing during retries</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:29:51.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Storage</dd><dt>Event code</dt><dd>BUFFER_GROWING</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Telemetry buffer continued growing during retries</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>168</dd><dt>Record ID</dt><dd class="record-id">8258c1368fb2683d9d6fd77253fbefec7a2bf29b85c8df5b300cc6c238a86ca0</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">40</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-73</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:29:51.000Z level=WARN subsystem=Storage eventCode=BUFFER_GROWING entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=180 queueDepth=40 reconnectCount=3 rssiDbm=-73 diskUsagePct=46 message=&quot;Telemetry buffer continued growing during retries&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-19"><summary>Warning · Flow telemetry batch queued behind backlog</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:30:09.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Telemetry</dd><dt>Event code</dt><dd>UPLOAD_RETRY</dd><dt>Entity ID</dt><dd>FLOW-12</dd><dt>Message</dt><dd class="preserve-whitespace">Flow telemetry batch queued behind backlog</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>170</dd><dt>Record ID</dt><dd class="record-id">e8332cb4f8c10031f78af1c80a6135b932837e4922c55e053eed575d432fbfc4</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">cell0</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">43</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-72</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:30:09.000Z level=WARN subsystem=Telemetry eventCode=UPLOAD_RETRY entityId=FLOW-12 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=cell0 latencyMs=180 queueDepth=43 reconnectCount=3 rssiDbm=-72 diskUsagePct=46 message=&quot;Flow telemetry batch queued behind backlog&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-20"><summary>Error · Telemetry worker stalled during backlog drain</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Finding: Open</span><span class="evidence-tag">Note</span><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:30:27.000Z</dd><dt>Severity</dt><dd>Error</dd><dt>Subsystem</dt><dd>Watchdog</dd><dt>Event code</dt><dd>PROCESS_STALL</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Telemetry worker stalled during backlog drain</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>173</dd><dt>Record ID</dt><dd class="record-id">7db740ceb581eb191d844dbd0e39ff448230ef2e93135323391627291b5c896c</dd></dl><h5>Analyst Note</h5><div class="annotation-note">Telemetry worker stalled during backlog drain with queue depth at 46.</div><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">850</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">46</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-74</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:30:27.000Z level=ERROR subsystem=Watchdog eventCode=PROCESS_STALL entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=850 queueDepth=46 reconnectCount=3 rssiDbm=-74 diskUsagePct=46 message=&quot;Telemetry worker stalled during backlog drain&quot;</pre></div></details><details class="evidence-record" id="session-2-evidence-21"><summary>Warning · Buffer persistence remained slower than target</summary><div class="details-body"><div class="evidence-tags"><span class="evidence-tag">Burst evidence</span></div><dl class="definition-grid"><dt>Timestamp</dt><dd>2026-08-20T16:30:45.000Z</dd><dt>Severity</dt><dd>Warning</dd><dt>Subsystem</dt><dd>Storage</dd><dt>Event code</dt><dd>WRITE_SLOW</dd><dt>Entity ID</dt><dd>PLC-03</dd><dt>Message</dt><dd class="preserve-whitespace">Buffer persistence remained slower than target</dd><dt>Source</dt><dd>field-gateway-degraded.log</dd><dt>Source record</dt><dd>175</dd><dt>Record ID</dt><dd class="record-id">1c3c3c6978f7e4ad0ce9d567854452846eeee7d606f44edbc4227dd5493308b3</dd></dl><h5>Custom Attributes</h5><dl class="definition-grid"><dt>Disk Usage (%)</dt><dd class="preserve-whitespace">46</dd><dt>Firmware</dt><dd class="preserve-whitespace">3.14.8-rc1</dd><dt>Gateway</dt><dd class="preserve-whitespace">GW-204</dd><dt>Interface</dt><dd class="preserve-whitespace">rs485-1</dd><dt>Latency (ms)</dt><dd class="preserve-whitespace">180</dd><dt>Queue Depth</dt><dd class="preserve-whitespace">41</dd><dt>Reconnect Count</dt><dd class="preserve-whitespace">3</dd><dt>RSSI (dBm)</dt><dd class="preserve-whitespace">-71</dd><dt>Site</dt><dd class="preserve-whitespace">NORTH-RIDGE-17</dd></dl><h5>Raw Source</h5><pre class="raw-source">timestamp=2026-08-20T16:30:45.000Z level=WARN subsystem=Storage eventCode=WRITE_SLOW entityId=PLC-03 site=NORTH-RIDGE-17 gateway=GW-204 firmware=3.14.8-rc1 interface=rs485-1 latencyMs=180 queueDepth=41 reconnectCount=3 rssiDbm=-71 diskUsagePct=46 message=&quot;Buffer persistence remained slower than target&quot;</pre></div></details><h3>Import and Data-Quality Context</h3><div class="table-wrap"><table><tbody><tr><th>Source name</th><td>field-gateway-degraded.log</td></tr><tr><th>Source size</th><td>64.2 KiB</td></tr><tr><th>Source last modified</th><td>2026-08-23T15:27:50.576Z</td></tr><tr><th>Imported at</th><td>2026-09-04T20:20:31.232Z</td></tr><tr><th>Importer</th><td>key-value</td></tr><tr><th>Import profile</th><td>Field Gateway Support Session</td></tr><tr><th>Processed records</th><td class="number">222</td></tr><tr><th>Imported records</th><td class="number">222</td></tr><tr><th>Skipped records</th><td class="number">0</td></tr><tr><th>Source truncated</th><td>No</td></tr></tbody></table></div><details><summary>Import Diagnostics (0)</summary><div class="details-body"><p class="muted">No import diagnostics were captured.</p></div></details><details><summary>Complete Import Profile</summary><div class="details-body"><dl class="definition-grid"><dt>Schema version</dt><dd>1</dd><dt>Profile name</dt><dd>Field Gateway Support Session</dd><dt>Importer</dt><dd>key-value</dd><dt>Preserve unmapped fields</dt><dd>Yes</dd></dl><h4>Canonical Field Mappings</h4><div class="table-wrap"><table><thead><tr><th>Canonical field</th><th>Source path</th></tr></thead><tbody><tr><td>Timestamp</td><td>timestamp</td></tr><tr><td>Severity</td><td>level</td></tr><tr><td>Subsystem</td><td>subsystem</td></tr><tr><td>Event code</td><td>eventCode</td></tr><tr><td>Entity ID</td><td>entityId</td></tr><tr><td>Message</td><td>message</td></tr></tbody></table></div><details><summary>Custom Field Mappings (9)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Source path</th></tr></thead><tbody><tr><td>Site</td><td>site</td></tr><tr><td>Gateway</td><td>gateway</td></tr><tr><td>Firmware</td><td>firmware</td></tr><tr><td>Interface</td><td>interface</td></tr><tr><td>Latency (ms)</td><td>latencyMs</td></tr><tr><td>Queue Depth</td><td>queueDepth</td></tr><tr><td>Reconnect Count</td><td>reconnectCount</td></tr><tr><td>RSSI (dBm)</td><td>rssiDbm</td></tr><tr><td>Disk Usage (%)</td><td>diskUsagePct</td></tr></tbody></table></div></div></details><details><summary>Severity Aliases (0)</summary><div class="details-body"><p class="muted">No severity aliases were configured.</p></div></details><details><summary>Timestamp Rules (1)</summary><div class="details-body"><div class="table-wrap"><table><thead><tr><th>Priority</th><th>Type</th><th>Format</th></tr></thead><tbody><tr><td class="number">1</td><td>ISO 8601</td><td>Default</td></tr></tbody></table></div></div></details></div></details><details><summary>Captured investigation filters</summary><div class="details-body"><p class="muted">No investigation filters were active when this report snapshot was captured.</p></div></details><details><summary>Source capabilities</summary><div class="details-body"><dl class="definition-grid"><dt>Timestamps</dt><dd>Available</dd><dt>Severity</dt><dd>Available</dd><dt>Subsystem</dt><dd>Available</dd><dt>Event code</dt><dd>Available</dd><dt>Entity</dt><dd>Available</dd><dt>Custom fields</dt><dd>Available</dd></dl></div></details></article><footer>Generated by TraceScope. This report is a static capture of investigation state and deterministic analysis at export time.</footer></main></div>
+    <script>
+    (function () {
+        function updateNavigationOffset() {
+            const navigation =
+                document.querySelector(".report-nav");
+
+            if (!navigation) {
+                return;
+            }
+
+            const isCompactNavigation =
+                window.matchMedia(
+                    "(max-width: 860px)"
+                ).matches;
+
+            const offset =
+                isCompactNavigation
+                    ? navigation.offsetHeight + 10
+                    : 18;
+
+            document.documentElement.style.setProperty(
+                "--report-nav-offset",
+                offset + "px"
+            );
+        }
+
+        function revealEvidenceTarget() {
+            if (!window.location.hash) {
+                return;
+            }
+
+            const targetId =
+                window.location.hash.substring(1);
+
+            const target =
+                document.getElementById(
+                    targetId
+                    );
+
+            if (
+                !target
+                || target.tagName !== "DETAILS"
+                || !target.classList.contains(
+                    "evidence-record"
+                    )
+                ) {
+                return;
+            }
+
+            target.open = true;
+
+            updateNavigationOffset();
+
+            window.requestAnimationFrame(
+                function () {
+                    target.scrollIntoView({
+                        block: "start",
+                        behavior: "smooth"
+                    });
+                }
+            );
+        }
+
+        /*
+         * Establish the correct sticky-navigation
+         * offset when the report first opens.
+         */
+        updateNavigationOffset();
+
+        window.addEventListener(
+            "resize",
+            updateNavigationOffset
+        );
+
+        window.addEventListener(
+            "hashchange",
+            revealEvidenceTarget
+        );
+
+        /*
+         * Also support opening an evidence anchor
+         * supplied directly in the report URL.
+         */
+        revealEvidenceTarget();
+    })();
+    </script>
+    </body></html>
