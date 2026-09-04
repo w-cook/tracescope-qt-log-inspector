@@ -265,6 +265,50 @@ QString comparisonAnchor(
     .arg(index + 1);
 }
 
+QString evidenceAnchor(
+    int sessionIndex,
+    int evidenceIndex
+    )
+{
+    return QStringLiteral(
+               "session-%1-evidence-%2"
+               )
+        .arg(sessionIndex + 1)
+        .arg(evidenceIndex + 1);
+}
+
+void appendAnnotationLinkCell(
+    QTextStream &out,
+    const QString &targetAnchor,
+    const QString &value,
+    const QString &cellClass = QString()
+    )
+{
+    const QString displayValue =
+        value.trimmed().isEmpty()
+            ? QStringLiteral("—")
+            : value;
+
+    out
+        << "<td";
+
+    if (!cellClass.isEmpty()) {
+        out
+            << " class=\""
+            << escaped(cellClass)
+            << "\"";
+    }
+
+    out
+        << ">"
+        << "<a class=\"annotation-link\" href=\"#"
+        << escaped(targetAnchor)
+        << "\">"
+        << escaped(displayValue)
+        << "</a>"
+        << "</td>";
+}
+
 void appendMetric(
     QTextStream &out,
     const QString &label,
@@ -2126,7 +2170,7 @@ void appendBurstAnalysis(
         << analysis.bursts.size()
         << ")</summary>"
         << "<div class=\"details-body table-wrap\">"
-        << "<table>"
+        << "<table class=\"burst-table\">"
         << "<thead><tr>"
         << "<th>Start</th>"
         << "<th>End</th>"
@@ -2202,28 +2246,27 @@ bool hasInvestigatorState(
 void appendInvestigatorAnnotations(
     QTextStream &out,
     const QVector<InvestigationReportEvidenceRecord>
-        &evidenceRecords
+        &evidenceRecords,
+    int sessionIndex
     )
 {
-    QVector<
-        const InvestigationReportEvidenceRecord *
-        > stateful;
+    QVector<int> statefulIndexes;
 
-    for (
-        const InvestigationReportEvidenceRecord
-            &evidence
-        : evidenceRecords
-        ) {
+    for (int evidenceIndex = 0;
+         evidenceIndex < evidenceRecords.size();
+         ++evidenceIndex) {
         if (hasInvestigatorState(
-                evidence
+                evidenceRecords.at(
+                    evidenceIndex
+                    )
                 )) {
-            stateful.append(
-                &evidence
+            statefulIndexes.append(
+                evidenceIndex
                 );
         }
     }
 
-    if (stateful.isEmpty()) {
+    if (statefulIndexes.isEmpty()) {
         out
             << "<p class=\"muted\">"
             << "No bookmarks, analyst notes, or finding "
@@ -2235,81 +2278,109 @@ void appendInvestigatorAnnotations(
 
     out
         << "<div class=\"table-wrap\">"
-        << "<table>"
+        << "<table class=\"annotation-table\">"
         << "<thead><tr>"
-        << "<th>Record</th>"
-        << "<th>Timestamp</th>"
+        << "<th>Finding</th>"
         << "<th>Severity</th>"
         << "<th>Message</th>"
-        << "<th>Bookmark</th>"
-        << "<th>Finding</th>"
         << "<th>Note</th>"
+        << "<th>Bookmark</th>"
+        << "<th>Timestamp</th>"
+        << "<th>Source Record</th>"
         << "</tr></thead>"
         << "<tbody>";
 
-    for (
+    for (const int evidenceIndex
+         : statefulIndexes) {
         const InvestigationReportEvidenceRecord
-            *evidence
-        : stateful
-        ) {
+            &evidence =
+            evidenceRecords.at(
+                evidenceIndex
+                );
+
         const InvestigationRecord &record =
-            evidence->record;
+            evidence.record;
+
+        const QString targetAnchor =
+            evidenceAnchor(
+                sessionIndex,
+                evidenceIndex
+                );
 
         out
-            << "<tr>"
-            << "<td>"
-            << escaped(
-                   record.recordId
-                   )
-            << "</td>"
-            << "<td>"
-            << escaped(
-                   record.timestamp.has_value()
-                       ? timestampText(
-                             *record.timestamp
-                             )
-                       : QStringLiteral(
-                             "Unavailable"
-                             )
-                   )
-            << "</td>"
-            << "<td>"
-            << escaped(
-                   severityText(
-                       record.severity
-                       )
-                   )
-            << "</td>"
-            << "<td>"
-            << escaped(
-                   record.message.has_value()
-                       ? *record.message
-                       : QString()
-                   )
-            << "</td>"
-            << "<td>"
-            << (
-                   evidence->state.bookmarked
-                       ? "Yes"
-                       : "No"
-                   )
-            << "</td>"
-            << "<td>"
-            << escaped(
-                   findingStatusText(
-                       evidence
-                           ->state
-                           .findingStatus
-                       )
-                   )
-            << "</td>"
-            << "<td class=\"preserve-whitespace\">"
-            << escaped(
-                   evidence
-                       ->state
-                       .note
-                   )
-            << "</td>"
+            << "<tr>";
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            findingStatusText(
+                evidence
+                    .state
+                    .findingStatus
+                )
+            );
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            severityText(
+                record.severity
+                )
+            );
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            record.message.has_value()
+                ? *record.message
+                : QString(),
+            QStringLiteral(
+                "annotation-message "
+                "preserve-whitespace"
+                )
+            );
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            evidence.state.note,
+            QStringLiteral(
+                "annotation-note-cell "
+                "preserve-whitespace"
+                )
+            );
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            evidence.state.bookmarked
+                ? QStringLiteral("Yes")
+                : QStringLiteral("No")
+            );
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            record.timestamp.has_value()
+                ? timestampText(
+                      *record.timestamp
+                      )
+                : QStringLiteral(
+                      "Unavailable"
+                      )
+            );
+
+        appendAnnotationLinkCell(
+            out,
+            targetAnchor,
+            record.source.recordNumber > 0
+                ? QString::number(
+                      record.source.recordNumber
+                      )
+                : QString()
+            );
+
+        out
             << "</tr>";
     }
 
@@ -2357,11 +2428,17 @@ void appendCustomAttributes(
 
 void appendEvidenceRecord(
     QTextStream &out,
-    const InvestigationReportEvidenceRecord
-        &evidence,
-    int index
+    const InvestigationReportEvidenceRecord &evidence,
+    int sessionIndex,
+    int evidenceIndex
     )
 {
+    const QString anchor =
+        evidenceAnchor(
+            sessionIndex,
+            evidenceIndex
+            );
+
     const InvestigationRecord &record =
         evidence.record;
 
@@ -2376,11 +2453,13 @@ void appendEvidenceRecord(
     if (summary.trimmed().isEmpty()) {
         summary =
             QStringLiteral("Evidence record %1")
-                .arg(index + 1);
+                .arg(evidenceIndex + 1);
     }
 
     out
-        << "<details class=\"evidence-record\">"
+        << "<details class=\"evidence-record\" id=\""
+        << escaped(anchor)
+        << "\">"
         << "<summary>"
         << escaped(
                severityText(
@@ -2442,9 +2521,6 @@ void appendEvidenceRecord(
 
     out
         << "<dl class=\"definition-grid\">"
-        << "<dt>Record ID</dt><dd>"
-        << escaped(record.recordId)
-        << "</dd>"
         << "<dt>Timestamp</dt><dd>"
         << escaped(
                record.timestamp.has_value()
@@ -2521,6 +2597,16 @@ void appendEvidenceRecord(
             << "</dd>";
     }
 
+    if (!record.recordId.isEmpty()) {
+        out
+            << "<dt>Record ID</dt>"
+            << "<dd class=\"record-id\">"
+            << escaped(
+                   record.recordId
+                   )
+            << "</dd>";
+    }
+
     out
         << "</dl>";
 
@@ -2563,6 +2649,7 @@ void appendEvidenceRecord(
 void appendEvidence(
     QTextStream &out,
     const InvestigationReportSessionSnapshot &session,
+    int sessionIndex,
     bool supportingEvidenceIncluded
     )
 {
@@ -2598,6 +2685,7 @@ void appendEvidence(
         appendEvidenceRecord(
             out,
             session.evidenceRecords.at(index),
+            sessionIndex,
             index
             );
     }
@@ -3497,7 +3585,8 @@ void appendSession(
 
     appendInvestigatorAnnotations(
         out,
-        session.evidenceRecords
+        session.evidenceRecords,
+        index
         );
 
     /*
@@ -3512,6 +3601,7 @@ void appendSession(
     appendEvidence(
         out,
         session,
+        index,
         supportingEvidenceIncluded
         );
 
@@ -3587,6 +3677,7 @@ QString InvestigationReportHtmlRenderer::render(
     --accent-soft: #eaf2f8;
     --nav: #18232e;
     --nav-text: #e8eef4;
+    --report-nav-offset: 18px;
 }
 
 * {
@@ -3595,6 +3686,7 @@ QString InvestigationReportHtmlRenderer::render(
 
 html {
     scroll-behavior: smooth;
+    font-size: 14.5px;
 }
 
 body {
@@ -3612,7 +3704,7 @@ body {
 
 .report-shell {
     display: grid;
-    grid-template-columns: 270px minmax(0, 1fr);
+    grid-template-columns: 215px minmax(0, 1fr);
     min-height: 100vh;
 }
 
@@ -3621,7 +3713,7 @@ body {
     top: 0;
     height: 100vh;
     overflow-y: auto;
-    padding: 24px 18px;
+    padding: 20px 12px;
     background: var(--nav);
     color: var(--nav-text);
 }
@@ -3633,7 +3725,7 @@ body {
 }
 
 .nav-label {
-    margin: 18px 8px 6px;
+    margin: 14px 6px 5px;
     opacity: 0.65;
     font-size: 0.72rem;
     font-weight: 700;
@@ -3643,11 +3735,12 @@ body {
 
 .report-nav a {
     display: block;
-    padding: 7px 8px;
+    padding: 6px 6px;
     border-radius: 5px;
     color: var(--nav-text);
     text-decoration: none;
     font-size: 0.9rem;
+    overflow-wrap: anywhere;
 }
 
 .report-nav a:hover {
@@ -3655,14 +3748,14 @@ body {
 }
 
 .report-main {
-    width: min(1180px, 100%);
-    padding: 42px 48px 72px;
+    width: min(1400px, 100%);
+    padding: 28px 16px 52px;
 }
 
 .report-header,
 .report-section {
-    margin-bottom: 26px;
-    padding: 28px 30px;
+    margin-bottom: 24px;
+    padding: 20px 16px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
@@ -3672,6 +3765,12 @@ body {
     margin: 0 0 8px;
     font-size: 2rem;
     line-height: 1.2;
+}
+
+.report-header,
+.report-section,
+.evidence-record {
+    scroll-margin-top: var(--report-nav-offset);
 }
 
 .report-context {
@@ -3751,7 +3850,7 @@ thead th {
 }
 
 td.number {
-    text-align: right;
+    text-align: start;
     font-variant-numeric: tabular-nums;
 }
 
@@ -3933,6 +4032,199 @@ footer {
     overflow-wrap: anywhere;
 }
 
+.burst-table {
+    min-width: 800px;
+    table-layout: fixed;
+    line-height: 1.35;
+}
+
+.burst-table th,
+.burst-table td {
+    padding: 4px 5px;
+}
+
+.burst-table th {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.burst-table th:nth-child(1),
+.burst-table td:nth-child(1) {
+    width: 125px;
+}
+
+.burst-table th:nth-child(2),
+.burst-table td:nth-child(2) {
+    width: 125px;
+}
+
+.burst-table th:nth-child(3),
+.burst-table td:nth-child(3) {
+    width: 70px;
+}
+
+.burst-table th:nth-child(4),
+.burst-table td:nth-child(4) {
+    width: 60px;
+}
+
+.burst-table th:nth-child(5),
+.burst-table td:nth-child(5) {
+    width: 50px;
+}
+
+.burst-table th:nth-child(6),
+.burst-table td:nth-child(6) {
+    width: 60px;
+}
+
+.burst-table th:nth-child(7),
+.burst-table td:nth-child(7) {
+    width: 80px;
+}
+
+.burst-table th:nth-child(8),
+.burst-table td:nth-child(8) {
+    width: 190px;
+}
+
+.burst-table th:nth-child(1),
+.burst-table th:nth-child(2),
+.burst-table th:nth-child(3),
+.burst-table th:nth-child(4),
+.burst-table th:nth-child(5),
+.burst-table th:nth-child(6) {
+    white-space: nowrap;
+}
+
+.burst-table td:nth-child(1),
+.burst-table td:nth-child(2) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    line-height: 1.25;
+}
+
+.annotation-table {
+    width: 100%;
+    min-width: 840px;
+    table-layout: fixed;
+    line-height: 1.35;
+}
+
+.annotation-table th,
+.annotation-table td {
+    padding: 3px 4px;
+}
+
+.annotation-table th {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.annotation-table th:nth-child(1),
+.annotation-table td:nth-child(1) {
+    width: 68px;
+}
+
+.annotation-table th:nth-child(2),
+.annotation-table td:nth-child(2) {
+    width: 62px;
+}
+
+.annotation-table th:nth-child(3),
+.annotation-table td:nth-child(3) {
+    width: 220px;
+}
+
+.annotation-table th:nth-child(4),
+.annotation-table td:nth-child(4) {
+    width: 220px;
+}
+
+.annotation-table th:nth-child(5),
+.annotation-table td:nth-child(5) {
+    width: 74px;
+}
+
+.annotation-table th:nth-child(6),
+.annotation-table td:nth-child(6) {
+    width: 130px;
+}
+
+.annotation-table th:nth-child(7),
+.annotation-table td:nth-child(7) {
+    width: 66px;
+}
+
+.annotation-table th:nth-child(1),
+.annotation-table th:nth-child(2),
+.annotation-table th:nth-child(5),
+.annotation-table th:nth-child(6) {
+    white-space: nowrap;
+}
+
+.annotation-message,
+.annotation-note-cell {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.annotation-table td:nth-child(7) {
+    font-variant-numeric: tabular-nums;
+}
+
+.annotation-link {
+    display: block;
+    margin: -3px -4px;
+    padding: 3px 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.annotation-link:hover,
+.annotation-link:focus-visible {
+    background: var(--accent-soft);
+    text-decoration: underline;
+}
+
+.annotation-table tbody tr:hover {
+    background: var(--surface-muted);
+}
+
+.evidence-record {
+    scroll-margin-top: 18px;
+}
+
+.evidence-record:target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.annotation-message,
+.annotation-note-cell {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.record-id {
+    color: var(--muted);
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+}
+
+.evidence-record > summary {
+    overflow-wrap: anywhere;
+}
+
 .evidence-record {
     margin: 10px 0;
 }
@@ -4008,23 +4300,50 @@ h5 {
 
     .report-nav {
         position: sticky;
+        top: 0;
         z-index: 10;
+        display: block;
         height: auto;
-        max-height: 40vh;
-        padding: 12px 16px;
+        max-height: none;
+        padding: 6px 10px 7px;
+        overflow: visible;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .nav-brand {
+        margin: 0 0 4px;
+        font-size: 0.86rem;
+        line-height: 1.2;
+    }
+
+    .report-nav nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px 4px;
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .report-nav a {
+        flex: 0 0 auto;
+        padding: 3px 6px;
+        font-size: 0.8rem;
+        line-height: 1.25;
+        white-space: nowrap;
     }
 
     .nav-label {
-        margin-top: 10px;
+        display: none;
     }
 
     .report-main {
-        padding: 24px 16px 48px;
+        padding: 18px 10px 40px;
     }
 
     .report-header,
     .report-section {
-        padding: 22px 18px;
+        padding: 18px 12px;
     }
 }
 
@@ -4444,7 +4763,98 @@ h5 {
            "analysis at export time."
         << "</footer>"
         << "</main>"
-        << "</div>"
+        << "</div>";
+
+    out << R"HTML(
+    <script>
+    (function () {
+        function updateNavigationOffset() {
+            const navigation =
+                document.querySelector(".report-nav");
+
+            if (!navigation) {
+                return;
+            }
+
+            const isCompactNavigation =
+                window.matchMedia(
+                    "(max-width: 860px)"
+                ).matches;
+
+            const offset =
+                isCompactNavigation
+                    ? navigation.offsetHeight + 10
+                    : 18;
+
+            document.documentElement.style.setProperty(
+                "--report-nav-offset",
+                offset + "px"
+            );
+        }
+
+        function revealEvidenceTarget() {
+            if (!window.location.hash) {
+                return;
+            }
+
+            const targetId =
+                window.location.hash.substring(1);
+
+            const target =
+                document.getElementById(
+                    targetId
+                    );
+
+            if (
+                !target
+                || target.tagName !== "DETAILS"
+                || !target.classList.contains(
+                    "evidence-record"
+                    )
+                ) {
+                return;
+            }
+
+            target.open = true;
+
+            updateNavigationOffset();
+
+            window.requestAnimationFrame(
+                function () {
+                    target.scrollIntoView({
+                        block: "start",
+                        behavior: "smooth"
+                    });
+                }
+            );
+        }
+
+        /*
+         * Establish the correct sticky-navigation
+         * offset when the report first opens.
+         */
+        updateNavigationOffset();
+
+        window.addEventListener(
+            "resize",
+            updateNavigationOffset
+        );
+
+        window.addEventListener(
+            "hashchange",
+            revealEvidenceTarget
+        );
+
+        /*
+         * Also support opening an evidence anchor
+         * supplied directly in the report URL.
+         */
+        revealEvidenceTarget();
+    })();
+    </script>
+    )HTML";
+
+    out
         << "</body></html>";
 
     return html;

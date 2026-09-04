@@ -351,6 +351,39 @@ void InvestigationReportHtmlRendererTests::
             )
         );
 
+    /*
+     * Narrow-screen navigation wraps rather than
+     * becoming a second scrollable viewport.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "flex-wrap: wrap"
+                )
+            )
+        );
+
+    /*
+     * Sticky-navigation offsets are calculated from
+     * the rendered compact navigation height so
+     * anchor targets are not obscured.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "updateNavigationOffset"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "--report-nav-offset"
+                )
+            )
+        );
+
     QVERIFY(
         html.contains(
             QStringLiteral(
@@ -1373,6 +1406,7 @@ void InvestigationReportHtmlRendererTests::
             )
         );
 }
+
 void InvestigationReportHtmlRendererTests::
     rendersCadenceBurstsAndEvidence()
 {
@@ -1539,6 +1573,18 @@ void InvestigationReportHtmlRendererTests::
             )
         );
 
+    /*
+     * Detected bursts use their dedicated compact
+     * investigation-table layout.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "class=\"burst-table\""
+                )
+            )
+        );
+
     QVERIFY(
         html.contains(
             QStringLiteral(
@@ -1575,6 +1621,188 @@ void InvestigationReportHtmlRendererTests::
         html.contains(
             QStringLiteral(
                 "gateway.jsonl"
+                )
+            )
+        );
+
+    /*
+     * Investigator-state records are presented as a
+     * compact navigation table.
+     */
+    const qsizetype annotationTablePosition =
+        html.indexOf(
+            QStringLiteral(
+                "<table class=\"annotation-table\">"
+                )
+            );
+
+    QVERIFY(
+        annotationTablePosition >= 0
+        );
+
+    const qsizetype annotationTableEnd =
+        html.indexOf(
+            QStringLiteral("</table>"),
+            annotationTablePosition
+            );
+
+    QVERIFY(
+        annotationTableEnd
+        > annotationTablePosition
+        );
+
+    const QString annotationTable =
+        html.mid(
+            annotationTablePosition,
+            annotationTableEnd
+                - annotationTablePosition
+            );
+
+    /*
+     * Human-facing investigation information remains
+     * ahead of lower-priority traceability metadata.
+     */
+    const qsizetype findingPosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Finding</th>"
+                )
+            );
+
+    const qsizetype severityPosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Severity</th>"
+                )
+            );
+
+    const qsizetype messagePosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Message</th>"
+                )
+            );
+
+    const qsizetype notePosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Note</th>"
+                )
+            );
+
+    const qsizetype bookmarkPosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Bookmark</th>"
+                )
+            );
+
+    const qsizetype timestampPosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Timestamp</th>"
+                )
+            );
+
+    const qsizetype sourceRecordPosition =
+        annotationTable.indexOf(
+            QStringLiteral(
+                "<th>Source Record</th>"
+                )
+            );
+
+    QVERIFY(
+        findingPosition >= 0
+        );
+
+    QVERIFY(
+        severityPosition
+        > findingPosition
+        );
+
+    QVERIFY(
+        messagePosition
+        > severityPosition
+        );
+
+    QVERIFY(
+        notePosition
+        > messagePosition
+        );
+
+    QVERIFY(
+        bookmarkPosition
+        > notePosition
+        );
+
+    QVERIFY(
+        timestampPosition
+        > bookmarkPosition
+        );
+
+    QVERIFY(
+        sourceRecordPosition
+        > timestampPosition
+        );
+
+    /*
+     * Stable record IDs remain available in detailed
+     * evidence, but do not clutter the annotations
+     * summary table.
+     */
+    QVERIFY(
+        !annotationTable.contains(
+            QStringLiteral(
+                "record-17"
+                )
+            )
+        );
+
+    /*
+     * Annotation cells link directly to the matching
+     * immutable Supporting Evidence record.
+     */
+    QVERIFY(
+        annotationTable.contains(
+            QStringLiteral(
+                "class=\"annotation-link\""
+                )
+            )
+        );
+
+    QVERIFY(
+        annotationTable.contains(
+            QStringLiteral(
+                "href=\"#session-1-evidence-1\""
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "class=\"evidence-record\" "
+                "id=\"session-1-evidence-1\""
+                )
+            )
+        );
+
+    /*
+     * Anchor navigation opens a collapsed evidence
+     * record before bringing it into view.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "revealEvidenceTarget"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "target.open = true"
                 )
             )
         );
