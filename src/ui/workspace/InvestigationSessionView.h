@@ -23,6 +23,7 @@ class QResizeEvent;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
+enum class InvestigationFindingExportScope;
 
 class InvestigationSessionView
     : public WorkspaceDocument
@@ -55,6 +56,10 @@ public:
         const InvestigationSessionPresentationState &state
         );
 
+    void populateExportMenu(
+        QMenu *menu
+        ) override;
+
 protected:
     void resizeEvent(
         QResizeEvent *event
@@ -79,9 +84,19 @@ private:
 
     void toggleSelectedEventBookmark();
 
+    void copySelectedEventAsStructuredJson();
+
+    void copySelectedEventAsFormattedText();
+
     void updateIssueSummary();
 
     void updateFindingsPanel();
+
+    void updateFindingsExportState();
+
+    void exportFindings(
+        InvestigationFindingExportScope scope
+        );
 
     void drillDownIssueSummary(
         const QString &subsystem,
@@ -111,6 +126,8 @@ private:
     void updateReviewSplitter(
         InvestigationReviewTab tab
         );
+
+    void exportFilteredResults();
 
     InvestigationSession *m_session =
         nullptr;

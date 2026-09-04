@@ -300,6 +300,313 @@ target_link_libraries(CsvExporterTests
 
 add_test(NAME CsvExporterTests COMMAND CsvExporterTests)
 
+qt_add_executable(
+    InvestigationFindingsCsvExporterTests
+
+    InvestigationFindingsCsvExporterTests.cpp
+
+    ../src/exporting/InvestigationFindingExport.h
+    ../src/exporting/InvestigationFindingsCsvExporter.h
+    ../src/exporting/InvestigationFindingsCsvExporter.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationFindingsCsvExporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationFindingsCsvExporterTests
+    COMMAND InvestigationFindingsCsvExporterTests
+)
+
+qt_add_executable(
+    InvestigationReportSessionSnapshotBuilderTests
+
+    InvestigationReportSessionSnapshotBuilderTests.cpp
+
+    ../src/exporting/InvestigationReportSnapshot.h
+    ../src/exporting/InvestigationReportSessionSnapshotBuilder.h
+    ../src/exporting/InvestigationReportSessionSnapshotBuilder.cpp
+
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+
+    ../src/analysis/EventCountBucket.h
+    ../src/analysis/EventTimelineAnalyzer.h
+    ../src/analysis/EventTimelineAnalyzer.cpp
+
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationValueTrendBucket.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.cpp
+
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+
+    ../src/analysis/TelemetryIssueGroup.h
+    ../src/analysis/TelemetryIssueAnalyzer.h
+    ../src/analysis/TelemetryIssueAnalyzer.cpp
+
+    ../src/analysis/InvestigationSessionComparison.h
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+)
+
+target_link_libraries(
+    InvestigationReportSessionSnapshotBuilderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportSessionSnapshotBuilderTests
+    COMMAND InvestigationReportSessionSnapshotBuilderTests
+)
+
+qt_add_executable(
+    InvestigationReportSnapshotBuilderTests
+
+    InvestigationReportSnapshotBuilderTests.cpp
+
+    # report builders
+    ../src/exporting/InvestigationReportConfiguration.h
+    ../src/exporting/InvestigationReportSnapshot.h
+    ../src/exporting/InvestigationReportSessionSnapshotBuilder.h
+    ../src/exporting/InvestigationReportSessionSnapshotBuilder.cpp
+    ../src/exporting/InvestigationReportSnapshotBuilder.h
+    ../src/exporting/InvestigationReportSnapshotBuilder.cpp
+
+    # analysis
+    ../src/analysis/AnalysisTimeBucketRange.h
+    ../src/analysis/AnalysisTimeBucketRange.cpp
+    ../src/analysis/EventCountBucket.h
+    ../src/analysis/EventTimelineAnalyzer.h
+    ../src/analysis/EventTimelineAnalyzer.cpp
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationValueTrendBucket.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.h
+    ../src/analysis/InvestigationAnalyticsAnalyzer.cpp
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationCadenceAnalyzer.h
+    ../src/analysis/InvestigationCadenceAnalyzer.cpp
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationBurstAnalyzer.h
+    ../src/analysis/InvestigationBurstAnalyzer.cpp
+    ../src/analysis/TelemetryIssueGroup.h
+    ../src/analysis/TelemetryIssueAnalyzer.h
+    ../src/analysis/TelemetryIssueAnalyzer.cpp
+    ../src/analysis/InvestigationSessionComparison.h
+
+    # workspace
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+    ../src/workspace/InvestigationComparisonSnapshot.h
+
+    # controller/models
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    # domain
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    # importing
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+)
+
+target_link_libraries(
+    InvestigationReportSnapshotBuilderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportSnapshotBuilderTests
+    COMMAND InvestigationReportSnapshotBuilderTests
+)
+
+qt_add_executable(
+    InvestigationReportSelectionModelTests
+
+    InvestigationReportSelectionModelTests.cpp
+
+    ../src/exporting/InvestigationReportSelectionModel.h
+    ../src/exporting/InvestigationReportSelectionModel.cpp
+)
+
+target_link_libraries(
+    InvestigationReportSelectionModelTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportSelectionModelTests
+    COMMAND InvestigationReportSelectionModelTests
+)
+
+qt_add_executable(
+    InvestigationReportHtmlRendererTests
+
+    InvestigationReportHtmlRendererTests.cpp
+
+    ../src/exporting/InvestigationReportHtmlRenderer.h
+    ../src/exporting/InvestigationReportHtmlRenderer.cpp
+    ../src/exporting/InvestigationReportSnapshot.h
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/EventCountBucket.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationValueTrendBucket.h
+    ../src/analysis/TelemetryIssueGroup.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+)
+
+target_link_libraries(
+    InvestigationReportHtmlRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportHtmlRendererTests
+    COMMAND InvestigationReportHtmlRendererTests
+)
+
+qt_add_executable(
+    InvestigationReportHtmlExporterTests
+
+    InvestigationReportHtmlExporterTests.cpp
+
+    ../src/exporting/InvestigationReportHtmlExporter.h
+    ../src/exporting/InvestigationReportHtmlExporter.cpp
+    ../src/exporting/InvestigationReportHtmlRenderer.h
+    ../src/exporting/InvestigationReportHtmlRenderer.cpp
+    ../src/exporting/InvestigationReportSnapshot.h
+
+    ../src/analysis/BurstDetectionSettings.h
+    ../src/analysis/EventCountBucket.h
+    ../src/analysis/InvestigationBurst.h
+    ../src/analysis/InvestigationCadence.h
+    ../src/analysis/InvestigationSessionComparison.h
+    ../src/analysis/InvestigationValueFrequency.h
+    ../src/analysis/InvestigationValueTrendBucket.h
+    ../src/analysis/TelemetryIssueGroup.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+)
+
+target_link_libraries(
+    InvestigationReportHtmlExporterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationReportHtmlExporterTests
+    COMMAND InvestigationReportHtmlExporterTests
+)
+
+qt_add_executable(
+    InvestigationRecordExportFormatterTests
+
+    InvestigationRecordExportFormatterTests.cpp
+
+    ../src/exporting/InvestigationRecordExportFormatter.h
+    ../src/exporting/InvestigationRecordExportFormatter.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationRecordExportFormatterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationRecordExportFormatterTests
+    COMMAND InvestigationRecordExportFormatterTests
+)
+
 qt_add_executable(EventTimelineAnalyzerTests
     EventTimelineAnalyzerTests.cpp
     ../src/analysis/EventCountBucket.h
@@ -983,6 +1290,54 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationFindingExportSnapshotBuilderTests
+
+    InvestigationFindingExportSnapshotBuilderTests.cpp
+
+    ../src/exporting/InvestigationFindingExport.h
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.h
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+
+    ../src/domain/InvestigationRecordState.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+
+    ../src/importing/ImportProfile.h
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportResult.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+)
+
+target_link_libraries(
+    InvestigationFindingExportSnapshotBuilderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME InvestigationFindingExportSnapshotBuilderTests
+    COMMAND InvestigationFindingExportSnapshotBuilderTests
+)
+
+qt_add_executable(
     InvestigationWorkspaceTests
 
     InvestigationWorkspaceTests.cpp
@@ -1311,6 +1666,17 @@ qt_add_executable(
     ../src/ui/workspace/WorkspaceDocument.h
     ../src/ui/workspace/WorkspaceDocument.cpp
 
+    ../src/exporting/InvestigationRecordExportFormatter.h
+    ../src/exporting/InvestigationRecordExportFormatter.cpp
+
+    ../src/exporting/InvestigationFindingExport.h
+
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.h
+    ../src/exporting/InvestigationFindingExportSnapshotBuilder.cpp
+
+    ../src/exporting/InvestigationFindingsCsvExporter.h
+    ../src/exporting/InvestigationFindingsCsvExporter.cpp
+
     ../src/ui/workspace/InvestigationSessionView.h
     ../src/ui/workspace/InvestigationSessionView.cpp
 
@@ -1330,6 +1696,9 @@ qt_add_executable(
 
     ../src/preferences/FilterPresetStore.h
     ../src/preferences/FilterPresetStore.cpp
+
+    ../src/exporting/InvestigationCsvExporter.h
+    ../src/exporting/InvestigationCsvExporter.cpp
 )
 
 target_link_libraries(

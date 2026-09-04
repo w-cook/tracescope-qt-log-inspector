@@ -686,6 +686,16 @@ bool WorkspaceDocumentHost::
         Qt::UniqueConnection
         );
 
+    connect(
+        document,
+        &WorkspaceDocument::
+        investigationReportExportRequested,
+        m_rootHost,
+        &WorkspaceDocumentHost::
+        investigationReportExportRequested,
+        Qt::UniqueConnection
+        );
+
     if (makeCurrent) {
         /*
          * A dropped/inserted document explicitly

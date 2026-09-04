@@ -49,6 +49,9 @@ signals:
     void noteEditRequested();
     void bookmarkToggleRequested();
 
+    void copyStructuredJsonRequested();
+    void copyFormattedTextRequested();
+
 protected:
     void resizeEvent(
         QResizeEvent *event
@@ -56,6 +59,8 @@ protected:
 
 private:
     void updateResponsiveControls();
+
+    void updateMinimumUsableWidth();
 
     QGridLayout *m_stateLayout =
         nullptr;

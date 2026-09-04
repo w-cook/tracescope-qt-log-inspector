@@ -16,6 +16,11 @@
 #include <QTextOption>
 #include <QVBoxLayout>
 #include <QScrollBar>
+#include <QAction>
+#include <QHBoxLayout>
+#include <QMargins>
+#include <QMenu>
+#include <QPushButton>
 
 #include "../../domain/InvestigationRecord.h"
 #include "../../domain/InvestigationRecordState.h"
@@ -273,6 +278,35 @@ InvestigationFindingsPanel::
             this
             )
         ),
+    m_headerLayout(
+        new QHBoxLayout()
+        ),
+    m_exportButton(
+        new QPushButton(
+            tr("Export"),
+            this
+            )
+        ),
+    m_exportMenu(
+        new QMenu(
+            m_exportButton
+            )
+        ),
+    m_exportAllAction(
+        new QAction(
+            m_exportMenu
+            )
+        ),
+    m_exportFilteredAction(
+        new QAction(
+            m_exportMenu
+            )
+        ),
+    m_exportBookmarkedAction(
+        new QAction(
+            m_exportMenu
+            )
+        ),
     m_table(
         new QTableWidget(
             0,
@@ -302,8 +336,114 @@ InvestigationFindingsPanel::
             )
         );
 
-    layout->addWidget(
+    m_headerLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    m_headerLayout->setSpacing(
+        6
+        );
+
+    m_headerLayout->addWidget(
         m_summaryLabel
+        );
+
+    m_headerLayout->addStretch(
+        1
+        );
+
+    m_headerLayout->addWidget(
+        m_exportButton
+        );
+
+    layout->addLayout(
+        m_headerLayout
+        );
+
+    m_exportButton->setMenu(
+        m_exportMenu
+        );
+
+    m_exportButton->setToolTip(
+        tr(
+            "Export investigation findings "
+            "to CSV"
+            )
+        );
+
+    m_exportMenu->setToolTipsVisible(
+        true
+        );
+
+    m_exportMenu->addAction(
+        m_exportAllAction
+        );
+
+    m_exportMenu->addAction(
+        m_exportFilteredAction
+        );
+
+    m_exportMenu->addAction(
+        m_exportBookmarkedAction
+        );
+
+    m_exportAllAction->setToolTip(
+        tr(
+            "Export every explicitly classified "
+            "finding in this investigation"
+            )
+        );
+
+    m_exportFilteredAction->setToolTip(
+        tr(
+            "Export findings whose source records "
+            "match the current investigation filters"
+            )
+        );
+
+    m_exportBookmarkedAction->setToolTip(
+        tr(
+            "Export bookmarked findings regardless "
+            "of the current investigation filters"
+            )
+        );
+
+    connect(
+        m_exportAllAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit exportRequested(
+                InvestigationFindingExportScope::All
+                );
+        }
+        );
+
+    connect(
+        m_exportFilteredAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit exportRequested(
+                InvestigationFindingExportScope::
+                Filtered
+                );
+        }
+        );
+
+    connect(
+        m_exportBookmarkedAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit exportRequested(
+                InvestigationFindingExportScope::
+                Bookmarked
+                );
+        }
         );
 
     m_table->setHorizontalHeaderLabels({
@@ -442,6 +582,10 @@ InvestigationFindingsPanel::
         m_table,
         1
         );
+
+    setExportCounts(
+        InvestigationFindingExportCounts{}
+        );
 }
 
 void InvestigationFindingsPanel::setSession(
@@ -476,6 +620,10 @@ void InvestigationFindingsPanel::refresh()
                 "Open: 0    Resolved: 0    "
                 "Dismissed: 0"
                 )
+            );
+
+        setExportCounts(
+            InvestigationFindingExportCounts{}
             );
 
         return;
@@ -707,6 +855,8 @@ void InvestigationFindingsPanel::refresh()
             .arg(dismissedCount)
         );
 
+    updateMinimumUsableWidth();
+
     m_table->resizeRowsToContents();
 
     m_table->setHorizontalScrollBarPolicy(
@@ -843,4 +993,107 @@ void InvestigationFindingsPanel::activateRow(
     emit findingActivated(
         recordId
         );
+}
+
+void InvestigationFindingsPanel::
+    setExportCounts(
+        const InvestigationFindingExportCounts
+            &counts
+        )
+{
+    m_exportAllAction->setText(
+        tr("Export All Findings (%1)")
+            .arg(counts.all)
+        );
+
+    m_exportFilteredAction->setText(
+        tr("Export Filtered Findings (%1)")
+            .arg(counts.filtered)
+        );
+
+    m_exportBookmarkedAction->setText(
+        tr("Export Bookmarked Findings (%1)")
+            .arg(counts.bookmarked)
+        );
+
+    m_exportAllAction->setEnabled(
+        counts.all > 0
+        );
+
+    m_exportFilteredAction->setEnabled(
+        counts.filtered > 0
+        );
+
+    m_exportBookmarkedAction->setEnabled(
+        counts.bookmarked > 0
+        );
+
+    m_exportButton->setEnabled(
+        counts.all > 0
+        );
+
+    updateMinimumUsableWidth();
+}
+
+void InvestigationFindingsPanel::
+    updateMinimumUsableWidth()
+{
+    if (
+        m_summaryLabel == nullptr
+        || m_exportButton == nullptr
+        || m_headerLayout == nullptr
+        ) {
+        return;
+    }
+
+    const int horizontalSpacing =
+        std::max(
+            0,
+            m_headerLayout->spacing()
+            );
+
+    /*
+     * Keep the complete findings summary and compact
+     * Export control visible at all supported widths.
+     * Use Qt's size hints rather than hard-coded pixels
+     * so platform style, font, and DPI scaling remain
+     * respected.
+     */
+    m_exportButton->setMinimumWidth(
+        m_exportButton
+            ->sizeHint()
+            .width()
+        );
+
+    int horizontalMargins = 0;
+
+    if (layout() != nullptr) {
+        const QMargins margins =
+            layout()->contentsMargins();
+
+        horizontalMargins =
+            margins.left()
+            + margins.right();
+    }
+
+    const QMargins headerMargins =
+        m_headerLayout->contentsMargins();
+
+    const int requiredWidth =
+        m_summaryLabel
+            ->sizeHint()
+            .width()
+        + horizontalSpacing
+        + m_exportButton
+              ->minimumWidth()
+        + horizontalMargins
+        + headerMargins.left()
+        + headerMargins.right();
+
+    if (minimumWidth()
+        != requiredWidth) {
+        setMinimumWidth(
+            requiredWidth
+            );
+    }
 }

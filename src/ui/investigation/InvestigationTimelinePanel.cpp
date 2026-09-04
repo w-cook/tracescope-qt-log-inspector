@@ -37,21 +37,8 @@
 namespace
 {
 
-constexpr int TimelineAutoTargetBuckets =
-    20;
-
 constexpr int TimelineMaximumVisibleBucketCount =
     20;
-
-constexpr int TimelineMinimumVisibleBucketCount =
-    6;
-
-/*
- * Approximate horizontal space needed for a
- * readable bucket label plus some breathing room.
- */
-constexpr int TimelineMinimumBucketWidth =
-    60;
 
 constexpr int TimelineScaledScrollMaximum =
     1'000'000;
@@ -68,24 +55,115 @@ constexpr qint64 MillisecondsPerHour =
 constexpr qint64 MillisecondsPerDay =
     24 * MillisecondsPerHour;
 
-int timelineVisibleBucketCount(
-    int availableWidth
+QString representativeTimelineLabel(
+    qint64 intervalMilliseconds,
+    bool spansMultipleDates
     )
 {
+    /*
+     * Match the effective labels produced by
+     * AnalysisTimeBucketRange and timelineDisplayLabel().
+     *
+     * The actual digits do not matter; use wide,
+     * representative numeric text so QFontMetrics can
+     * determine the space required by the active font.
+     */
+    if (intervalMilliseconds < 1000) {
+        return QStringLiteral(
+            "00.000"
+            );
+    }
+
+    if (intervalMilliseconds
+        < MillisecondsPerMinute) {
+        return spansMultipleDates
+                   ? QStringLiteral(
+                         "00-00 00:00:00"
+                         )
+                   : QStringLiteral(
+                         "00:00:00"
+                         );
+    }
+
+    if (intervalMilliseconds
+        < MillisecondsPerDay) {
+        return spansMultipleDates
+                   ? QStringLiteral(
+                         "0000-00-00 00:00"
+                         )
+                   : QStringLiteral(
+                         "00:00"
+                         );
+    }
+
+    return QStringLiteral(
+        "0000-00-00"
+        );
+}
+
+int timelineMinimumBucketWidth(
+    const QFontMetrics &fontMetrics,
+    qint64 intervalMilliseconds,
+    bool spansMultipleDates
+    )
+{
+    const QString label =
+        representativeTimelineLabel(
+            intervalMilliseconds,
+            spansMultipleDates
+            );
+
+    /*
+     * Give adjacent category labels breathing room
+     * derived from the same active font rather than
+     * from a fixed pixel allowance.
+     */
+    const int labelWidth =
+        fontMetrics.horizontalAdvance(
+            label
+            );
+
+    const int labelSpacing =
+        fontMetrics.horizontalAdvance(
+            QStringLiteral("  ")
+            );
+
+    return std::max(
+        1,
+        labelWidth + labelSpacing
+        );
+}
+
+int timelineVisibleBucketCount(
+    int availableWidth,
+    const QFontMetrics &fontMetrics,
+    qint64 intervalMilliseconds,
+    bool spansMultipleDates
+    )
+{
+    const int minimumBucketWidth =
+        timelineMinimumBucketWidth(
+            fontMetrics,
+            intervalMilliseconds,
+            spansMultipleDates
+            );
+
     const int widthBasedCount =
         availableWidth
-        / TimelineMinimumBucketWidth;
+        / minimumBucketWidth;
 
     return std::clamp(
         widthBasedCount,
-        TimelineMinimumVisibleBucketCount,
+        1,
         TimelineMaximumVisibleBucketCount
         );
 }
 
 qint64 automaticTimelineIntervalMilliseconds(
     const QDateTime &firstTimestamp,
-    const QDateTime &lastTimestamp
+    const QDateTime &lastTimestamp,
+    int availableWidth,
+    const QFontMetrics &fontMetrics
     )
 {
     if (!firstTimestamp.isValid()
@@ -102,6 +180,10 @@ qint64 automaticTimelineIntervalMilliseconds(
                 )
                 + 1
             );
+
+    const bool spansMultipleDates =
+        firstTimestamp.date()
+        != lastTimestamp.date();
 
     const QList<qint64> candidates {
         1,
@@ -139,8 +221,16 @@ qint64 automaticTimelineIntervalMilliseconds(
                 )
             / intervalMilliseconds;
 
+        const int readableBucketCount =
+            timelineVisibleBucketCount(
+                availableWidth,
+                fontMetrics,
+                intervalMilliseconds,
+                spansMultipleDates
+                );
+
         if (bucketCount
-            <= TimelineAutoTargetBuckets) {
+            <= readableBucketCount) {
             return intervalMilliseconds;
         }
     }
@@ -149,13 +239,21 @@ qint64 automaticTimelineIntervalMilliseconds(
      * For unusually long investigations,
      * continue scaling in whole-day units.
      */
+    const int readableDayBucketCount =
+        timelineVisibleBucketCount(
+            availableWidth,
+            fontMetrics,
+            MillisecondsPerDay,
+            spansMultipleDates
+            );
+
     const qint64 targetMilliseconds =
         (
             spanMilliseconds
-            + TimelineAutoTargetBuckets
+            + readableDayBucketCount
             - 1
             )
-        / TimelineAutoTargetBuckets;
+        / readableDayBucketCount;
 
     const qint64 wholeDays =
         std::max<qint64>(
@@ -937,10 +1035,7 @@ InvestigationTimelinePanel::
         &QTimer::timeout,
         this,
         [this]() {
-            if (m_session == nullptr
-                || m_intervalCombo
-                           ->currentData()
-                           .toLongLong() <= 0) {
+            if (m_session == nullptr) {
                 return;
             }
 
@@ -1470,12 +1565,10 @@ void InvestigationTimelinePanel::render()
         requestedIntervalMilliseconds <= 0;
 
     const qint64 intervalMilliseconds =
-        automaticInterval
-            ? automaticTimelineIntervalMilliseconds(
-                  firstTimestamp.value(),
-                  lastTimestamp.value()
-                  )
-            : requestedIntervalMilliseconds;
+        effectiveTimelineIntervalMilliseconds(
+            firstTimestamp.value(),
+            lastTimestamp.value()
+            );
 
     if (intervalMilliseconds <= 0) {
         showEmptyTimeline();
@@ -1607,10 +1700,10 @@ void InvestigationTimelinePanel::render()
     }
 
     const int visibleBucketCount =
-        timelineVisibleBucketCount(
-            m_chartView
-                ->viewport()
-                ->width()
+        responsiveVisibleBucketCount(
+            firstTimestamp.value(),
+            lastTimestamp.value(),
+            intervalMilliseconds
             );
 
     QVector<EventCountBucket> buckets;
@@ -2437,12 +2530,10 @@ void InvestigationTimelinePanel::
         requestedIntervalMilliseconds <= 0;
 
     const qint64 intervalMilliseconds =
-        automaticInterval
-            ? automaticTimelineIntervalMilliseconds(
-                  firstTimestamp.value(),
-                  lastTimestamp.value()
-                  )
-            : requestedIntervalMilliseconds;
+        effectiveTimelineIntervalMilliseconds(
+            firstTimestamp.value(),
+            lastTimestamp.value()
+            );
 
     if (intervalMilliseconds <= 0) {
         m_rangeLabel->setText(
@@ -2475,23 +2566,23 @@ void InvestigationTimelinePanel::
         totalBucketCount;
 
     if (!automaticInterval) {
-        const int responsiveVisibleBucketCount =
-            timelineVisibleBucketCount(
-                m_chartView
-                    ->viewport()
-                    ->width()
+        const int visibleBucketCapacity =
+            responsiveVisibleBucketCount(
+                firstTimestamp.value(),
+                lastTimestamp.value(),
+                intervalMilliseconds
                 );
 
         startBucketIndex =
             timelineStartBucketIndex(
                 totalBucketCount,
                 scrollValue,
-                responsiveVisibleBucketCount
+                visibleBucketCapacity
                 );
 
         visibleBucketCount =
             std::min<qint64>(
-                responsiveVisibleBucketCount,
+                visibleBucketCapacity,
                 totalBucketCount
                     - startBucketIndex
                 );
@@ -2645,12 +2736,10 @@ void InvestigationTimelinePanel::
         requestedIntervalMilliseconds <= 0;
 
     const qint64 intervalMilliseconds =
-        automaticInterval
-            ? automaticTimelineIntervalMilliseconds(
-                  firstTimestamp.value(),
-                  lastTimestamp.value()
-                  )
-            : requestedIntervalMilliseconds;
+        effectiveTimelineIntervalMilliseconds(
+            firstTimestamp.value(),
+            lastTimestamp.value()
+            );
 
     if (intervalMilliseconds <= 0) {
         return;
@@ -2672,18 +2761,18 @@ void InvestigationTimelinePanel::
         0;
 
     if (!automaticInterval) {
-        const int responsiveVisibleBucketCount =
-            timelineVisibleBucketCount(
-                m_chartView
-                    ->viewport()
-                    ->width()
+        const int visibleBucketCapacity =
+            responsiveVisibleBucketCount(
+                firstTimestamp.value(),
+                lastTimestamp.value(),
+                intervalMilliseconds
                 );
 
         startBucketIndex =
             timelineStartBucketIndex(
                 totalBucketCount,
                 m_scrollBar->value(),
-                responsiveVisibleBucketCount
+                visibleBucketCapacity
                 );
     }
 
@@ -2796,4 +2885,62 @@ void InvestigationTimelinePanel::
     if (m_resizeRenderTimer != nullptr) {
         m_resizeRenderTimer->start();
     }
+}
+
+qint64 InvestigationTimelinePanel::
+    effectiveTimelineIntervalMilliseconds(
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp
+        ) const
+{
+    const qint64 requestedIntervalMilliseconds =
+        m_intervalCombo
+            ->currentData()
+            .toLongLong();
+
+    if (requestedIntervalMilliseconds > 0) {
+        return requestedIntervalMilliseconds;
+    }
+
+    const int availableWidth =
+        std::max(
+            1,
+            m_chartView
+                ->viewport()
+                ->width()
+            );
+
+    return automaticTimelineIntervalMilliseconds(
+        firstTimestamp,
+        lastTimestamp,
+        availableWidth,
+        m_chartView->fontMetrics()
+        );
+}
+
+int InvestigationTimelinePanel::
+    responsiveVisibleBucketCount(
+        const QDateTime &firstTimestamp,
+        const QDateTime &lastTimestamp,
+        qint64 intervalMilliseconds
+        ) const
+{
+    const bool spansMultipleDates =
+        firstTimestamp.date()
+        != lastTimestamp.date();
+
+    const int availableWidth =
+        std::max(
+            1,
+            m_chartView
+                ->viewport()
+                ->width()
+            );
+
+    return timelineVisibleBucketCount(
+        availableWidth,
+        m_chartView->fontMetrics(),
+        intervalMilliseconds,
+        spansMultipleDates
+        );
 }

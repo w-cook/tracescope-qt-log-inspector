@@ -108,6 +108,10 @@ signals:
         QMenu *menu
         );
 
+    void investigationReportExportRequested(
+        const QString &documentId
+        );
+
 private slots:
     void updateDocumentTitle(
         const QString &title

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.14.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.15.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -175,6 +175,29 @@ qt_add_executable(TraceScope
     src/workspace/WorkspaceDocumentLayoutState.h
     src/workspace/WorkspaceDocumentLayoutSerialization.h
     src/workspace/WorkspaceDocumentLayoutSerialization.cpp
+    src/exporting/InvestigationRecordExportFormatter.h
+    src/exporting/InvestigationRecordExportFormatter.cpp
+    src/exporting/InvestigationFindingExport.h
+    src/exporting/InvestigationFindingExportSnapshotBuilder.h
+    src/exporting/InvestigationFindingExportSnapshotBuilder.cpp
+    src/exporting/InvestigationFindingsCsvExporter.h
+    src/exporting/InvestigationFindingsCsvExporter.cpp
+    src/exporting/InvestigationReportConfiguration.h
+    src/exporting/InvestigationReportSnapshot.h
+    src/exporting/InvestigationReportSessionSnapshotBuilder.h
+    src/exporting/InvestigationReportSessionSnapshotBuilder.cpp
+    src/exporting/InvestigationReportSnapshotBuilder.h
+    src/exporting/InvestigationReportSnapshotBuilder.cpp
+    src/exporting/InvestigationReportSelectionModel.h
+    src/exporting/InvestigationReportSelectionModel.cpp
+    src/ui/InvestigationReportExportDialog.h
+    src/ui/InvestigationReportExportDialog.cpp
+    src/ui/workspace/InvestigationReportWorkspaceContext.h
+    src/ui/workspace/InvestigationReportWorkspaceContext.cpp
+    src/exporting/InvestigationReportHtmlRenderer.h
+    src/exporting/InvestigationReportHtmlRenderer.cpp
+    src/exporting/InvestigationReportHtmlExporter.h
+    src/exporting/InvestigationReportHtmlExporter.cpp
 
 )
 

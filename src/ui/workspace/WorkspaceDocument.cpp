@@ -2,6 +2,9 @@
 
 #include <utility>
 
+#include <QAction>
+#include <QMenu>
+
 WorkspaceDocument::WorkspaceDocument(
     QString documentId,
     QString documentTitle,
@@ -55,5 +58,44 @@ void WorkspaceDocument::setDocumentTitle(
 
     emit documentTitleChanged(
         m_documentTitle
+        );
+}
+
+void WorkspaceDocument::populateExportMenu(
+    QMenu *menu
+    )
+{
+    if (menu == nullptr) {
+        return;
+    }
+
+    menu->setToolTipsVisible(
+        true
+        );
+
+    QAction *reportAction =
+        menu->addAction(
+            tr(
+                "Export Investigation Report..."
+                )
+            );
+
+    reportAction->setToolTip(
+        tr(
+            "Create a self-contained HTML report "
+            "from this investigation and other "
+            "selected workspace documents"
+            )
+        );
+
+    connect(
+        reportAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit investigationReportExportRequested(
+                documentId()
+                );
+        }
         );
 }

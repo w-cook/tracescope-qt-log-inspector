@@ -450,35 +450,46 @@ int InvestigationController::
 QVector<InvestigationRecord>
 InvestigationController::recordsForAnalysis() const
 {
-    const bool filtersActive =
-        !m_proxyModel
-            .severityFilters()
-            .isEmpty()
-        || !m_proxyModel
-            .subsystemFilters()
-            .isEmpty()
-        || !m_proxyModel
-            .searchText()
-            .isEmpty()
-        || !m_proxyModel
-            .eventCodeFilters()
-            .isEmpty()
-        || !m_proxyModel
-            .entityFilters()
-            .isEmpty()
-        || m_proxyModel
-            .timeRangeStart()
-            .has_value()
-        || m_proxyModel
-            .timeRangeEnd()
-            .has_value()
-        || !m_proxyModel
-            .customFieldFilters()
-            .isEmpty();
+    QVector<InvestigationRecord> records;
 
-    if (!filtersActive) {
-        return m_sourceModel.records();
+    const QVector<InvestigationRecord> &sourceRecords =
+        m_sourceModel.records();
+
+    records.reserve(
+        sourceRecords.size()
+        );
+
+    /*
+     * Analytics responds only to filters that describe
+     * the source data itself.
+     *
+     * Finding-status and bookmark filters are review/
+     * annotation concerns. They affect the visible event
+     * table but must not redefine the underlying
+     * investigation population used by deterministic
+     * analysis.
+     */
+    for (const InvestigationRecord &record
+         : sourceRecords) {
+        const InvestigationFilterMatch match =
+            m_proxyModel.filterMatchForRecord(
+                record
+                );
+
+        if (!match.severity
+            || !match.subsystem
+            || !match.eventCode
+            || !match.entity
+            || !match.timeRange
+            || !match.customFields
+            || !match.search) {
+            continue;
+        }
+
+        records.append(
+            record
+            );
     }
 
-    return visibleRecords();
+    return records;
 }

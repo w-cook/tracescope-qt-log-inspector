@@ -12,6 +12,14 @@
 #include <QVBoxLayout>
 #include <QResizeEvent>
 #include <QSizePolicy>
+#include <QApplication>
+#include <QClipboard>
+#include <QTimer>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QMessageBox>
+#include <QAction>
+#include <QMenu>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -24,6 +32,10 @@
 #include "../investigation/InvestigationTimelinePanel.h"
 
 #include "../../domain/InvestigationRecord.h"
+#include "../../exporting/InvestigationCsvExporter.h"
+#include "../../exporting/InvestigationFindingExportSnapshotBuilder.h"
+#include "../../exporting/InvestigationFindingsCsvExporter.h"
+#include "../../exporting/InvestigationRecordExportFormatter.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../preferences/FilterPresetStore.h"
 #include "../../workspace/InvestigationSession.h"
@@ -84,6 +96,107 @@ QString documentTitleFor(
     return session
         ->sourceMetadata()
         .sourceName;
+}
+
+QString findingsExportTitle(
+    InvestigationFindingExportScope scope
+    )
+{
+    switch (scope) {
+    case InvestigationFindingExportScope::All:
+        return QObject::tr(
+            "Export All Findings"
+            );
+
+    case InvestigationFindingExportScope::Filtered:
+        return QObject::tr(
+            "Export Filtered Findings"
+            );
+
+    case InvestigationFindingExportScope::Bookmarked:
+        return QObject::tr(
+            "Export Bookmarked Findings"
+            );
+    }
+
+    return QObject::tr(
+        "Export Findings"
+        );
+}
+
+QString findingsExportFileName(
+    const InvestigationSession *session,
+    InvestigationFindingExportScope scope
+    )
+{
+    QString baseName;
+
+    if (session != nullptr) {
+        baseName =
+            QFileInfo(
+                session
+                    ->sourceMetadata()
+                    .sourceName
+                )
+                .completeBaseName();
+    }
+
+    if (baseName.trimmed().isEmpty()) {
+        baseName =
+            QStringLiteral("investigation");
+    }
+
+    QString suffix;
+
+    switch (scope) {
+    case InvestigationFindingExportScope::All:
+        suffix =
+            QStringLiteral("-findings.csv");
+        break;
+
+    case InvestigationFindingExportScope::Filtered:
+        suffix =
+            QStringLiteral(
+                "-filtered-findings.csv"
+                );
+        break;
+
+    case InvestigationFindingExportScope::Bookmarked:
+        suffix =
+            QStringLiteral(
+                "-bookmarked-findings.csv"
+                );
+        break;
+    }
+
+    return baseName + suffix;
+}
+
+QString filteredResultsExportFileName(
+    const InvestigationSession *session
+    )
+{
+    QString baseName;
+
+    if (session != nullptr) {
+        baseName =
+            QFileInfo(
+                session
+                    ->sourceMetadata()
+                    .sourceName
+                )
+                .completeBaseName();
+    }
+
+    if (baseName.trimmed().isEmpty()) {
+        baseName =
+            QStringLiteral("investigation");
+    }
+
+    return baseName
+           + QStringLiteral(
+               "-filtered-records.csv"
+               );
 }
 }
 
@@ -360,6 +473,15 @@ InvestigationSessionView::
         navigateToFinding
         );
 
+    connect(
+        m_findingsPanel,
+        &InvestigationFindingsPanel::
+        exportRequested,
+        this,
+        &InvestigationSessionView::
+        exportFindings
+        );
+
     /*
      * ---------------------------------------------------------
      * Analytics
@@ -418,6 +540,24 @@ InvestigationSessionView::
         this,
         &InvestigationSessionView::
         toggleSelectedEventBookmark
+        );
+
+    connect(
+        m_eventDetailPanel,
+        &InvestigationEventDetailPanel::
+        copyStructuredJsonRequested,
+        this,
+        &InvestigationSessionView::
+        copySelectedEventAsStructuredJson
+        );
+
+    connect(
+        m_eventDetailPanel,
+        &InvestigationEventDetailPanel::
+        copyFormattedTextRequested,
+        this,
+        &InvestigationSessionView::
+        copySelectedEventAsFormattedText
         );
 
     /*
@@ -643,6 +783,177 @@ void InvestigationSessionView::
 }
 
 void InvestigationSessionView::
+    populateExportMenu(
+        QMenu *menu
+        )
+{
+    if (menu == nullptr
+        || m_session == nullptr) {
+        return;
+    }
+
+    WorkspaceDocument::populateExportMenu(
+        menu
+        );
+
+    menu->addSeparator();
+
+    menu->setToolTipsVisible(
+        true
+        );
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    QAction *filteredResultsAction =
+        menu->addAction(
+            tr(
+                "Export Filtered Results..."
+                )
+            );
+
+    filteredResultsAction->setToolTip(
+        tr(
+            "Export the records matching the "
+            "current investigation filters"
+            )
+        );
+
+    filteredResultsAction->setEnabled(
+        controller != nullptr
+        && controller
+                   ->proxyModel()
+                   ->rowCount()
+               > 0
+        );
+
+    connect(
+        filteredResultsAction,
+        &QAction::triggered,
+        this,
+        &InvestigationSessionView::
+        exportFilteredResults
+        );
+
+    menu->addSeparator();
+
+    /*
+     * Findings remain available here as a second
+     * document-level access path in addition to the
+     * contextual Export control on the Findings tab.
+     */
+    QMenu *findingsMenu =
+        menu->addMenu(
+            tr("Findings")
+            );
+
+    findingsMenu->setToolTipsVisible(
+        true
+        );
+
+    const InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const InvestigationFindingExportCounts counts =
+        builder.counts(
+            *m_session
+            );
+
+    QAction *allFindingsAction =
+        findingsMenu->addAction(
+            tr(
+                "Export All Findings (%1)"
+                )
+                .arg(counts.all)
+            );
+
+    QAction *filteredFindingsAction =
+        findingsMenu->addAction(
+            tr(
+                "Export Filtered Findings (%1)"
+                )
+                .arg(counts.filtered)
+            );
+
+    QAction *bookmarkedFindingsAction =
+        findingsMenu->addAction(
+            tr(
+                "Export Bookmarked Findings (%1)"
+                )
+                .arg(counts.bookmarked)
+            );
+
+    allFindingsAction->setEnabled(
+        counts.all > 0
+        );
+
+    filteredFindingsAction->setEnabled(
+        counts.filtered > 0
+        );
+
+    bookmarkedFindingsAction->setEnabled(
+        counts.bookmarked > 0
+        );
+
+    allFindingsAction->setToolTip(
+        tr(
+            "Export every explicitly classified "
+            "finding in this investigation"
+            )
+        );
+
+    filteredFindingsAction->setToolTip(
+        tr(
+            "Export findings whose source records "
+            "match the current investigation filters"
+            )
+        );
+
+    bookmarkedFindingsAction->setToolTip(
+        tr(
+            "Export bookmarked findings regardless "
+            "of the current investigation filters"
+            )
+        );
+
+    connect(
+        allFindingsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFindings(
+                InvestigationFindingExportScope::All
+                );
+        }
+        );
+
+    connect(
+        filteredFindingsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFindings(
+                InvestigationFindingExportScope::
+                Filtered
+                );
+        }
+        );
+
+    connect(
+        bookmarkedFindingsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            exportFindings(
+                InvestigationFindingExportScope::
+                Bookmarked
+                );
+        }
+        );
+}
+
+void InvestigationSessionView::
     applyFilters()
 {
     if (m_session == nullptr) {
@@ -713,6 +1024,8 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
+
+    updateFindingsExportState();
 }
 
 void InvestigationSessionView::
@@ -865,6 +1178,60 @@ void InvestigationSessionView::
 }
 
 void InvestigationSessionView::
+    copySelectedEventAsStructuredJson()
+{
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (record == nullptr) {
+        return;
+    }
+
+    QClipboard *clipboard =
+        QApplication::clipboard();
+
+    if (clipboard == nullptr) {
+        return;
+    }
+
+    const InvestigationRecordExportFormatter
+        formatter;
+
+    clipboard->setText(
+        formatter.toStructuredJson(
+            *record
+            )
+        );
+}
+
+void InvestigationSessionView::
+    copySelectedEventAsFormattedText()
+{
+    const InvestigationRecord *record =
+        selectedEventRecord();
+
+    if (record == nullptr) {
+        return;
+    }
+
+    QClipboard *clipboard =
+        QApplication::clipboard();
+
+    if (clipboard == nullptr) {
+        return;
+    }
+
+    const InvestigationRecordExportFormatter
+        formatter;
+
+    clipboard->setText(
+        formatter.toFormattedText(
+            *record
+            )
+        );
+}
+
+void InvestigationSessionView::
     syncInvestigationStatePresentation()
 {
     if (m_session == nullptr) {
@@ -888,12 +1255,118 @@ void InvestigationSessionView::
             stateStore
                 ->findingStatuses()
             );
+
+    updateFindingsExportState();
 }
 
 void InvestigationSessionView::
     updateFindingsPanel()
 {
     m_findingsPanel->refresh();
+}
+
+void InvestigationSessionView::
+    updateFindingsExportState()
+{
+    if (m_findingsPanel == nullptr) {
+        return;
+    }
+
+    if (m_session == nullptr) {
+        m_findingsPanel->setExportCounts(
+            InvestigationFindingExportCounts{}
+            );
+
+        return;
+    }
+
+    const InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    m_findingsPanel->setExportCounts(
+        builder.counts(
+            *m_session
+            )
+        );
+}
+
+void InvestigationSessionView::
+    exportFindings(
+        InvestigationFindingExportScope scope
+        )
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    /*
+     * Capture the immutable export state first.
+     * The subsequent save dialog and filesystem
+     * operation work only from this frozen snapshot.
+     */
+    const InvestigationFindingExportSnapshotBuilder
+        builder;
+
+    const QVector<InvestigationFindingExport>
+        findings =
+        builder.build(
+            *m_session,
+            scope
+            );
+
+    if (findings.isEmpty()) {
+        return;
+    }
+
+    const QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            findingsExportTitle(
+                scope
+                ),
+            findingsExportFileName(
+                m_session,
+                scope
+                ),
+            tr(
+                "CSV Files (*.csv);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const InvestigationFindingsCsvExporter
+        exporter;
+
+    if (!exporter.exportToFile(
+            findings,
+            filePath
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Findings Export Failed"),
+            tr(
+                "TraceScope could not write "
+                "the findings export to:\n\n%1"
+                )
+                .arg(filePath)
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tr("Findings Exported"),
+        tr(
+            "Exported %1 findings to:\n\n%2"
+            )
+            .arg(findings.size())
+            .arg(filePath)
+        );
 }
 
 void InvestigationSessionView::
@@ -1291,15 +1764,48 @@ void InvestigationSessionView::
         InvestigationReviewTab tab
         )
 {
-    if (m_bottomSplitter == nullptr) {
+    if (
+        m_bottomSplitter == nullptr
+        || m_eventDetailPanel == nullptr
+        ) {
         return;
     }
 
-    const int totalWidth =
-        std::max(
-            1,
-            m_bottomSplitter->width()
-            );
+    /*
+     * QSplitter::sizes() describes the widget areas
+     * without the splitter handle itself, so base the
+     * adaptive sizing on the same usable space.
+     *
+     * During initial session construction the review
+     * tab can be restored before the splitter has been
+     * assigned real geometry. Do not manufacture a
+     * one-pixel layout in that transient state.
+     */
+    const int availableWidth =
+        m_bottomSplitter->width()
+        - m_bottomSplitter->handleWidth();
+
+    if (availableWidth <= 0) {
+        return;
+    }
+
+    /*
+     * Selected Event Details has a content-derived
+     * minimum width based on its actual controls.
+     * Respect that constraint explicitly when
+     * calculating adaptive splitter proportions.
+     */
+    const int detailMinimumWidth =
+        m_eventDetailPanel->minimumWidth();
+
+    if (availableWidth
+        <= detailMinimumWidth) {
+        return;
+    }
+
+    const int maximumReviewWidth =
+        availableWidth
+        - detailMinimumWidth;
 
     const bool wideReviewSelected =
         tab
@@ -1317,26 +1823,32 @@ void InvestigationSessionView::
         double reviewFraction =
             0.60;
 
-        if (totalWidth < 750) {
+        if (availableWidth < 750) {
             reviewFraction =
                 0.72;
-        } else if (totalWidth < 1100) {
+        } else if (
+            availableWidth < 1100
+            ) {
             reviewFraction =
                 0.68;
         }
 
-        const int reviewWidth =
+        const int desiredReviewWidth =
             static_cast<int>(
-                totalWidth
+                availableWidth
                 * reviewFraction
+                );
+
+        const int reviewWidth =
+            std::clamp(
+                desiredReviewWidth,
+                1,
+                maximumReviewWidth
                 );
 
         m_bottomSplitter->setSizes({
             reviewWidth,
-            std::max(
-                1,
-                totalWidth - reviewWidth
-                )
+            availableWidth - reviewWidth
         });
 
         return;
@@ -1347,21 +1859,26 @@ void InvestigationSessionView::
      * because its table supports horizontal
      * scrolling when necessary.
      */
-    const int issueWidth =
+    const int desiredIssueWidth =
         std::max(
             m_issueSummaryPanel
                 ->preferredCompactWidth(),
             static_cast<int>(
-                totalWidth * 0.35
+                availableWidth
+                * 0.35
                 )
+            );
+
+    const int issueWidth =
+        std::clamp(
+            desiredIssueWidth,
+            1,
+            maximumReviewWidth
             );
 
     m_bottomSplitter->setSizes({
         issueWidth,
-        std::max(
-            1,
-            totalWidth - issueWidth
-            )
+        availableWidth - issueWidth
     });
 }
 
@@ -1378,7 +1895,112 @@ void InvestigationSessionView::
         return;
     }
 
-    updateReviewSplitter(
-        m_reviewPanel->currentTab()
+    /*
+     * QWidget receives its resize before the child
+     * layout necessarily finishes assigning geometry
+     * to the nested splitter.
+     *
+     * Defer the adaptive split until the current
+     * event-loop turn has completed so calculations
+     * use the splitter's settled width.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (
+                m_reviewPanel == nullptr
+                || m_bottomSplitter == nullptr
+                ) {
+                return;
+            }
+
+            updateReviewSplitter(
+                m_reviewPanel
+                    ->currentTab()
+                );
+        }
+        );
+}
+
+void InvestigationSessionView::
+    exportFilteredResults()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    /*
+     * Capture the current filtered record collection
+     * before opening the save dialog. The export then
+     * has the same immutable point-in-time semantics
+     * as the Phase 14 findings exports.
+     */
+    const QVector<InvestigationRecord> records =
+        controller->visibleRecords();
+
+    if (records.isEmpty()) {
+        QMessageBox::information(
+            this,
+            tr("No Records to Export"),
+            tr(
+                "There are no currently visible "
+                "records to export."
+                )
+            );
+
+        return;
+    }
+
+    const QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            tr("Export Filtered Records"),
+            filteredResultsExportFileName(
+                m_session
+                ),
+            tr(
+                "CSV Files (*.csv);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const InvestigationCsvExporter exporter;
+
+    if (!exporter.exportToFile(
+            records,
+            filePath
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Export Failed"),
+            tr(
+                "TraceScope could not export "
+                "the filtered records."
+                )
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tr("Export Complete"),
+        tr(
+            "Exported %1 records."
+            )
+            .arg(records.size())
         );
 }

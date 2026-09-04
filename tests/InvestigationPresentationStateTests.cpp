@@ -1,6 +1,11 @@
 #include <QtTest>
 
 #include <QCoreApplication>
+#include <QPushButton>
+#include <QBarCategoryAxis>
+#include <QChartView>
+#include <QScrollBar>
+#include <QMenu>
 
 #include <memory>
 #include <utility>
@@ -228,6 +233,38 @@ void processUi()
     QCoreApplication::processEvents();
 }
 
+int timelineCategoryCount(
+    InvestigationTimelinePanel &panel
+    )
+{
+    QChartView *chartView =
+        panel.findChild<QChartView *>();
+
+    if (chartView == nullptr
+        || chartView->chart() == nullptr) {
+        return 0;
+    }
+
+    const QList<QAbstractAxis *> axes =
+        chartView->chart()->axes(
+            Qt::Horizontal
+            );
+
+    for (QAbstractAxis *axis : axes) {
+        if (auto *categoryAxis =
+            qobject_cast<
+                QBarCategoryAxis *
+                >(axis);
+            categoryAxis != nullptr) {
+            return categoryAxis
+                ->categories()
+                .size();
+        }
+    }
+
+    return 0;
+}
+
 }
 
 class InvestigationPresentationStateTests
@@ -244,6 +281,12 @@ private slots:
     void analyticsPresentationRoundTrips();
     void reviewPresentationRoundTrips();
     void sessionViewPresentationRoundTrips();
+    void eventDetailMinimumWidthTracksControls();
+    void eventDetailMinimumWidthProtectsControls();
+    void newSessionKeepsEventDetailsVisible();
+    void autoTimelineDensityAdaptsToWidth();
+    void manualTimelineDensityAdaptsToWidth();
+    void sessionViewPopulatesExportMenu();
 };
 
 void InvestigationPresentationStateTests::
@@ -1993,6 +2036,577 @@ void InvestigationPresentationStateTests::
             .mergeGapMilliseconds,
         saved.burstDetectionSettings
             .mergeGapMilliseconds
+        );
+}
+
+void InvestigationPresentationStateTests::
+    eventDetailMinimumWidthTracksControls()
+{
+    InvestigationEventDetailPanel panel;
+
+    panel.show();
+
+    processUi();
+
+    const int defaultMinimumWidth =
+        panel.minimumWidth();
+
+    QVERIFY(
+        defaultMinimumWidth > 0
+        );
+
+    InvestigationRecordState state;
+
+    state.note =
+        QStringLiteral(
+            "Diagnostic note"
+            );
+
+    state.bookmarked =
+        true;
+
+    state.findingStatus =
+        FindingStatus::Open;
+
+    panel.setInvestigationState(
+        state
+        );
+
+    processUi();
+
+    const int populatedStateMinimumWidth =
+        panel.minimumWidth();
+
+    /*
+     * The active-state labels are at least as
+     * demanding as the default labels. The exact
+     * pixel widths are intentionally not asserted
+     * because those legitimately vary by platform,
+     * font, and DPI configuration.
+     */
+    QVERIFY(
+        populatedStateMinimumWidth
+        >= defaultMinimumWidth
+        );
+
+    panel.resize(
+        std::max(
+            1,
+            populatedStateMinimumWidth / 2
+            ),
+        180
+        );
+
+    processUi();
+
+    /*
+     * QWidget/QSplitter layout constraints must not
+     * permit the panel below the content-derived
+     * minimum required by its compact controls.
+     */
+    QVERIFY(
+        panel.width()
+        >= panel.minimumWidth()
+        );
+}
+
+void InvestigationPresentationStateTests::
+    eventDetailMinimumWidthProtectsControls()
+{
+    InvestigationEventDetailPanel panel;
+
+    panel.show();
+
+    processUi();
+
+    const int defaultMinimumWidth =
+        panel.minimumWidth();
+
+    QVERIFY(
+        defaultMinimumWidth > 0
+        );
+
+    InvestigationRecordState state;
+
+    state.note =
+        QStringLiteral(
+            "Existing analyst note"
+            );
+
+    state.bookmarked =
+        true;
+
+    state.findingStatus =
+        FindingStatus::Open;
+
+    panel.setInvestigationState(
+        state
+        );
+
+    processUi();
+
+    const int activeMinimumWidth =
+        panel.minimumWidth();
+
+    /*
+     * Longer active-state labels such as
+     * "View/Edit Note" and "Remove Bookmark"
+     * must not reduce the usable minimum.
+     *
+     * Do not assert exact pixels: those legitimately
+     * depend on font metrics, platform style, and DPI.
+     */
+    QVERIFY(
+        activeMinimumWidth
+        >= defaultMinimumWidth
+        );
+
+    /*
+     * Attempt to force the panel below its own
+     * content-derived minimum.
+     */
+    panel.resize(
+        std::max(
+            1,
+            activeMinimumWidth / 2
+            ),
+        180
+        );
+
+    processUi();
+
+    QVERIFY(
+        panel.width()
+        >= panel.minimumWidth()
+        );
+
+    /*
+     * Every action button must retain at least the
+     * width Qt reports as necessary for its contents.
+     */
+    const QList<QPushButton *> buttons =
+        panel.findChildren<QPushButton *>();
+
+    QVERIFY(
+        !buttons.isEmpty()
+        );
+
+    for (QPushButton *button : buttons) {
+        QVERIFY(
+            button != nullptr
+            );
+
+        QVERIFY(
+            button->minimumWidth()
+            >= button->sizeHint().width()
+            );
+
+        QVERIFY(
+            button->width()
+            >= button->minimumWidth()
+            );
+    }
+}
+
+void InvestigationPresentationStateTests::
+    newSessionKeepsEventDetailsVisible()
+{
+    InvestigationSession session =
+        makeSession();
+
+    InvestigationSessionView view(
+        &session,
+        nullptr
+        );
+
+    view.resize(
+        1000,
+        800
+        );
+
+    view.show();
+
+    /*
+     * resizeEvent() intentionally defers the adaptive
+     * Review/Detail split until child geometry has
+     * settled, so allow queued UI work to complete.
+     */
+    processUi();
+    processUi();
+
+    const InvestigationSessionPresentationState
+        state =
+        view.capturePresentationState();
+
+    QCOMPARE(
+        state.bottomSplitterSizes.size(),
+        2
+        );
+
+    QVERIFY(
+        state.bottomSplitterSizes.at(0)
+        > 0
+        );
+
+    QVERIFY(
+        state.bottomSplitterSizes.at(1)
+        > 0
+        );
+
+    InvestigationEventDetailPanel *detailPanel =
+        view.findChild<
+            InvestigationEventDetailPanel *
+            >();
+
+    if (detailPanel == nullptr) {
+        QFAIL(
+            "InvestigationEventDetailPanel "
+            "was not found"
+            );
+    }
+
+    QVERIFY(
+        state.bottomSplitterSizes.at(1)
+        >= detailPanel->minimumWidth()
+        );
+}
+
+void InvestigationPresentationStateTests::
+    autoTimelineDensityAdaptsToWidth()
+{
+    InvestigationSession session =
+        makeSession();
+
+    InvestigationTimelinePanel panel;
+
+    panel.resize(
+        900,
+        240
+        );
+
+    panel.setSession(
+        &session
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    panel.show();
+
+    processUi();
+
+    /*
+     * Auto is the default. Capture the number of
+     * categories Qt determined were readable in a
+     * relatively wide timeline.
+     */
+    const int wideCategoryCount =
+        timelineCategoryCount(
+            panel
+            );
+
+    QVERIFY(
+        wideCategoryCount > 0
+        );
+
+    panel.resize(
+        320,
+        240
+        );
+
+    /*
+     * Timeline resize rendering is deliberately
+     * debounced. QTRY_VERIFY lets Qt's event loop
+     * process that timer without relying on exact
+     * timing or a real display server.
+     */
+    QTRY_VERIFY(
+        timelineCategoryCount(panel)
+        > 0
+        );
+
+    QTRY_VERIFY(
+        timelineCategoryCount(panel)
+        <= wideCategoryCount
+        );
+
+    const int narrowCategoryCount =
+        timelineCategoryCount(
+            panel
+            );
+
+    QVERIFY(
+        narrowCategoryCount
+        <= wideCategoryCount
+        );
+}
+
+void InvestigationPresentationStateTests::
+    manualTimelineDensityAdaptsToWidth()
+{
+    InvestigationSession session =
+        makeSession();
+
+    InvestigationTimelinePanel panel;
+
+    panel.resize(
+        900,
+        240
+        );
+
+    panel.setSession(
+        &session
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    InvestigationTimelinePresentationState
+        manualState;
+
+    manualState.intervalMilliseconds =
+        1000;
+
+    manualState.breakdown =
+        InvestigationTimelineBreakdown::
+        Severity;
+
+    manualState.subsystemTrendLimit =
+        5;
+
+    manualState.horizontalScrollValue =
+        0;
+
+    panel.restorePresentationState(
+        manualState
+        );
+
+    panel.show();
+
+    processUi();
+
+    const int wideCategoryCount =
+        timelineCategoryCount(
+            panel
+            );
+
+    QVERIFY(
+        wideCategoryCount > 0
+        );
+
+    QCOMPARE(
+        panel.capturePresentationState()
+            .intervalMilliseconds,
+        qint64(1000)
+        );
+
+    panel.resize(
+        320,
+        240
+        );
+
+    QTRY_VERIFY(
+        timelineCategoryCount(panel)
+        > 0
+        );
+
+    QTRY_VERIFY(
+        timelineCategoryCount(panel)
+        <= wideCategoryCount
+        );
+
+    const InvestigationTimelinePresentationState
+        narrowState =
+        panel.capturePresentationState();
+
+    /*
+     * Responsive density must not silently change a
+     * manually selected resolution.
+     */
+    QCOMPARE(
+        narrowState.intervalMilliseconds,
+        qint64(1000)
+        );
+
+    /*
+     * The narrower viewport may show fewer buckets,
+     * but it must continue using horizontal
+     * navigation for the remaining investigation.
+     */
+    QScrollBar *scrollBar =
+        panel.findChild<QScrollBar *>();
+
+    QVERIFY(
+        scrollBar != nullptr
+        );
+
+    if (scrollBar == nullptr) {
+        return;
+    }
+
+    QVERIFY(
+        scrollBar->maximum() > 0
+        );
+}
+
+void InvestigationPresentationStateTests::
+    sessionViewPopulatesExportMenu()
+{
+    InvestigationSession session =
+        makeSession();
+
+    session
+        .investigationStateStore()
+        ->setFindingStatus(
+            QStringLiteral("record-000"),
+            FindingStatus::Open
+            );
+
+    session
+        .investigationStateStore()
+        ->setFindingStatus(
+            QStringLiteral("record-001"),
+            FindingStatus::Resolved
+            );
+
+    session
+        .investigationStateStore()
+        ->setBookmarked(
+            QStringLiteral("record-000"),
+            true
+            );
+
+    InvestigationSessionView view(
+        &session,
+        nullptr
+        );
+
+    QMenu menu;
+
+    view.populateExportMenu(
+        &menu
+        );
+
+    const QList<QAction *> actions =
+        menu.actions();
+
+    /*
+     * Session export menus now begin with the
+     * workspace-level investigation report action,
+     * followed by the existing session-specific
+     * record and findings exports.
+     */
+    QCOMPARE(
+        actions.size(),
+        5
+        );
+
+    QCOMPARE(
+        actions[0]->text(),
+        QStringLiteral(
+            "Export Investigation Report..."
+            )
+        );
+
+    QVERIFY(
+        actions[0]->isEnabled()
+        );
+
+    QVERIFY(
+        actions[1]->isSeparator()
+        );
+
+    QCOMPARE(
+        actions[2]->text(),
+        QStringLiteral(
+            "Export Filtered Results..."
+            )
+        );
+
+    QVERIFY(
+        actions[2]->isEnabled()
+        );
+
+    QVERIFY(
+        actions[3]->isSeparator()
+        );
+
+    QCOMPARE(
+        actions[4]->text(),
+        QStringLiteral("Findings")
+        );
+
+    QMenu *findingsMenu =
+        actions[4]->menu();
+
+    QVERIFY(
+        findingsMenu != nullptr
+        );
+
+    const QList<QAction *> findingsActions =
+        findingsMenu->actions();
+
+    QCOMPARE(
+        findingsActions.size(),
+        3
+        );
+
+    QCOMPARE(
+        findingsActions[0]->text(),
+        QStringLiteral(
+            "Export All Findings (2)"
+            )
+        );
+
+    QCOMPARE(
+        findingsActions[1]->text(),
+        QStringLiteral(
+            "Export Filtered Findings (2)"
+            )
+        );
+
+    QCOMPARE(
+        findingsActions[2]->text(),
+        QStringLiteral(
+            "Export Bookmarked Findings (1)"
+            )
+        );
+
+    /*
+     * The common report action should delegate the
+     * actual workflow through the document request
+     * signal rather than owning report generation.
+     */
+    QSignalSpy reportExportSpy(
+        &view,
+        &WorkspaceDocument::
+        investigationReportExportRequested
+        );
+
+    actions[0]->trigger();
+
+    QCOMPARE(
+        reportExportSpy.count(),
+        1
+        );
+
+    const QList<QVariant> arguments =
+        reportExportSpy.takeFirst();
+
+    QCOMPARE(
+        arguments.size(),
+        1
+        );
+
+    QCOMPARE(
+        arguments.at(0).toString(),
+        view.documentId()
         );
 }
 

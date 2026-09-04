@@ -36,12 +36,17 @@
 #include <utility>
 #include <vector>
 
+#include "exporting/InvestigationReportHtmlExporter.h"
+#include "exporting/InvestigationReportSnapshotBuilder.h"
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/InvestigationComparisonDialog.h"
+#include "ui/InvestigationReportExportDialog.h"
 #include "ui/workspace/InvestigationComparisonDocument.h"
+#include "ui/workspace/InvestigationReportWorkspaceContext.h"
 #include "ui/workspace/InvestigationSessionView.h"
+#include "ui/workspace/WorkspaceDocument.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
 #include "workspace/InvestigationComparisonPersistence.h"
 #include "workspace/InvestigationComparisonSnapshotBuilder.h"
@@ -296,6 +301,108 @@ public:
             );
     }
 };
+
+QString investigationReportFileName(
+    const QString &title
+    )
+{
+    QString baseName =
+        title.trimmed();
+
+    if (baseName.isEmpty()) {
+        baseName =
+            QStringLiteral(
+                "investigation-report"
+                );
+    }
+
+    const QString invalidCharacters =
+        QStringLiteral(
+            "<>:\"/\\|?*"
+            );
+
+    QString safeName;
+
+    safeName.reserve(
+        baseName.size()
+        );
+
+    bool previousSeparator =
+        false;
+
+    for (const QChar character
+         : std::as_const(baseName)) {
+        const bool invalid =
+            character.unicode() < 32
+            || invalidCharacters.contains(
+                character
+                )
+            || character.isSpace();
+
+        if (invalid) {
+            if (!previousSeparator
+                && !safeName.isEmpty()) {
+                safeName.append(
+                    QLatin1Char('-')
+                    );
+
+                previousSeparator =
+                    true;
+            }
+
+            continue;
+        }
+
+        safeName.append(
+            character
+            );
+
+        previousSeparator =
+            false;
+    }
+
+    while (
+        safeName.endsWith(
+            QLatin1Char('-')
+            )
+        ) {
+        safeName.chop(1);
+    }
+
+    if (safeName.isEmpty()) {
+        safeName =
+            QStringLiteral(
+                "investigation-report"
+                );
+    }
+
+    return safeName
+           + QStringLiteral(
+               ".html"
+               );
+}
+
+QString investigationReportOutputPath(
+    const QString &selectedPath
+    )
+{
+    if (selectedPath.trimmed().isEmpty()) {
+        return QString();
+    }
+
+    const QFileInfo info(
+        selectedPath
+        );
+
+    if (!info.suffix().isEmpty()) {
+        return selectedPath;
+    }
+
+    return selectedPath
+           + QStringLiteral(
+               ".html"
+               );
+}
 }
 
 struct MainWindow::WorkspaceOpenOperation
@@ -637,6 +744,15 @@ MainWindow::MainWindow(QWidget *parent)
                 );
         }
         );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        investigationReportExportRequested,
+        this,
+        &MainWindow::
+        exportInvestigationReport
+        );
 }
 
 void MainWindow::createMenus()
@@ -800,25 +916,47 @@ void MainWindow::createMenus()
         saveWorkspaceAsAction
         );
 
-    fileMenu->addSeparator();
-
-    auto *exportAction =
-        new QAction(
-            tr("&Export Filtered Results..."),
-            this
+    auto *exportingMenu =
+        menuBar()->addMenu(
+            tr("&Exporting")
             );
 
     connect(
-        exportAction,
-        &QAction::triggered,
+        exportingMenu,
+        &QMenu::aboutToShow,
         this,
-        [this]() {
-            exportFilteredResults();
-        }
-        );
+        [this, exportingMenu]() {
+            exportingMenu->clear();
 
-    fileMenu->addAction(
-        exportAction
+            WorkspaceDocument *document =
+                workspaceDocumentHost != nullptr
+                    ? workspaceDocumentHost
+                          ->currentDocument()
+                    : nullptr;
+
+            if (document != nullptr) {
+                document->populateExportMenu(
+                    exportingMenu
+                    );
+            }
+
+            if (
+                exportingMenu
+                    ->actions()
+                    .isEmpty()
+                ) {
+                QAction *unavailableAction =
+                    exportingMenu->addAction(
+                        tr(
+                            "No export actions available"
+                            )
+                        );
+
+                unavailableAction->setEnabled(
+                    false
+                    );
+            }
+        }
         );
 
     auto *investigationMenu =
@@ -1363,79 +1501,6 @@ void MainWindow::completeLogFileImport(
             "or unsupported."
             );
     }
-}
-
-void MainWindow::exportFilteredResults()
-{
-    InvestigationSession *session =
-        workspace->activeSession();
-
-    if (session == nullptr) {
-        QMessageBox::information(
-            this,
-            "No Records to Export",
-            "There are no currently visible records to export."
-            );
-
-        return;
-    }
-
-    InvestigationController *controller =
-        session
-            ->investigationController();
-
-    if (controller == nullptr) {
-        return;
-    }
-
-    const QVector<InvestigationRecord> records =
-        controller->visibleRecords();
-
-    if (records.isEmpty()) {
-        QMessageBox::information(
-            this,
-            "No Records to Export",
-            "There are no currently visible records to export."
-            );
-
-        return;
-    }
-
-    const QString filePath =
-        QFileDialog::getSaveFileName(
-            this,
-            "Export Filtered Records",
-            "filtered-investigation-records.csv",
-            "CSV Files (*.csv);;All Files (*)"
-            );
-
-    if (filePath.isEmpty()) {
-        return;
-    }
-
-    const bool exported =
-        csvExporter.exportToFile(
-            records,
-            filePath
-            );
-
-    if (!exported) {
-        QMessageBox::warning(
-            this,
-            "Export Failed",
-            "TraceScope could not export the filtered records."
-            );
-
-        return;
-    }
-
-    QMessageBox::information(
-        this,
-        "Export Complete",
-        QString(
-            "Exported %1 records."
-            ).arg(records.size())
-        );
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -2813,4 +2878,177 @@ void MainWindow::installOpenedWorkspace(
                 )
             );
     }
+}
+
+void MainWindow::exportInvestigationReport(
+    const QString &originDocumentId
+    )
+{
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    /*
+     * Resolve the complete logical workspace rather
+     * than only the tab group containing the origin
+     * document. Detached documents therefore remain
+     * eligible report sources.
+     */
+    const InvestigationReportWorkspaceContextBuilder
+        contextBuilder;
+
+    InvestigationReportWorkspaceContext context =
+        contextBuilder.build(
+            *workspaceDocumentHost,
+            originDocumentId
+            );
+
+    if (!context.hasReportDocuments()) {
+        return;
+    }
+
+    /*
+     * Parent the workflow to the originating document's
+     * window where possible. This keeps export dialogs
+     * associated with a detached window when that is
+     * where the command originated.
+     */
+    WorkspaceDocument *originDocument =
+        workspaceDocumentHost
+            ->documentById(
+                originDocumentId
+                );
+
+    QWidget *dialogParent =
+        originDocument != nullptr
+            ? originDocument->window()
+            : this;
+
+    InvestigationReportExportDialog dialog(
+        context.sessionSelections,
+        context.comparisonSelections,
+        context.origin,
+        context.suggestedTitle,
+        dialogParent
+        );
+
+    if (
+        dialog.exec()
+        != QDialog::Accepted
+        ) {
+        return;
+    }
+
+    const InvestigationReportConfiguration
+        configuration =
+        dialog.configuration();
+
+    if (!configuration.hasSelectedDocuments()) {
+        return;
+    }
+
+    /*
+     * -------------------------------------------------
+     * Immutable export boundary
+     * -------------------------------------------------
+     *
+     * Capture the report immediately after the user
+     * confirms its configuration and BEFORE opening
+     * the save-file dialog.
+     *
+     * Everything after this point operates only on
+     * this frozen snapshot. Mutable widgets, filters,
+     * annotations, live session state, or comparison
+     * documents cannot alter the report while the
+     * user is choosing a destination.
+     */
+    const QDateTime generatedAtUtc =
+        QDateTime::currentDateTimeUtc();
+
+    const InvestigationReportSnapshotBuilder
+        snapshotBuilder;
+
+    const InvestigationReportSnapshot snapshot =
+        snapshotBuilder.build(
+            configuration,
+            context.sessionInputs,
+            context.comparisonInputs,
+            generatedAtUtc
+            );
+
+    if (
+        snapshot.sessions.isEmpty()
+        && snapshot.comparisons.isEmpty()
+        ) {
+        QMessageBox::warning(
+            dialogParent,
+            tr(
+                "Investigation Report Unavailable"
+                ),
+            tr(
+                "The selected investigation documents "
+                "are no longer available for export."
+                )
+            );
+
+        return;
+    }
+
+    const QString selectedPath =
+        QFileDialog::getSaveFileName(
+            dialogParent,
+            tr(
+                "Export Investigation Report"
+                ),
+            investigationReportFileName(
+                snapshot.title
+                ),
+            tr(
+                "HTML Files (*.html);;"
+                "All Files (*)"
+                )
+            );
+
+    if (selectedPath.isEmpty()) {
+        return;
+    }
+
+    const QString filePath =
+        investigationReportOutputPath(
+            selectedPath
+            );
+
+    const InvestigationReportHtmlExporter
+        exporter;
+
+    if (!exporter.exportToFile(
+            snapshot,
+            filePath
+            )) {
+        QMessageBox::warning(
+            dialogParent,
+            tr(
+                "Investigation Report Export Failed"
+                ),
+            tr(
+                "TraceScope could not write the "
+                "investigation report to:\n\n%1"
+                )
+                .arg(filePath)
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        dialogParent,
+        tr(
+            "Investigation Report Exported"
+            ),
+        tr(
+            "Exported the investigation report to:"
+            "\n\n%1"
+            )
+            .arg(filePath)
+        );
 }

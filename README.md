@@ -6,7 +6,7 @@ TraceScope is a native C++/Qt desktop application for investigating file-based t
 
 TraceScope imports multiple structured and operational log formats and uses reusable import profiles to map source fields into a common investigation model. Timestamp, severity, subsystem, event code, entity ID, and message are optional canonical fields rather than a required fixed schema. Source-specific values and raw records remain available alongside normalized data.
 
-Once a source is loaded, investigators can combine canonical and custom-field filters, search and navigate records, inspect timeline and trend views, review deterministic event-code/entity analytics, detect explainable warning/error bursts, preserve bookmarks, notes, and finding states, keep multiple sessions open, detach or re-dock workspace documents, compare complete sessions, save and reopen the investigation workspace, and export the currently visible investigation to CSV.
+Once a source is loaded, investigators can combine canonical and custom-field filters, search and navigate records, inspect timeline and trend views, review deterministic event-code/entity analytics, detect explainable warning/error bursts, preserve bookmarks, notes, and finding states, keep multiple sessions open, detach or re-dock workspace documents, compare complete sessions, save and reopen the investigation workspace, and hand off results through record copy, CSV exports, or self-contained offline HTML reports.
 
 TraceScope is intentionally file-oriented and offline. It does not claim to automatically understand every arbitrary log format, diagnose root cause, replace centralized observability systems, or guarantee a fixed maximum file size. Import and analysis behavior stays explicit, testable, and reproducible.
 
@@ -16,19 +16,19 @@ TraceScope is intentionally file-oriented and offline. It does not claim to auto
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The current release is **`v0.14.0`**:
+The current release is **`v0.15.0`**:
 
 ```text
-TraceScope-v0.14.0-windows-x64.zip
-TraceScope-v0.14.0-linux-x86_64.AppImage
-TraceScope-v0.14.0-samples.zip
+TraceScope-v0.15.0-windows-x64.zip
+TraceScope-v0.15.0-linux-x86_64.AppImage
+TraceScope-v0.15.0-samples.zip
 ```
 
-Historical `v0.1.0` through `v0.13.0` prereleases remain available as earlier development milestones.
+Historical `v0.1.0` through `v0.14.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.14.0-windows-x64.zip`.
+1. Download `TraceScope-v0.15.0-windows-x64.zip`.
 2. Extract the complete ZIP.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory or choose one of your own supported log files.
@@ -37,28 +37,28 @@ The package includes the required Qt libraries, plugins, MinGW runtime dependenc
 
 ### Linux
 
-1. Download `TraceScope-v0.14.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.15.0-linux-x86_64.AppImage`.
 2. Make it executable:
 
 ```bash
-chmod +x TraceScope-v0.14.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.15.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.14.0-linux-x86_64.AppImage
+./TraceScope-v0.15.0-linux-x86_64.AppImage
 ```
 
 ### Samples Only
 
-`TraceScope-v0.14.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable import profiles.
+`TraceScope-v0.15.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable import profiles.
 
 Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the packaged applications.
 
 ## Documentation
 
-- [Feature Screenshot Gallery](docs/feature-screenshot-gallery.md) — visual walkthrough of import, investigation, analytics, findings, session comparison, detachable workspaces, responsive layouts, large-file behavior, recent files/workspaces, and export workflows
+- [Feature Screenshot Gallery](docs/feature-screenshot-gallery.md) — visual walkthrough of import, investigation, analytics, findings, session comparison, workspace persistence, reporting/export, responsive layouts, and large-file behavior
 - [Expansion Roadmap](docs/expansion-roadmap.md) — product direction, completed milestones, active development, release discipline, and scope boundaries
 - [Performance Notes](docs/performance.md) — measured large-file scenarios, methodology, environment, and interpretation limits
 - [Original Prototype Plan](docs/original-prototype-plan.md) — historical plan for the initial focused JSON Lines inspector
@@ -115,13 +115,19 @@ TraceScope can also compare two complete imported sessions using an explicit **B
 
 The comparison view prioritizes meaningful differences in event codes, severity, elevated subsystem/entity activity, conservative shared custom fields, optional burst behavior, and session-level context such as total records, duration, and event rate. Missing dimensions are reported as unavailable rather than treated as zero, and the output remains descriptive rather than claiming causal diagnosis or root cause.
 
-![TraceScope Session Comparison](docs/screenshots/tracescope-session-comparison.png)
+![TraceScope Session Comparison](docs/screenshots/tracescope-session-comparison-overview.png)
 
 ### Export the Current Investigation
 
-The CSV export workflow writes the currently visible records using readable canonical headers and configured custom-field names. Filtering before export makes it possible to hand off only the records relevant to a finding or investigation path.
+TraceScope supports several levels of investigation handoff without requiring a hosted service. The currently visible record set can be exported to CSV, a selected record can be copied as structured JSON or compact human-readable text, and classified findings can be exported to a dedicated CSV for QA, issue-tracking, spreadsheet, or documentation workflows.
 
-**Phase 14 — Reporting and Export is in progress, targeted for `v0.15.0`.** The phase expands this handoff workflow with findings export, selected-record copy as JSON and formatted text, and offline HTML reports for investigations and comparison snapshots. Reporting is being designed around immutable point-in-time capture so exported output remains stable and can later support mutable live-following sessions or live comparisons without changing already-generated reports.
+Offline HTML reports provide a broader investigation artifact. The report setup workflow lets the investigator supply a title and optional context, choose which open investigation and comparison documents to include, and decide whether to include detailed supporting evidence and the technical import appendix. Reports summarize captured source/session context, filters, findings, deterministic analytics, burst analysis when available, and Baseline → Comparison results without presenting automated diagnosis or root-cause claims.
+
+Report generation captures immutable point-in-time state before rendering begins, including generation time and relevant record/time-span context. The generated HTML is self-contained and usable without TraceScope or a backend; local workstation source paths are intentionally omitted. Browser printing can also provide a practical PDF handoff when needed.
+
+A representative [Field Gateway investigation report](docs/examples/field-gateway-investigation-report.html) is included in the repository so the exported format can be reviewed directly without installing TraceScope. It is generated from the same fictional known-good/degraded Field Gateway samples used elsewhere in the documentation.
+
+![TraceScope Offline HTML Investigation Report](docs/screenshots/tracescope-html-report-overview.png)
 
 ## Supported Formats and Profiles
 
@@ -140,7 +146,7 @@ Different source formats need different amounts of configuration. TraceScope kee
 | Structured XML | Nested elements, attributes, repeated elements, record paths, and raw XML preservation |
 | Windows Event XML | Uses the XML importer with Windows Event detection, presets, severity aliases, and named `EventData` fields |
 
-Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.14.0`.
+Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.15.0`.
 
 ### Canonical Investigation Fields
 
@@ -169,7 +175,7 @@ The larger scenarios are designed to resemble files a prospective user might act
 
 Additional repository samples exercise structured XML, Windows Event XML, CSV/TSV, structured JSON, Syslog, Apache/Nginx/IIS access logs, regex-configurable application logs, and other supported import paths.
 
-The samples are fictional and self-contained. They are intended to demonstrate import configuration, profile reuse, canonical mappings, custom fields, filtering, timeline behavior, analytics, findings, burst detection, export, and related-session workflows without external services.
+The samples are fictional and self-contained. They are intended to demonstrate import configuration, profile reuse, canonical mappings, custom fields, filtering, timeline behavior, analytics, findings, burst detection, comparison, persistence, and reporting/export workflows without external services.
 
 ## Performance and Large-File Behavior
 
@@ -270,10 +276,16 @@ See [Performance Notes](docs/performance.md) for methodology, environment, scena
 
 ### Export, Samples, and Verification
 
-- Export currently visible investigation records to CSV
-- Use user-facing canonical headers and configured custom-field names
-- Preserve deterministic custom-column ordering and blanks for attributes absent from individual records
-- Retain CSV escaping and compact JSON serialization for structured custom values
+- Export currently visible investigation records to CSV using user-facing canonical headers and configured custom-field names
+- Preserve deterministic custom-column ordering, blanks for absent attributes, CSV escaping, and compact JSON serialization for structured custom values
+- Copy the selected record as structured JSON or compact human-readable text for direct use in tickets, notes, chat, or documentation
+- Export classified findings to a dedicated CSV with stable source-record context and investigator state
+- Build offline HTML reports from explicitly selected investigation and comparison documents
+- Supply a report title and optional investigator context, with optional supporting evidence and technical import appendix
+- Capture report generation time, source/session context, record/time-span context, findings, deterministic analytics, burst analysis, and comparison results into immutable point-in-time report state
+- Preserve explicit Baseline → Comparison orientation and captured comparison results rather than recalculating them from later mutable session state
+- Omit unsupported report dimensions or identify them as unavailable instead of treating missing data as zero
+- Keep HTML reports self-contained and offline, omit local workstation source paths, and support browser printing without adding a dedicated PDF-generation dependency
 - Include demonstration logs and reusable profiles across supported source families
 - Include larger realistic fictional investigation scenarios for product walkthroughs
 - Build and test on Windows and Linux through GitHub Actions
@@ -301,12 +313,11 @@ Implemented expansion milestones:
 | `v0.12.0` | Deterministic event-code/entity analytics, subsystem/severity trends, adaptive cadence, configurable burst detection, and analytics drill-down |
 | `v0.13.0` | Directional session comparison, immutable comparison snapshots, detachable multi-window workspace documents, and constrained-layout hardening |
 | `v0.14.0` | Versioned local workspace persistence, session/investigation restoration, immutable comparison persistence, document/window layout restoration, missing-source recovery, and recent workspace history |
+| `v0.15.0` | Findings/record handoff, immutable report capture, and self-contained offline HTML investigation/comparison reporting |
 
-The current release is **`v0.14.0`**.
+The current release is **`v0.15.0`**.
 
-**Phase 14 — Reporting and Export is in active development, targeted for `v0.15.0`.** It expands investigation handoff beyond visible-record CSV with findings export, selected-record copy workflows, and offline HTML investigation/comparison reports built from immutable point-in-time report state.
-
-Phase 15 then extends the file-oriented investigation model with live file following. Its design will preserve the existing immutable comparison snapshots while considering live comparisons that update with active source sessions and can be frozen into stable snapshots for persistence or reporting.
+**Phase 15 — Live File Following is in active development.** It extends the existing file-oriented investigation model to logs that are actively receiving appended records, with explicit handling planned for pause/resume, incremental parsing, partial lines, truncation/replacement, live summaries, and live filtering. Existing immutable comparison snapshots and exported reports remain stable artifacts; any continuously updating live-comparison behavior is being designed as a separate explicit workflow rather than silently changing those semantics.
 
 Phase 16 completes final UI polish, documentation, packaging, and the stable `v1.0.0` release.
 
@@ -339,6 +350,8 @@ The trusted local Windows development baseline uses Qt 6.11.1 with MinGW 64-bit.
     └── ci.yml                     # Windows, Linux, and sample packaging
 
 docs/
+├── examples/                     # Representative generated export artifacts
+│   └── field-gateway-investigation-report.html
 ├── original-prototype-plan.md    # Historical initial implementation plan
 ├── expansion-roadmap.md          # Expansion architecture and phased roadmap
 ├── feature-screenshot-gallery.md # Visual feature walkthrough
@@ -358,7 +371,7 @@ src/
 ├── compatibility/                # Flexible-record adapters for legacy telemetry components
 ├── controllers/                  # Investigation model/proxy coordination
 ├── domain/                       # Flexible investigation-record and legacy telemetry domain
-├── exporting/                    # Investigation-record CSV export
+├── exporting/                    # CSV/findings export, record copy, report capture, and HTML reporting
 ├── filtering/                    # Legacy telemetry filtering retained for compatibility/tests
 ├── importing/                    # Importers, profiles, validation, preview, results, and diagnostics
 ├── models/                       # Investigation table and filter proxy models
@@ -408,7 +421,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-The Qt Test suite covers the flexible record/import domain, supported importer families, progress/cancellation, profile validation and preview behavior, model/filter coordination, presets, bookmarks and findings, timeline and deterministic analytics, burst detection, CSV export, per-session state and reload behavior, session-comparison analysis and immutable snapshots, comparison-dialog defaults/validation, workspace-document semantics, versioned workspace serialization/restoration, presentation-state persistence, and recent-item history.
+The Qt Test suite covers the flexible record/import domain, supported importer families, progress/cancellation, profile validation and preview behavior, model/filter coordination, presets, bookmarks and findings, timeline and deterministic analytics, burst detection, CSV/findings export, selected-record formatting, immutable report-model capture, HTML rendering/escaping, per-session state and reload behavior, session-comparison analysis and immutable snapshots, comparison-dialog defaults/validation, workspace-document semantics, versioned workspace serialization/restoration, presentation-state persistence, and recent-item history.
 
 The same CTest suite runs in GitHub Actions on Windows and Linux.
 
@@ -416,9 +429,9 @@ The same CTest suite runs in GitHub Actions on Windows and Linux.
 
 The GitHub Actions workflow runs three parallel jobs with read-only repository permissions:
 
-- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.14.0-windows-x64.zip`
-- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.14.0-linux-x86_64.AppImage`
-- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.14.0-samples.zip`
+- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.15.0-windows-x64.zip`
+- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.15.0-linux-x86_64.AppImage`
+- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.15.0-samples.zip`
 
 Workflow artifacts validate candidate packages. Approved packages are attached permanently to GitHub Releases.
 

@@ -13,6 +13,9 @@
 #include <QGridLayout>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QAction>
+#include <QMenu>
+#include <QMargins>
 
 #include "../../domain/RecordSeverity.h"
 
@@ -52,6 +55,83 @@ InvestigationEventDetailPanel::
             "Select a telemetry event to "
             "view its details."
             )
+        );
+
+    /*
+     * ---------------------------------------------------------
+     * Selected-event context menu
+     * ---------------------------------------------------------
+     *
+     * Preserve the standard QPlainTextEdit context menu
+     * so users can still copy selected text normally,
+     * then append whole-record export actions.
+     */
+    m_detailText->setContextMenuPolicy(
+        Qt::CustomContextMenu
+        );
+
+    connect(
+        m_detailText,
+        &QPlainTextEdit::
+        customContextMenuRequested,
+        this,
+        [this](const QPoint &position) {
+            QMenu *menu =
+                m_detailText
+                    ->createStandardContextMenu();
+
+            menu->addSeparator();
+
+            QAction *copyJsonAction =
+                menu->addAction(
+                    tr("Copy Event as JSON")
+                    );
+
+            QAction *copyTextAction =
+                menu->addAction(
+                    tr(
+                        "Copy Event as "
+                        "Formatted Text"
+                        )
+                    );
+
+            const bool hasRecord =
+                !m_detailText
+                     ->toPlainText()
+                     .isEmpty();
+
+            copyJsonAction->setEnabled(
+                hasRecord
+                );
+
+            copyTextAction->setEnabled(
+                hasRecord
+                );
+
+            connect(
+                copyJsonAction,
+                &QAction::triggered,
+                this,
+                &InvestigationEventDetailPanel::
+                copyStructuredJsonRequested
+                );
+
+            connect(
+                copyTextAction,
+                &QAction::triggered,
+                this,
+                &InvestigationEventDetailPanel::
+                copyFormattedTextRequested
+                );
+
+            menu->exec(
+                m_detailText->mapToGlobal(
+                    position
+                    )
+                );
+
+            delete menu;
+        }
         );
 
     auto *layout =
@@ -142,10 +222,12 @@ InvestigationEventDetailPanel::
     /*
      * Start in the normal single-row presentation:
      *
-     * Finding status: [Status]   [Add Note] [Bookmark Event]
+     * Finding status: [Status]
+     *                   ... [Add Note] [Bookmark Event]
      *
-     * updateResponsiveControls() moves the action buttons
-     * to a second row only when the panel becomes too narrow.
+     * updateResponsiveControls() moves the action
+     * buttons to a second row only when the panel
+     * becomes too narrow.
      */
     m_stateLayout->addWidget(
         m_findingStatusLabel,
@@ -186,7 +268,7 @@ InvestigationEventDetailPanel::
 
     /*
      * ---------------------------------------------------------
-     * Signals
+     * Investigation-state signals
      * ---------------------------------------------------------
      */
     connect(
@@ -367,6 +449,8 @@ void InvestigationEventDetailPanel::
     m_bookmarkButton->setText(
         tr("Bookmark Event")
         );
+
+    updateMinimumUsableWidth();
 }
 
 void InvestigationEventDetailPanel::
@@ -426,6 +510,8 @@ void InvestigationEventDetailPanel::
             ? tr("Remove Bookmark")
             : tr("Bookmark Event")
         );
+
+    updateMinimumUsableWidth();
 }
 
 FindingStatus
@@ -516,6 +602,8 @@ void InvestigationEventDetailPanel::
     if (m_stateLayout == nullptr) {
         return;
     }
+
+    updateMinimumUsableWidth();
 
     const int requiredWideWidth =
         m_findingStatusLabel
@@ -643,6 +731,97 @@ void InvestigationEventDetailPanel::
     }
 
     m_stateLayout->invalidate();
+}
+
+void InvestigationEventDetailPanel::
+    updateMinimumUsableWidth()
+{
+    if (
+        m_stateLayout == nullptr
+        || m_findingStatusLabel == nullptr
+        || m_findingStatusCombo == nullptr
+        || m_noteButton == nullptr
+        || m_bookmarkButton == nullptr
+        ) {
+        return;
+    }
+
+    const int horizontalSpacing =
+        std::max(
+            0,
+            m_stateLayout
+                ->horizontalSpacing()
+            );
+
+    /*
+     * The compact layout has two rows:
+     *
+     * Finding status: [Status]
+     * [Note action]   [Bookmark action]
+     *
+     * The panel must remain wide enough for whichever
+     * of those rows requires more horizontal space.
+     *
+     * sizeHint() deliberately comes from Qt rather
+     * than from fixed pixel assumptions so font,
+     * platform style, and display scaling are
+     * reflected automatically.
+     */
+    m_noteButton->setMinimumWidth(
+        m_noteButton
+            ->sizeHint()
+            .width()
+        );
+
+    m_bookmarkButton->setMinimumWidth(
+        m_bookmarkButton
+            ->sizeHint()
+            .width()
+        );
+
+    const int statusRowWidth =
+        m_findingStatusLabel
+            ->sizeHint()
+            .width()
+        + horizontalSpacing
+        + m_findingStatusCombo
+              ->sizeHint()
+              .width();
+
+    const int actionRowWidth =
+        m_noteButton
+            ->minimumWidth()
+        + horizontalSpacing
+        + m_bookmarkButton
+            ->minimumWidth();
+
+    const int controlWidth =
+        std::max(
+            statusRowWidth,
+            actionRowWidth
+            );
+
+    int horizontalMargins = 0;
+
+    if (layout() != nullptr) {
+        const QMargins margins =
+            layout()->contentsMargins();
+
+        horizontalMargins =
+            margins.left()
+            + margins.right();
+    }
+
+    const int requiredWidth =
+        controlWidth
+        + horizontalMargins;
+
+    if (minimumWidth()
+        != requiredWidth) {
+        setMinimumWidth(
+            requiredWidth
+            );
+    }
 }
 
 void InvestigationEventDetailPanel::
