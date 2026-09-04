@@ -1005,6 +1005,518 @@ void appendFrequencyTable(
         << "</details>";
 }
 
+QString signedCountText(
+    qint64 value
+    )
+{
+    if (value > 0) {
+        return QStringLiteral("+%1")
+        .arg(value);
+    }
+
+    return QString::number(value);
+}
+
+QString comparisonRateText(
+    const std::optional<double> &rate
+    )
+{
+    if (!rate.has_value()) {
+        return QStringLiteral("Unavailable");
+    }
+
+    return QStringLiteral("%1 records/min")
+        .arg(
+            *rate,
+            0,
+            'f',
+            *rate < 10.0
+                ? 2
+                : 1
+            );
+}
+
+QString comparisonNumericSummaryText(
+    const InvestigationNumericFieldSummary &summary
+    )
+{
+    return QStringLiteral(
+               "min %1 · median %2 · max %3 · n=%4"
+               )
+        .arg(
+            QString::number(
+                summary.minimum,
+                'g',
+                6
+                ),
+            QString::number(
+                summary.median,
+                'g',
+                6
+                ),
+            QString::number(
+                summary.maximum,
+                'g',
+                6
+                ),
+            QString::number(
+                summary.populatedRecordCount
+                )
+            );
+}
+
+QString comparisonDominantValueText(
+    const std::optional<InvestigationValueFrequency> &value
+    )
+{
+    if (!value.has_value()) {
+        return QStringLiteral("Unavailable");
+    }
+
+    return QStringLiteral("%1 (%2)")
+        .arg(
+            value->value,
+            QString::number(
+                value->count
+                )
+            );
+}
+
+void appendComparisonSeverity(
+    QTextStream &out,
+    const InvestigationSeverityComparison &severity
+    )
+{
+    out
+        << "<h3>Severity Changes</h3>";
+
+    if (!severity.comparable()) {
+        out
+            << "<p class=\"muted\">"
+            << "Severity comparison is unavailable because "
+               "severity data is not populated in both sessions."
+            << "</p>";
+
+        return;
+    }
+
+    if (severity.differences.isEmpty()) {
+        out
+            << "<p class=\"muted\">"
+            << "No severity-count differences were captured."
+            << "</p>";
+
+        return;
+    }
+
+    out
+        << "<div class=\"table-wrap\">"
+        << "<table>"
+        << "<thead><tr>"
+        << "<th>Severity</th>"
+        << "<th>Baseline</th>"
+        << "<th>Comparison</th>"
+        << "<th>Delta</th>"
+        << "</tr></thead>"
+        << "<tbody>";
+
+    for (
+        const InvestigationSeverityDifference &difference
+        : severity.differences
+        ) {
+        out
+            << "<tr>"
+            << "<td>"
+            << escaped(
+                   severityText(
+                       difference.severity
+                       )
+                   )
+            << "</td>"
+            << "<td class=\"number\">"
+            << difference.baselineCount
+            << "</td>"
+            << "<td class=\"number\">"
+            << difference.comparisonCount
+            << "</td>"
+            << "<td class=\"number\">"
+            << escaped(
+                   signedCountText(
+                       difference.delta()
+                       )
+                   )
+            << "</td>"
+            << "</tr>";
+    }
+
+    out
+        << "</tbody></table>"
+        << "</div>";
+}
+
+void appendComparisonDimension(
+    QTextStream &out,
+    const QString &title,
+    const InvestigationDimensionComparison &dimension,
+    const QString &unavailableText
+    )
+{
+    out
+        << "<h3>"
+        << escaped(title)
+        << "</h3>";
+
+    if (!dimension.comparable()) {
+        out
+            << "<p class=\"muted\">"
+            << escaped(unavailableText)
+            << "</p>";
+
+        return;
+    }
+
+    if (dimension.differences.isEmpty()) {
+        out
+            << "<p class=\"muted\">"
+            << "No differences were captured for this dimension."
+            << "</p>";
+
+        return;
+    }
+
+    out
+        << "<div class=\"table-wrap\">"
+        << "<table>"
+        << "<thead><tr>"
+        << "<th>Value</th>"
+        << "<th>Baseline</th>"
+        << "<th>Comparison</th>"
+        << "<th>Delta</th>"
+        << "</tr></thead>"
+        << "<tbody>";
+
+    for (
+        const InvestigationValueDifference &difference
+        : dimension.differences
+        ) {
+        out
+            << "<tr>"
+            << "<td>"
+            << escaped(
+                   difference.value
+                   )
+            << "</td>"
+            << "<td class=\"number\">"
+            << difference.baselineCount
+            << "</td>"
+            << "<td class=\"number\">"
+            << difference.comparisonCount
+            << "</td>"
+            << "<td class=\"number\">"
+            << escaped(
+                   signedCountText(
+                       difference.delta()
+                       )
+                   )
+            << "</td>"
+            << "</tr>";
+    }
+
+    out
+        << "</tbody></table>"
+        << "</div>";
+}
+
+void appendComparisonCustomFields(
+    QTextStream &out,
+    const InvestigationCustomFieldComparison &customFields
+    )
+{
+    out
+        << "<h3>Custom-Field Changes</h3>";
+
+    if (
+        customFields.categoricalFields.isEmpty()
+        && customFields.numericFields.isEmpty()
+        ) {
+        out
+            << "<p class=\"muted\">"
+            << "No meaningful shared custom-field differences "
+               "were captured."
+            << "</p>";
+
+        return;
+    }
+
+    if (!customFields.categoricalFields.isEmpty()) {
+        out
+            << "<h4>Categorical Fields</h4>"
+            << "<div class=\"table-wrap\">"
+            << "<table>"
+            << "<thead><tr>"
+            << "<th>Field</th>"
+            << "<th>Value</th>"
+            << "<th>Baseline</th>"
+            << "<th>Comparison</th>"
+            << "<th>Change</th>"
+            << "</tr></thead>"
+            << "<tbody>";
+
+        for (
+            const InvestigationCategoricalCustomFieldComparison
+                &field
+            : customFields.categoricalFields
+            ) {
+            for (
+                const InvestigationValueDifference &difference
+                : field.changedValues
+                ) {
+                QString changeText;
+
+                if (
+                    difference.appearsOnlyInComparison()
+                    ) {
+                    changeText =
+                        QStringLiteral(
+                            "Appeared"
+                            );
+                } else if (
+                    difference.appearsOnlyInBaseline()
+                    ) {
+                    changeText =
+                        QStringLiteral(
+                            "Disappeared"
+                            );
+                } else {
+                    changeText =
+                        signedCountText(
+                            difference.delta()
+                            );
+                }
+
+                out
+                    << "<tr>"
+                    << "<td>"
+                    << escaped(
+                           field.fieldName
+                           )
+                    << "</td>"
+                    << "<td>"
+                    << escaped(
+                           difference.value
+                           )
+                    << "</td>"
+                    << "<td class=\"number\">"
+                    << difference.baselineCount
+                    << "</td>"
+                    << "<td class=\"number\">"
+                    << difference.comparisonCount
+                    << "</td>"
+                    << "<td>"
+                    << escaped(
+                           changeText
+                           )
+                    << "</td>"
+                    << "</tr>";
+            }
+        }
+
+        out
+            << "</tbody></table>"
+            << "</div>";
+    }
+
+    if (!customFields.numericFields.isEmpty()) {
+        out
+            << "<h4>Numeric Fields</h4>"
+            << "<div class=\"table-wrap\">"
+            << "<table>"
+            << "<thead><tr>"
+            << "<th>Field</th>"
+            << "<th>Baseline</th>"
+            << "<th>Comparison</th>"
+            << "</tr></thead>"
+            << "<tbody>";
+
+        for (
+            const InvestigationNumericCustomFieldComparison
+                &field
+            : customFields.numericFields
+            ) {
+            out
+                << "<tr>"
+                << "<td>"
+                << escaped(
+                       field.fieldName
+                       )
+                << "</td>"
+                << "<td>"
+                << escaped(
+                       comparisonNumericSummaryText(
+                           field.baseline
+                           )
+                       )
+                << "</td>"
+                << "<td>"
+                << escaped(
+                       comparisonNumericSummaryText(
+                           field.comparison
+                           )
+                       )
+                << "</td>"
+                << "</tr>";
+        }
+
+        out
+            << "</tbody></table>"
+            << "</div>";
+    }
+}
+
+void appendComparisonBurstSession(
+    QTextStream &out,
+    const QString &label,
+    const InvestigationBurstSessionSummary &summary
+    )
+{
+    out
+        << "<tr>"
+        << "<th>"
+        << escaped(label)
+        << "</th>";
+
+    if (!summary.available) {
+        out
+            << "<td colspan=\"7\">Unavailable</td>"
+            << "</tr>";
+
+        return;
+    }
+
+    out
+        << "<td class=\"number\">"
+        << summary.burstCount
+        << "</td>"
+        << "<td class=\"number\">"
+        << summary.elevatedRecordCountInBursts
+        << "</td>"
+        << "<td class=\"number\">"
+        << summary.peakBurstElevatedCount
+        << "</td>"
+        << "<td>"
+        << escaped(
+               durationText(
+                   summary.longestBurstDurationMilliseconds
+                   )
+               )
+        << "</td>"
+        << "<td>"
+        << escaped(
+               comparisonDominantValueText(
+                   summary.dominantSubsystem
+                   )
+               )
+        << "</td>"
+        << "<td>"
+        << escaped(
+               comparisonDominantValueText(
+                   summary.dominantEventCode
+                   )
+               )
+        << "</td>"
+        << "<td>"
+        << escaped(
+               comparisonDominantValueText(
+                   summary.dominantEntity
+                   )
+               )
+        << "</td>"
+        << "</tr>";
+}
+
+void appendComparisonBursts(
+    QTextStream &out,
+    const std::optional<InvestigationBurstComparison> &bursts
+    )
+{
+    out
+        << "<h3>Burst Comparison</h3>";
+
+    if (!bursts.has_value()) {
+        out
+            << "<p class=\"muted\">"
+            << "No shared-settings burst comparison was "
+               "captured for this comparison document."
+            << "</p>";
+
+        return;
+    }
+
+    out
+        << "<details>"
+        << "<summary>Shared burst-detection settings</summary>"
+        << "<div class=\"details-body\">"
+        << "<dl class=\"definition-grid\">"
+        << "<dt>Window</dt><dd>"
+        << escaped(
+               durationText(
+                   bursts->settings
+                       .windowMilliseconds
+                   )
+               )
+        << "</dd>"
+        << "<dt>Elevated-event threshold</dt><dd>"
+        << bursts->settings
+               .elevatedEventThreshold
+        << "</dd>"
+        << "<dt>Error/Critical threshold</dt><dd>"
+        << bursts->settings
+               .errorCriticalThreshold
+        << "</dd>"
+        << "<dt>Merge gap</dt><dd>"
+        << escaped(
+               durationText(
+                   bursts->settings
+                       .mergeGapMilliseconds
+                   )
+               )
+        << "</dd>"
+        << "</dl>"
+        << "</div>"
+        << "</details>";
+
+    out
+        << "<div class=\"table-wrap\">"
+        << "<table>"
+        << "<thead><tr>"
+        << "<th>Session</th>"
+        << "<th>Bursts</th>"
+        << "<th>Elevated records in bursts</th>"
+        << "<th>Peak elevated</th>"
+        << "<th>Longest burst</th>"
+        << "<th>Dominant subsystem</th>"
+        << "<th>Dominant event code</th>"
+        << "<th>Dominant entity</th>"
+        << "</tr></thead>"
+        << "<tbody>";
+
+    appendComparisonBurstSession(
+        out,
+        QStringLiteral("Baseline"),
+        bursts->baseline
+        );
+
+    appendComparisonBurstSession(
+        out,
+        QStringLiteral("Comparison"),
+        bursts->comparison
+        );
+
+    out
+        << "</tbody></table>"
+        << "</div>";
+}
+
 void appendComparison(
     QTextStream &out,
     const InvestigationReportComparisonSnapshot &comparison,
@@ -1154,8 +1666,70 @@ void appendComparison(
                    )
                )
         << "</td></tr>"
+        << "<tr><th>Record rate</th><td>"
+        << escaped(
+               comparisonRateText(
+                   comparison.analysis
+                       .baselineTiming
+                       .recordsPerMinute
+                   )
+               )
+        << "</td><td>"
+        << escaped(
+               comparisonRateText(
+                   comparison.analysis
+                       .comparisonTiming
+                       .recordsPerMinute
+                   )
+               )
+        << "</td></tr>"
         << "</tbody></table>"
         << "</div>";
+
+    appendComparisonSeverity(
+        out,
+        comparison.analysis.severity
+        );
+
+    appendComparisonDimension(
+        out,
+        QStringLiteral("Event-Code Changes"),
+        comparison.analysis.eventCodes,
+        QStringLiteral(
+            "Event-code comparison is unavailable because "
+            "event-code data is not populated in both sessions."
+            )
+        );
+
+    appendComparisonDimension(
+        out,
+        QStringLiteral("Elevated Subsystem Changes"),
+        comparison.analysis.elevatedSubsystems,
+        QStringLiteral(
+            "Elevated subsystem comparison is unavailable "
+            "because subsystem data is not populated in both sessions."
+            )
+        );
+
+    appendComparisonDimension(
+        out,
+        QStringLiteral("Elevated Entity Changes"),
+        comparison.analysis.elevatedEntities,
+        QStringLiteral(
+            "Elevated entity comparison is unavailable "
+            "because entity data is not populated in both sessions."
+            )
+        );
+
+    appendComparisonCustomFields(
+        out,
+        comparison.analysis.customFields
+        );
+
+    appendComparisonBursts(
+        out,
+        comparison.analysis.bursts
+        );
 
     out
         << "<p class=\"note\">"

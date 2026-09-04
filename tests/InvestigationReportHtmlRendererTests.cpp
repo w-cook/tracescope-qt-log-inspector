@@ -83,6 +83,191 @@ InvestigationReportComparisonSnapshot makeComparison()
     comparison.analysis.totalRecords.comparisonCount =
         130;
 
+    comparison.analysis.baselineTiming.timestampedRecordCount =
+        100;
+
+    comparison.analysis.baselineTiming.firstTimestamp =
+        fixedTimestamp();
+
+    comparison.analysis.baselineTiming.lastTimestamp =
+        fixedTimestamp(600);
+
+    comparison.analysis.baselineTiming.durationMilliseconds =
+        600000;
+
+    comparison.analysis.baselineTiming.recordsPerMinute =
+        10.0;
+
+    comparison.analysis.comparisonTiming.timestampedRecordCount =
+        125;
+
+    comparison.analysis.comparisonTiming.firstTimestamp =
+        fixedTimestamp();
+
+    comparison.analysis.comparisonTiming.lastTimestamp =
+        fixedTimestamp(900);
+
+    comparison.analysis.comparisonTiming.durationMilliseconds =
+        900000;
+
+    comparison.analysis.comparisonTiming.recordsPerMinute =
+        8.3;
+
+
+    comparison.analysis.severity.baselinePopulatedRecordCount =
+        100;
+
+    comparison.analysis.severity.comparisonPopulatedRecordCount =
+        130;
+
+    comparison.analysis.severity.differences = {
+        {
+            RecordSeverity::Warning,
+            8,
+            15
+        },
+        {
+            RecordSeverity::Error,
+            3,
+            9
+        },
+        {
+            RecordSeverity::Critical,
+            1,
+            2
+        }
+    };
+
+
+    comparison.analysis.eventCodes.baselinePopulatedRecordCount =
+        90;
+
+    comparison.analysis.eventCodes.comparisonPopulatedRecordCount =
+        120;
+
+    comparison.analysis.eventCodes.differences = {
+        {
+            QStringLiteral("NET_TIMEOUT"),
+            4,
+            11
+        },
+        {
+            QStringLiteral("RECOVERY"),
+            3,
+            0
+        },
+        {
+            QStringLiteral("RETRY"),
+            0,
+            8
+        }
+    };
+
+
+    comparison.analysis.elevatedSubsystems
+        .baselinePopulatedRecordCount = 12;
+
+    comparison.analysis.elevatedSubsystems
+        .comparisonPopulatedRecordCount = 26;
+
+    comparison.analysis.elevatedSubsystems.differences = {
+        {
+            QStringLiteral("Network"),
+            5,
+            17
+        },
+        {
+            QStringLiteral("Storage"),
+            4,
+            3
+        }
+    };
+
+
+    comparison.analysis.elevatedEntities
+        .baselinePopulatedRecordCount = 12;
+
+    comparison.analysis.elevatedEntities
+        .comparisonPopulatedRecordCount = 26;
+
+    comparison.analysis.elevatedEntities.differences = {
+        {
+            QStringLiteral("gateway-17"),
+            2,
+            10
+        },
+        {
+            QStringLiteral("gateway-04"),
+            4,
+            1
+        }
+    };
+
+
+    InvestigationCategoricalCustomFieldComparison
+        categoricalField;
+
+    categoricalField.fieldName =
+        QStringLiteral("firmware");
+
+    categoricalField.changedValues = {
+        {
+            QStringLiteral("1.4.2"),
+            12,
+            0
+        },
+        {
+            QStringLiteral("1.5.0"),
+            0,
+            14
+        }
+    };
+
+    comparison.analysis.customFields
+        .categoricalFields
+        .append(categoricalField);
+
+
+    InvestigationNumericCustomFieldComparison
+        numericField;
+
+    numericField.fieldName =
+        QStringLiteral("queueDepth");
+
+    numericField.baseline.populatedRecordCount = 90;
+    numericField.baseline.minimum = 1.0;
+    numericField.baseline.median = 4.0;
+    numericField.baseline.maximum = 11.0;
+
+    numericField.comparison.populatedRecordCount = 118;
+    numericField.comparison.minimum = 2.0;
+    numericField.comparison.median = 9.0;
+    numericField.comparison.maximum = 27.0;
+
+    comparison.analysis.customFields
+        .numericFields
+        .append(numericField);
+
+
+    InvestigationBurstComparison burstComparison;
+
+    burstComparison.baseline.available = true;
+    burstComparison.baseline.burstCount = 2;
+    burstComparison.baseline.elevatedRecordCountInBursts = 7;
+    burstComparison.baseline.peakBurstElevatedCount = 4;
+    burstComparison.baseline.longestBurstDurationMilliseconds =
+        8000;
+
+    burstComparison.comparison.available = true;
+    burstComparison.comparison.burstCount = 5;
+    burstComparison.comparison.elevatedRecordCountInBursts = 19;
+    burstComparison.comparison.peakBurstElevatedCount = 8;
+    burstComparison.comparison.longestBurstDurationMilliseconds =
+        18000;
+
+    comparison.analysis.bursts =
+        burstComparison;
+
     return comparison;
 }
 
@@ -99,6 +284,7 @@ private slots:
     void omitsLocalSourcePaths();
     void preservesReportSectionOrder();
     void rendersImmutableComparisonProvenance();
+    void rendersUnavailableComparisonAnalysisGracefully();
     void rendersCrossSourceClockCaveat();
     void rendersTimelineAndDeterministicAnalytics();
     void rendersCadenceBurstsAndEvidence();
@@ -521,6 +707,277 @@ void InvestigationReportHtmlRendererTests::
             )
         );
 
+    /*
+     * Timing/rate comparison.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Captured Timing"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Record rate"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "10.0 records/min"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "8.30 records/min"
+                )
+            )
+        );
+
+
+    /*
+     * Severity comparison.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Severity Changes"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">Warning<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">Critical<"
+                )
+            )
+        );
+
+
+    /*
+     * Event-code comparison.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Event-Code Changes"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "NET_TIMEOUT"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "RECOVERY"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "RETRY"
+                )
+            )
+        );
+
+
+    /*
+     * Elevated subsystem/entity comparison.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Elevated Subsystem Changes"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">Network<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Elevated Entity Changes"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "gateway-17"
+                )
+            )
+        );
+
+
+    /*
+     * Shared custom-field comparison.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Custom-Field Changes"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">firmware<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">1.4.2<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">Disappeared<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">1.5.0<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">Appeared<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">queueDepth<"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "min 1 · median 4 · max 11 · n=90"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "min 2 · median 9 · max 27 · n=118"
+                )
+            )
+        );
+
+
+    /*
+     * Shared-settings burst comparison.
+     */
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Burst Comparison"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Shared burst-detection settings"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Elevated records in bursts"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Peak elevated"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Longest burst"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "8.0 s"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "18.0 s"
+                )
+            )
+        );
+
     QVERIFY(
         html.contains(
             QStringLiteral(
@@ -533,6 +990,141 @@ void InvestigationReportHtmlRendererTests::
         html.contains(
             QStringLiteral(
                 "It was not recalculated from current session state"
+                )
+            )
+        );
+}
+
+void InvestigationReportHtmlRendererTests::
+    rendersUnavailableComparisonAnalysisGracefully()
+{
+    InvestigationReportSnapshot snapshot;
+
+    snapshot.title =
+        QStringLiteral(
+            "Sparse Comparison Test"
+            );
+
+    snapshot.generatedAtUtc =
+        fixedTimestamp();
+
+    InvestigationReportComparisonSnapshot comparison;
+
+    comparison.comparisonId =
+        QStringLiteral(
+            "comparison-sparse"
+            );
+
+    comparison.documentTitle =
+        QStringLiteral(
+            "Sparse Baseline → Sparse Comparison"
+            );
+
+    comparison.baselineSessionId =
+        QStringLiteral(
+            "baseline"
+            );
+
+    comparison.comparisonSessionId =
+        QStringLiteral(
+            "comparison"
+            );
+
+    comparison.baselineSourceName =
+        QStringLiteral(
+            "baseline.log"
+            );
+
+    comparison.comparisonSourceName =
+        QStringLiteral(
+            "comparison.log"
+            );
+
+    /*
+     * Deliberately leave canonical comparison
+     * dimensions and burst analysis unpopulated.
+     *
+     * This is valid for heterogeneous or sparse
+     * sources and must produce explanatory report
+     * content rather than empty/broken sections.
+     */
+    snapshot.comparisons.append(
+        comparison
+        );
+
+    InvestigationReportHtmlRenderer renderer;
+
+    const QString html =
+        renderer.render(
+            snapshot
+            );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Sparse Baseline → Sparse Comparison"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Severity comparison is unavailable because "
+                "severity data is not populated in both sessions."
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Event-code comparison is unavailable because "
+                "event-code data is not populated in both sessions."
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Elevated subsystem comparison is unavailable "
+                "because subsystem data is not populated in both sessions."
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Elevated entity comparison is unavailable "
+                "because entity data is not populated in both sessions."
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "No meaningful shared custom-field differences "
+                "were captured."
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "No shared-settings burst comparison was "
+                "captured for this comparison document."
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ">Unavailable<"
                 )
             )
         );
