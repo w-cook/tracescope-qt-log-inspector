@@ -125,7 +125,7 @@ Offline HTML reports provide a broader investigation artifact. The report setup 
 
 Report generation captures immutable point-in-time state before rendering begins, including generation time and relevant record/time-span context. The generated HTML is self-contained and usable without TraceScope or a backend; local workstation source paths are intentionally omitted. Browser printing can also provide a practical PDF handoff when needed.
 
-A representative [Field Gateway investigation report](docs/examples/field-gateway-investigation-report.html) is included in the repository so the exported format can be reviewed directly without installing TraceScope. It is generated from the same fictional known-good/degraded Field Gateway samples used elsewhere in the documentation.
+A representative [Field Gateway investigation report](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html) is published for direct browser viewing so the exported format can be reviewed without installing TraceScope. It is generated from the same fictional known-good/degraded Field Gateway samples used elsewhere in the documentation.
 
 ![TraceScope Offline HTML Investigation Report](docs/screenshots/tracescope-html-report-overview.png)
 
