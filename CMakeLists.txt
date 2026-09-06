@@ -208,5 +208,7 @@ target_link_libraries(TraceScope
         Qt6::Concurrent
 )
 
+add_subdirectory(tools/live-log-generator)
+
 enable_testing()
 add_subdirectory(tests)
