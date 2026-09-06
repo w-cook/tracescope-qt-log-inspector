@@ -1797,3 +1797,32 @@ add_test(
     NAME JsonLinesRendererTests
     COMMAND JsonLinesRendererTests
 )
+
+qt_add_executable(
+    DelimitedTextRendererTests
+
+    DelimitedTextRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/LiveLogScenarioStep.h
+    ../tools/live-log-generator/LiveLogScenario.h
+
+    ../tools/live-log-generator/ILogRecordRenderer.h
+    ../tools/live-log-generator/LiveLogScenarioPlayer.h
+    ../tools/live-log-generator/LiveLogScenarioPlayer.cpp
+
+    ../tools/live-log-generator/renderers/DelimitedTextRenderer.h
+    ../tools/live-log-generator/renderers/DelimitedTextRenderer.cpp
+)
+
+target_link_libraries(
+    DelimitedTextRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME DelimitedTextRendererTests
+    COMMAND DelimitedTextRendererTests
+)
