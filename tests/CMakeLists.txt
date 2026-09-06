@@ -1720,3 +1720,27 @@ set_tests_properties(
     PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=minimal"
 )
+
+qt_add_executable(
+    LiveLogScenarioLoaderTests
+
+    LiveLogScenarioLoaderTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/LiveLogScenarioStep.h
+    ../tools/live-log-generator/LiveLogScenario.h
+    ../tools/live-log-generator/LiveLogScenarioLoader.h
+    ../tools/live-log-generator/LiveLogScenarioLoader.cpp
+)
+
+target_link_libraries(
+    LiveLogScenarioLoaderTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveLogScenarioLoaderTests
+    COMMAND LiveLogScenarioLoaderTests
+)

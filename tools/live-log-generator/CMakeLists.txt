@@ -3,6 +3,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     LiveLogRecord.h
     LiveLogScenarioStep.h
     LiveLogScenario.h
+    LiveLogScenarioLoader.h
+    LiveLogScenarioLoader.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator
