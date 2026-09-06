@@ -1744,3 +1744,26 @@ add_test(
     NAME LiveLogScenarioLoaderTests
     COMMAND LiveLogScenarioLoaderTests
 )
+
+qt_add_executable(
+    JsonLinesRendererTests
+
+    JsonLinesRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+    ../tools/live-log-generator/renderers/JsonLinesRenderer.h
+    ../tools/live-log-generator/renderers/JsonLinesRenderer.cpp
+)
+
+target_link_libraries(
+    JsonLinesRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME JsonLinesRendererTests
+    COMMAND JsonLinesRendererTests
+)
