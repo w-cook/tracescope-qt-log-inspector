@@ -1,4 +1,6 @@
 #include "LiveLogScenarioLoader.h"
+#include "LiveLogScenarioPlayer.h"
+#include "renderers/JsonLinesRenderer.h"
 
 #include <cmath>
 
@@ -145,7 +147,19 @@ int main(int argc, char *argv[])
         parser.value(outputOption);
 
     const QString formatId =
-        parser.value(formatOption);
+        parser.value(formatOption)
+            .trimmed()
+            .toLower();
+
+    if (formatId != QStringLiteral("jsonl")) {
+        return fail(
+            QStringLiteral(
+                "Unsupported format '%1'. "
+                "Currently supported formats: jsonl."
+                )
+                .arg(formatId)
+            );
+    }
 
     const LiveLogScenarioLoadResult loadResult =
         LiveLogScenarioLoader().loadFile(
@@ -192,6 +206,59 @@ int main(int argc, char *argv[])
                    : "no"
                )
         << '\n';
+
+    JsonLinesRenderer renderer;
+    LiveLogScenarioPlayer player;
+
+    LiveLogScenarioPlayerOptions playOptions;
+
+    playOptions.outputPath =
+        outputPath;
+
+    playOptions.speed =
+        speed;
+
+    do {
+        playOptions.scenarioStart =
+            QDateTime::currentDateTimeUtc();
+
+        output
+            << "Playback started at "
+            << playOptions.scenarioStart
+                   .toString(
+                       Qt::ISODateWithMs
+                       )
+            << '\n';
+
+        output.flush();
+
+        const LiveLogScenarioPlayResult
+            playResult =
+            player.play(
+                scenario,
+                renderer,
+                playOptions
+                );
+
+        if (!playResult.isSuccess()) {
+            return fail(
+                QStringLiteral(
+                    "%1: %2"
+                    )
+                    .arg(
+                        playResult.errorCode,
+                        playResult.errorMessage
+                        )
+                );
+        }
+
+        output
+            << "Playback completed."
+            << '\n';
+
+        output.flush();
+
+    } while (parser.isSet(loopOption));
 
     return 0;
 }
