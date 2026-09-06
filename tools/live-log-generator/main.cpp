@@ -1,6 +1,6 @@
 #include "LiveLogScenarioLoader.h"
 #include "LiveLogScenarioPlayer.h"
-#include "renderers/JsonLinesRenderer.h"
+#include "LogRecordRendererFactory.h"
 
 #include <cmath>
 
@@ -151,16 +151,6 @@ int main(int argc, char *argv[])
             .trimmed()
             .toLower();
 
-    if (formatId != QStringLiteral("jsonl")) {
-        return fail(
-            QStringLiteral(
-                "Unsupported format '%1'. "
-                "Currently supported formats: jsonl."
-                )
-                .arg(formatId)
-            );
-    }
-
     const LiveLogScenarioLoadResult loadResult =
         LiveLogScenarioLoader().loadFile(
             scenarioPath
@@ -180,6 +170,25 @@ int main(int argc, char *argv[])
 
     const LiveLogScenario &scenario =
         *loadResult.scenario;
+
+    LogRecordRendererCreateResult
+        rendererResult =
+        LogRecordRendererFactory::create(
+            formatId,
+            scenario
+            );
+
+    if (!rendererResult.isSuccess()) {
+        return fail(
+            QStringLiteral(
+                "%1: %2"
+                )
+                .arg(
+                    rendererResult.errorCode,
+                    rendererResult.errorMessage
+                    )
+            );
+    }
 
     QTextStream output(stdout);
 
@@ -207,8 +216,10 @@ int main(int argc, char *argv[])
                )
         << '\n';
 
-    JsonLinesRenderer renderer;
     LiveLogScenarioPlayer player;
+
+    const ILogRecordRenderer &renderer =
+        *rendererResult.renderer;
 
     LiveLogScenarioPlayerOptions playOptions;
 

@@ -12,6 +12,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     LiveLogScenarioPlayer.cpp
     renderers/DelimitedTextRenderer.h
     renderers/DelimitedTextRenderer.cpp
+    LogRecordRendererFactory.h
+    LogRecordRendererFactory.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator

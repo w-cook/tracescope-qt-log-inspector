@@ -1740,6 +1740,11 @@ target_link_libraries(
         Qt6::Core
 )
 
+add_test(
+    NAME LiveLogScenarioLoaderTests
+    COMMAND LiveLogScenarioLoaderTests
+)
+
 qt_add_executable(
     LiveLogScenarioPlayerTests
 
@@ -1770,9 +1775,37 @@ add_test(
     COMMAND LiveLogScenarioPlayerTests
 )
 
+qt_add_executable(
+    LogRecordRendererFactoryTests
+
+    LogRecordRendererFactoryTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/LiveLogScenarioStep.h
+    ../tools/live-log-generator/LiveLogScenario.h
+
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/LogRecordRendererFactory.h
+    ../tools/live-log-generator/LogRecordRendererFactory.cpp
+
+    ../tools/live-log-generator/renderers/JsonLinesRenderer.h
+    ../tools/live-log-generator/renderers/JsonLinesRenderer.cpp
+
+    ../tools/live-log-generator/renderers/DelimitedTextRenderer.h
+    ../tools/live-log-generator/renderers/DelimitedTextRenderer.cpp
+)
+
+target_link_libraries(
+    LogRecordRendererFactoryTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
 add_test(
-    NAME LiveLogScenarioLoaderTests
-    COMMAND LiveLogScenarioLoaderTests
+    NAME LogRecordRendererFactoryTests
+    COMMAND LogRecordRendererFactoryTests
 )
 
 qt_add_executable(
