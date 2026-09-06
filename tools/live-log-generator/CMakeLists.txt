@@ -8,6 +8,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     ILogRecordRenderer.h
     renderers/JsonLinesRenderer.h
     renderers/JsonLinesRenderer.cpp
+    LiveLogScenarioPlayer.h
+    LiveLogScenarioPlayer.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator

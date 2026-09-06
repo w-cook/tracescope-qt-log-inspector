@@ -1740,6 +1740,36 @@ target_link_libraries(
         Qt6::Core
 )
 
+qt_add_executable(
+    LiveLogScenarioPlayerTests
+
+    LiveLogScenarioPlayerTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/LiveLogScenarioStep.h
+    ../tools/live-log-generator/LiveLogScenario.h
+
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/LiveLogScenarioPlayer.h
+    ../tools/live-log-generator/LiveLogScenarioPlayer.cpp
+
+    ../tools/live-log-generator/renderers/JsonLinesRenderer.h
+    ../tools/live-log-generator/renderers/JsonLinesRenderer.cpp
+)
+
+target_link_libraries(
+    LiveLogScenarioPlayerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveLogScenarioPlayerTests
+    COMMAND LiveLogScenarioPlayerTests
+)
+
 add_test(
     NAME LiveLogScenarioLoaderTests
     COMMAND LiveLogScenarioLoaderTests
