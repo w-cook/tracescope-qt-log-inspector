@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "name": "Field Gateway Live Degradation",
+  "description": "Deterministic gateway degradation, timeout, truncation, and recovery scenario for Phase 15 live-follow testing.",
+  "steps": [
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 0,
+        "severity": "INFO",
+        "subsystem": "Gateway",
+        "eventCode": "GW_START",
+        "entityId": "gateway-17",
+        "message": "Gateway startup completed.",
+        "attributes": {
+          "site": "north-yard",
+          "firmware": "4.2.1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1500
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1500,
+        "severity": "INFO",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_CONNECTED",
+        "entityId": "gateway-17",
+        "message": "Connected to upstream collector.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "latencyMs": 42
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 2000
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3500,
+        "severity": "WARN",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_LATENCY",
+        "entityId": "gateway-17",
+        "message": "Upstream response latency exceeded expected range.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "latencyMs": 1840,
+          "retrying": true
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 500
+    },
+    {
+      "type": "record",
+      "write": {
+        "mode": "partial",
+        "splitFraction": 0.55,
+        "holdMs": 1000
+      },
+      "record": {
+        "timestampOffsetMs": 4000,
+        "severity": "ERROR",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_TIMEOUT",
+        "entityId": "gateway-17",
+        "message": "Upstream request timed out.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "timeoutMs": 5000,
+          "attempt": 3
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 750
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 4750,
+        "severity": "ERROR",
+        "subsystem": "Gateway",
+        "eventCode": "BUFFER_PRESSURE",
+        "entityId": "gateway-17",
+        "message": "Pending telemetry queue exceeded warning threshold.",
+        "attributes": {
+          "queuedRecords": 1247,
+          "capacity": 1500
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1250
+    },
+    {
+      "type": "truncate"
+    },
+    {
+      "type": "wait",
+      "durationMs": 500
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 6500,
+        "severity": "INFO",
+        "subsystem": "Gateway",
+        "eventCode": "LOG_REOPENED",
+        "entityId": "gateway-17",
+        "message": "Application log reopened after truncation.",
+        "attributes": {
+          "site": "north-yard"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1000
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7500,
+        "severity": "INFO",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_RECOVERED",
+        "entityId": "gateway-17",
+        "message": "Upstream collector responses returned to normal.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "latencyMs": 58,
+          "retrying": false
+        }
+      }
+    }
+  ]
+}
