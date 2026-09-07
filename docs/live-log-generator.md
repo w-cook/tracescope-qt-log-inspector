@@ -146,7 +146,7 @@ Example:
 
 ### Scenario Step Types
 
-The initial scenario language supports:
+The scenario language supports:
 
 #### `record`
 
@@ -231,7 +231,7 @@ No dedicated `burst` step is required. A burst is represented by several determi
 
 ## Runtime Options
 
-The initial command-line interface should support:
+The command-line interface supports:
 
 ```text
 TraceScopeLiveLogGenerator
@@ -246,7 +246,7 @@ Example:
 
 ```text
 TraceScopeLiveLogGenerator
-    --scenario samples/live/field-gateway-live-incident.json
+    --scenario samples/live/field-gateway-live-scenario.json
     --output live-test.jsonl
     --format jsonl
     --speed 4
@@ -288,7 +288,7 @@ Additional controls such as starting from a particular step should be added only
 
 Playback behavior and serialization must remain separate.
 
-A renderer is responsible only for expressing a semantic record in a particular log format.
+A renderer is responsible for expressing semantic records and any format-specific file boundaries required to produce a realistic live source.
 
 Conceptually:
 
@@ -300,12 +300,31 @@ public:
 
     virtual QByteArray initialContent() const = 0;
 
+    virtual QByteArray recordSeparator() const
+    {
+        return {};
+    }
+
     virtual QByteArray renderRecord(
         const LiveLogRecord &record,
         const QDateTime &scenarioStart
         ) const = 0;
+
+    virtual QByteArray finalContent() const
+    {
+        return {};
+    }
 };
 ```
+
+The four renderer boundaries have distinct purposes:
+
+* `initialContent()` is written when an output file is first created and after a truncate, replacement, or rotation creates a fresh active file.
+* `recordSeparator()` is written only between complete records. Most line-oriented renderers return no separator because their record output already contains its own line termination. Structured JSON uses this boundary for commas between array elements.
+* `renderRecord()` serializes one semantic record.
+* `finalContent()` closes any outer format container required for a normally completed file. It is written at normal playback completion and before a rotated file is preserved.
+
+Renderers remain stateless. The scenario player tracks the number of completed records written to the current file so separator behavior resets correctly after truncation, replacement, and rotation.
 
 The scenario player owns:
 
@@ -314,41 +333,77 @@ The scenario player owns:
 * writing bytes
 * flushing
 * partial writes
+* record-separator placement
 * truncation
 * replacement
 * rotation
+* structured-file finalization
 * looping
+
+A partial record does not count as complete until its final bytes are written.
+
+Truncation and replacement intentionally do not finalize the previous structured document before discarding it. These steps model abrupt source lifecycle behavior. Rotation does finalize the previous structured document before preserving it, so the rotated file is independently valid.
 
 Renderers should not sleep, manipulate the output file, or know about scenario playback state.
 
 ## Format and Live-Behavior Capability Matrix
 
-Static TraceScope format support does not imply that every source format is naturally suitable for append-style live following.
+Phase 15 live following should support all current TraceScope source families when the configured import behavior identifies a usable repeatable record structure. The physical ingestion strategy differs by format; live support does not require every format to behave like a newline-delimited text file.
 
-The generator and Phase 15 implementation should respect the following boundary.
+The generator should exercise both line-oriented append streams and structured open-container streams.
 
-| Format             | TraceScope importer path | Semantic fidelity               | Natural append stream | Partial-record test                    | Truncate                      | Replace / rotate              | Phase 15 role                |
-| ------------------ | ------------------------ | ------------------------------- | --------------------- | -------------------------------------- | ----------------------------- | ----------------------------- | ---------------------------- |
-| JSON Lines         | `json-lines`             | Full                            | Yes                   | Yes                                    | Yes                           | Yes                           | Primary                      |
-| CSV                | `csv`                    | Full with fixed scenario schema | Yes                   | Yes                                    | Yes, with header regeneration | Yes, with header regeneration | Primary                      |
-| TSV                | `tsv`                    | Full with fixed scenario schema | Yes                   | Yes                                    | Yes, with header regeneration | Yes, with header regeneration | Primary                      |
-| key-value / logfmt | `key-value`              | Full                            | Yes                   | Yes                                    | Yes                           | Yes                           | Primary                      |
-| generic regex text | `regex-text`             | Full with matching profile      | Yes                   | Yes                                    | Yes                           | Yes                           | Primary / secondary          |
-| Syslog RFC 5424    | `syslog`                 | High                            | Yes                   | Yes                                    | Yes                           | Yes                           | Primary / secondary          |
-| Syslog RFC 3164    | `syslog`                 | Reduced                         | Yes                   | Yes                                    | Yes                           | Yes                           | Secondary                    |
-| IIS W3C            | `iis-w3c`                | Access-log oriented             | Yes                   | Yes                                    | Yes, with header regeneration | Yes, with header regeneration | Secondary                    |
-| Apache Common      | `regex-text` preset      | Access-log oriented             | Yes                   | Yes                                    | Yes                           | Yes                           | Secondary                    |
-| Apache Combined    | `regex-text` preset      | Access-log oriented             | Yes                   | Yes                                    | Yes                           | Yes                           | Secondary                    |
-| Nginx Combined     | `regex-text` preset      | Access-log oriented             | Yes                   | Yes                                    | Yes                           | Yes                           | Secondary                    |
-| Structured JSON    | `structured-json`        | Full                            | No                    | Not applicable as line-follow behavior | Whole-document rewrite        | Yes                           | Replacement/snapshot testing |
-| Structured XML     | `xml`                    | Full                            | No                    | Not applicable as line-follow behavior | Whole-document rewrite        | Yes                           | Replacement/snapshot testing |
-| Windows Event XML  | `xml` preset             | High                            | No                    | Not applicable as line-follow behavior | Whole-document rewrite        | Yes                           | Replacement/snapshot testing |
+| Format             | TraceScope importer path | Semantic fidelity               | Live strategy                              | Partial-record test | Truncate / replacement / rotation                  | Generator status |
+| ------------------ | ------------------------ | ------------------------------- | ------------------------------------------ | ------------------- | -------------------------------------------------- | ---------------- |
+| JSON Lines         | `json-lines`             | Full                            | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
+| CSV                | `csv`                    | Full with fixed scenario schema | Line-oriented append with header           | Yes                 | Yes, with header regeneration                      | Implemented      |
+| TSV                | `tsv`                    | Full with fixed scenario schema | Line-oriented append with header           | Yes                 | Yes, with header regeneration                      | Implemented      |
+| key-value / logfmt | `key-value`              | Full                            | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
+| generic regex text | `regex-text`             | Full with matching profile      | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
+| Syslog RFC 5424    | `syslog`                 | High                            | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
+| Syslog RFC 3164    | `syslog`                 | Reduced                         | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
+| IIS W3C            | `iis-w3c`                | Access-log oriented             | Line-oriented append with header           | Yes                 | Yes, with header regeneration                      | Planned          |
+| Apache Common      | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
+| Apache Combined    | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
+| Nginx Combined     | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
+| Structured JSON    | `structured-json`        | Full                            | Profiled open record-array container       | Yes                 | Yes, with fresh container / rewrite reconciliation | Planned          |
+| Structured XML     | `xml`                    | Full                            | Profiled open repeated-record container    | Yes                 | Yes, with fresh container / rewrite reconciliation | Planned          |
+| Windows Event XML  | `xml` preset             | High                            | Profiled open `Events`-style container     | Yes                 | Yes, with fresh container / rewrite reconciliation | Planned          |
 
-Structured JSON arrays and XML documents are not ordinary append streams. Appending arbitrary serialized records after the closing JSON array or XML root would make the document invalid.
+### Line-Oriented Sources
 
-Phase 15 should therefore not claim normal append-follow semantics for those formats unless a valid incremental representation is explicitly implemented.
+Line-oriented sources expose complete records through ordinary file growth.
 
-For structured-document formats, replacement or whole-document rewrite behavior may still be useful for testing file-change detection.
+An incomplete trailing record remains pending until its physical write finishes. Header-based formats regenerate their initial header content whenever a lifecycle event creates a fresh active file.
+
+### Structured Open-Container Sources
+
+Structured JSON, structured XML, and Windows Event XML are not excluded from true live following.
+
+When a profile identifies a repeatable record structure, the producer may keep an outer document container open while complete child records are appended.
+
+Conceptually:
+
+```text
+outer container
+    complete record
+    complete record
+    partially written record   ← pending
+EOF
+```
+
+Completed records are independently usable even though the trailing record and outer container are not yet complete.
+
+For structured JSON, live append behavior requires a profiled repeatable record array. The generator writes the array/container prefix through `initialContent()`, inserts separators only between completed elements, writes each record independently, and closes the structure through `finalContent()` after normal completion.
+
+For structured XML and Windows Event XML, live append behavior requires a profiled repeated-record element path. The generator writes the document/container prefix, appends complete record elements, and leaves the outer container intentionally open during playback.
+
+Partial-write behavior applies to structured formats exactly as it does to line-oriented formats: the renderer first produces the complete serialized record, then the scenario player exposes only the configured first fraction of its bytes during the hold interval.
+
+A normally completed structured playback must leave a valid standalone document. Rotation finalizes the old document before preserving it and starts a fresh container at the active path. Truncation and replacement intentionally model abrupt lifecycle events and therefore start a fresh container without first repairing the discarded document.
+
+Structured sources may also be maintained by a producer that repeatedly rewrites, truncates, or replaces a formally closed document. Phase 15 should treat those cases through the corresponding file-lifecycle and reconciliation behavior rather than requiring byte-append semantics.
+
+Appending an unrelated second complete JSON or XML document after an already closed document is not a supported live-source model.
 
 ## Format Fidelity
 
@@ -394,14 +449,23 @@ These values must not alter the semantic incident story.
 
 The generator should eventually support manual verification of:
 
-* appended-record following
+* appended-record following for every supported line-oriented source family
+* structured JSON record-array following
+* structured XML repeated-record following
+* Windows Event XML repeated-record following
 * pause
 * resume
 * catch-up after resume
-* partial-line handling
+* incomplete trailing-line handling
+* incomplete structured JSON record handling
+* incomplete structured XML / Windows Event XML record handling
+* still-open structured outer containers
+* normal structured-stream finalization
 * truncation handling
 * file replacement
 * file rotation
+* fresh header or container creation after lifecycle events
+* valid finalized structured files after rotation
 * burst ingestion
 * filtering while records arrive
 * summary updates
@@ -409,6 +473,42 @@ The generator should eventually support manual verification of:
 * live comparison behavior, if implemented
 
 The generator itself does not verify TraceScope behavior. It creates known external conditions against which TraceScope can be observed and tested.
+
+## Generator Completion Boundary
+
+The live-log generator is not complete merely because a representative subset of renderers works.
+
+Before Phase 15 implementation moves into TraceScope's live-follow ingestion and presentation behavior, the utility should provide reproducible generation for every currently supported source family using the appropriate live strategy.
+
+Generator completion therefore requires representative coverage for:
+
+* JSON Lines
+* CSV
+* TSV
+* key-value / logfmt
+* generic regex text
+* Syslog RFC 5424
+* Syslog RFC 3164
+* IIS W3C
+* Apache Common
+* Apache Combined
+* Nginx Combined
+* Structured JSON
+* Structured XML
+* Windows Event XML
+
+Across those formats, the generator must also exercise the lifecycle behaviors relevant to the format:
+
+* ordinary record growth
+* deterministic semantic timing independent of playback speed
+* partial physical writes
+* truncation
+* replacement
+* rotation
+* header regeneration where required
+* structured-container initialization, record separation, and normal finalization where required
+
+TraceScope live-follow implementation should begin only after this generator-side coverage is complete and manually verifiable.
 
 ## Stable Snapshot Boundaries
 
