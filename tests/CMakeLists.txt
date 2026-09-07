@@ -1761,6 +1761,9 @@ qt_add_executable(
     ../tools/live-log-generator/renderers/JsonLinesRenderer.h
     ../tools/live-log-generator/renderers/JsonLinesRenderer.cpp
 
+    ../tools/live-log-generator/renderers/SyslogRenderer.h
+    ../tools/live-log-generator/renderers/SyslogRenderer.cpp
+
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.h
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.cpp
 
@@ -1805,6 +1808,9 @@ qt_add_executable(
 
     ../tools/live-log-generator/renderers/KeyValueTextRenderer.h
     ../tools/live-log-generator/renderers/KeyValueTextRenderer.cpp
+
+    ../tools/live-log-generator/renderers/SyslogRenderer.h
+    ../tools/live-log-generator/renderers/SyslogRenderer.cpp
 
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.h
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.cpp
@@ -1975,4 +1981,28 @@ target_link_libraries(
 add_test(
     NAME WindowsEventXmlRendererTests
     COMMAND WindowsEventXmlRendererTests
+)
+
+qt_add_executable(
+    SyslogRendererTests
+
+    SyslogRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/SyslogRenderer.h
+    ../tools/live-log-generator/renderers/SyslogRenderer.cpp
+)
+
+target_link_libraries(
+    SyslogRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME SyslogRendererTests
+    COMMAND SyslogRendererTests
 )

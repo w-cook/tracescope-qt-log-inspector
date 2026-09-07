@@ -7,6 +7,7 @@
 #include "renderers/KeyValueTextRenderer.h"
 #include "renderers/StructuredJsonRenderer.h"
 #include "renderers/StructuredXmlRenderer.h"
+#include "renderers/SyslogRenderer.h"
 #include "renderers/WindowsEventXmlRenderer.h"
 
 namespace
@@ -33,6 +34,8 @@ LogRecordRendererFactory::supportedFormats()
         QStringLiteral("csv"),
         QStringLiteral("tsv"),
         QStringLiteral("logfmt"),
+        QStringLiteral("syslog-rfc5424"),
+        QStringLiteral("syslog-rfc3164"),
         QStringLiteral("structured-json"),
         QStringLiteral("structured-xml"),
         QStringLiteral("windows-event-xml")
@@ -115,6 +118,214 @@ LogRecordRendererFactory::create(
             std::make_unique<
                 KeyValueTextRenderer
                 >();
+
+        return result;
+    }
+
+    if (normalized
+        == QStringLiteral("syslog-rfc5424")) {
+        for (qsizetype stepIndex = 0;
+             stepIndex < scenario.steps.size();
+             ++stepIndex) {
+            const auto *recordStep =
+                std::get_if<LiveLogRecordStep>(
+                    &scenario.steps.at(
+                        stepIndex
+                        )
+                    );
+
+            if (!recordStep) {
+                continue;
+            }
+
+            const LiveLogRecord &record =
+                recordStep->record;
+
+            if (!record.subsystem.isEmpty()
+                && !SyslogRenderer::
+                   isValidRfc5424AppName(
+                       record.subsystem
+                       )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_RFC5424_APP_NAME"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "subsystem '%2', which cannot "
+                        "be represented as an RFC 5424 "
+                        "APP-NAME."
+                        )
+                        .arg(
+                            QString::number(
+                                stepIndex + 1
+                                ),
+                            record.subsystem
+                            )
+                    );
+            }
+
+            if (!record.eventCode.isEmpty()
+                && !SyslogRenderer::
+                   isValidRfc5424MessageId(
+                       record.eventCode
+                       )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_RFC5424_MESSAGE_ID"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "event code '%2', which cannot "
+                        "be represented as an RFC 5424 "
+                        "MSGID."
+                        )
+                        .arg(
+                            QString::number(
+                                stepIndex + 1
+                                ),
+                            record.eventCode
+                            )
+                    );
+            }
+
+            if (record.message.contains(
+                    QLatin1Char('\n')
+                    )
+                || record.message.contains(
+                    QLatin1Char('\r')
+                    )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SYSLOG_MESSAGE"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "a line break in its message. "
+                        "Syslog generator records must "
+                        "remain single-line messages."
+                        )
+                        .arg(
+                            stepIndex + 1
+                            )
+                    );
+            }
+
+            for (auto iterator =
+                 record.attributes.constBegin();
+                 iterator !=
+                 record.attributes.constEnd();
+                 ++iterator) {
+                if (SyslogRenderer::
+                    isValidRfc5424StructuredDataName(
+                        iterator.key()
+                        )) {
+                    continue;
+                }
+
+                return failure(
+                    QStringLiteral(
+                        "INVALID_RFC5424_STRUCTURED_DATA_NAME"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "attribute key '%2', which "
+                        "cannot be represented as an "
+                        "RFC 5424 structured-data "
+                        "parameter name."
+                        )
+                        .arg(
+                            QString::number(
+                                stepIndex + 1
+                                ),
+                            iterator.key()
+                            )
+                    );
+            }
+        }
+
+        result.renderer =
+            std::make_unique<
+                SyslogRenderer
+                >(
+                SyslogFormat::Rfc5424
+                );
+
+        return result;
+    }
+
+    if (normalized
+        == QStringLiteral("syslog-rfc3164")) {
+        for (qsizetype stepIndex = 0;
+             stepIndex < scenario.steps.size();
+             ++stepIndex) {
+            const auto *recordStep =
+                std::get_if<LiveLogRecordStep>(
+                    &scenario.steps.at(
+                        stepIndex
+                        )
+                    );
+
+            if (!recordStep) {
+                continue;
+            }
+
+            const LiveLogRecord &record =
+                recordStep->record;
+
+            if (!record.subsystem.isEmpty()
+                && !SyslogRenderer::
+                   isValidRfc3164Tag(
+                       record.subsystem
+                       )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_RFC3164_TAG"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "subsystem '%2', which cannot "
+                        "be represented as an RFC 3164 "
+                        "tag."
+                        )
+                        .arg(
+                            QString::number(
+                                stepIndex + 1
+                                ),
+                            record.subsystem
+                            )
+                    );
+            }
+
+            if (record.message.contains(
+                    QLatin1Char('\n')
+                    )
+                || record.message.contains(
+                    QLatin1Char('\r')
+                    )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SYSLOG_MESSAGE"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "a line break in its message. "
+                        "Syslog generator records must "
+                        "remain single-line messages."
+                        )
+                        .arg(
+                            stepIndex + 1
+                            )
+                    );
+            }
+        }
+
+        result.renderer =
+            std::make_unique<
+                SyslogRenderer
+                >(
+                SyslogFormat::Rfc3164
+                );
 
         return result;
     }

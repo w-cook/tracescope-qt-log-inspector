@@ -15,6 +15,13 @@ private slots:
     void logfmtRendererIsCreated();
     void invalidLogfmtAttributeKeyIsRejected();
     void logfmtAllowsAttributeKeysSupportedByImporter();
+    void syslogRfc5424RendererIsCreated();
+    void invalidRfc5424AppNameIsRejected();
+    void invalidRfc5424MessageIdIsRejected();
+    void invalidRfc5424StructuredDataNameIsRejected();
+    void syslogRfc3164RendererIsCreated();
+    void invalidRfc3164TagIsRejected();
+    void syslogMessageWithLineBreakIsRejected();
     void structuredJsonRendererIsCreated();
     void structuredXmlRendererIsCreated();
     void windowsEventXmlRendererIsCreated();
@@ -32,6 +39,8 @@ void LogRecordRendererFactoryTests::
             QStringLiteral("csv"),
             QStringLiteral("tsv"),
             QStringLiteral("logfmt"),
+            QStringLiteral("syslog-rfc5424"),
+            QStringLiteral("syslog-rfc3164"),
             QStringLiteral("structured-json"),
             QStringLiteral("structured-xml"),
             QStringLiteral("windows-event-xml")
@@ -248,6 +257,224 @@ void LogRecordRendererFactoryTests::
 
     QVERIFY(result.isSuccess());
     QVERIFY(result.renderer);
+}
+
+void LogRecordRendererFactoryTests::
+    syslogRfc5424RendererIsCreated()
+{
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "SYSLOG-RFC5424"
+                ),
+            LiveLogScenario()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QVERIFY(
+        result.renderer
+            ->initialContent()
+            .isEmpty()
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    syslogRfc3164RendererIsCreated()
+{
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "SYSLOG-RFC3164"
+                ),
+            LiveLogScenario()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QVERIFY(
+        result.renderer
+            ->initialContent()
+            .isEmpty()
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidRfc5424AppNameIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.subsystem =
+        QStringLiteral(
+            "gateway service"
+            );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "syslog-rfc5424"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_RFC5424_APP_NAME"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidRfc5424MessageIdIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.eventCode =
+        QStringLiteral(
+            "EVENT CODE"
+            );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "syslog-rfc5424"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_RFC5424_MESSAGE_ID"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidRfc5424StructuredDataNameIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral(
+            "request id"
+            ),
+        QStringLiteral(
+            "REQ-123"
+            )
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "syslog-rfc5424"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_RFC5424_STRUCTURED_DATA_NAME"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidRfc3164TagIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.subsystem =
+        QStringLiteral(
+            "gateway service"
+            );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "syslog-rfc3164"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_RFC3164_TAG"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    syslogMessageWithLineBreakIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.message =
+        QStringLiteral(
+            "First line\nSecond line"
+            );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto rfc5424 =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "syslog-rfc5424"
+                ),
+            scenario
+            );
+
+    QVERIFY(!rfc5424.isSuccess());
+
+    QCOMPARE(
+        rfc5424.errorCode,
+        QStringLiteral(
+            "INVALID_SYSLOG_MESSAGE"
+            )
+        );
+
+    const auto rfc3164 =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "syslog-rfc3164"
+                ),
+            scenario
+            );
+
+    QVERIFY(!rfc3164.isSuccess());
+
+    QCOMPARE(
+        rfc3164.errorCode,
+        QStringLiteral(
+            "INVALID_SYSLOG_MESSAGE"
+            )
+        );
 }
 
 void LogRecordRendererFactoryTests::

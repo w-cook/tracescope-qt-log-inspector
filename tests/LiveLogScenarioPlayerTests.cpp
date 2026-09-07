@@ -10,6 +10,7 @@
 #include "../tools/live-log-generator/renderers/JsonLinesRenderer.h"
 #include "../tools/live-log-generator/renderers/StructuredJsonRenderer.h"
 #include "../tools/live-log-generator/renderers/StructuredXmlRenderer.h"
+#include "../tools/live-log-generator/renderers/SyslogRenderer.h"
 #include "../tools/live-log-generator/renderers/WindowsEventXmlRenderer.h"
 
 namespace
@@ -101,6 +102,8 @@ private slots:
     void truncateResetsRecordSeparatorState();
     void rotateFinalizesPreviousContainer();
     void invalidPlaybackSpeedIsRejected();
+    void syslogRfc5424PartialRecordIsIncompleteDuringHold();
+    void syslogRfc3164RotationPreservesRecords();
     void structuredJsonPartialRecordIsIncompleteDuringHold();
     void structuredJsonRotationProducesValidDocuments();
     void structuredXmlPartialRecordIsIncompleteDuringHold();
@@ -846,6 +849,273 @@ void LiveLogScenarioPlayerTests::
     QVERIFY(
         !QFile::exists(
             options.outputPath
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    syslogRfc5424PartialRecordIsIncompleteDuringHold()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-rfc5424.log"
+                )
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Complete syslog record."
+                    )
+                )
+        }
+        );
+
+    LiveLogRecordStep partialStep;
+
+    partialStep.record =
+        record(
+            1000,
+            QStringLiteral(
+                "Partially written syslog record."
+                )
+            );
+
+    partialStep.write.mode =
+        LiveLogWriteMode::Partial;
+
+    partialStep.write.splitFraction =
+        0.5;
+
+    partialStep.write.holdMs =
+        1000;
+
+    scenario.steps.append(
+        partialStep
+        );
+
+    QByteArray contentDuringHold;
+
+    LiveLogScenarioPlayer player(
+        [&](qint64) {
+            contentDuringHold =
+                readFile(
+                    outputPath
+                    );
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            SyslogRenderer(
+                SyslogFormat::Rfc5424
+                ),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        contentDuringHold.contains(
+            "Complete syslog record."
+            )
+        );
+
+    /*
+     * The first line is complete, but the second
+     * physical syslog line is still being written.
+     */
+    QVERIFY(
+        !contentDuringHold.endsWith(
+            '\n'
+            )
+        );
+
+    const QByteArray finalContent =
+        readFile(
+            outputPath
+            );
+
+    QVERIFY(
+        finalContent.endsWith(
+            '\n'
+            )
+        );
+
+    QVERIFY(
+        finalContent.contains(
+            "Complete syslog record."
+            )
+        );
+
+    QVERIFY(
+        finalContent.contains(
+            "Partially written syslog record."
+            )
+        );
+
+    const QList<QByteArray> lines =
+        finalContent.split(
+            '\n'
+            );
+
+    QCOMPARE(
+        lines.size(),
+        3
+        );
+
+    QVERIFY(
+        lines.at(0).startsWith(
+            "<134>1 "
+            )
+        );
+
+    QVERIFY(
+        lines.at(1).startsWith(
+            "<134>1 "
+            )
+        );
+
+    QVERIFY(
+        lines.at(2).isEmpty()
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    syslogRfc3164RotationPreservesRecords()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-rfc3164.log"
+                )
+            );
+
+    const QString rotatedPath =
+        QStringLiteral("%1.1")
+            .arg(
+                outputPath
+                );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Before syslog rotation."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "After syslog rotation."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                SyslogRenderer(
+                    SyslogFormat::Rfc3164
+                    ),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        QFile::exists(
+            rotatedPath
+            )
+        );
+
+    QVERIFY(
+        QFile::exists(
+            outputPath
+            )
+        );
+
+    const QByteArray rotatedContent =
+        readFile(
+            rotatedPath
+            );
+
+    const QByteArray activeContent =
+        readFile(
+            outputPath
+            );
+
+    QCOMPARE(
+        rotatedContent,
+        QByteArray(
+            "<134>Sep  7 12:00:00 "
+            "tracescope-live "
+            "Gateway: "
+            "Before syslog rotation.\n"
+            )
+        );
+
+    QCOMPARE(
+        activeContent,
+        QByteArray(
+            "<134>Sep  7 12:00:01 "
+            "tracescope-live "
+            "Gateway: "
+            "After syslog rotation.\n"
             )
         );
 }

@@ -22,6 +22,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     renderers/StructuredXmlRenderer.cpp
     renderers/WindowsEventXmlRenderer.h
     renderers/WindowsEventXmlRenderer.cpp
+    renderers/SyslogRenderer.h
+    renderers/SyslogRenderer.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator
