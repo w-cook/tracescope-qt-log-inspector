@@ -5,6 +5,7 @@
 #include "renderers/DelimitedTextRenderer.h"
 #include "renderers/JsonLinesRenderer.h"
 #include "renderers/KeyValueTextRenderer.h"
+#include "renderers/StructuredJsonRenderer.h"
 
 namespace
 {
@@ -29,7 +30,8 @@ LogRecordRendererFactory::supportedFormats()
         QStringLiteral("jsonl"),
         QStringLiteral("csv"),
         QStringLiteral("tsv"),
-        QStringLiteral("logfmt")
+        QStringLiteral("logfmt"),
+        QStringLiteral("structured-json")
     };
 }
 
@@ -108,6 +110,16 @@ LogRecordRendererFactory::create(
         result.renderer =
             std::make_unique<
                 KeyValueTextRenderer
+                >();
+
+        return result;
+    }
+
+    if (normalized
+        == QStringLiteral("structured-json")) {
+        result.renderer =
+            std::make_unique<
+                StructuredJsonRenderer
                 >();
 
         return result;

@@ -15,6 +15,7 @@ private slots:
     void logfmtRendererIsCreated();
     void invalidLogfmtAttributeKeyIsRejected();
     void logfmtAllowsAttributeKeysSupportedByImporter();
+    void structuredJsonRendererIsCreated();
     void unsupportedFormatIsRejected();
 };
 
@@ -28,7 +29,8 @@ void LogRecordRendererFactoryTests::
             QStringLiteral("jsonl"),
             QStringLiteral("csv"),
             QStringLiteral("tsv"),
-            QStringLiteral("logfmt")
+            QStringLiteral("logfmt"),
+            QStringLiteral("structured-json")
         })
         );
 }
@@ -242,6 +244,48 @@ void LogRecordRendererFactoryTests::
 
     QVERIFY(result.isSuccess());
     QVERIFY(result.renderer);
+}
+
+void LogRecordRendererFactoryTests::
+    structuredJsonRendererIsCreated()
+{
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "STRUCTURED-JSON"
+                ),
+            LiveLogScenario()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QCOMPARE(
+        result.renderer
+            ->initialContent(),
+        QByteArray(
+            "{\n"
+            "  \"data\": {\n"
+            "    \"records\": [\n"
+            )
+        );
+
+    QCOMPARE(
+        result.renderer
+            ->recordSeparator(),
+        QByteArray(",\n")
+        );
+
+    QCOMPARE(
+        result.renderer
+            ->finalContent(),
+        QByteArray(
+            "\n"
+            "    ]\n"
+            "  }\n"
+            "}\n"
+            )
+        );
 }
 
 void LogRecordRendererFactoryTests::

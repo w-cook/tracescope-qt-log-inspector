@@ -365,7 +365,7 @@ The generator should exercise both line-oriented append streams and structured o
 | Apache Common      | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
 | Apache Combined    | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
 | Nginx Combined     | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Planned          |
-| Structured JSON    | `structured-json`        | Full                            | Profiled open record-array container       | Yes                 | Yes, with fresh container / rewrite reconciliation | Planned          |
+| Structured JSON    | `structured-json`        | Full                            | Profiled open record-array container       | Yes                 | Yes, with fresh container / rewrite reconciliation | Implemented      |
 | Structured XML     | `xml`                    | Full                            | Profiled open repeated-record container    | Yes                 | Yes, with fresh container / rewrite reconciliation | Planned          |
 | Windows Event XML  | `xml` preset             | High                            | Profiled open `Events`-style container     | Yes                 | Yes, with fresh container / rewrite reconciliation | Planned          |
 

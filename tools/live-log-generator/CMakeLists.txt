@@ -16,6 +16,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     LogRecordRendererFactory.cpp
     renderers/KeyValueTextRenderer.h
     renderers/KeyValueTextRenderer.cpp
+    renderers/StructuredJsonRenderer.h
+    renderers/StructuredJsonRenderer.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator

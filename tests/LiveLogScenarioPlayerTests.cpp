@@ -7,6 +7,7 @@
 
 #include "../tools/live-log-generator/LiveLogScenarioPlayer.h"
 #include "../tools/live-log-generator/renderers/JsonLinesRenderer.h"
+#include "../tools/live-log-generator/renderers/StructuredJsonRenderer.h"
 
 namespace
 {
@@ -97,6 +98,8 @@ private slots:
     void truncateResetsRecordSeparatorState();
     void rotateFinalizesPreviousContainer();
     void invalidPlaybackSpeedIsRejected();
+    void structuredJsonPartialRecordIsIncompleteDuringHold();
+    void structuredJsonRotationProducesValidDocuments();
 };
 
 void LiveLogScenarioPlayerTests::
@@ -836,6 +839,370 @@ void LiveLogScenarioPlayerTests::
     QVERIFY(
         !QFile::exists(
             options.outputPath
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    structuredJsonPartialRecordIsIncompleteDuringHold()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-structured.json"
+                )
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Complete record."
+                    )
+                )
+        }
+        );
+
+    LiveLogRecordStep partialStep;
+
+    partialStep.record =
+        record(
+            1000,
+            QStringLiteral(
+                "Partially written record."
+                )
+            );
+
+    partialStep.write.mode =
+        LiveLogWriteMode::Partial;
+
+    partialStep.write.splitFraction =
+        0.5;
+
+    partialStep.write.holdMs =
+        1000;
+
+    scenario.steps.append(
+        partialStep
+        );
+
+    QByteArray contentDuringHold;
+
+    LiveLogScenarioPlayer player(
+        [&](
+            qint64
+            ) {
+            contentDuringHold =
+                readFile(
+                    outputPath
+                    );
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            StructuredJsonRenderer(),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        !contentDuringHold.isEmpty()
+        );
+
+    /*
+     * During the partial-write hold, the structured
+     * document must intentionally be incomplete.
+     */
+    QJsonParseError holdError;
+
+    const QJsonDocument holdDocument =
+        QJsonDocument::fromJson(
+            contentDuringHold,
+            &holdError
+            );
+
+    Q_UNUSED(holdDocument);
+
+    QVERIFY(
+        holdError.error
+        != QJsonParseError::NoError
+        );
+
+    /*
+     * The first record should already exist in full
+     * before the partial second record.
+     */
+    QVERIFY(
+        contentDuringHold.contains(
+            "Complete record."
+            )
+        );
+
+    /*
+     * The outer document must still be open during
+     * playback rather than prematurely finalized.
+     */
+    QVERIFY(
+        !contentDuringHold.endsWith(
+            "}\n"
+            )
+        );
+
+    const QByteArray finalContent =
+        readFile(
+            outputPath
+            );
+
+    QJsonParseError finalError;
+
+    const QJsonDocument finalDocument =
+        QJsonDocument::fromJson(
+            finalContent,
+            &finalError
+            );
+
+    QCOMPARE(
+        finalError.error,
+        QJsonParseError::NoError
+        );
+
+    QVERIFY(
+        finalDocument.isObject()
+        );
+
+    const QJsonArray records =
+        finalDocument
+            .object()
+            .value(
+                QStringLiteral("data")
+                )
+            .toObject()
+            .value(
+                QStringLiteral("records")
+                )
+            .toArray();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .toObject()
+            .value(
+                QStringLiteral("message")
+                )
+            .toString(),
+        QStringLiteral(
+            "Complete record."
+            )
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .toObject()
+            .value(
+                QStringLiteral("message")
+                )
+            .toString(),
+        QStringLiteral(
+            "Partially written record."
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    structuredJsonRotationProducesValidDocuments()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-structured.json"
+                )
+            );
+
+    const QString rotatedPath =
+        QStringLiteral("%1.1")
+            .arg(
+                outputPath
+                );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Before rotation."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "After rotation."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                StructuredJsonRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        QFile::exists(
+            rotatedPath
+            )
+        );
+
+    QVERIFY(
+        QFile::exists(
+            outputPath
+            )
+        );
+
+    QJsonParseError rotatedError;
+
+    const QJsonDocument rotatedDocument =
+        QJsonDocument::fromJson(
+            readFile(
+                rotatedPath
+                ),
+            &rotatedError
+            );
+
+    QCOMPARE(
+        rotatedError.error,
+        QJsonParseError::NoError
+        );
+
+    QJsonParseError activeError;
+
+    const QJsonDocument activeDocument =
+        QJsonDocument::fromJson(
+            readFile(
+                outputPath
+                ),
+            &activeError
+            );
+
+    QCOMPARE(
+        activeError.error,
+        QJsonParseError::NoError
+        );
+
+    const QJsonArray rotatedRecords =
+        rotatedDocument
+            .object()
+            .value(
+                QStringLiteral("data")
+                )
+            .toObject()
+            .value(
+                QStringLiteral("records")
+                )
+            .toArray();
+
+    const QJsonArray activeRecords =
+        activeDocument
+            .object()
+            .value(
+                QStringLiteral("data")
+                )
+            .toObject()
+            .value(
+                QStringLiteral("records")
+                )
+            .toArray();
+
+    QCOMPARE(
+        rotatedRecords.size(),
+        1
+        );
+
+    QCOMPARE(
+        activeRecords.size(),
+        1
+        );
+
+    QCOMPARE(
+        rotatedRecords.at(0)
+            .toObject()
+            .value(
+                QStringLiteral("message")
+                )
+            .toString(),
+        QStringLiteral(
+            "Before rotation."
+            )
+        );
+
+    QCOMPARE(
+        activeRecords.at(0)
+            .toObject()
+            .value(
+                QStringLiteral("message")
+                )
+            .toString(),
+        QStringLiteral(
+            "After rotation."
             )
         );
 }
