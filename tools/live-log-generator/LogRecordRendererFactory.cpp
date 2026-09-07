@@ -1,7 +1,10 @@
 #include "LogRecordRendererFactory.h"
 
+#include <variant>
+
 #include "renderers/DelimitedTextRenderer.h"
 #include "renderers/JsonLinesRenderer.h"
+#include "renderers/KeyValueTextRenderer.h"
 
 namespace
 {
@@ -25,7 +28,8 @@ LogRecordRendererFactory::supportedFormats()
     return {
         QStringLiteral("jsonl"),
         QStringLiteral("csv"),
-        QStringLiteral("tsv")
+        QStringLiteral("tsv"),
+        QStringLiteral("logfmt")
     };
 }
 
@@ -45,6 +49,65 @@ LogRecordRendererFactory::create(
         result.renderer =
             std::make_unique<
                 JsonLinesRenderer
+                >();
+
+        return result;
+    }
+
+    if (normalized
+        == QStringLiteral("logfmt")) {
+        for (qsizetype stepIndex = 0;
+             stepIndex < scenario.steps.size();
+             ++stepIndex) {
+            const auto *recordStep =
+                std::get_if<LiveLogRecordStep>(
+                    &scenario.steps.at(
+                        stepIndex
+                        )
+                    );
+
+            if (!recordStep) {
+                continue;
+            }
+
+            for (auto iterator =
+                 recordStep
+                     ->record
+                     .attributes
+                     .constBegin();
+                 iterator !=
+                 recordStep
+                     ->record
+                     .attributes
+                     .constEnd();
+                 ++iterator) {
+                if (KeyValueTextRenderer::
+                    isValidAttributeKey(
+                        iterator.key()
+                        )) {
+                    continue;
+                }
+
+                return failure(
+                    QStringLiteral(
+                        "INVALID_LOGFMT_ATTRIBUTE_KEY"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "attribute key '%2', which "
+                        "cannot be rendered as logfmt. "
+                        "Keys must be non-empty and "
+                        "cannot contain whitespace or '='."
+                        )
+                        .arg(stepIndex + 1)
+                        .arg(iterator.key())
+                    );
+            }
+        }
+
+        result.renderer =
+            std::make_unique<
+                KeyValueTextRenderer
                 >();
 
         return result;

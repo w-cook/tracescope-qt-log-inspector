@@ -1794,6 +1794,9 @@ qt_add_executable(
 
     ../tools/live-log-generator/renderers/DelimitedTextRenderer.h
     ../tools/live-log-generator/renderers/DelimitedTextRenderer.cpp
+
+    ../tools/live-log-generator/renderers/KeyValueTextRenderer.h
+    ../tools/live-log-generator/renderers/KeyValueTextRenderer.cpp
 )
 
 target_link_libraries(
@@ -1858,4 +1861,29 @@ target_link_libraries(
 add_test(
     NAME DelimitedTextRendererTests
     COMMAND DelimitedTextRendererTests
+)
+
+qt_add_executable(
+    KeyValueTextRendererTests
+
+    KeyValueTextRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/KeyValueTextRenderer.h
+    ../tools/live-log-generator/renderers/KeyValueTextRenderer.cpp
+)
+
+target_link_libraries(
+    KeyValueTextRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME KeyValueTextRendererTests
+    COMMAND KeyValueTextRendererTests
 )

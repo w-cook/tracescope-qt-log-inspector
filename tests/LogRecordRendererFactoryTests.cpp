@@ -12,6 +12,9 @@ private slots:
     void jsonLinesRendererIsCreated();
     void csvRendererUsesScenarioSchema();
     void tsvRendererUsesScenarioSchema();
+    void logfmtRendererIsCreated();
+    void invalidLogfmtAttributeKeyIsRejected();
+    void logfmtAllowsAttributeKeysSupportedByImporter();
     void unsupportedFormatIsRejected();
 };
 
@@ -24,7 +27,8 @@ void LogRecordRendererFactoryTests::
         QStringList({
             QStringLiteral("jsonl"),
             QStringLiteral("csv"),
-            QStringLiteral("tsv")
+            QStringLiteral("tsv"),
+            QStringLiteral("logfmt")
         })
         );
 }
@@ -113,6 +117,131 @@ void LogRecordRendererFactoryTests::
             "eventCode\tentityId\tmessage\tsite\n"
             )
         );
+}
+
+void LogRecordRendererFactoryTests::
+    logfmtRendererIsCreated()
+{
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("LOGFMT"),
+            LiveLogScenario()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QVERIFY(
+        result.renderer
+            ->initialContent()
+            .isEmpty()
+        );
+
+    LiveLogRecord record;
+
+    record.severity =
+        QStringLiteral("INFO");
+    record.subsystem =
+        QStringLiteral("Gateway");
+    record.eventCode =
+        QStringLiteral("STARTED");
+    record.entityId =
+        QStringLiteral("gateway-17");
+    record.message =
+        QStringLiteral("Started");
+
+    const QByteArray rendered =
+        result.renderer->renderRecord(
+            record,
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-09-06T12:00:00.000Z"
+                    ),
+                Qt::ISODateWithMs
+                )
+            );
+
+    QVERIFY(
+        rendered.startsWith(
+            "timestamp=2026-09-06T12:00:00.000Z "
+            )
+        );
+
+    QVERIFY(
+        rendered.contains(
+            "level=INFO"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidLogfmtAttributeKeyIsRejected()
+{
+    LiveLogScenario scenario;
+
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("request id"),
+        QStringLiteral("abc-123")
+        );
+
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("logfmt"),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_LOGFMT_ATTRIBUTE_KEY"
+            )
+        );
+
+    QVERIFY(
+        result.errorMessage.contains(
+            QStringLiteral("request id")
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    logfmtAllowsAttributeKeysSupportedByImporter()
+{
+    LiveLogScenario scenario;
+
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("request-id"),
+        QStringLiteral("abc-123")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("http.status"),
+        200
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("retry_count"),
+        2
+        );
+
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("logfmt"),
+            scenario
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
 }
 
 void LogRecordRendererFactoryTests::
