@@ -10,6 +10,36 @@
 
 namespace
 {
+class ContainerRenderer final
+    : public ILogRecordRenderer
+{
+public:
+    QByteArray initialContent() const override
+    {
+        return QByteArray("[");
+    }
+
+    QByteArray recordSeparator() const override
+    {
+        return QByteArray(",");
+    }
+
+    QByteArray renderRecord(
+        const LiveLogRecord &record,
+        const QDateTime &
+        ) const override
+    {
+        return QByteArray("\"")
+        + record.message.toUtf8()
+            + QByteArray("\"");
+    }
+
+    QByteArray finalContent() const override
+    {
+        return QByteArray("]");
+    }
+};
+
 LiveLogRecord record(
     qint64 timestampOffsetMs,
     const QString &message
@@ -63,6 +93,9 @@ private slots:
     void truncateRemovesPreviousContent();
     void replaceRemovesPreviousContent();
     void rotatePreservesPreviousFile();
+    void rendererBoundaryContentWrapsRecords();
+    void truncateResetsRecordSeparatorState();
+    void rotateFinalizesPreviousContainer();
     void invalidPlaybackSpeedIsRejected();
 };
 
@@ -544,6 +577,227 @@ void LiveLogScenarioPlayerTests::
     QVERIFY(
         !activeContent.contains(
             "Before rotate."
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    rendererBoundaryContentWrapsRecords()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.json")
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "First record."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "Second record."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+    options.outputPath = outputPath;
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                ContainerRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QCOMPARE(
+        readFile(outputPath),
+        QByteArray(
+            "[\"First record.\","
+            "\"Second record.\"]"
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    truncateResetsRecordSeparatorState()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.json")
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Before truncate."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogTruncateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "After truncate."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+    options.outputPath = outputPath;
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                ContainerRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    const QByteArray content =
+        readFile(outputPath);
+
+    QCOMPARE(
+        content,
+        QByteArray(
+            "[\"After truncate.\"]"
+            )
+        );
+
+    QVERIFY(
+        !content.contains(
+            "Before truncate."
+            )
+        );
+
+    QVERIFY(
+        !content.startsWith(
+            "[,"
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    rotateFinalizesPreviousContainer()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.json")
+            );
+
+    const QString rotatedPath =
+        QStringLiteral("%1.1")
+            .arg(outputPath);
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Before rotate."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "After rotate."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+    options.outputPath = outputPath;
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                ContainerRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        QFile::exists(
+            rotatedPath
+            )
+        );
+
+    QVERIFY(
+        QFile::exists(
+            outputPath
+            )
+        );
+
+    QCOMPARE(
+        readFile(rotatedPath),
+        QByteArray(
+            "[\"Before rotate.\"]"
+            )
+        );
+
+    QCOMPARE(
+        readFile(outputPath),
+        QByteArray(
+            "[\"After rotate.\"]"
             )
         );
 }

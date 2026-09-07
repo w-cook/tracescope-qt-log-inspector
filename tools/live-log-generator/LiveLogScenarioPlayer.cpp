@@ -192,6 +192,7 @@ LiveLogScenarioPlayer::play(
     }
 
     int rotationIndex = 0;
+    qint64 recordsInCurrentFile = 0;
 
     for (const LiveLogScenarioStep &step
          : scenario.steps) {
@@ -221,6 +222,23 @@ LiveLogScenarioPlayer::play(
                     step
                     );
 
+            if (recordsInCurrentFile > 0) {
+                const QByteArray separator =
+                    renderer.recordSeparator();
+
+                if (!separator.isEmpty()) {
+                    result =
+                        writeBytes(
+                            file,
+                            separator
+                            );
+
+                    if (!result.isSuccess()) {
+                        return result;
+                    }
+                }
+            }
+
             const QByteArray rendered =
                 renderer.renderRecord(
                     recordStep.record,
@@ -238,6 +256,8 @@ LiveLogScenarioPlayer::play(
                 if (!result.isSuccess()) {
                     return result;
                 }
+
+                ++recordsInCurrentFile;
 
                 continue;
             }
@@ -298,6 +318,8 @@ LiveLogScenarioPlayer::play(
                 return result;
             }
 
+            ++recordsInCurrentFile;
+
             continue;
         }
 
@@ -329,6 +351,8 @@ LiveLogScenarioPlayer::play(
             if (!result.isSuccess()) {
                 return result;
             }
+
+            recordsInCurrentFile = 0;
 
             continue;
         }
@@ -372,12 +396,29 @@ LiveLogScenarioPlayer::play(
                 return result;
             }
 
+            recordsInCurrentFile = 0;
+
             continue;
         }
 
         if (std::holds_alternative<
                 LiveLogRotateStep
                 >(step)) {
+            const QByteArray finalContent =
+                renderer.finalContent();
+
+            if (!finalContent.isEmpty()) {
+                result =
+                    writeBytes(
+                        file,
+                        finalContent
+                        );
+
+                if (!result.isSuccess()) {
+                    return result;
+                }
+            }
+
             file.close();
 
             ++rotationIndex;
@@ -403,7 +444,9 @@ LiveLogScenarioPlayer::play(
                         "Could not remove existing "
                         "rotated file '%1'."
                         )
-                        .arg(rotatedPath)
+                        .arg(
+                            rotatedPath
+                            )
                     );
             }
 
@@ -438,6 +481,25 @@ LiveLogScenarioPlayer::play(
             if (!result.isSuccess()) {
                 return result;
             }
+
+            recordsInCurrentFile = 0;
+
+            continue;
+        }
+    }
+
+    const QByteArray finalContent =
+        renderer.finalContent();
+
+    if (!finalContent.isEmpty()) {
+        result =
+            writeBytes(
+                file,
+                finalContent
+                );
+
+        if (!result.isSuccess()) {
+            return result;
         }
     }
 

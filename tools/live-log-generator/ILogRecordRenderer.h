@@ -12,8 +12,18 @@ public:
 
     virtual QByteArray initialContent() const = 0;
 
+    virtual QByteArray recordSeparator() const
+    {
+        return {};
+    }
+
     virtual QByteArray renderRecord(
         const LiveLogRecord &record,
         const QDateTime &scenarioStart
         ) const = 0;
+
+    virtual QByteArray finalContent() const
+    {
+        return {};
+    }
 };
