@@ -17,6 +17,7 @@ private slots:
     void logfmtAllowsAttributeKeysSupportedByImporter();
     void structuredJsonRendererIsCreated();
     void structuredXmlRendererIsCreated();
+    void windowsEventXmlRendererIsCreated();
     void unsupportedFormatIsRejected();
 };
 
@@ -32,7 +33,8 @@ void LogRecordRendererFactoryTests::
             QStringLiteral("tsv"),
             QStringLiteral("logfmt"),
             QStringLiteral("structured-json"),
-            QStringLiteral("structured-xml")
+            QStringLiteral("structured-xml"),
+            QStringLiteral("windows-event-xml")
         })
         );
 }
@@ -326,6 +328,44 @@ void LogRecordRendererFactoryTests::
         QByteArray(
             "    </events>\n"
             "</session>\n"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    windowsEventXmlRendererIsCreated()
+{
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "WINDOWS-EVENT-XML"
+                ),
+            LiveLogScenario()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QCOMPARE(
+        result.renderer
+            ->initialContent(),
+        QByteArray(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<Events>\n"
+            )
+        );
+
+    QVERIFY(
+        result.renderer
+            ->recordSeparator()
+            .isEmpty()
+        );
+
+    QCOMPARE(
+        result.renderer
+            ->finalContent(),
+        QByteArray(
+            "</Events>\n"
             )
         );
 }

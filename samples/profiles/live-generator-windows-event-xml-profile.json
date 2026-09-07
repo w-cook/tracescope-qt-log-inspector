@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "name": "Live Generator Windows Event XML",
+  "importerId": "xml",
+  "recordPath": "Events.Event",
+  "canonicalFields": {
+    "timestamp": "System.TimeCreated.@SystemTime",
+    "severity": "System.Level",
+    "subsystem": "System.Provider.@Name",
+    "eventCode": "EventData.NamedData.EventCode",
+    "entityId": "EventData.NamedData.DeviceId",
+    "message": "RenderingInfo.Message"
+  },
+  "customFields": [],
+  "severityAliases": {
+    "1": "CRITICAL",
+    "2": "ERROR",
+    "3": "WARN",
+    "4": "INFO",
+    "5": "TRACE"
+  },
+  "timestampRules": [
+    {
+      "type": "iso8601"
+    }
+  ],
+  "preserveUnmappedFields": true
+}

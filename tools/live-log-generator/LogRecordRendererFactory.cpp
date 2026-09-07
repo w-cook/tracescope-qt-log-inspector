@@ -7,6 +7,7 @@
 #include "renderers/KeyValueTextRenderer.h"
 #include "renderers/StructuredJsonRenderer.h"
 #include "renderers/StructuredXmlRenderer.h"
+#include "renderers/WindowsEventXmlRenderer.h"
 
 namespace
 {
@@ -33,7 +34,8 @@ LogRecordRendererFactory::supportedFormats()
         QStringLiteral("tsv"),
         QStringLiteral("logfmt"),
         QStringLiteral("structured-json"),
-        QStringLiteral("structured-xml")
+        QStringLiteral("structured-xml"),
+        QStringLiteral("windows-event-xml")
     };
 }
 
@@ -132,6 +134,16 @@ LogRecordRendererFactory::create(
         result.renderer =
             std::make_unique<
                 StructuredXmlRenderer
+                >();
+
+        return result;
+    }
+
+    if (normalized
+        == QStringLiteral("windows-event-xml")) {
+        result.renderer =
+            std::make_unique<
+                WindowsEventXmlRenderer
                 >();
 
         return result;

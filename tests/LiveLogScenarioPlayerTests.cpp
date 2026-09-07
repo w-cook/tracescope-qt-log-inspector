@@ -10,6 +10,7 @@
 #include "../tools/live-log-generator/renderers/JsonLinesRenderer.h"
 #include "../tools/live-log-generator/renderers/StructuredJsonRenderer.h"
 #include "../tools/live-log-generator/renderers/StructuredXmlRenderer.h"
+#include "../tools/live-log-generator/renderers/WindowsEventXmlRenderer.h"
 
 namespace
 {
@@ -104,6 +105,8 @@ private slots:
     void structuredJsonRotationProducesValidDocuments();
     void structuredXmlPartialRecordIsIncompleteDuringHold();
     void structuredXmlRotationProducesValidDocuments();
+    void windowsEventXmlPartialRecordIsIncompleteDuringHold();
+    void windowsEventXmlRotationProducesValidDocuments();
 };
 
 void LiveLogScenarioPlayerTests::
@@ -1504,6 +1507,325 @@ void LiveLogScenarioPlayerTests::
         if (activeReader.isStartElement()
             && activeReader.name()
                    == QStringLiteral("message")) {
+            activeMessages.append(
+                activeReader.readElementText()
+                );
+        }
+    }
+
+    QVERIFY(
+        !activeReader.hasError()
+        );
+
+    QCOMPARE(
+        rotatedMessages,
+        QStringList({
+            QStringLiteral(
+                "Before rotation."
+                )
+        })
+        );
+
+    QCOMPARE(
+        activeMessages,
+        QStringList({
+            QStringLiteral(
+                "After rotation."
+                )
+        })
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    windowsEventXmlPartialRecordIsIncompleteDuringHold()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-windows-events.xml"
+                )
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Complete event."
+                    )
+                )
+        }
+        );
+
+    LiveLogRecordStep partialStep;
+
+    partialStep.record =
+        record(
+            1000,
+            QStringLiteral(
+                "Partially written event."
+                )
+            );
+
+    partialStep.write.mode =
+        LiveLogWriteMode::Partial;
+
+    partialStep.write.splitFraction =
+        0.5;
+
+    partialStep.write.holdMs =
+        1000;
+
+    scenario.steps.append(
+        partialStep
+        );
+
+    QByteArray contentDuringHold;
+
+    LiveLogScenarioPlayer player(
+        [&](qint64) {
+            contentDuringHold =
+                readFile(
+                    outputPath
+                    );
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            WindowsEventXmlRenderer(),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        !contentDuringHold.isEmpty()
+        );
+
+    QVERIFY(
+        contentDuringHold.contains(
+            "Complete event."
+            )
+        );
+
+    /*
+     * Both the partial Event and the outer Events
+     * container are intentionally unfinished here.
+     */
+    QXmlStreamReader holdReader(
+        contentDuringHold
+        );
+
+    while (!holdReader.atEnd()) {
+        holdReader.readNext();
+    }
+
+    QVERIFY(
+        holdReader.hasError()
+        );
+
+    const QByteArray finalContent =
+        readFile(
+            outputPath
+            );
+
+    QXmlStreamReader finalReader(
+        finalContent
+        );
+
+    int eventCount = 0;
+    QStringList messages;
+
+    while (!finalReader.atEnd()) {
+        finalReader.readNext();
+
+        if (!finalReader.isStartElement()) {
+            continue;
+        }
+
+        if (finalReader.name()
+            == QStringLiteral("Event")) {
+            ++eventCount;
+        }
+
+        if (finalReader.name()
+            == QStringLiteral("Message")) {
+            messages.append(
+                finalReader.readElementText()
+                );
+        }
+    }
+
+    QVERIFY(
+        !finalReader.hasError()
+        );
+
+    QCOMPARE(
+        eventCount,
+        2
+        );
+
+    QCOMPARE(
+        messages,
+        QStringList({
+            QStringLiteral(
+                "Complete event."
+                ),
+            QStringLiteral(
+                "Partially written event."
+                )
+        })
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    windowsEventXmlRotationProducesValidDocuments()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-windows-events.xml"
+                )
+            );
+
+    const QString rotatedPath =
+        QStringLiteral("%1.1")
+            .arg(
+                outputPath
+                );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Before rotation."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "After rotation."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                WindowsEventXmlRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        QFile::exists(
+            rotatedPath
+            )
+        );
+
+    QVERIFY(
+        QFile::exists(
+            outputPath
+            )
+        );
+
+    const QByteArray rotatedContent =
+        readFile(
+            rotatedPath
+            );
+
+    const QByteArray activeContent =
+        readFile(
+            outputPath
+            );
+
+    QXmlStreamReader rotatedReader(
+        rotatedContent
+        );
+
+    QStringList rotatedMessages;
+
+    while (!rotatedReader.atEnd()) {
+        rotatedReader.readNext();
+
+        if (rotatedReader.isStartElement()
+            && rotatedReader.name()
+                   == QStringLiteral("Message")) {
+            rotatedMessages.append(
+                rotatedReader.readElementText()
+                );
+        }
+    }
+
+    QVERIFY(
+        !rotatedReader.hasError()
+        );
+
+    QXmlStreamReader activeReader(
+        activeContent
+        );
+
+    QStringList activeMessages;
+
+    while (!activeReader.atEnd()) {
+        activeReader.readNext();
+
+        if (activeReader.isStartElement()
+            && activeReader.name()
+                   == QStringLiteral("Message")) {
             activeMessages.append(
                 activeReader.readElementText()
                 );

@@ -1766,6 +1766,9 @@ qt_add_executable(
 
     ../tools/live-log-generator/renderers/StructuredXmlRenderer.h
     ../tools/live-log-generator/renderers/StructuredXmlRenderer.cpp
+
+    ../tools/live-log-generator/renderers/WindowsEventXmlRenderer.h
+    ../tools/live-log-generator/renderers/WindowsEventXmlRenderer.cpp
 )
 
 target_link_libraries(
@@ -1808,6 +1811,9 @@ qt_add_executable(
 
     ../tools/live-log-generator/renderers/StructuredXmlRenderer.h
     ../tools/live-log-generator/renderers/StructuredXmlRenderer.cpp
+
+    ../tools/live-log-generator/renderers/WindowsEventXmlRenderer.h
+    ../tools/live-log-generator/renderers/WindowsEventXmlRenderer.cpp
 )
 
 target_link_libraries(
@@ -1945,4 +1951,28 @@ target_link_libraries(
 add_test(
     NAME StructuredXmlRendererTests
     COMMAND StructuredXmlRendererTests
+)
+
+qt_add_executable(
+    WindowsEventXmlRendererTests
+
+    WindowsEventXmlRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/WindowsEventXmlRenderer.h
+    ../tools/live-log-generator/renderers/WindowsEventXmlRenderer.cpp
+)
+
+target_link_libraries(
+    WindowsEventXmlRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME WindowsEventXmlRendererTests
+    COMMAND WindowsEventXmlRendererTests
 )

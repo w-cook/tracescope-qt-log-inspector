@@ -20,6 +20,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     renderers/StructuredJsonRenderer.cpp
     renderers/StructuredXmlRenderer.h
     renderers/StructuredXmlRenderer.cpp
+    renderers/WindowsEventXmlRenderer.h
+    renderers/WindowsEventXmlRenderer.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator
