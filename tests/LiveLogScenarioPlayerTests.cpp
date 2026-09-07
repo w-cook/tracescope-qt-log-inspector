@@ -4,10 +4,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QXmlStreamReader>
 
 #include "../tools/live-log-generator/LiveLogScenarioPlayer.h"
 #include "../tools/live-log-generator/renderers/JsonLinesRenderer.h"
 #include "../tools/live-log-generator/renderers/StructuredJsonRenderer.h"
+#include "../tools/live-log-generator/renderers/StructuredXmlRenderer.h"
 
 namespace
 {
@@ -100,6 +102,8 @@ private slots:
     void invalidPlaybackSpeedIsRejected();
     void structuredJsonPartialRecordIsIncompleteDuringHold();
     void structuredJsonRotationProducesValidDocuments();
+    void structuredXmlPartialRecordIsIncompleteDuringHold();
+    void structuredXmlRotationProducesValidDocuments();
 };
 
 void LiveLogScenarioPlayerTests::
@@ -1204,6 +1208,328 @@ void LiveLogScenarioPlayerTests::
         QStringLiteral(
             "After rotation."
             )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    structuredXmlPartialRecordIsIncompleteDuringHold()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-structured.xml"
+                )
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Complete record."
+                    )
+                )
+        }
+        );
+
+    LiveLogRecordStep partialStep;
+
+    partialStep.record =
+        record(
+            1000,
+            QStringLiteral(
+                "Partially written record."
+                )
+            );
+
+    partialStep.write.mode =
+        LiveLogWriteMode::Partial;
+
+    partialStep.write.splitFraction =
+        0.5;
+
+    partialStep.write.holdMs =
+        1000;
+
+    scenario.steps.append(
+        partialStep
+        );
+
+    QByteArray contentDuringHold;
+
+    LiveLogScenarioPlayer player(
+        [&](
+            qint64
+            ) {
+            contentDuringHold =
+                readFile(
+                    outputPath
+                    );
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            StructuredXmlRenderer(),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        !contentDuringHold.isEmpty()
+        );
+
+    QVERIFY(
+        contentDuringHold.contains(
+            "Complete record."
+            )
+        );
+
+    /*
+     * During the hold the second record and outer
+     * container are intentionally incomplete.
+     */
+    QXmlStreamReader holdReader(
+        contentDuringHold
+        );
+
+    while (!holdReader.atEnd()) {
+        holdReader.readNext();
+    }
+
+    QVERIFY(
+        holdReader.hasError()
+        );
+
+    const QByteArray finalContent =
+        readFile(
+            outputPath
+            );
+
+    QXmlStreamReader finalReader(
+        finalContent
+        );
+
+    int eventCount = 0;
+
+    QStringList messages;
+
+    while (!finalReader.atEnd()) {
+        finalReader.readNext();
+
+        if (!finalReader.isStartElement()) {
+            continue;
+        }
+
+        if (finalReader.name()
+            == QStringLiteral("event")) {
+            ++eventCount;
+        }
+
+        if (finalReader.name()
+            == QStringLiteral("message")) {
+            messages.append(
+                finalReader.readElementText()
+                );
+        }
+    }
+
+    QVERIFY(
+        !finalReader.hasError()
+        );
+
+    QCOMPARE(
+        eventCount,
+        2
+        );
+
+    QCOMPARE(
+        messages,
+        QStringList({
+            QStringLiteral(
+                "Complete record."
+                ),
+            QStringLiteral(
+                "Partially written record."
+                )
+        })
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    structuredXmlRotationProducesValidDocuments()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral(
+                "live-structured.xml"
+                )
+            );
+
+    const QString rotatedPath =
+        QStringLiteral("%1.1")
+            .arg(
+                outputPath
+                );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Before rotation."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "After rotation."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-07T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                StructuredXmlRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(
+        QFile::exists(
+            rotatedPath
+            )
+        );
+
+    QVERIFY(
+        QFile::exists(
+            outputPath
+            )
+        );
+
+    const QByteArray rotatedContent =
+        readFile(
+            rotatedPath
+            );
+
+    const QByteArray activeContent =
+        readFile(
+            outputPath
+            );
+
+    QXmlStreamReader rotatedReader(
+        rotatedContent
+        );
+
+    QStringList rotatedMessages;
+
+    while (!rotatedReader.atEnd()) {
+        rotatedReader.readNext();
+
+        if (rotatedReader.isStartElement()
+            && rotatedReader.name()
+                   == QStringLiteral("message")) {
+            rotatedMessages.append(
+                rotatedReader.readElementText()
+                );
+        }
+    }
+
+    QVERIFY(
+        !rotatedReader.hasError()
+        );
+
+    QXmlStreamReader activeReader(
+        activeContent
+        );
+
+    QStringList activeMessages;
+
+    while (!activeReader.atEnd()) {
+        activeReader.readNext();
+
+        if (activeReader.isStartElement()
+            && activeReader.name()
+                   == QStringLiteral("message")) {
+            activeMessages.append(
+                activeReader.readElementText()
+                );
+        }
+    }
+
+    QVERIFY(
+        !activeReader.hasError()
+        );
+
+    QCOMPARE(
+        rotatedMessages,
+        QStringList({
+            QStringLiteral(
+                "Before rotation."
+                )
+        })
+        );
+
+    QCOMPARE(
+        activeMessages,
+        QStringList({
+            QStringLiteral(
+                "After rotation."
+                )
+        })
         );
 }
 

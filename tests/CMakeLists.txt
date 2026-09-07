@@ -1763,6 +1763,9 @@ qt_add_executable(
 
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.h
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.cpp
+
+    ../tools/live-log-generator/renderers/StructuredXmlRenderer.h
+    ../tools/live-log-generator/renderers/StructuredXmlRenderer.cpp
 )
 
 target_link_libraries(
@@ -1802,6 +1805,9 @@ qt_add_executable(
 
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.h
     ../tools/live-log-generator/renderers/StructuredJsonRenderer.cpp
+
+    ../tools/live-log-generator/renderers/StructuredXmlRenderer.h
+    ../tools/live-log-generator/renderers/StructuredXmlRenderer.cpp
 )
 
 target_link_libraries(
@@ -1915,4 +1921,28 @@ target_link_libraries(
 add_test(
     NAME StructuredJsonRendererTests
     COMMAND StructuredJsonRendererTests
+)
+
+qt_add_executable(
+    StructuredXmlRendererTests
+
+    StructuredXmlRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/StructuredXmlRenderer.h
+    ../tools/live-log-generator/renderers/StructuredXmlRenderer.cpp
+)
+
+target_link_libraries(
+    StructuredXmlRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME StructuredXmlRendererTests
+    COMMAND StructuredXmlRendererTests
 )
