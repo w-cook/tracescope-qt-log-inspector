@@ -229,6 +229,60 @@ This represents common file-rotation behavior while allowing TraceScope to conti
 
 No dedicated `burst` step is required. A burst is represented by several deterministic `record` steps separated by short waits.
 
+## Scenario Library
+
+The repository includes a small permanent library of deterministic scenarios under `samples/live/`.
+
+These scenarios are intended to serve two related purposes:
+
+* provide repeatable manual-test inputs for Phase 15 live-file-following behavior
+* provide realistic, presentation-quality data for screenshots and demonstrations of live following, filtering, analytics, navigation, and comparison behavior
+
+Scenario content should therefore remain technically deterministic without looking like artificial test fixtures. Service names, event codes, entities, messages, and attributes should form a coherent fictional production story that a TraceScope user could reasonably imagine investigating.
+
+The scenario library is intentionally small. Each scenario has a distinct role rather than attempting to make every scenario exercise every file lifecycle behavior or every output format.
+
+| Scenario | Primary story and demonstration role | Lifecycle emphasis | Intended format families |
+| -------- | ------------------------------------ | ------------------ | ------------------------ |
+| `field-gateway-live-scenario.json` | A production field gateway moves from healthy telemetry delivery into rising upstream latency, retries, timeout pressure, queue growth, and recovery. Useful for live-follow, filtering, severity/event-code analysis, timeline activity, and investigation screenshots. | ordinary growth, waits, partial write, burst-like degradation, in-place truncation, recovery | JSON Lines, CSV, TSV, key-value / logfmt, generic regex text, Syslog RFC 5424, Syslog RFC 3164, Structured JSON, Structured XML, Windows Event XML |
+| `web-access-live-scenario.json` | Representative production web traffic including health checks, page and asset requests, authenticated API activity, query traffic, 401/403/404 responses, a brief 503 failure burst, and recovery. Useful for access-log live-follow demonstrations. | ordinary growth, waits, partial write, short request/error bursts | IIS W3C, Apache Common, Apache Combined, Nginx Combined |
+| `checkout-api-healthy-baseline-live-scenario.json` | Healthy checkout processing with inventory reservation, payment authorization, and order creation. Intended primarily as a clean baseline for live-comparison demonstrations. | ordinary growth and realistic service-to-service timing | application-oriented and operational formats |
+| `checkout-api-payment-regression-live-scenario.json` | A related checkout session in which a release is followed by elevated payment-provider latency, retry behavior, timeout, checkout failure, circuit-breaker activity, and eventual recovery. Intended as the regression side of live-comparison screenshots and demonstrations. | ordinary growth, warning/error burst, partial write, recovery | application-oriented and operational formats |
+| `warehouse-sync-deployment-rotation-live-scenario.json` | A warehouse synchronization worker is replaced during a rolling deployment, processes accumulated backlog in a catch-up burst, and continues under sustained load before returning to steady state. | same-path replacement, catch-up burst, partial write, multiple rotations, recovery | application-oriented and operational formats |
+
+### Scenario Roles
+
+The five scenarios are complementary.
+
+`field-gateway-live-scenario.json` remains the primary truncation scenario. Its in-place truncation deliberately discards earlier active-file content before the gateway continues writing recovery records to the same path.
+
+`warehouse-sync-deployment-rotation-live-scenario.json` is the primary replacement and rotation scenario. Records written before the replacement are intentionally discarded. After replacement, the scenario produces a catch-up burst and then rotates the active file twice, producing sequential `.1` and `.2` artifacts before continuing in the active file.
+
+The two checkout scenarios form an intentional baseline/regression pair. They describe related versions of the same fictional production system so that a comparison view can show a meaningful contrast rather than two unrelated synthetic sessions.
+
+`web-access-live-scenario.json` is intentionally access-log specific. It uses neutral HTTP attributes that can be rendered naturally into IIS W3C, Apache Common, Apache Combined, and Nginx Combined output without forcing application-domain severity or subsystem concepts into formats that do not naturally contain them.
+
+### Scenario Library Coverage
+
+Taken together, the scenario library exercises:
+
+* ordinary append growth
+* deterministic waits and semantic timing
+* short record bursts
+* partial physical writes
+* in-place truncation
+* same-path replacement
+* single and multiple rotation
+* recovery after degraded behavior
+* healthy-versus-regressed comparison material
+* realistic warning/error distributions
+* multiple subsystems, event codes, and entities
+* HTTP success, client-error, authorization-error, and server-error traffic
+
+The library is not a load-testing corpus and is not intended to generate large random datasets. Scenarios should remain readable enough that a developer can inspect the JSON and understand the complete incident story.
+
+Renderer-specific tests remain responsible for validating serialization details. The scenario library provides realistic cross-format and lifecycle inputs for manual verification and demonstrations.
+
 ## Runtime Options
 
 The command-line interface supports:
@@ -447,7 +501,7 @@ These values must not alter the semantic incident story.
 
 ## Phase 15 Verification Role
 
-The generator should eventually support manual verification of:
+The generator and scenario library are designed to support manual verification of:
 
 * appended-record following for every supported line-oriented source family
 * structured JSON record-array following
@@ -507,6 +561,8 @@ Across those formats, the generator must also exercise the lifecycle behaviors r
 * rotation
 * header regeneration where required
 * structured-container initialization, record separation, and normal finalization where required
+
+The implemented renderer set and five-scenario library provide the planned source-family and lifecycle inputs for this boundary. Remaining generator-side completion work should focus on making those scenarios easy to launch and on completing the documented manual verification pass rather than expanding the scenario language or adding speculative formats.
 
 TraceScope live-follow implementation should begin only after this generator-side coverage is complete and manually verifiable.
 

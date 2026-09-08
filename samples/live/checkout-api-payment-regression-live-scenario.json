@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "name": "Checkout API Payment Latency Regression",
+  "description": "Production checkout traffic after a release introduces elevated payment-provider latency, retries, timeouts, and a short error burst before recovery.",
+  "steps": [
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 0,
+        "severity": "INFO",
+        "subsystem": "CheckoutApi",
+        "eventCode": "SERVICE_READY",
+        "entityId": "checkout-api-03",
+        "message": "Checkout API instance is ready to accept traffic.",
+        "attributes": {
+          "environment": "production",
+          "region": "us-east",
+          "release": "2026.09.08.2",
+          "instance": "checkout-api-03"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1800
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1800,
+        "severity": "INFO",
+        "subsystem": "Checkout",
+        "eventCode": "CHECKOUT_STARTED",
+        "entityId": "checkout-84207",
+        "message": "Checkout request accepted for processing.",
+        "attributes": {
+          "customerId": "cust-18427",
+          "cartItems": 3,
+          "currency": "USD",
+          "orderTotal": 128.47,
+          "requestId": "req-f835a1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 430
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 2230,
+        "severity": "INFO",
+        "subsystem": "Inventory",
+        "eventCode": "INVENTORY_RESERVED",
+        "entityId": "checkout-84207",
+        "message": "Inventory reservation completed.",
+        "attributes": {
+          "itemsReserved": 3,
+          "reservationMs": 36,
+          "warehouse": "east-2",
+          "requestId": "req-f835a1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 850
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3080,
+        "severity": "WARN",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_PROVIDER_SLOW",
+        "entityId": "checkout-84207",
+        "message": "Payment provider response exceeded the expected latency threshold.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "latencyMs": 1846,
+          "thresholdMs": 750,
+          "attempt": 1,
+          "requestId": "req-f835a1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 300
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3380,
+        "severity": "WARN",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_RETRY",
+        "entityId": "checkout-84207",
+        "message": "Payment authorization is being retried after a transient provider failure.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "attempt": 2,
+          "backoffMs": 250,
+          "requestId": "req-f835a1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 250
+    },
+    {
+      "type": "record",
+      "write": {
+        "mode": "partial",
+        "splitFraction": 0.58,
+        "holdMs": 900
+      },
+      "record": {
+        "timestampOffsetMs": 3630,
+        "severity": "ERROR",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_TIMEOUT",
+        "entityId": "checkout-84207",
+        "message": "Payment authorization timed out after the retry attempt.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "timeoutMs": 3000,
+          "attempt": 2,
+          "requestId": "req-f835a1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 180
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3810,
+        "severity": "ERROR",
+        "subsystem": "Checkout",
+        "eventCode": "CHECKOUT_FAILED",
+        "entityId": "checkout-84207",
+        "message": "Checkout failed because payment authorization could not be completed.",
+        "attributes": {
+          "failureStage": "payment",
+          "requestId": "req-f835a1"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 120
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3930,
+        "severity": "WARN",
+        "subsystem": "Payments",
+        "eventCode": "CIRCUIT_BREAKER_OPEN",
+        "entityId": "NorthstarPay",
+        "message": "Payment provider circuit breaker opened after consecutive failures.",
+        "attributes": {
+          "failureCount": 5,
+          "cooldownMs": 5000,
+          "provider": "NorthstarPay"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 5070
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 9000,
+        "severity": "INFO",
+        "subsystem": "Payments",
+        "eventCode": "CIRCUIT_BREAKER_HALF_OPEN",
+        "entityId": "NorthstarPay",
+        "message": "Payment provider circuit breaker entered half-open state for a probe request.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "cooldownMs": 5000
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 420
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 9420,
+        "severity": "INFO",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_PROVIDER_RECOVERED",
+        "entityId": "NorthstarPay",
+        "message": "Payment provider latency returned to the expected range.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "latencyMs": 231,
+          "circuitState": "closed"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1480
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 10900,
+        "severity": "INFO",
+        "subsystem": "Checkout",
+        "eventCode": "CHECKOUT_STARTED",
+        "entityId": "checkout-84208",
+        "message": "Checkout request accepted for processing.",
+        "attributes": {
+          "customerId": "cust-21905",
+          "cartItems": 1,
+          "currency": "USD",
+          "orderTotal": 42.0,
+          "requestId": "req-42ed19"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 640
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 11540,
+        "severity": "INFO",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_AUTHORIZED",
+        "entityId": "checkout-84208",
+        "message": "Payment authorization completed successfully.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "authorizationMs": 219,
+          "amount": 42.0,
+          "currency": "USD",
+          "requestId": "req-42ed19"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 290
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 11830,
+        "severity": "INFO",
+        "subsystem": "Orders",
+        "eventCode": "ORDER_CREATED",
+        "entityId": "order-581258",
+        "message": "Order was created from the recovered checkout flow.",
+        "attributes": {
+          "checkoutId": "checkout-84208",
+          "orderTotal": 42.0,
+          "requestId": "req-42ed19"
+        }
+      }
+    }
+  ]
+}

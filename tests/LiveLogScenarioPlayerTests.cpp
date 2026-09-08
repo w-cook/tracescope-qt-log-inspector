@@ -98,6 +98,7 @@ private slots:
     void truncateRemovesPreviousContent();
     void replaceRemovesPreviousContent();
     void rotatePreservesPreviousFile();
+    void multipleRotationsPreserveSequentialFiles();
     void rendererBoundaryContentWrapsRecords();
     void truncateResetsRecordSeparatorState();
     void rotateFinalizesPreviousContainer();
@@ -590,6 +591,151 @@ void LiveLogScenarioPlayerTests::
     QVERIFY(
         !activeContent.contains(
             "Before rotate."
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    multipleRotationsPreserveSequentialFiles()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.jsonl")
+            );
+
+    const QString firstRotatedPath =
+        QStringLiteral("%1.1")
+            .arg(outputPath);
+
+    const QString secondRotatedPath =
+        QStringLiteral("%1.2")
+            .arg(outputPath);
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "First file record."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                1000,
+                QStringLiteral(
+                    "Second file record."
+                    )
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRotateStep{}
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                2000,
+                QStringLiteral(
+                    "Active file record."
+                    )
+                )
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+    options.outputPath = outputPath;
+
+    const LiveLogScenarioPlayResult result =
+        LiveLogScenarioPlayer(
+            [](qint64) {}
+            )
+            .play(
+                scenario,
+                JsonLinesRenderer(),
+                options
+                );
+
+    QVERIFY(result.isSuccess());
+
+    QVERIFY(QFile::exists(firstRotatedPath));
+    QVERIFY(QFile::exists(secondRotatedPath));
+    QVERIFY(QFile::exists(outputPath));
+
+    const QByteArray firstRotatedContent =
+        readFile(firstRotatedPath);
+
+    const QByteArray secondRotatedContent =
+        readFile(secondRotatedPath);
+
+    const QByteArray activeContent =
+        readFile(outputPath);
+
+    QVERIFY(
+        firstRotatedContent.contains(
+            "First file record."
+            )
+        );
+
+    QVERIFY(
+        !firstRotatedContent.contains(
+            "Second file record."
+            )
+        );
+
+    QVERIFY(
+        !firstRotatedContent.contains(
+            "Active file record."
+            )
+        );
+
+    QVERIFY(
+        secondRotatedContent.contains(
+            "Second file record."
+            )
+        );
+
+    QVERIFY(
+        !secondRotatedContent.contains(
+            "First file record."
+            )
+        );
+
+    QVERIFY(
+        !secondRotatedContent.contains(
+            "Active file record."
+            )
+        );
+
+    QVERIFY(
+        activeContent.contains(
+            "Active file record."
+            )
+        );
+
+    QVERIFY(
+        !activeContent.contains(
+            "First file record."
+            )
+        );
+
+    QVERIFY(
+        !activeContent.contains(
+            "Second file record."
             )
         );
 }

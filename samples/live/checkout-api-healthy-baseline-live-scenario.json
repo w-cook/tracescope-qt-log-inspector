@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "name": "Checkout API Healthy Baseline",
+  "description": "Representative healthy production traffic for a checkout API, intended as a baseline for live-follow and live-comparison demonstrations.",
+  "steps": [
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 0,
+        "severity": "INFO",
+        "subsystem": "CheckoutApi",
+        "eventCode": "SERVICE_READY",
+        "entityId": "checkout-api-03",
+        "message": "Checkout API instance is ready to accept traffic.",
+        "attributes": {
+          "environment": "production",
+          "region": "us-east",
+          "release": "2026.09.08.1",
+          "instance": "checkout-api-03"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1800
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1800,
+        "severity": "INFO",
+        "subsystem": "Checkout",
+        "eventCode": "CHECKOUT_STARTED",
+        "entityId": "checkout-84192",
+        "message": "Checkout request accepted for processing.",
+        "attributes": {
+          "customerId": "cust-18427",
+          "cartItems": 3,
+          "currency": "USD",
+          "orderTotal": 128.47,
+          "requestId": "req-7c91e2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 450
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 2250,
+        "severity": "INFO",
+        "subsystem": "Inventory",
+        "eventCode": "INVENTORY_RESERVED",
+        "entityId": "checkout-84192",
+        "message": "Inventory reservation completed.",
+        "attributes": {
+          "itemsReserved": 3,
+          "reservationMs": 34,
+          "warehouse": "east-2",
+          "requestId": "req-7c91e2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 350
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 2600,
+        "severity": "INFO",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_AUTHORIZED",
+        "entityId": "checkout-84192",
+        "message": "Payment authorization completed successfully.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "authorizationMs": 182,
+          "amount": 128.47,
+          "currency": "USD",
+          "requestId": "req-7c91e2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 300
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 2900,
+        "severity": "INFO",
+        "subsystem": "Orders",
+        "eventCode": "ORDER_CREATED",
+        "entityId": "order-581241",
+        "message": "Order was created from the completed checkout.",
+        "attributes": {
+          "checkoutId": "checkout-84192",
+          "orderTotal": 128.47,
+          "requestId": "req-7c91e2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 4100
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7000,
+        "severity": "INFO",
+        "subsystem": "Checkout",
+        "eventCode": "CHECKOUT_STARTED",
+        "entityId": "checkout-84193",
+        "message": "Checkout request accepted for processing.",
+        "attributes": {
+          "customerId": "cust-21905",
+          "cartItems": 1,
+          "currency": "USD",
+          "orderTotal": 42.0,
+          "requestId": "req-b14a73"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 320
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7320,
+        "severity": "INFO",
+        "subsystem": "Inventory",
+        "eventCode": "INVENTORY_RESERVED",
+        "entityId": "checkout-84193",
+        "message": "Inventory reservation completed.",
+        "attributes": {
+          "itemsReserved": 1,
+          "reservationMs": 29,
+          "warehouse": "east-2",
+          "requestId": "req-b14a73"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 360
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7680,
+        "severity": "INFO",
+        "subsystem": "Payments",
+        "eventCode": "PAYMENT_AUTHORIZED",
+        "entityId": "checkout-84193",
+        "message": "Payment authorization completed successfully.",
+        "attributes": {
+          "provider": "NorthstarPay",
+          "authorizationMs": 164,
+          "amount": 42.0,
+          "currency": "USD",
+          "requestId": "req-b14a73"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 260
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7940,
+        "severity": "INFO",
+        "subsystem": "Orders",
+        "eventCode": "ORDER_CREATED",
+        "entityId": "order-581242",
+        "message": "Order was created from the completed checkout.",
+        "attributes": {
+          "checkoutId": "checkout-84193",
+          "orderTotal": 42.0,
+          "requestId": "req-b14a73"
+        }
+      }
+    }
+  ]
+}

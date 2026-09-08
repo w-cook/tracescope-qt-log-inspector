@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "Field Gateway Live Degradation",
-  "description": "Deterministic gateway degradation, timeout, truncation, and recovery scenario for Phase 15 live-follow testing.",
+  "description": "A production field gateway experiences rising upstream latency, retries, timeout pressure, queue growth, an in-place log truncation, and a visible recovery to normal operation.",
   "steps": [
     {
       "type": "record",
@@ -20,12 +20,12 @@
     },
     {
       "type": "wait",
-      "durationMs": 1500
+      "durationMs": 1200
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 1500,
+        "timestampOffsetMs": 1200,
         "severity": "INFO",
         "subsystem": "Transport",
         "eventCode": "UPSTREAM_CONNECTED",
@@ -33,23 +33,103 @@
         "message": "Connected to upstream collector.",
         "attributes": {
           "endpoint": "collector-a",
-          "latencyMs": 42
+          "latencyMs": 41
         }
       }
     },
     {
       "type": "wait",
-      "durationMs": 2000
+      "durationMs": 1300
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 3500,
+        "timestampOffsetMs": 2500,
+        "severity": "INFO",
+        "subsystem": "Telemetry",
+        "eventCode": "BATCH_SENT",
+        "entityId": "gateway-17",
+        "message": "Telemetry batch sent successfully.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "queuedRecords": 18,
+          "latencyMs": 48
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1800
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 4300,
+        "severity": "INFO",
+        "subsystem": "Telemetry",
+        "eventCode": "BATCH_SENT",
+        "entityId": "gateway-17",
+        "message": "Telemetry batch sent successfully.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "queuedRecords": 24,
+          "latencyMs": 63
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1400
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 5700,
         "severity": "WARN",
         "subsystem": "Transport",
         "eventCode": "UPSTREAM_LATENCY",
         "entityId": "gateway-17",
         "message": "Upstream response latency exceeded expected range.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "latencyMs": 912,
+          "retrying": false
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 900
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 6600,
+        "severity": "INFO",
+        "subsystem": "Telemetry",
+        "eventCode": "BATCH_DELAYED",
+        "entityId": "gateway-17",
+        "message": "Telemetry batch remained queued while the upstream collector responded slowly.",
+        "attributes": {
+          "queuedRecords": 146,
+          "capacity": 1500,
+          "endpoint": "collector-a"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 800
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7400,
+        "severity": "WARN",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_LATENCY",
+        "entityId": "gateway-17",
+        "message": "Upstream response latency continued to rise.",
         "attributes": {
           "endpoint": "collector-a",
           "latencyMs": 1840,
@@ -59,7 +139,27 @@
     },
     {
       "type": "wait",
-      "durationMs": 500
+      "durationMs": 450
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7850,
+        "severity": "WARN",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_RETRY",
+        "entityId": "gateway-17",
+        "message": "Gateway retried an upstream telemetry submission.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "attempt": 2,
+          "retrying": true
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 400
     },
     {
       "type": "record",
@@ -69,7 +169,7 @@
         "holdMs": 1000
       },
       "record": {
-        "timestampOffsetMs": 4000,
+        "timestampOffsetMs": 8250,
         "severity": "ERROR",
         "subsystem": "Transport",
         "eventCode": "UPSTREAM_TIMEOUT",
@@ -84,12 +184,12 @@
     },
     {
       "type": "wait",
-      "durationMs": 750
+      "durationMs": 250
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 4750,
+        "timestampOffsetMs": 8500,
         "severity": "ERROR",
         "subsystem": "Gateway",
         "eventCode": "BUFFER_PRESSURE",
@@ -103,7 +203,27 @@
     },
     {
       "type": "wait",
-      "durationMs": 1250
+      "durationMs": 180
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 8680,
+        "severity": "WARN",
+        "subsystem": "Telemetry",
+        "eventCode": "BATCH_DROPPED",
+        "entityId": "gateway-17",
+        "message": "Oldest non-critical telemetry batch was dropped to preserve queue capacity.",
+        "attributes": {
+          "queuedRecords": 1396,
+          "capacity": 1500,
+          "attempt": 1
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1320
     },
     {
       "type": "truncate"
@@ -115,7 +235,7 @@
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 6500,
+        "timestampOffsetMs": 10500,
         "severity": "INFO",
         "subsystem": "Gateway",
         "eventCode": "LOG_REOPENED",
@@ -128,12 +248,50 @@
     },
     {
       "type": "wait",
+      "durationMs": 600
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 11100,
+        "severity": "WARN",
+        "subsystem": "Gateway",
+        "eventCode": "BUFFER_RECOVERY",
+        "entityId": "gateway-17",
+        "message": "Telemetry queue remains elevated but is draining.",
+        "attributes": {
+          "queuedRecords": 884,
+          "capacity": 1500
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 900
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 12000,
+        "severity": "INFO",
+        "subsystem": "Transport",
+        "eventCode": "UPSTREAM_PROBE_OK",
+        "entityId": "gateway-17",
+        "message": "Upstream collector health probe succeeded.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "latencyMs": 214
+        }
+      }
+    },
+    {
+      "type": "wait",
       "durationMs": 1000
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 7500,
+        "timestampOffsetMs": 13000,
         "severity": "INFO",
         "subsystem": "Transport",
         "eventCode": "UPSTREAM_RECOVERED",
@@ -143,6 +301,45 @@
           "endpoint": "collector-a",
           "latencyMs": 58,
           "retrying": false
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1200
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 14200,
+        "severity": "INFO",
+        "subsystem": "Telemetry",
+        "eventCode": "QUEUE_NORMAL",
+        "entityId": "gateway-17",
+        "message": "Pending telemetry queue returned to normal operating range.",
+        "attributes": {
+          "queuedRecords": 96,
+          "capacity": 1500
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1400
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 15600,
+        "severity": "INFO",
+        "subsystem": "Telemetry",
+        "eventCode": "BATCH_SENT",
+        "entityId": "gateway-17",
+        "message": "Telemetry batch sent successfully after recovery.",
+        "attributes": {
+          "endpoint": "collector-a",
+          "queuedRecords": 22,
+          "latencyMs": 52
         }
       }
     }

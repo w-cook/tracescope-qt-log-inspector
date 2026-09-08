@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "Web Access Live Traffic",
-  "description": "Deterministic web-request traffic for IIS W3C, Apache Common, Apache Combined, and Nginx Combined live-log generation.",
+  "description": "Representative production web traffic for IIS W3C, Apache Common, Apache Combined, and Nginx Combined demonstrations, including authenticated requests, query traffic, client errors, a brief server-side failure, and recovery.",
   "steps": [
     {
       "type": "record",
@@ -29,12 +29,100 @@
     },
     {
       "type": "wait",
-      "durationMs": 1000
+      "durationMs": 500
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 1000,
+        "timestampOffsetMs": 500,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "HOME_PAGE",
+        "entityId": "web-01",
+        "message": "Home page request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/",
+          "serverPort": 443,
+          "clientIp": "198.51.100.20",
+          "userAgent": "Mozilla/5.0",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 18,
+          "responseBytes": 1834
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 300
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 800,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "STATIC_ASSET",
+        "entityId": "web-01",
+        "message": "Static JavaScript asset request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/assets/app.js",
+          "serverPort": 443,
+          "clientIp": "198.51.100.20",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 12,
+          "responseBytes": 44128
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 700
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1500,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "ORDER_LIST",
+        "entityId": "web-01",
+        "message": "Order list request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/orders",
+          "query": "page=1&pageSize=25",
+          "serverPort": 443,
+          "username": "analyst",
+          "clientIp": "198.51.100.31",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 46,
+          "responseBytes": 3491
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 600
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 2100,
         "severity": "INFO",
         "subsystem": "Web",
         "eventCode": "ORDER_READ",
@@ -59,12 +147,12 @@
     },
     {
       "type": "wait",
-      "durationMs": 750
+      "durationMs": 550
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 1750,
+        "timestampOffsetMs": 2650,
         "severity": "INFO",
         "subsystem": "Web",
         "eventCode": "SEARCH",
@@ -78,6 +166,7 @@
           "serverPort": 443,
           "clientIp": "198.51.100.91",
           "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/",
           "status": 200,
           "substatus": 0,
           "win32Status": 0,
@@ -88,7 +177,7 @@
     },
     {
       "type": "wait",
-      "durationMs": 250
+      "durationMs": 350
     },
     {
       "type": "record",
@@ -98,7 +187,7 @@
         "holdMs": 750
       },
       "record": {
-        "timestampOffsetMs": 2000,
+        "timestampOffsetMs": 3000,
         "severity": "INFO",
         "subsystem": "Web",
         "eventCode": "ORDER_CREATE",
@@ -123,12 +212,100 @@
     },
     {
       "type": "wait",
-      "durationMs": 1000
+      "durationMs": 400
     },
     {
       "type": "record",
       "record": {
-        "timestampOffsetMs": 3000,
+        "timestampOffsetMs": 3400,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "ORDER_READ",
+        "entityId": "order-5813",
+        "message": "Order request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/orders/5813",
+          "serverPort": 443,
+          "username": "analyst",
+          "clientIp": "198.51.100.31",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 49,
+          "responseBytes": 811
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 250
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3650,
+        "severity": "WARN",
+        "subsystem": "Web",
+        "eventCode": "UNAUTHORIZED",
+        "entityId": "web-01",
+        "message": "Unauthenticated request was rejected.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/admin/users",
+          "serverPort": 443,
+          "clientIp": "203.0.113.44",
+          "userAgent": "curl/8.14.1",
+          "status": 401,
+          "substatus": 0,
+          "win32Status": 5,
+          "timeTakenMs": 7,
+          "responseBytes": 96
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 300
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3950,
+        "severity": "WARN",
+        "subsystem": "Web",
+        "eventCode": "FORBIDDEN",
+        "entityId": "web-01",
+        "message": "Authenticated user attempted an unauthorized operation.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "DELETE",
+          "path": "/api/orders/5812",
+          "serverPort": 443,
+          "username": "analyst",
+          "clientIp": "198.51.100.31",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders/5812",
+          "status": 403,
+          "substatus": 0,
+          "win32Status": 5,
+          "timeTakenMs": 16,
+          "responseBytes": 176
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 300
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 4250,
         "severity": "WARN",
         "subsystem": "Web",
         "eventCode": "NOT_FOUND",
@@ -151,12 +328,129 @@
     },
     {
       "type": "wait",
-      "durationMs": 1500
+      "durationMs": 250
     },
     {
       "type": "record",
       "record": {
         "timestampOffsetMs": 4500,
+        "severity": "ERROR",
+        "subsystem": "Web",
+        "eventCode": "ORDER_SERVICE_FAILURE",
+        "entityId": "web-01",
+        "message": "Order API request failed while a downstream dependency was unavailable.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/orders/9999",
+          "serverPort": 443,
+          "clientIp": "203.0.113.55",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders",
+          "status": 503,
+          "substatus": 0,
+          "win32Status": 64,
+          "timeTakenMs": 1842,
+          "responseBytes": 248
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 180
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 4680,
+        "severity": "ERROR",
+        "subsystem": "Web",
+        "eventCode": "ORDER_SERVICE_FAILURE",
+        "entityId": "web-01",
+        "message": "Second order API request failed during the same downstream outage.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/orders/10001",
+          "serverPort": 443,
+          "clientIp": "203.0.113.56",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders",
+          "status": 503,
+          "substatus": 0,
+          "win32Status": 64,
+          "timeTakenMs": 1911,
+          "responseBytes": 248
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1600
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 6280,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "HEALTH_CHECK",
+        "entityId": "web-01",
+        "message": "Health check completed after downstream recovery.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/health",
+          "serverPort": 443,
+          "clientIp": "203.0.113.77",
+          "userAgent": "kube-probe/1.33",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 5,
+          "responseBytes": 27
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 420
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 6700,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "ORDER_LIST",
+        "entityId": "web-01",
+        "message": "Order list request completed after recovery.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/orders",
+          "query": "page=2&pageSize=25",
+          "serverPort": 443,
+          "username": "operator",
+          "clientIp": "203.0.113.18",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 51,
+          "responseBytes": 3612
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 380
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7080,
         "severity": "INFO",
         "subsystem": "Web",
         "eventCode": "INVENTORY_UPDATE",
@@ -175,6 +469,63 @@
           "substatus": 0,
           "win32Status": 0,
           "timeTakenMs": 74
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 340
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7420,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "STATIC_ASSET",
+        "entityId": "web-01",
+        "message": "Static stylesheet request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/assets/site.css",
+          "serverPort": 443,
+          "clientIp": "198.51.100.20",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 10,
+          "responseBytes": 8124
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 900
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 8320,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "HEALTH_CHECK",
+        "entityId": "web-01",
+        "message": "Health check completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/health",
+          "serverPort": 443,
+          "clientIp": "203.0.113.77",
+          "userAgent": "kube-probe/1.33",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 4,
+          "responseBytes": 27
         }
       }
     }
