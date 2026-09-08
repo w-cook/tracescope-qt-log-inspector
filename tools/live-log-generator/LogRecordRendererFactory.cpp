@@ -5,6 +5,7 @@
 #include "renderers/DelimitedTextRenderer.h"
 #include "renderers/JsonLinesRenderer.h"
 #include "renderers/KeyValueTextRenderer.h"
+#include "renderers/RegexTextRenderer.h"
 #include "renderers/StructuredJsonRenderer.h"
 #include "renderers/StructuredXmlRenderer.h"
 #include "renderers/SyslogRenderer.h"
@@ -12,6 +13,21 @@
 
 namespace
 {
+bool isValidRegexTextValue(
+    const QString &value
+    )
+{
+    return !value.contains(
+               QLatin1Char(']')
+               )
+           && !value.contains(
+               QLatin1Char('\r')
+               )
+           && !value.contains(
+               QLatin1Char('\n')
+               );
+}
+
 LogRecordRendererCreateResult failure(
     const QString &code,
     const QString &message
@@ -34,6 +50,7 @@ LogRecordRendererFactory::supportedFormats()
         QStringLiteral("csv"),
         QStringLiteral("tsv"),
         QStringLiteral("logfmt"),
+        QStringLiteral("regex-text"),
         QStringLiteral("syslog-rfc5424"),
         QStringLiteral("syslog-rfc3164"),
         QStringLiteral("structured-json"),
@@ -118,6 +135,116 @@ LogRecordRendererFactory::create(
             std::make_unique<
                 KeyValueTextRenderer
                 >();
+
+        return result;
+    }
+
+    if (normalized
+        == QStringLiteral("regex-text")) {
+        for (qsizetype stepIndex = 0;
+             stepIndex < scenario.steps.size();
+             ++stepIndex) {
+            const auto *recordStep =
+                std::get_if<LiveLogRecordStep>(
+                    &scenario.steps.at(
+                        stepIndex
+                        )
+                    );
+
+            if (!recordStep) {
+                continue;
+            }
+
+            const LiveLogRecord &record =
+                recordStep->record;
+
+            const QStringList canonicalValues {
+                record.severity,
+                record.subsystem,
+                record.eventCode,
+                record.entityId
+            };
+
+            for (const QString &value
+                 : canonicalValues) {
+                if (isValidRegexTextValue(
+                        value
+                        )) {
+                    continue;
+                }
+
+                return failure(
+                    QStringLiteral(
+                        "INVALID_REGEX_TEXT_VALUE"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "a canonical value that cannot "
+                        "be represented by the generator's "
+                        "regex-text format."
+                        )
+                        .arg(stepIndex + 1)
+                    );
+            }
+
+            if (record.message.contains(
+                    QLatin1Char('\r')
+                    )
+                || record.message.contains(
+                    QLatin1Char('\n')
+                    )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_REGEX_TEXT_MESSAGE"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "a line break in its message. "
+                        "Regex-text generator records "
+                        "must remain single-line records."
+                        )
+                        .arg(stepIndex + 1)
+                    );
+            }
+
+            for (auto iterator =
+                 record.attributes.constBegin();
+                 iterator
+                 != record.attributes.constEnd();
+                 ++iterator) {
+                if (!isValidRegexTextValue(
+                        iterator.key()
+                        )
+                    || !isValidRegexTextValue(
+                        iterator.value().toString()
+                        )) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_REGEX_TEXT_ATTRIBUTE"
+                            ),
+                        QStringLiteral(
+                            "Scenario step %1 contains "
+                            "attribute '%2' with a key or "
+                            "value that cannot be represented "
+                            "by the generator's regex-text "
+                            "format."
+                            )
+                            .arg(stepIndex + 1)
+                            .arg(iterator.key())
+                        );
+                }
+            }
+        }
+
+        result.renderer =
+            std::make_unique<
+                RegexTextRenderer
+                >(
+                DelimitedTextRenderer::
+                attributeKeysForScenario(
+                    scenario
+                    )
+                );
 
         return result;
     }

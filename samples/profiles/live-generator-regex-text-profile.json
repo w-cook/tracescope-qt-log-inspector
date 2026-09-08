@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "name": "Live Generator Regex Text",
+  "importerId": "regex-text",
+  "regexPattern": "^(?<timestamp>\\S+)\\s+\\[(?<level>[^\\]]*)\\]\\s+\\[(?<subsystem>[^\\]]*)\\]\\s+\\[(?<eventCode>[^\\]]*)\\]\\s+\\[(?<entityId>[^\\]]*)\\]\\s+\\[attempt=(?<attempt>[^\\]]*)\\]\\s+\\[capacity=(?<capacity>[^\\]]*)\\]\\s+\\[endpoint=(?<endpoint>[^\\]]*)\\]\\s+\\[firmware=(?<firmware>[^\\]]*)\\]\\s+\\[latencyMs=(?<latencyMs>[^\\]]*)\\]\\s+\\[queuedRecords=(?<queuedRecords>[^\\]]*)\\]\\s+\\[retrying=(?<retrying>[^\\]]*)\\]\\s+\\[site=(?<site>[^\\]]*)\\]\\s+\\[timeoutMs=(?<timeoutMs>[^\\]]*)\\]\\s+(?<message>.*)$",
+  "canonicalFields": {
+    "timestamp": "timestamp",
+    "severity": "level",
+    "subsystem": "subsystem",
+    "eventCode": "eventCode",
+    "entityId": "entityId",
+    "message": "message"
+  },
+  "customFields": [
+    {
+      "name": "Attempt",
+      "sourcePath": "attempt"
+    },
+    {
+      "name": "Capacity",
+      "sourcePath": "capacity"
+    },
+    {
+      "name": "Endpoint",
+      "sourcePath": "endpoint"
+    },
+    {
+      "name": "Firmware",
+      "sourcePath": "firmware"
+    },
+    {
+      "name": "Latency (ms)",
+      "sourcePath": "latencyMs"
+    },
+    {
+      "name": "Queued Records",
+      "sourcePath": "queuedRecords"
+    },
+    {
+      "name": "Retrying",
+      "sourcePath": "retrying"
+    },
+    {
+      "name": "Site",
+      "sourcePath": "site"
+    },
+    {
+      "name": "Timeout (ms)",
+      "sourcePath": "timeoutMs"
+    }
+  ],
+  "severityAliases": {},
+  "timestampRules": [
+    {
+      "type": "iso8601"
+    }
+  ],
+  "preserveUnmappedFields": true
+}

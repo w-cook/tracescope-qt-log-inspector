@@ -15,6 +15,9 @@ private slots:
     void logfmtRendererIsCreated();
     void invalidLogfmtAttributeKeyIsRejected();
     void logfmtAllowsAttributeKeysSupportedByImporter();
+    void regexTextRendererUsesScenarioSchema();
+    void invalidRegexTextAttributeIsRejected();
+    void regexTextMessageWithLineBreakIsRejected();
     void syslogRfc5424RendererIsCreated();
     void invalidRfc5424AppNameIsRejected();
     void invalidRfc5424MessageIdIsRejected();
@@ -39,6 +42,7 @@ void LogRecordRendererFactoryTests::
             QStringLiteral("csv"),
             QStringLiteral("tsv"),
             QStringLiteral("logfmt"),
+            QStringLiteral("regex-text"),
             QStringLiteral("syslog-rfc5424"),
             QStringLiteral("syslog-rfc3164"),
             QStringLiteral("structured-json"),
@@ -257,6 +261,150 @@ void LogRecordRendererFactoryTests::
 
     QVERIFY(result.isSuccess());
     QVERIFY(result.renderer);
+}
+
+void LogRecordRendererFactoryTests::
+    regexTextRendererUsesScenarioSchema()
+{
+    LiveLogRecordStep firstStep;
+
+    firstStep.record.severity =
+        QStringLiteral("INFO");
+    firstStep.record.subsystem =
+        QStringLiteral("Gateway");
+    firstStep.record.eventCode =
+        QStringLiteral("GW_START");
+    firstStep.record.entityId =
+        QStringLiteral("gateway-17");
+    firstStep.record.message =
+        QStringLiteral(
+            "Gateway startup completed."
+            );
+
+    firstStep.record.attributes.insert(
+        QStringLiteral("site"),
+        QStringLiteral("north-yard")
+        );
+
+    LiveLogRecordStep secondStep;
+
+    secondStep.record.attributes.insert(
+        QStringLiteral("latencyMs"),
+        1840
+        );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(firstStep);
+    scenario.steps.append(secondStep);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("REGEX-TEXT"),
+            scenario
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QVERIFY(
+        result.renderer
+            ->initialContent()
+            .isEmpty()
+        );
+
+    const QDateTime scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-08T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    QCOMPARE(
+        result.renderer->renderRecord(
+            firstStep.record,
+            scenarioStart
+            ),
+        QByteArray(
+            "2026-09-08T12:00:00.000Z "
+            "[INFO] "
+            "[Gateway] "
+            "[GW_START] "
+            "[gateway-17] "
+            "[latencyMs=] "
+            "[site=north-yard] "
+            "Gateway startup completed.\n"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidRegexTextAttributeIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("endpoint"),
+        QStringLiteral(
+            "collector]a"
+            )
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("regex-text"),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_REGEX_TEXT_ATTRIBUTE"
+            )
+        );
+
+    QVERIFY(
+        result.errorMessage.contains(
+            QStringLiteral("endpoint")
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    regexTextMessageWithLineBreakIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.message =
+        QStringLiteral(
+            "First line\nSecond line"
+            );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("regex-text"),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_REGEX_TEXT_MESSAGE"
+            )
+        );
 }
 
 void LogRecordRendererFactoryTests::

@@ -1809,6 +1809,9 @@ qt_add_executable(
     ../tools/live-log-generator/renderers/KeyValueTextRenderer.h
     ../tools/live-log-generator/renderers/KeyValueTextRenderer.cpp
 
+    ../tools/live-log-generator/renderers/RegexTextRenderer.h
+    ../tools/live-log-generator/renderers/RegexTextRenderer.cpp
+
     ../tools/live-log-generator/renderers/SyslogRenderer.h
     ../tools/live-log-generator/renderers/SyslogRenderer.cpp
 
@@ -2005,4 +2008,28 @@ target_link_libraries(
 add_test(
     NAME SyslogRendererTests
     COMMAND SyslogRendererTests
+)
+
+qt_add_executable(
+    RegexTextRendererTests
+
+    RegexTextRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/RegexTextRenderer.h
+    ../tools/live-log-generator/renderers/RegexTextRenderer.cpp
+)
+
+target_link_libraries(
+    RegexTextRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME RegexTextRendererTests
+    COMMAND RegexTextRendererTests
 )
