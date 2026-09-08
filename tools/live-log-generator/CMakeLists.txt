@@ -30,9 +30,30 @@ qt_add_executable(TraceScopeLiveLogGenerator
     renderers/IisW3cRenderer.cpp
     renderers/AccessLogRenderer.h
     renderers/AccessLogRenderer.cpp
+
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator
     PRIVATE
         Qt6::Core
+)
+
+qt_add_executable(
+    TraceScopeLiveLogGeneratorLauncher
+
+    launcher-main.cpp
+
+    LiveLogGeneratorLauncherWindow.h
+    LiveLogGeneratorLauncherWindow.cpp
+)
+
+target_link_libraries(
+    TraceScopeLiveLogGeneratorLauncher
+    PRIVATE
+        Qt6::Widgets
+)
+
+add_dependencies(
+    TraceScopeLiveLogGeneratorLauncher
+    TraceScopeLiveLogGenerator
 )
