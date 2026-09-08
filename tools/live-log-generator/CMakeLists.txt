@@ -28,6 +28,8 @@ qt_add_executable(TraceScopeLiveLogGenerator
     renderers/RegexTextRenderer.cpp
     renderers/IisW3cRenderer.h
     renderers/IisW3cRenderer.cpp
+    renderers/AccessLogRenderer.h
+    renderers/AccessLogRenderer.cpp
 )
 
 target_link_libraries(TraceScopeLiveLogGenerator

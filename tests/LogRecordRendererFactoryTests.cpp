@@ -20,6 +20,11 @@ private slots:
     void regexTextMessageWithLineBreakIsRejected();
     void iisW3cRendererIsCreated();
     void invalidIisW3cAttributeIsRejected();
+    void accessLogRenderersAreCreated();
+    void missingRequiredAccessLogAttributeIsRejected();
+    void invalidAccessLogStatusIsRejected();
+    void invalidAccessLogResponseBytesIsRejected();
+    void invalidAccessLogQuotedAttributeIsRejected();
     void syslogRfc5424RendererIsCreated();
     void invalidRfc5424AppNameIsRejected();
     void invalidRfc5424MessageIdIsRejected();
@@ -46,6 +51,9 @@ void LogRecordRendererFactoryTests::
             QStringLiteral("logfmt"),
             QStringLiteral("regex-text"),
             QStringLiteral("iis-w3c"),
+            QStringLiteral("apache-common"),
+            QStringLiteral("apache-combined"),
+            QStringLiteral("nginx-combined"),
             QStringLiteral("syslog-rfc5424"),
             QStringLiteral("syslog-rfc3164"),
             QStringLiteral("structured-json"),
@@ -459,6 +467,293 @@ void LogRecordRendererFactoryTests::
         result.errorCode,
         QStringLiteral(
             "INVALID_IIS_W3C_ATTRIBUTE"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    accessLogRenderersAreCreated()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("clientIp"),
+        QStringLiteral("198.51.100.24")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("method"),
+        QStringLiteral("GET")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("path"),
+        QStringLiteral(
+            "/api/orders/5812"
+            )
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("status"),
+        200
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("responseBytes"),
+        842
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("referer"),
+        QStringLiteral(
+            "https://portal.example.test/orders"
+            )
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("userAgent"),
+        QStringLiteral("Mozilla/5.0")
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const QStringList formats({
+        QStringLiteral("APACHE-COMMON"),
+        QStringLiteral("APACHE-COMBINED"),
+        QStringLiteral("NGINX-COMBINED")
+    });
+
+    for (const QString &format :
+         formats) {
+        const auto result =
+            LogRecordRendererFactory::create(
+                format,
+                scenario
+                );
+
+        QVERIFY2(
+            result.isSuccess(),
+            qPrintable(
+                result.errorMessage
+                )
+            );
+
+        QVERIFY(result.renderer);
+
+        QVERIFY(
+            result.renderer
+                ->initialContent()
+                .isEmpty()
+            );
+    }
+}
+
+void LogRecordRendererFactoryTests::
+    missingRequiredAccessLogAttributeIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("clientIp"),
+        QStringLiteral("198.51.100.24")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("method"),
+        QStringLiteral("GET")
+        );
+
+    // path intentionally omitted
+
+    step.record.attributes.insert(
+        QStringLiteral("status"),
+        200
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "apache-common"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "MISSING_ACCESS_LOG_ATTRIBUTE"
+            )
+        );
+
+    QVERIFY(
+        result.errorMessage.contains(
+            QStringLiteral("path")
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidAccessLogStatusIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("clientIp"),
+        QStringLiteral("198.51.100.24")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("method"),
+        QStringLiteral("GET")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("path"),
+        QStringLiteral("/health")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("status"),
+        QStringLiteral("20A")
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "apache-common"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_ACCESS_LOG_STATUS"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidAccessLogResponseBytesIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("clientIp"),
+        QStringLiteral("198.51.100.24")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("method"),
+        QStringLiteral("GET")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("path"),
+        QStringLiteral("/health")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("status"),
+        200
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("responseBytes"),
+        -1
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "apache-common"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_ACCESS_LOG_RESPONSE_BYTES"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidAccessLogQuotedAttributeIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("clientIp"),
+        QStringLiteral("198.51.100.24")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("method"),
+        QStringLiteral("GET")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("path"),
+        QStringLiteral("/health")
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("status"),
+        200
+        );
+
+    step.record.attributes.insert(
+        QStringLiteral("userAgent"),
+        QStringLiteral(
+            "Mozilla/\"Test\""
+            )
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral(
+                "apache-combined"
+                ),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_ACCESS_LOG_ATTRIBUTE"
+            )
+        );
+
+    QVERIFY(
+        result.errorMessage.contains(
+            QStringLiteral("userAgent")
             )
         );
 }

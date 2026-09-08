@@ -1815,6 +1815,9 @@ qt_add_executable(
     ../tools/live-log-generator/renderers/IisW3cRenderer.h
     ../tools/live-log-generator/renderers/IisW3cRenderer.cpp
 
+    ../tools/live-log-generator/renderers/AccessLogRenderer.h
+    ../tools/live-log-generator/renderers/AccessLogRenderer.cpp
+
     ../tools/live-log-generator/renderers/SyslogRenderer.h
     ../tools/live-log-generator/renderers/SyslogRenderer.cpp
 
@@ -2059,4 +2062,28 @@ target_link_libraries(
 add_test(
     NAME IisW3cRendererTests
     COMMAND IisW3cRendererTests
+)
+
+qt_add_executable(
+    AccessLogRendererTests
+
+    AccessLogRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/AccessLogRenderer.h
+    ../tools/live-log-generator/renderers/AccessLogRenderer.cpp
+)
+
+target_link_libraries(
+    AccessLogRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME AccessLogRendererTests
+    COMMAND AccessLogRendererTests
 )

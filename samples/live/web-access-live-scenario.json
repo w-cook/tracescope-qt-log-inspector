@@ -22,7 +22,8 @@
           "status": 200,
           "substatus": 0,
           "win32Status": 0,
-          "timeTakenMs": 4
+          "timeTakenMs": 4,
+          "responseBytes": 27
         }
       }
     },
@@ -51,7 +52,8 @@
           "status": 200,
           "substatus": 0,
           "win32Status": 0,
-          "timeTakenMs": 57
+          "timeTakenMs": 57,
+          "responseBytes": 842
         }
       }
     },
@@ -79,7 +81,8 @@
           "status": 200,
           "substatus": 0,
           "win32Status": 0,
-          "timeTakenMs": 33
+          "timeTakenMs": 33,
+          "responseBytes": 611
         }
       }
     },
@@ -113,7 +116,8 @@
           "status": 201,
           "substatus": 0,
           "win32Status": 0,
-          "timeTakenMs": 91
+          "timeTakenMs": 91,
+          "responseBytes": 394
         }
       }
     },
@@ -140,7 +144,8 @@
           "status": 404,
           "substatus": 0,
           "win32Status": 2,
-          "timeTakenMs": 11
+          "timeTakenMs": 11,
+          "responseBytes": 212
         }
       }
     },

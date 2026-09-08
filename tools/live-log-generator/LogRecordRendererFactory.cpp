@@ -2,6 +2,7 @@
 
 #include <variant>
 
+#include "renderers/AccessLogRenderer.h"
 #include "renderers/DelimitedTextRenderer.h"
 #include "renderers/IisW3cRenderer.h"
 #include "renderers/JsonLinesRenderer.h"
@@ -54,6 +55,38 @@ bool containsWhitespace(
 
     return false;
 }
+
+bool containsLineBreakOrQuote(
+    const QString &value
+    )
+{
+    return value.contains(
+               QLatin1Char('\r')
+               )
+           || value.contains(
+               QLatin1Char('\n')
+               )
+           || value.contains(
+               QLatin1Char('"')
+               );
+}
+
+bool containsOnlyDigits(
+    const QString &value
+    )
+{
+    if (value.isEmpty()) {
+        return false;
+    }
+
+    for (const QChar character : value) {
+        if (!character.isDigit()) {
+            return false;
+        }
+    }
+
+    return true;
+}
 }
 
 QStringList
@@ -66,6 +99,9 @@ LogRecordRendererFactory::supportedFormats()
         QStringLiteral("logfmt"),
         QStringLiteral("regex-text"),
         QStringLiteral("iis-w3c"),
+        QStringLiteral("apache-common"),
+        QStringLiteral("apache-combined"),
+        QStringLiteral("nginx-combined"),
         QStringLiteral("syslog-rfc5424"),
         QStringLiteral("syslog-rfc3164"),
         QStringLiteral("structured-json"),
@@ -336,6 +372,240 @@ LogRecordRendererFactory::create(
             {},
             {}
         };
+    }
+
+    if (normalized
+            == QStringLiteral("apache-common")
+        || normalized
+               == QStringLiteral("apache-combined")
+        || normalized
+               == QStringLiteral("nginx-combined")) {
+
+        for (qsizetype stepIndex = 0;
+             stepIndex < scenario.steps.size();
+             ++stepIndex) {
+            const auto *recordStep =
+                std::get_if<LiveLogRecordStep>(
+                    &scenario.steps.at(
+                        stepIndex
+                        )
+                    );
+
+            if (!recordStep) {
+                continue;
+            }
+
+            const LiveLogRecord &record =
+                recordStep->record;
+
+            const QStringList requiredKeys({
+                QStringLiteral("clientIp"),
+                QStringLiteral("method"),
+                QStringLiteral("path"),
+                QStringLiteral("status")
+            });
+
+            for (const QString &key :
+                 requiredKeys) {
+                const auto iterator =
+                    record.attributes.constFind(
+                        key
+                        );
+
+                if (iterator
+                        == record.attributes.constEnd()
+                    || !iterator.value().isValid()
+                    || iterator.value().isNull()
+                    || iterator.value()
+                           .toString()
+                           .isEmpty()) {
+                    return failure(
+                        QStringLiteral(
+                            "MISSING_ACCESS_LOG_ATTRIBUTE"
+                            ),
+                        QStringLiteral(
+                            "Scenario step %1 is missing "
+                            "required access-log attribute "
+                            "'%2'."
+                            )
+                            .arg(stepIndex + 1)
+                            .arg(key)
+                        );
+                }
+            }
+
+            const QStringList tokenKeys({
+                QStringLiteral("clientIp"),
+                QStringLiteral("method"),
+                QStringLiteral("path"),
+                QStringLiteral("query"),
+                QStringLiteral("username")
+            });
+
+            for (const QString &key :
+                 tokenKeys) {
+                const auto iterator =
+                    record.attributes.constFind(
+                        key
+                        );
+
+                if (iterator
+                        == record.attributes.constEnd()
+                    || !iterator.value().isValid()
+                    || iterator.value().isNull()) {
+                    continue;
+                }
+
+                const QString value =
+                    iterator.value().toString();
+
+                if (containsWhitespace(value)
+                    || containsLineBreakOrQuote(
+                        value
+                        )) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_ACCESS_LOG_ATTRIBUTE"
+                            ),
+                        QStringLiteral(
+                            "Scenario step %1 contains "
+                            "access-log attribute '%2' "
+                            "that cannot be represented "
+                            "safely."
+                            )
+                            .arg(stepIndex + 1)
+                            .arg(key)
+                        );
+                }
+            }
+
+            if (normalized
+                    == QStringLiteral("apache-combined")
+                || normalized
+                       == QStringLiteral("nginx-combined")) {
+                const QStringList quotedKeys({
+                    QStringLiteral("referer"),
+                    QStringLiteral("userAgent")
+                });
+
+                for (const QString &key :
+                     quotedKeys) {
+                    const auto iterator =
+                        record.attributes.constFind(
+                            key
+                            );
+
+                    if (iterator
+                            == record.attributes.constEnd()
+                        || !iterator.value().isValid()
+                        || iterator.value().isNull()) {
+                        continue;
+                    }
+
+                    if (containsLineBreakOrQuote(
+                            iterator.value()
+                                .toString()
+                            )) {
+                        return failure(
+                            QStringLiteral(
+                                "INVALID_ACCESS_LOG_ATTRIBUTE"
+                                ),
+                            QStringLiteral(
+                                "Scenario step %1 contains "
+                                "access-log attribute '%2' "
+                                "that cannot be represented "
+                                "safely."
+                                )
+                                .arg(stepIndex + 1)
+                                .arg(key)
+                            );
+                    }
+                }
+            }
+
+            const QString status =
+                record.attributes
+                    .value(
+                        QStringLiteral("status")
+                        )
+                    .toString();
+
+            if (status.size() != 3
+                || !containsOnlyDigits(status)) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_ACCESS_LOG_STATUS"
+                        ),
+                    QStringLiteral(
+                        "Scenario step %1 contains "
+                        "HTTP status '%2'. Access-log "
+                        "status values must contain "
+                        "exactly three digits."
+                        )
+                        .arg(stepIndex + 1)
+                        .arg(status)
+                    );
+            }
+
+            const auto bytesIterator =
+                record.attributes.constFind(
+                    QStringLiteral(
+                        "responseBytes"
+                        )
+                    );
+
+            if (bytesIterator
+                    != record.attributes.constEnd()
+                && bytesIterator.value().isValid()
+                && !bytesIterator.value().isNull()) {
+                const QString bytes =
+                    bytesIterator.value()
+                        .toString();
+
+                if (!bytes.isEmpty()
+                    && !containsOnlyDigits(bytes)) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_ACCESS_LOG_RESPONSE_BYTES"
+                            ),
+                        QStringLiteral(
+                            "Scenario step %1 contains "
+                            "responseBytes '%2'. Response "
+                            "bytes must be a non-negative "
+                            "integer when present."
+                            )
+                            .arg(stepIndex + 1)
+                            .arg(bytes)
+                        );
+                }
+            }
+        }
+
+        AccessLogFormat accessFormat =
+            AccessLogFormat::ApacheCommon;
+
+        if (normalized
+            == QStringLiteral(
+                "apache-combined"
+                )) {
+            accessFormat =
+                AccessLogFormat::ApacheCombined;
+        } else if (normalized
+                   == QStringLiteral(
+                       "nginx-combined"
+                       )) {
+            accessFormat =
+                AccessLogFormat::NginxCombined;
+        }
+
+        result.renderer =
+            std::make_unique<
+                AccessLogRenderer
+                >(
+                accessFormat
+                );
+
+        return result;
     }
 
     if (normalized
