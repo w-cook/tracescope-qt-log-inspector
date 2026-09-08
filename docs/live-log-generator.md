@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The TraceScope live-log generator is a small standalone command-line utility used to exercise Phase 15 live-file-following behavior under realistic, reproducible conditions.
+The TraceScope live-log generator is a small standalone test utility used to exercise Phase 15 live-file-following behavior under realistic, reproducible conditions. It provides both a command-line generator and a thin Qt Widgets launcher for convenient manual playback.
 
 The generator behaves like an external application writing logs to disk. TraceScope has no knowledge of or dependency on the generator; it observes only the resulting file.
 
@@ -38,7 +38,11 @@ TraceScope Live Follow
 
 TraceScope and the generator remain separate processes.
 
-The generator may use Qt Core for JSON handling, command-line parsing, timestamps, and file operations, but it should not depend on TraceScope investigation, workspace, filtering, comparison, or UI classes.
+The core generator uses Qt Core for JSON handling, command-line parsing, timestamps, and file operations. A separate Qt Widgets launcher provides a thin graphical front end and invokes the command-line generator through `QProcess`.
+
+The launcher does not duplicate scenario loading, renderer validation, playback, looping, or file-lifecycle behavior. The command-line generator remains the single source of truth for those responsibilities.
+
+Neither executable depends on TraceScope investigation, workspace, filtering, comparison, or UI classes.
 
 ## Semantic Record Model
 
@@ -282,6 +286,43 @@ Taken together, the scenario library exercises:
 The library is not a load-testing corpus and is not intended to generate large random datasets. Scenarios should remain readable enough that a developer can inspect the JSON and understand the complete incident story.
 
 Renderer-specific tests remain responsible for validating serialization details. The scenario library provides realistic cross-format and lifecycle inputs for manual verification and demonstrations.
+
+## Graphical Launcher
+
+`TraceScopeLiveLogGeneratorLauncher` provides a small Qt Widgets interface for manually running the generator without entering command-line arguments.
+
+The launcher exposes:
+
+* scenario-file selection
+* output-file selection
+* output-format selection
+* playback-speed selection
+* optional looping
+* Play and Stop controls
+* playback status
+* captured generator standard output and error output
+
+The launcher starts `TraceScopeLiveLogGenerator` as a child process through `QProcess`. The generator executable is expected to reside in the same application directory as the launcher.
+
+Starting playback constructs the same arguments that may be supplied directly to the command-line interface. The launcher therefore does not introduce a separate playback path or alternate interpretation of scenarios.
+
+While playback is active, scenario, output, format, speed, and loop controls are disabled. Normal completion restores the controls and reports that playback completed.
+
+For looping scenarios, Stop intentionally terminates the child generator process and reports the stop as an expected user action rather than a playback failure. Closing the launcher while playback is active also terminates the child process so the generator is not left running independently.
+
+The launcher is intentionally limited to playback convenience. It does not provide:
+
+* scenario editing
+* scenario history
+* saved launcher presets
+* generated-record counters
+* advanced progress tracking
+* renderer configuration
+* TraceScope integration
+
+Those features would add a second application surface without materially improving Phase 15 verification.
+
+The command-line executable remains available for automated tests, direct invocation, and any workflow where a graphical launcher is unnecessary.
 
 ## Runtime Options
 
@@ -562,7 +603,7 @@ Across those formats, the generator must also exercise the lifecycle behaviors r
 * header regeneration where required
 * structured-container initialization, record separation, and normal finalization where required
 
-The implemented renderer set and five-scenario library provide the planned source-family and lifecycle inputs for this boundary. Remaining generator-side completion work should focus on making those scenarios easy to launch and on completing the documented manual verification pass rather than expanding the scenario language or adding speculative formats.
+The implemented renderer set, five-scenario library, and graphical launcher provide the planned source-family, lifecycle, and manual-playback inputs for this boundary. Remaining generator-side completion work should focus on the final documented manual verification pass rather than expanding the scenario language, adding speculative formats, or growing the launcher beyond its testing role.
 
 TraceScope live-follow implementation should begin only after this generator-side coverage is complete and manually verifiable.
 
