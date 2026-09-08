@@ -3,6 +3,7 @@
 #include <variant>
 
 #include "renderers/DelimitedTextRenderer.h"
+#include "renderers/IisW3cRenderer.h"
 #include "renderers/JsonLinesRenderer.h"
 #include "renderers/KeyValueTextRenderer.h"
 #include "renderers/RegexTextRenderer.h"
@@ -40,6 +41,19 @@ LogRecordRendererCreateResult failure(
 
     return result;
 }
+
+bool containsWhitespace(
+    const QString &value
+    )
+{
+    for (const QChar character : value) {
+        if (character.isSpace()) {
+            return true;
+        }
+    }
+
+    return false;
+}
 }
 
 QStringList
@@ -51,6 +65,7 @@ LogRecordRendererFactory::supportedFormats()
         QStringLiteral("tsv"),
         QStringLiteral("logfmt"),
         QStringLiteral("regex-text"),
+        QStringLiteral("iis-w3c"),
         QStringLiteral("syslog-rfc5424"),
         QStringLiteral("syslog-rfc3164"),
         QStringLiteral("structured-json"),
@@ -247,6 +262,80 @@ LogRecordRendererFactory::create(
                 );
 
         return result;
+    }
+
+    if (normalized
+        == QStringLiteral("iis-w3c")) {
+        const QStringList iisAttributeKeys({
+            QStringLiteral("serverIp"),
+            QStringLiteral("method"),
+            QStringLiteral("path"),
+            QStringLiteral("query"),
+            QStringLiteral("serverPort"),
+            QStringLiteral("username"),
+            QStringLiteral("clientIp"),
+            QStringLiteral("userAgent"),
+            QStringLiteral("referer"),
+            QStringLiteral("status"),
+            QStringLiteral("substatus"),
+            QStringLiteral("win32Status"),
+            QStringLiteral("timeTakenMs")
+        });
+
+        for (const LiveLogScenarioStep &scenarioStep :
+             scenario.steps) {
+            if (!std::holds_alternative<
+                    LiveLogRecordStep
+                    >(scenarioStep)) {
+                continue;
+            }
+
+            const LiveLogRecord &record =
+                std::get<LiveLogRecordStep>(
+                    scenarioStep
+                    ).record;
+
+            for (const QString &key :
+                 iisAttributeKeys) {
+                const auto iterator =
+                    record.attributes.constFind(
+                        key
+                        );
+
+                if (iterator
+                        == record.attributes.constEnd()
+                    || !iterator.value().isValid()
+                    || iterator.value().isNull()) {
+                    continue;
+                }
+
+                const QString value =
+                    iterator.value().toString();
+
+                if (containsWhitespace(value)) {
+                    return {
+                        nullptr,
+                        QStringLiteral(
+                            "INVALID_IIS_W3C_ATTRIBUTE"
+                            ),
+                        QStringLiteral(
+                            "IIS W3C attribute '%1' "
+                            "contains whitespace and cannot "
+                            "be represented safely."
+                            )
+                            .arg(key)
+                    };
+                }
+            }
+        }
+
+        return {
+            std::make_unique<
+                IisW3cRenderer
+                >(),
+            {},
+            {}
+        };
     }
 
     if (normalized

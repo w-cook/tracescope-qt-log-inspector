@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "name": "Web Access Live Traffic",
+  "description": "Deterministic web-request traffic for IIS W3C, Apache Common, Apache Combined, and Nginx Combined live-log generation.",
+  "steps": [
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 0,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "HEALTH_CHECK",
+        "entityId": "web-01",
+        "message": "Health check completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/health",
+          "serverPort": 443,
+          "clientIp": "203.0.113.77",
+          "userAgent": "kube-probe/1.33",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 4
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1000
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1000,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "ORDER_READ",
+        "entityId": "order-5812",
+        "message": "Order request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/api/orders/5812",
+          "serverPort": 443,
+          "username": "analyst",
+          "clientIp": "198.51.100.31",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 57
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 750
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1750,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "SEARCH",
+        "entityId": "web-01",
+        "message": "Search request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/search",
+          "query": "q=widget&page=2",
+          "serverPort": 443,
+          "clientIp": "198.51.100.91",
+          "userAgent": "Mozilla/5.0",
+          "status": 200,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 33
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 250
+    },
+    {
+      "type": "record",
+      "write": {
+        "mode": "partial",
+        "splitFraction": 0.6,
+        "holdMs": 750
+      },
+      "record": {
+        "timestampOffsetMs": 2000,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "ORDER_CREATE",
+        "entityId": "web-01",
+        "message": "Order creation request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "POST",
+          "path": "/api/orders",
+          "serverPort": 443,
+          "username": "analyst",
+          "clientIp": "203.0.113.7",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/orders/new",
+          "status": 201,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 91
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1000
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3000,
+        "severity": "WARN",
+        "subsystem": "Web",
+        "eventCode": "NOT_FOUND",
+        "entityId": "web-01",
+        "message": "Requested resource was not found.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "GET",
+          "path": "/missing",
+          "serverPort": 443,
+          "clientIp": "192.0.2.44",
+          "userAgent": "curl/8.14.1",
+          "status": 404,
+          "substatus": 0,
+          "win32Status": 2,
+          "timeTakenMs": 11
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1500
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 4500,
+        "severity": "INFO",
+        "subsystem": "Web",
+        "eventCode": "INVENTORY_UPDATE",
+        "entityId": "SKU-441",
+        "message": "Inventory update request completed.",
+        "attributes": {
+          "serverIp": "192.0.2.10",
+          "method": "PUT",
+          "path": "/api/inventory/SKU-441",
+          "serverPort": 443,
+          "username": "operator",
+          "clientIp": "203.0.113.18",
+          "userAgent": "Mozilla/5.0",
+          "referer": "https://portal.example.test/inventory",
+          "status": 204,
+          "substatus": 0,
+          "win32Status": 0,
+          "timeTakenMs": 74
+        }
+      }
+    }
+  ]
+}

@@ -18,6 +18,8 @@ private slots:
     void regexTextRendererUsesScenarioSchema();
     void invalidRegexTextAttributeIsRejected();
     void regexTextMessageWithLineBreakIsRejected();
+    void iisW3cRendererIsCreated();
+    void invalidIisW3cAttributeIsRejected();
     void syslogRfc5424RendererIsCreated();
     void invalidRfc5424AppNameIsRejected();
     void invalidRfc5424MessageIdIsRejected();
@@ -43,6 +45,7 @@ void LogRecordRendererFactoryTests::
             QStringLiteral("tsv"),
             QStringLiteral("logfmt"),
             QStringLiteral("regex-text"),
+            QStringLiteral("iis-w3c"),
             QStringLiteral("syslog-rfc5424"),
             QStringLiteral("syslog-rfc3164"),
             QStringLiteral("structured-json"),
@@ -403,6 +406,59 @@ void LogRecordRendererFactoryTests::
         result.errorCode,
         QStringLiteral(
             "INVALID_REGEX_TEXT_MESSAGE"
+            )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    iisW3cRendererIsCreated()
+{
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("IIS-W3C"),
+            LiveLogScenario()
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.renderer);
+
+    QVERIFY(
+        result.renderer
+            ->initialContent()
+            .contains(
+                "#Fields: date time"
+                )
+        );
+}
+
+void LogRecordRendererFactoryTests::
+    invalidIisW3cAttributeIsRejected()
+{
+    LiveLogRecordStep step;
+
+    step.record.attributes.insert(
+        QStringLiteral("userAgent"),
+        QStringLiteral(
+            "Mozilla Test Agent"
+            )
+        );
+
+    LiveLogScenario scenario;
+    scenario.steps.append(step);
+
+    const auto result =
+        LogRecordRendererFactory::create(
+            QStringLiteral("iis-w3c"),
+            scenario
+            );
+
+    QVERIFY(!result.isSuccess());
+    QVERIFY(!result.renderer);
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_IIS_W3C_ATTRIBUTE"
             )
         );
 }

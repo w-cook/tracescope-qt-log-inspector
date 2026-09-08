@@ -1812,6 +1812,9 @@ qt_add_executable(
     ../tools/live-log-generator/renderers/RegexTextRenderer.h
     ../tools/live-log-generator/renderers/RegexTextRenderer.cpp
 
+    ../tools/live-log-generator/renderers/IisW3cRenderer.h
+    ../tools/live-log-generator/renderers/IisW3cRenderer.cpp
+
     ../tools/live-log-generator/renderers/SyslogRenderer.h
     ../tools/live-log-generator/renderers/SyslogRenderer.cpp
 
@@ -2032,4 +2035,28 @@ target_link_libraries(
 add_test(
     NAME RegexTextRendererTests
     COMMAND RegexTextRendererTests
+)
+
+qt_add_executable(
+    IisW3cRendererTests
+
+    IisW3cRendererTests.cpp
+
+    ../tools/live-log-generator/LiveLogRecord.h
+    ../tools/live-log-generator/ILogRecordRenderer.h
+
+    ../tools/live-log-generator/renderers/IisW3cRenderer.h
+    ../tools/live-log-generator/renderers/IisW3cRenderer.cpp
+)
+
+target_link_libraries(
+    IisW3cRendererTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME IisW3cRendererTests
+    COMMAND IisW3cRendererTests
 )
