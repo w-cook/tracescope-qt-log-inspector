@@ -748,6 +748,7 @@ IncrementalImportInitializationResult
     DelimitedTextImporter::
     initializeIncrementalStateFromFile(
         const QString &sourcePath,
+        qint64 existingByteCount,
         DelimitedTextImportState &state
         ) const
 {
@@ -755,6 +756,18 @@ IncrementalImportInitializationResult
         initialization;
 
     state.reset();
+
+    if (existingByteCount < 0) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The incremental import baseline "
+                "byte count cannot be negative."
+                );
+
+        return initialization;
+    }
 
     QFile file(
         sourcePath
@@ -781,9 +794,28 @@ IncrementalImportInitializationResult
 
     qint64 physicalLineNumber = 0;
 
-    while (!file.atEnd()) {
+    while (file.pos()
+           < existingByteCount) {
+        const qint64 lineStart =
+            file.pos();
+
         QByteArray lineBytes =
             file.readLine();
+
+        if (lineBytes.isEmpty()) {
+            break;
+        }
+
+        const qint64 allowedByteCount =
+            existingByteCount
+            - lineStart;
+
+        if (lineBytes.size()
+            > allowedByteCount) {
+            lineBytes.truncate(
+                allowedByteCount
+                );
+        }
 
         ++physicalLineNumber;
 
@@ -849,6 +881,20 @@ IncrementalImportInitializationResult
 
         state.headerStatus =
             DelimitedTextHeaderStatus::Ready;
+
+        return initialization;
+    }
+
+    if (file.pos() < existingByteCount
+        && file.atEnd()) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing delimited source became "
+                "shorter than the captured baseline "
+                "while initializing incremental import."
+                );
 
         return initialization;
     }

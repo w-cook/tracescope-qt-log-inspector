@@ -1,6 +1,7 @@
 #include <QtTest>
 
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 
 #include "../src/live/LiveLineImportAdapter.h"
@@ -210,9 +211,15 @@ void LiveLineImportAdapterTests::
         profile
         );
 
+    const qint64 baselineByteCount =
+        QFileInfo(
+            sourcePath
+            ).size();
+
     const auto initialization =
         adapter.initializeFromExistingFile(
-            sourcePath
+            sourcePath,
+            baselineByteCount
             );
 
     QVERIFY(

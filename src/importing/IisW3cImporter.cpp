@@ -504,6 +504,7 @@ IncrementalImportInitializationResult
     IisW3cImporter::
     initializeIncrementalStateFromFile(
         const QString &sourcePath,
+        qint64 existingByteCount,
         IisW3cImportState &state
         ) const
 {
@@ -511,6 +512,18 @@ IncrementalImportInitializationResult
         initialization;
 
     state.reset();
+
+    if (existingByteCount < 0) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The incremental import baseline "
+                "byte count cannot be negative."
+                );
+
+        return initialization;
+    }
 
     QFile file(
         sourcePath
@@ -535,9 +548,28 @@ IncrementalImportInitializationResult
         return initialization;
     }
 
-    while (!file.atEnd()) {
+    while (file.pos()
+           < existingByteCount) {
+        const qint64 lineStart =
+            file.pos();
+
         QByteArray lineBytes =
             file.readLine();
+
+        if (lineBytes.isEmpty()) {
+            break;
+        }
+
+        const qint64 allowedByteCount =
+            existingByteCount
+            - lineStart;
+
+        if (lineBytes.size()
+            > allowedByteCount) {
+            lineBytes.truncate(
+                allowedByteCount
+                );
+        }
 
         QString rawSource =
             QString::fromUtf8(
@@ -581,6 +613,20 @@ IncrementalImportInitializationResult
 
         state.activeFields =
             fields;
+    }
+
+    if (file.pos() < existingByteCount
+        && file.atEnd()) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing IIS W3C source became "
+                "shorter than the captured baseline "
+                "while initializing incremental import."
+                );
+
+        return initialization;
     }
 
     if (file.error()

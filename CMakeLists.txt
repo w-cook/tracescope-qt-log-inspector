@@ -209,6 +209,8 @@ qt_add_executable(TraceScope
     src/importing/IncrementalImportInitializationResult.h
     src/live/LiveLineImportAdapter.h
     src/live/LiveLineImportAdapter.cpp
+    src/live/LiveSessionFollowCoordinator.h
+    src/live/LiveSessionFollowCoordinator.cpp
 
 )
 

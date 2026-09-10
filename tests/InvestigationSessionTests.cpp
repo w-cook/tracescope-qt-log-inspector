@@ -7,8 +7,7 @@
 #include <utility>
 
 #include "../src/importing/JsonLinesImporter.h"
-#include "../src/live/LiveFileFollower.h"
-#include "../src/live/LiveLineSourceContext.h"
+#include "../src/live/LiveSessionFollowCoordinator.h"
 #include "../src/workspace/InvestigationSession.h"
 #include "../src/workspace/InvestigationSessionPersistence.h"
 
@@ -26,6 +25,8 @@ private slots:
     void appendsLiveRecordsWithoutDiscardingInvestigationState();
     void ignoresDuplicateLiveRecordIds();
     void followsAppendedJsonLinesIntoExistingSession();
+    void rejectsLiveFollowForExistingUnterminatedLine();
+    void followsReplacementAsNewSourceGeneration();
 };
 
 void InvestigationSessionTests::
@@ -1166,49 +1167,50 @@ void InvestigationSessionTests::
         );
 
     /*
-     * Establish the line-oriented parsing position
-     * from the source that has already been imported.
+     * The coordinator now owns the complete live
+     * ingestion path:
+     *
+     * physical source
+     * -> bounded read
+     * -> line framing
+     * -> importer
+     * -> InvestigationSession append
      */
-    LiveLineSourceContext sourceContext;
-
-    const auto initialization =
-        sourceContext.initializeFromExistingFile(
-            sourcePath
-            );
-
-    QVERIFY(
-        initialization.succeeded
+    LiveSessionFollowCoordinator coordinator(
+        session
         );
 
     QVERIFY(
-        initialization.endsAtLineBoundary
+        coordinator.isSupported()
         );
 
-    QCOMPARE(
-        initialization.existingPhysicalLineCount,
-        qint64(1)
-        );
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator.start();
 
-    QCOMPARE(
-        sourceContext.nextPhysicalLineNumber(),
-        qint64(2)
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
         );
 
     /*
-     * Following begins at the current EOF, so the
-     * existing static record must never be consumed
-     * again.
+     * The existing static contents establish the
+     * fixed live-follow baseline. Those bytes must
+     * never be imported a second time.
      */
-    LiveFileFollower follower(
-        sourcePath
-        );
-
-    QVERIFY(
-        follower.start()
+    QCOMPARE(
+        startResult.baselineByteCount,
+        qint64(
+            initialRecord.size()
+            )
         );
 
     QCOMPARE(
-        follower.state().sourceGeneration(),
+        coordinator
+            .state()
+            .sourceGeneration(),
         quint64(0)
         );
 
@@ -1236,116 +1238,47 @@ void InvestigationSessionTests::
     sourceFile.close();
 
     /*
-     * Physical source growth is read independently
-     * from logical record framing.
+     * A single coordinator poll should consume the
+     * new physical bytes, frame the completed line,
+     * reuse the configured JSON Lines importer, and
+     * append the resulting record to the existing
+     * investigation session.
      */
-    LiveFileReadResult readResult =
-        follower.readAvailableBytes();
+    const LiveSessionFollowPollResult
+        pollResult =
+        coordinator.pollOnce();
 
-    QVERIFY(
-        readResult.succeeded
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
         );
 
     QCOMPARE(
-        readResult.observation.kind,
+        pollResult.observation.kind,
         LiveFileObservationKind::Appended
         );
 
     QCOMPARE(
-        readResult.bytes,
-        appendedRecord
-        );
-
-    /*
-     * Convert arbitrary bytes into completed
-     * physical lines while preserving their true
-     * source positions.
-     */
-    LiveFramedLineBatch framedBatch =
-        sourceContext.appendBytes(
-            std::move(
-                readResult.bytes
-                )
-            );
-
-    QCOMPARE(
-        framedBatch.firstPhysicalLineNumber,
-        qint64(2)
-        );
-
-    QCOMPARE(
-        framedBatch.sourceGeneration,
-        quint64(0)
-        );
-
-    QCOMPARE(
-        framedBatch.lines.size(),
-        1
-        );
-
-    QVERIFY(
-        sourceContext
-            .framer()
-            .pendingBytes()
-            .isEmpty()
-        );
-
-    QStringList lines;
-
-    for (const QByteArray &line
-         : framedBatch.lines) {
-        lines.append(
-            QString::fromUtf8(
-                line
-                )
-            );
-    }
-
-    /*
-     * Reuse the normal JSON Lines parser with the
-     * live source's physical position and generation.
-     */
-    ImportResult liveResult =
-        importer.importLines(
-            lines,
-            sourcePath,
-            framedBatch.firstPhysicalLineNumber,
-            framedBatch.sourceGeneration
-            );
-
-    QCOMPARE(
-        liveResult.records.size(),
-        1
-        );
-
-    QCOMPARE(
-        liveResult.processedRecordCount,
+        pollResult.processedRecordCount,
         qint64(1)
         );
 
     QCOMPARE(
-        liveResult.records.first()
-            .source.recordNumber,
-        qint64(2)
+        pollResult.importedRecordCount,
+        qint64(1)
         );
 
-    QCOMPARE(
-        liveResult.records.first()
-            .source.sourceGeneration,
-        quint64(0)
+    QVERIFY(
+        !pollResult.sourceGenerationChanged
         );
 
     /*
-     * This is the final Phase 15 seam: new live
-     * evidence enters the ordinary investigation
-     * session rather than a separate live model.
+     * The original static evidence remains in place
+     * and the newly followed record has been appended
+     * to the same investigation.
      */
-    session.appendLiveImportResult(
-        std::move(
-            liveResult
-            )
-        );
-
     QCOMPARE(
         session.importedRecordCount(),
         qint64(2)
@@ -1384,10 +1317,373 @@ void InvestigationSessionTests::
             )
         );
 
+    /*
+     * The live record continues the original physical
+     * source, so it is line two of generation zero.
+     */
     QCOMPARE(
         records.at(1)
             .source.recordNumber,
         qint64(2)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    QVERIFY(
+        records.at(0).recordId
+        != records.at(1).recordId
+        );
+}
+
+void InvestigationSessionTests::
+    rejectsLiveFollowForExistingUnterminatedLine()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "unterminated.jsonl"
+                )
+            );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    const QByteArray content(
+        R"({"message":"Existing"})"
+        );
+
+    QCOMPARE(
+        file.write(content),
+        qint64(content.size())
+        );
+
+    file.close();
+
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult importResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        importResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(importResult)
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    const LiveSessionFollowStartResult result =
+        coordinator.start();
+
+    QVERIFY(
+        !result.succeeded
+        );
+
+    QVERIFY(
+        !result.errorMessage.isEmpty()
+        );
+
+    QVERIFY(
+        coordinator.state().isStopped()
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+}
+
+void InvestigationSessionTests::
+    followsReplacementAsNewSourceGeneration()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live-replacement.jsonl"
+                )
+            );
+
+    /*
+     * Keep the original source deliberately larger
+     * than the replacement so the same-path overwrite
+     * is unambiguously observable as a size regression.
+     */
+    const QByteArray initialRecord(
+        R"({"timestamp":"2026-09-10T15:00:00Z","level":"INFO","subsystem":"Gateway","eventCode":"ORIGINAL_GENERATION","entityId":"REQ-ORIGINAL","message":"Original generation record with deliberately longer physical contents"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator.start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        coordinator
+            .state()
+            .sourceGeneration(),
+        quint64(0)
+        );
+
+    /*
+     * Replace the contents at the same path.
+     *
+     * Opening WriteOnly without Append truncates the
+     * existing file before the new generation is
+     * written.
+     */
+    const QByteArray replacementRecord(
+        R"({"message":"Replacement generation"})"
+        "\n"
+        );
+
+    QVERIFY(
+        replacementRecord.size()
+        < initialRecord.size()
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            replacementRecord
+            ),
+        qint64(
+            replacementRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    /*
+     * The coordinator should detect the size
+     * regression, advance the physical generation,
+     * reset line/import state, read the new source
+     * from byte zero, and append its evidence.
+     */
+    const LiveSessionFollowPollResult
+        pollResult =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        pollResult.observation.kind,
+        LiveFileObservationKind::
+        SourceReset
+        );
+
+    QVERIFY(
+        pollResult.sourceGenerationChanged
+        );
+
+    QCOMPARE(
+        coordinator
+            .state()
+            .sourceGeneration(),
+        quint64(1)
+        );
+
+    QCOMPARE(
+        pollResult.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        pollResult.importedRecordCount,
+        qint64(1)
+        );
+
+    /*
+     * A physical reset must not behave like static
+     * reload. Generation-zero evidence remains part
+     * of the investigation.
+     */
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(2)
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Original generation record "
+                "with deliberately longer "
+                "physical contents"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Replacement generation"
+                )
+            )
+        );
+
+    /*
+     * The replacement is a new physical source, so
+     * numbering restarts at line one and identity
+     * carries generation one.
+     */
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(1)
         );
 
     QVERIFY(

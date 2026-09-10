@@ -1,6 +1,7 @@
 #include <QtTest>
 
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 
 #include "../src/live/LiveLineSourceContext.h"
@@ -12,16 +13,12 @@ class LiveLineSourceContextTests
 
 private slots:
     void emptySourceStartsAtFirstPhysicalLine();
-
     void initializesAfterExistingPhysicalLines();
-
     void reportsExistingUnterminatedFinalLine();
-
     void advancesOnlyForCompleteFramedLines();
-
     void sourceGenerationResetsLinePositionAndPendingBytes();
-
     void initializationReportsMissingSource();
+    void initializationStopsAtCapturedByteBoundary();
 };
 
 void LiveLineSourceContextTests::
@@ -52,7 +49,8 @@ void LiveLineSourceContextTests::
 
     const auto result =
         context.initializeFromExistingFile(
-            path
+            path,
+            QFileInfo(path).size()
             );
 
     QVERIFY(
@@ -122,7 +120,8 @@ void LiveLineSourceContextTests::
 
     const auto result =
         context.initializeFromExistingFile(
-            path
+            path,
+            QFileInfo(path).size()
             );
 
     QVERIFY(
@@ -186,7 +185,8 @@ void LiveLineSourceContextTests::
 
     const auto result =
         context.initializeFromExistingFile(
-            path
+            path,
+            QFileInfo(path).size()
             );
 
     QVERIFY(
@@ -369,7 +369,8 @@ void LiveLineSourceContextTests::
         context.initializeFromExistingFile(
             QStringLiteral(
                 "missing/live.log"
-                )
+                ),
+            0
             );
 
     QVERIFY(
@@ -388,6 +389,101 @@ void LiveLineSourceContextTests::
     QCOMPARE(
         context.sourceGeneration(),
         quint64(0)
+        );
+}
+
+void LiveLineSourceContextTests::
+    initializationStopsAtCapturedByteBoundary()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString path =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(path);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    const QByteArray baseline(
+        "first\n"
+        "second\n"
+        );
+
+    QCOMPARE(
+        file.write(
+            baseline
+            ),
+        qint64(
+            baseline.size()
+            )
+        );
+
+    file.close();
+
+    const qint64 baselineByteCount =
+        baseline.size();
+
+    /*
+     * Simulate producer growth after the follower
+     * has captured its starting offset.
+     */
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    const QByteArray laterGrowth(
+        "third\n"
+        "fourth\n"
+        );
+
+    QCOMPARE(
+        file.write(
+            laterGrowth
+            ),
+        qint64(
+            laterGrowth.size()
+            )
+        );
+
+    file.close();
+
+    LiveLineSourceContext context;
+
+    const auto result =
+        context.initializeFromExistingFile(
+            path,
+            baselineByteCount
+            );
+
+    QVERIFY(
+        result.succeeded
+        );
+
+    QCOMPARE(
+        result.existingPhysicalLineCount,
+        qint64(2)
+        );
+
+    QVERIFY(
+        result.endsAtLineBoundary
+        );
+
+    QCOMPARE(
+        context.nextPhysicalLineNumber(),
+        qint64(3)
         );
 }
 

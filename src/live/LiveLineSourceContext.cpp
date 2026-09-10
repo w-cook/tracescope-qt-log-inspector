@@ -1,5 +1,6 @@
 #include "LiveLineSourceContext.h"
 
+#include <algorithm>
 #include <utility>
 
 #include <QFile>
@@ -14,10 +15,23 @@ constexpr qint64 SourceScanChunkSizeBytes =
 LiveLineSourceInitializationResult
     LiveLineSourceContext::
     initializeFromExistingFile(
-        const QString &sourcePath
+        const QString &sourcePath,
+        qint64 existingByteCount
         )
 {
     LiveLineSourceInitializationResult result;
+
+    if (existingByteCount < 0) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The existing live source byte count "
+                "cannot be negative."
+                );
+
+        return result;
+    }
 
     QFile file(
         sourcePath
@@ -41,15 +55,27 @@ LiveLineSourceInitializationResult
         return result;
     }
 
+    qint64 bytesScanned = 0;
     qint64 newlineCount = 0;
 
     bool sawBytes = false;
     char lastByte = '\0';
 
-    while (true) {
+    while (bytesScanned
+           < existingByteCount) {
+        const qint64 remaining =
+            existingByteCount
+            - bytesScanned;
+
+        const qint64 requested =
+            std::min(
+                SourceScanChunkSizeBytes,
+                remaining
+                );
+
         const QByteArray chunk =
             file.read(
-                SourceScanChunkSizeBytes
+                requested
                 );
 
         if (chunk.isEmpty()) {
@@ -57,6 +83,9 @@ LiveLineSourceInitializationResult
         }
 
         sawBytes = true;
+
+        bytesScanned +=
+            chunk.size();
 
         newlineCount +=
             chunk.count(
@@ -84,6 +113,20 @@ LiveLineSourceInitializationResult
         return result;
     }
 
+    if (bytesScanned
+        != existingByteCount) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The existing live source became "
+                "shorter than the captured baseline "
+                "while initializing line position."
+                );
+
+        return result;
+    }
+
     result.endsAtLineBoundary =
         !sawBytes
         || lastByte == '\n';
@@ -96,11 +139,6 @@ LiveLineSourceInitializationResult
         ++result.existingPhysicalLineCount;
     }
 
-    /*
-     * The existing file has already been imported.
-     * Live lines therefore begin after every physical
-     * line that existed at activation time.
-     */
     m_nextPhysicalLineNumber =
         result.existingPhysicalLineCount
         + 1;

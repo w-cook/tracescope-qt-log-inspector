@@ -1076,6 +1076,11 @@ void DelimitedTextImporterTests::
             )
         );
 
+    const qint64 baselineByteCount =
+        QFileInfo(
+            file.fileName()
+            ).size();
+
     const DelimitedTextImporter importer =
         createCsvImporter();
 
@@ -1084,6 +1089,7 @@ void DelimitedTextImporterTests::
     const auto initialization =
         importer.initializeIncrementalStateFromFile(
             file.fileName(),
+            baselineByteCount,
             state
             );
 
@@ -1130,6 +1136,7 @@ void DelimitedTextImporterTests::
     const auto initialization =
         importer.initializeIncrementalStateFromFile(
             file.fileName(),
+            0,
             state
             );
 

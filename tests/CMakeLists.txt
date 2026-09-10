@@ -1261,26 +1261,41 @@ qt_add_executable(
     ../src/domain/RecordTimestamp.cpp
 
     ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/DelimitedTextImporter.h
+    ../src/importing/DelimitedTextImporter.cpp
+    ../src/importing/IisW3cImporter.h
+    ../src/importing/IisW3cImporter.cpp
     ../src/importing/ILogImporter.h
     ../src/importing/ImportProfile.h
     ../src/importing/ImportDiagnostic.h
     ../src/importing/ImportDiagnostic.cpp
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
+    ../src/importing/IncrementalImportInitializationResult.h
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
     ../src/importing/JsonObjectRecordMapper.h
     ../src/importing/JsonObjectRecordMapper.cpp
+    ../src/importing/KeyValueTextImporter.h
+    ../src/importing/KeyValueTextImporter.cpp
+    ../src/importing/RegexTextImporter.h
+    ../src/importing/RegexTextImporter.cpp
+    ../src/importing/SyslogImporter.h
+    ../src/importing/SyslogImporter.cpp
 
     ../src/live/LiveFileFollowState.h
     ../src/live/LiveFileFollowState.cpp
     ../src/live/LiveFileFollower.h
     ../src/live/LiveFileFollower.cpp
+    ../src/live/LiveLineImportAdapter.h
+    ../src/live/LiveLineImportAdapter.cpp
     ../src/live/LiveLineRecordFramer.h
     ../src/live/LiveLineRecordFramer.cpp
     ../src/live/LiveLineSourceContext.h
     ../src/live/LiveLineSourceContext.cpp
+    ../src/live/LiveSessionFollowCoordinator.h
+    ../src/live/LiveSessionFollowCoordinator.cpp
 
     ../src/models/InvestigationFilterProxyModel.h
     ../src/models/InvestigationFilterProxyModel.cpp

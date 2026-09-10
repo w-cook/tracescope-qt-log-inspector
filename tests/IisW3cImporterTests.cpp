@@ -36,6 +36,7 @@ private slots:
     void incrementalImportPreservesFieldsAcrossBatches();
     void incrementalStateInitializesFromLatestFieldsDirective();
     void incrementalStateClearsOnEmptyLatestFieldsDirective();
+    void incrementalInitializationStopsAtCapturedBoundary();
 };
 
 namespace
@@ -1278,6 +1279,9 @@ void IisW3cImporterTests::
 
     stream.flush();
 
+    const qint64 baselineByteCount =
+        file.size();
+
     const QString sourcePath =
         file.fileName();
 
@@ -1291,6 +1295,7 @@ void IisW3cImporterTests::
     const auto initialization =
         importer.initializeIncrementalStateFromFile(
             sourcePath,
+            baselineByteCount,
             state
             );
 
@@ -1338,6 +1343,9 @@ void IisW3cImporterTests::
 
     stream.flush();
 
+    const qint64 baselineByteCount =
+        file.size();
+
     const QString sourcePath =
         file.fileName();
 
@@ -1351,6 +1359,7 @@ void IisW3cImporterTests::
     const auto initialization =
         importer.initializeIncrementalStateFromFile(
             sourcePath,
+            baselineByteCount,
             state
             );
 
@@ -1360,6 +1369,70 @@ void IisW3cImporterTests::
 
     QVERIFY(
         state.activeFields.isEmpty()
+        );
+}
+
+void IisW3cImporterTests::
+    incrementalInitializationStopsAtCapturedBoundary()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        file.open()
+        );
+
+    QTextStream stream(
+        &file
+        );
+
+    stream
+        << "#Fields: date time "
+           "cs-method cs-uri-stem sc-status\n"
+        << "2026-09-10 10:00:00 "
+           "GET /baseline 200\n";
+
+    stream.flush();
+
+    const qint64 baselineByteCount =
+        file.size();
+
+    stream
+        << "#Fields: date time "
+           "c-ip cs-method cs-uri-stem "
+           "sc-status time-taken\n";
+
+    stream.flush();
+
+    const QString sourcePath =
+        file.fileName();
+
+    file.close();
+
+    IisW3cImporter importer =
+        createImporter();
+
+    IisW3cImportState state;
+
+    const auto initialization =
+        importer.initializeIncrementalStateFromFile(
+            sourcePath,
+            baselineByteCount,
+            state
+            );
+
+    QVERIFY(
+        initialization.succeeded
+        );
+
+    QCOMPARE(
+        state.activeFields,
+        QStringList({
+            QStringLiteral("date"),
+            QStringLiteral("time"),
+            QStringLiteral("cs-method"),
+            QStringLiteral("cs-uri-stem"),
+            QStringLiteral("sc-status")
+        })
         );
 }
 

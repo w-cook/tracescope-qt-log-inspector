@@ -49,6 +49,7 @@ public:
     IncrementalImportInitializationResult
     initializeIncrementalStateFromFile(
         const QString &sourcePath,
+        qint64 existingByteCount,
         IisW3cImportState &state
         ) const;
 

@@ -88,7 +88,8 @@ LiveLineImportAdapter::kind() const
 IncrementalImportInitializationResult
     LiveLineImportAdapter::
     initializeFromExistingFile(
-        const QString &sourcePath
+        const QString &sourcePath,
+        qint64 existingByteCount
         )
 {
     switch (m_kind) {
@@ -103,6 +104,7 @@ IncrementalImportInitializationResult
         return importer
             .initializeIncrementalStateFromFile(
                 sourcePath,
+                existingByteCount,
                 m_delimitedState
                 );
     }
@@ -118,6 +120,7 @@ IncrementalImportInitializationResult
         return importer
             .initializeIncrementalStateFromFile(
                 sourcePath,
+                existingByteCount,
                 m_delimitedState
                 );
     }
@@ -130,6 +133,7 @@ IncrementalImportInitializationResult
         return importer
             .initializeIncrementalStateFromFile(
                 sourcePath,
+                existingByteCount,
                 m_iisState
                 );
     }

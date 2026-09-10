@@ -36,7 +36,8 @@ public:
 
     IncrementalImportInitializationResult
     initializeFromExistingFile(
-        const QString &sourcePath
+        const QString &sourcePath,
+        qint64 existingByteCount
         );
 
     ImportResult importBatch(
