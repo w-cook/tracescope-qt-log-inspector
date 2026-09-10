@@ -6,6 +6,9 @@
 
 #include <utility>
 
+#include "../src/importing/JsonLinesImporter.h"
+#include "../src/live/LiveFileFollower.h"
+#include "../src/live/LiveLineSourceContext.h"
 #include "../src/workspace/InvestigationSession.h"
 #include "../src/workspace/InvestigationSessionPersistence.h"
 
@@ -22,6 +25,7 @@ private slots:
     void capturesAndRestoresPersistedInvestigationState();
     void appendsLiveRecordsWithoutDiscardingInvestigationState();
     void ignoresDuplicateLiveRecordIds();
+    void followsAppendedJsonLinesIntoExistingSession();
 };
 
 void InvestigationSessionTests::
@@ -1072,6 +1076,323 @@ void InvestigationSessionTests::
                 "DuplicateSubsystem"
                 )
             )
+        );
+}
+
+void InvestigationSessionTests::
+    followsAppendedJsonLinesIntoExistingSession()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live-session.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"timestamp":"2026-09-10T14:00:00Z","level":"INFO","subsystem":"Gateway","eventCode":"STARTED","entityId":"REQ-1","message":"Existing record"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        initialResult.processedRecordCount,
+        qint64(1)
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    /*
+     * Establish the line-oriented parsing position
+     * from the source that has already been imported.
+     */
+    LiveLineSourceContext sourceContext;
+
+    const auto initialization =
+        sourceContext.initializeFromExistingFile(
+            sourcePath
+            );
+
+    QVERIFY(
+        initialization.succeeded
+        );
+
+    QVERIFY(
+        initialization.endsAtLineBoundary
+        );
+
+    QCOMPARE(
+        initialization.existingPhysicalLineCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        sourceContext.nextPhysicalLineNumber(),
+        qint64(2)
+        );
+
+    /*
+     * Following begins at the current EOF, so the
+     * existing static record must never be consumed
+     * again.
+     */
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    QCOMPARE(
+        follower.state().sourceGeneration(),
+        quint64(0)
+        );
+
+    const QByteArray appendedRecord(
+        R"({"timestamp":"2026-09-10T14:00:01Z","level":"WARN","subsystem":"Gateway","eventCode":"SLOW_REQUEST","entityId":"REQ-2","message":"Live appended record"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            appendedRecord
+            ),
+        qint64(
+            appendedRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    /*
+     * Physical source growth is read independently
+     * from logical record framing.
+     */
+    LiveFileReadResult readResult =
+        follower.readAvailableBytes();
+
+    QVERIFY(
+        readResult.succeeded
+        );
+
+    QCOMPARE(
+        readResult.observation.kind,
+        LiveFileObservationKind::Appended
+        );
+
+    QCOMPARE(
+        readResult.bytes,
+        appendedRecord
+        );
+
+    /*
+     * Convert arbitrary bytes into completed
+     * physical lines while preserving their true
+     * source positions.
+     */
+    LiveFramedLineBatch framedBatch =
+        sourceContext.appendBytes(
+            std::move(
+                readResult.bytes
+                )
+            );
+
+    QCOMPARE(
+        framedBatch.firstPhysicalLineNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        framedBatch.sourceGeneration,
+        quint64(0)
+        );
+
+    QCOMPARE(
+        framedBatch.lines.size(),
+        1
+        );
+
+    QVERIFY(
+        sourceContext
+            .framer()
+            .pendingBytes()
+            .isEmpty()
+        );
+
+    QStringList lines;
+
+    for (const QByteArray &line
+         : framedBatch.lines) {
+        lines.append(
+            QString::fromUtf8(
+                line
+                )
+            );
+    }
+
+    /*
+     * Reuse the normal JSON Lines parser with the
+     * live source's physical position and generation.
+     */
+    ImportResult liveResult =
+        importer.importLines(
+            lines,
+            sourcePath,
+            framedBatch.firstPhysicalLineNumber,
+            framedBatch.sourceGeneration
+            );
+
+    QCOMPARE(
+        liveResult.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        liveResult.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        liveResult.records.first()
+            .source.recordNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        liveResult.records.first()
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    /*
+     * This is the final Phase 15 seam: new live
+     * evidence enters the ordinary investigation
+     * session rather than a separate live model.
+     */
+    session.appendLiveImportResult(
+        std::move(
+            liveResult
+            )
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(2)
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Existing record"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Live appended record"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(2)
+        );
+
+    QVERIFY(
+        records.at(0).recordId
+        != records.at(1).recordId
         );
 }
 

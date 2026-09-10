@@ -1247,34 +1247,52 @@ qt_add_executable(
 
     InvestigationSessionTests.cpp
 
-    ../src/workspace/InvestigationSession.h
-    ../src/workspace/InvestigationSession.cpp
-
-    ../src/workspace/InvestigationStateStore.h
-    ../src/workspace/InvestigationStateStore.cpp
-
-    ../src/domain/InvestigationRecordState.h
-
     ../src/controllers/InvestigationController.h
     ../src/controllers/InvestigationController.cpp
 
-    ../src/models/InvestigationTableModel.h
-    ../src/models/InvestigationTableModel.cpp
-    ../src/models/InvestigationFilterProxyModel.h
-    ../src/models/InvestigationFilterProxyModel.cpp
-
-    ../src/importing/ImportProfile.h
-    ../src/importing/CanonicalFieldMappings.h
-    ../src/importing/ImportDiagnostic.h
-    ../src/importing/ImportResult.h
-
     ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
     ../src/domain/RecordSeverity.h
     ../src/domain/RecordSeverity.cpp
     ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
 
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/live/LiveFileFollowState.h
+    ../src/live/LiveFileFollowState.cpp
+    ../src/live/LiveFileFollower.h
+    ../src/live/LiveFileFollower.cpp
+    ../src/live/LiveLineRecordFramer.h
+    ../src/live/LiveLineRecordFramer.cpp
+    ../src/live/LiveLineSourceContext.h
+    ../src/live/LiveLineSourceContext.cpp
+
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
     ../src/workspace/InvestigationSessionPersistence.h
     ../src/workspace/InvestigationSessionPersistence.cpp
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
 )
 
 target_link_libraries(
@@ -1807,6 +1825,64 @@ target_link_libraries(
 add_test(
     NAME LiveLineSourceContextTests
     COMMAND LiveLineSourceContextTests
+)
+
+qt_add_executable(
+    LiveLineImportAdapterTests
+
+    LiveLineImportAdapterTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/DelimitedTextImporter.h
+    ../src/importing/DelimitedTextImporter.cpp
+    ../src/importing/IisW3cImporter.h
+    ../src/importing/IisW3cImporter.cpp
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/IncrementalImportInitializationResult.h
+    ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+    ../src/importing/KeyValueTextImporter.h
+    ../src/importing/KeyValueTextImporter.cpp
+    ../src/importing/RegexTextImporter.h
+    ../src/importing/RegexTextImporter.cpp
+    ../src/importing/SyslogImporter.h
+    ../src/importing/SyslogImporter.cpp
+
+    ../src/live/LiveLineImportAdapter.h
+    ../src/live/LiveLineImportAdapter.cpp
+    ../src/live/LiveLineRecordFramer.h
+    ../src/live/LiveLineRecordFramer.cpp
+    ../src/live/LiveLineSourceContext.h
+    ../src/live/LiveLineSourceContext.cpp
+)
+
+target_link_libraries(
+    LiveLineImportAdapterTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveLineImportAdapterTests
+    COMMAND LiveLineImportAdapterTests
 )
 
 qt_add_executable(
