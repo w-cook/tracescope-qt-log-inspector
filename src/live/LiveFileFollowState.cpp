@@ -1,7 +1,6 @@
 #include "LiveFileFollowState.h"
 
 #include <algorithm>
-#include <utility>
 
 LiveFileFollowStatus
 LiveFileFollowState::status() const
@@ -38,12 +37,6 @@ LiveFileFollowState::sourceGeneration() const
     return m_sourceGeneration;
 }
 
-const QByteArray &
-LiveFileFollowState::pendingBytes() const
-{
-    return m_pendingBytes;
-}
-
 void LiveFileFollowState::startAtOffset(
     qint64 offset
     )
@@ -53,8 +46,6 @@ void LiveFileFollowState::startAtOffset(
             0,
             offset
             );
-
-    m_pendingBytes.clear();
 
     m_status =
         LiveFileFollowStatus::Following;
@@ -90,16 +81,6 @@ void LiveFileFollowState::stop()
 {
     m_status =
         LiveFileFollowStatus::Stopped;
-
-    /*
-     * Pause retains incomplete source data because
-     * following will resume from the same cursor.
-     *
-     * Stop ends the current following episode, so
-     * an incomplete physical record must not leak
-     * into a later start operation.
-     */
-    m_pendingBytes.clear();
 }
 
 bool LiveFileFollowState::advanceReadOffset(
@@ -123,14 +104,6 @@ bool LiveFileFollowState::advanceReadOffset(
     return true;
 }
 
-void LiveFileFollowState::setPendingBytes(
-    QByteArray bytes
-    )
-{
-    m_pendingBytes =
-        std::move(bytes);
-}
-
 void LiveFileFollowState::
     beginNextSourceGeneration()
 {
@@ -143,5 +116,4 @@ void LiveFileFollowState::
      * from the previous generation are invalid.
      */
     m_readOffset = 0;
-    m_pendingBytes.clear();
 }

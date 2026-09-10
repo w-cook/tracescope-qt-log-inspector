@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QByteArray>
 #include <QtTypes>
 
 enum class LiveFileFollowStatus
@@ -22,8 +21,6 @@ public:
     qint64 readOffset() const;
     quint64 sourceGeneration() const;
 
-    const QByteArray &pendingBytes() const;
-
     void startAtOffset(
         qint64 offset
         );
@@ -37,10 +34,6 @@ public:
         qint64 byteCount
         );
 
-    void setPendingBytes(
-        QByteArray bytes
-        );
-
     void beginNextSourceGeneration();
 
 private:
@@ -50,6 +43,4 @@ private:
     qint64 m_readOffset = 0;
 
     quint64 m_sourceGeneration = 0;
-
-    QByteArray m_pendingBytes;
 };

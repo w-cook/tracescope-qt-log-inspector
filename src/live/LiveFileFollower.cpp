@@ -211,6 +211,177 @@ LiveFileObservation LiveFileFollower::poll()
     };
 }
 
+LiveFileReadResult
+LiveFileFollower::readAvailableBytes(
+    qint64 maxByteCount
+    )
+{
+    LiveFileReadResult result;
+
+    result.observation =
+        poll();
+
+    /*
+     * poll() remains useful while paused because it
+     * can observe accumulated growth or a source
+     * generation change. Actual byte consumption,
+     * however, occurs only while actively following.
+     */
+    if (!m_state.isFollowing()) {
+        return result;
+    }
+
+    if (result.observation.kind
+            != LiveFileObservationKind::Appended
+        && result.observation.kind
+               != LiveFileObservationKind::SourceReset) {
+        return result;
+    }
+
+    if (result.observation.availableByteCount
+        <= 0) {
+        return result;
+    }
+
+    if (maxByteCount <= 0) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The live read chunk size must "
+                "be greater than zero."
+                );
+
+        return result;
+    }
+
+    const qint64 byteCount =
+        std::min(
+            maxByteCount,
+            result.observation
+                .availableByteCount
+            );
+
+    const qint64 startingOffset =
+        m_state.readOffset();
+
+    QFile file(
+        m_sourcePath
+        );
+
+    if (!file.open(
+            QIODevice::ReadOnly
+            )) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The live source could not be "
+                "opened for reading: %1"
+                )
+                .arg(
+                    file.errorString()
+                    );
+
+        return result;
+    }
+
+    if (!file.seek(
+            startingOffset
+            )) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The live source could not be "
+                "positioned at byte %1: %2"
+                )
+                .arg(
+                    startingOffset
+                    )
+                .arg(
+                    file.errorString()
+                    );
+
+        return result;
+    }
+
+    const QByteArray bytes =
+        file.read(
+            byteCount
+            );
+
+    /*
+     * Accept only the complete range we intended to
+     * consume. A short read can mean that the source
+     * changed between observation and physical read.
+     *
+     * In that case leave the cursor untouched so the
+     * next poll can reassess the source safely.
+     */
+    if (bytes.size()
+        != byteCount) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            file.error()
+                    != QFileDevice::NoError
+                ? QStringLiteral(
+                      "The live source could not "
+                      "be read: %1"
+                      )
+                      .arg(
+                          file.errorString()
+                          )
+                : QStringLiteral(
+                      "The live source changed "
+                      "before the observed byte "
+                      "range could be read."
+                      );
+
+        return result;
+    }
+
+    if (!m_state.advanceReadOffset(
+            bytes.size()
+            )) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The live source cursor could "
+                "not be advanced."
+                );
+
+        return result;
+    }
+
+    result.bytes =
+        bytes;
+
+    /*
+     * An initially empty generation has no prefix
+     * available to fingerprint. Once real bytes have
+     * arrived, establish that bounded identity so
+     * later same-path replacement detection retains
+     * its portable fallback.
+     */
+    if (m_sourceFingerprintLength == 0) {
+        const QFileInfo fileInfo(
+            m_sourcePath
+            );
+
+        if (fileInfo.exists()
+            && fileInfo.isFile()) {
+            captureSourceIdentity(
+                fileInfo
+                );
+        }
+    }
+
+    return result;
+}
+
 QByteArray
 LiveFileFollower::sourcePrefixFingerprint(
     qint64 byteCount

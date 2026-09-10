@@ -24,6 +24,7 @@ private slots:
     void importLinesReportsMalformedJson();
     void importLinesReportsInvalidCanonicalValues();
     void importLinesReportsNonObjectJson();
+    void importLinesPreservesExplicitSourcePosition();
 
     void importFilePreservesSourceMetadata();
     void importFileReportsOpenFailure();
@@ -153,6 +154,11 @@ void JsonLinesImporterTests::importLinesCreatesFlexibleInvestigationRecord()
     QCOMPARE(
         record.source.recordNumber,
         qint64(1)
+        );
+
+    QCOMPARE(
+        record.source.sourceGeneration,
+        quint64(0)
         );
 
     QVERIFY(!record.recordId.isEmpty());
@@ -506,6 +512,76 @@ void JsonLinesImporterTests::importLinesReportsNonObjectJson()
             ImportDiagnosticSeverity::Error
             );
     }
+}
+
+void JsonLinesImporterTests::
+    importLinesPreservesExplicitSourcePosition()
+{
+    JsonLinesImporter importer;
+
+    const QString sourcePath =
+        QStringLiteral(
+            "samples/live/session.jsonl"
+            );
+
+    const QString rawSource =
+        QStringLiteral(
+            R"({"level":"INFO","message":"Live record"})"
+            );
+
+    const ImportResult original =
+        importer.importLines(
+            {rawSource},
+            sourcePath,
+            42,
+            0
+            );
+
+    const ImportResult live =
+        importer.importLines(
+            {rawSource},
+            sourcePath,
+            42,
+            3
+            );
+
+    QCOMPARE(
+        original.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        live.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        live.records.first();
+
+    QCOMPARE(
+        record.source.recordNumber,
+        qint64(42)
+        );
+
+    QCOMPARE(
+        record.source.sourceGeneration,
+        quint64(3)
+        );
+
+    QCOMPARE(
+        record.source.sourcePath,
+        sourcePath
+        );
+
+    /*
+     * The semantic record and source ordinal are
+     * identical, but a later physical file
+     * generation represents distinct evidence.
+     */
+    QVERIFY(
+        original.records.first().recordId
+        != record.recordId
+        );
 }
 
 void JsonLinesImporterTests::importFilePreservesSourceMetadata()

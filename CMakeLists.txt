@@ -202,6 +202,8 @@ qt_add_executable(TraceScope
     src/live/LiveFileFollowState.cpp
     src/live/LiveFileFollower.h
     src/live/LiveFileFollower.cpp
+    src/live/LiveLineRecordFramer.h
+    src/live/LiveLineRecordFramer.cpp
 
 )
 

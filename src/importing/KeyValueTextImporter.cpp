@@ -27,13 +27,16 @@ struct ParsedKeyValueLine
 
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
 
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -316,6 +319,7 @@ void processKeyValueRecord(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     const ImportProfile &profile,
     ImportResult &result
     )
@@ -329,7 +333,8 @@ void processKeyValueRecord(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     const ParsedKeyValueLine parsed =
@@ -407,7 +412,9 @@ QString KeyValueTextImporter::displayName() const
 
 ImportResult KeyValueTextImporter::importLines(
     const QStringList &lines,
-    const QString &sourcePath
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
     ) const
 {
     ImportResult result;
@@ -418,7 +425,9 @@ ImportResult KeyValueTextImporter::importLines(
         processKeyValueRecord(
             lines.at(index),
             sourcePath,
-            index + 1,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
             profile,
             result
             );
@@ -516,6 +525,7 @@ ImportResult KeyValueTextImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 profile,
                 result
                 );

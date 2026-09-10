@@ -26,6 +26,16 @@ struct LiveFileObservation
     qint64 availableByteCount = 0;
 };
 
+struct LiveFileReadResult
+{
+    LiveFileObservation observation;
+
+    QByteArray bytes;
+
+    bool succeeded = true;
+    QString errorMessage;
+};
+
 class LiveFileFollower : public QObject
 {
     Q_OBJECT
@@ -46,6 +56,15 @@ public:
     bool stop();
 
     LiveFileObservation poll();
+
+    inline static constexpr qint64
+        DefaultReadChunkSizeBytes =
+        256 * 1024;
+
+    LiveFileReadResult readAvailableBytes(
+        qint64 maxByteCount =
+        DefaultReadChunkSizeBytes
+        );
 
 signals:
     void stateChanged();

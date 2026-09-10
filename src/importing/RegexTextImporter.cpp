@@ -21,13 +21,16 @@ namespace
 {
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
 
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -370,6 +373,7 @@ void processRegexRecord(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     const QRegularExpression &expression,
     const QStringList &captureNames,
     const ImportProfile &profile,
@@ -385,7 +389,8 @@ void processRegexRecord(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     const QRegularExpressionMatch match =
@@ -481,7 +486,9 @@ QString RegexTextImporter::displayName() const
 
 ImportResult RegexTextImporter::importLines(
     const QStringList &lines,
-    const QString &sourcePath
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
     ) const
 {
     ImportResult result;
@@ -518,7 +525,9 @@ ImportResult RegexTextImporter::importLines(
         processRegexRecord(
             lines.at(index),
             sourcePath,
-            index + 1,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
             expression,
             captureNames,
             profile,
@@ -646,6 +655,7 @@ ImportResult RegexTextImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 expression,
                 captureNames,
                 profile,

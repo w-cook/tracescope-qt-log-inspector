@@ -46,10 +46,6 @@ void LiveFileFollowStateTests::
         state.sourceGeneration(),
         quint64(0)
         );
-
-    QVERIFY(
-        state.pendingBytes().isEmpty()
-        );
 }
 
 void LiveFileFollowStateTests::
@@ -102,10 +98,6 @@ void LiveFileFollowStateTests::
             )
         );
 
-    state.setPendingBytes(
-        QByteArray("partial")
-        );
-
     QVERIFY(
         state.pause()
         );
@@ -117,11 +109,6 @@ void LiveFileFollowStateTests::
     QCOMPARE(
         state.readOffset(),
         qint64(125)
-        );
-
-    QCOMPARE(
-        state.pendingBytes(),
-        QByteArray("partial")
         );
 
     /*
@@ -147,9 +134,14 @@ void LiveFileFollowStateTests::
         state.isFollowing()
         );
 
+    /*
+     * Resume continues from the same consumed-source
+     * position so accumulated source growth can be
+     * caught up rather than skipped.
+     */
     QCOMPARE(
-        state.pendingBytes(),
-        QByteArray("partial")
+        state.readOffset(),
+        qint64(125)
         );
 
     QVERIFY(
@@ -173,10 +165,6 @@ void LiveFileFollowStateTests::
         250
         );
 
-    state.setPendingBytes(
-        QByteArray("unfinished")
-        );
-
     state.beginNextSourceGeneration();
 
     QCOMPARE(
@@ -188,10 +176,6 @@ void LiveFileFollowStateTests::
         state.advanceReadOffset(
             30
             )
-        );
-
-    state.setPendingBytes(
-        QByteArray("new-partial")
         );
 
     state.stop();
@@ -210,14 +194,19 @@ void LiveFileFollowStateTests::
         quint64(1)
         );
 
-    QVERIFY(
-        state.pendingBytes().isEmpty()
-        );
-
+    /*
+     * Stopped state must not consume additional
+     * physical source bytes.
+     */
     QVERIFY(
         !state.advanceReadOffset(
             10
             )
+        );
+
+    QCOMPARE(
+        state.readOffset(),
+        qint64(30)
         );
 }
 
@@ -236,12 +225,13 @@ void LiveFileFollowStateTests::
             )
         );
 
-    state.setPendingBytes(
-        QByteArray("partial-record")
-        );
-
     state.beginNextSourceGeneration();
 
+    /*
+     * A physical source reset changes generation
+     * and restarts its byte cursor, but does not
+     * override the user's active-follow intent.
+     */
     QVERIFY(
         state.isFollowing()
         );
@@ -256,10 +246,6 @@ void LiveFileFollowStateTests::
         qint64(0)
         );
 
-    QVERIFY(
-        state.pendingBytes().isEmpty()
-        );
-
     state.beginNextSourceGeneration();
 
     QCOMPARE(
@@ -270,6 +256,10 @@ void LiveFileFollowStateTests::
     QCOMPARE(
         state.readOffset(),
         qint64(0)
+        );
+
+    QVERIFY(
+        state.isFollowing()
         );
 }
 

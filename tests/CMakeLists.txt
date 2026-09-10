@@ -1766,6 +1766,27 @@ add_test(
 )
 
 qt_add_executable(
+    LiveLineRecordFramerTests
+
+    LiveLineRecordFramerTests.cpp
+
+    ../src/live/LiveLineRecordFramer.h
+    ../src/live/LiveLineRecordFramer.cpp
+)
+
+target_link_libraries(
+    LiveLineRecordFramerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveLineRecordFramerTests
+    COMMAND LiveLineRecordFramerTests
+)
+
+qt_add_executable(
     LiveLogScenarioLoaderTests
 
     LiveLogScenarioLoaderTests.cpp

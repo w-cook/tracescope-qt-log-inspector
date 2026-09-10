@@ -24,6 +24,11 @@ private slots:
     void pollingDetectsSourceTruncation();
     void missingSourceDoesNotDestroyFollowState();
     void detectsSamePathReplacementWithoutSizeRegression();
+    void readsOnlyNewlyAppendedBytes();
+    void boundedReadsDrainBacklogIncrementally();
+    void pausedFollowerDoesNotConsumeAvailableBytes();
+    void sourceResetReadBeginsAtNewGenerationStart();
+    void rejectsInvalidReadChunkSize();
 };
 
 void LiveFileFollowerTests::
@@ -911,6 +916,493 @@ void LiveFileFollowerTests::
     QCOMPARE(
         stateSpy.count(),
         1
+        );
+}
+
+void LiveFileFollowerTests::
+    readsOnlyNewlyAppendedBytes()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    file.write(
+        QByteArray("existing\n")
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    const qint64 startingOffset =
+        follower.state().readOffset();
+
+    const QByteArray appendedBytes(
+        "first-live\n"
+        "second-live\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            appendedBytes
+            ),
+        qint64(
+            appendedBytes.size()
+            )
+        );
+
+    file.close();
+
+    const LiveFileReadResult result =
+        follower.readAvailableBytes();
+
+    QVERIFY(
+        result.succeeded
+        );
+
+    QCOMPARE(
+        result.bytes,
+        appendedBytes
+        );
+
+    QCOMPARE(
+        result.observation.kind,
+        LiveFileObservationKind::Appended
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        startingOffset
+            + appendedBytes.size()
+        );
+
+    const LiveFileReadResult secondRead =
+        follower.readAvailableBytes();
+
+    QVERIFY(
+        secondRead.succeeded
+        );
+
+    QVERIFY(
+        secondRead.bytes.isEmpty()
+        );
+
+    QCOMPARE(
+        secondRead.observation.kind,
+        LiveFileObservationKind::NoChange
+        );
+}
+
+void LiveFileFollowerTests::
+    boundedReadsDrainBacklogIncrementally()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    file.write(
+        QByteArray("existing\n")
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    const QByteArray appendedBytes(
+        "ABCDEFGHIJKL"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::Append
+            )
+        );
+
+    file.write(
+        appendedBytes
+        );
+
+    file.close();
+
+    const LiveFileReadResult first =
+        follower.readAvailableBytes(
+            5
+            );
+
+    QVERIFY(first.succeeded);
+
+    QCOMPARE(
+        first.bytes,
+        QByteArray("ABCDE")
+        );
+
+    QCOMPARE(
+        first.observation
+            .availableByteCount,
+        qint64(12)
+        );
+
+    const LiveFileReadResult second =
+        follower.readAvailableBytes(
+            5
+            );
+
+    QVERIFY(second.succeeded);
+
+    QCOMPARE(
+        second.bytes,
+        QByteArray("FGHIJ")
+        );
+
+    QCOMPARE(
+        second.observation
+            .availableByteCount,
+        qint64(7)
+        );
+
+    const LiveFileReadResult third =
+        follower.readAvailableBytes(
+            5
+            );
+
+    QVERIFY(third.succeeded);
+
+    QCOMPARE(
+        third.bytes,
+        QByteArray("KL")
+        );
+
+    QCOMPARE(
+        third.observation
+            .availableByteCount,
+        qint64(2)
+        );
+
+    const LiveFileReadResult complete =
+        follower.readAvailableBytes(
+            5
+            );
+
+    QVERIFY(complete.succeeded);
+    QVERIFY(complete.bytes.isEmpty());
+
+    QCOMPARE(
+        complete.observation.kind,
+        LiveFileObservationKind::NoChange
+        );
+}
+
+void LiveFileFollowerTests::
+    pausedFollowerDoesNotConsumeAvailableBytes()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    file.write(
+        QByteArray("existing\n")
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    const qint64 startingOffset =
+        follower.state().readOffset();
+
+    QVERIFY(
+        follower.pause()
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::Append
+            )
+        );
+
+    const QByteArray appendedBytes(
+        "while-paused\n"
+        );
+
+    file.write(
+        appendedBytes
+        );
+
+    file.close();
+
+    const LiveFileReadResult pausedRead =
+        follower.readAvailableBytes();
+
+    QVERIFY(
+        pausedRead.succeeded
+        );
+
+    QVERIFY(
+        pausedRead.bytes.isEmpty()
+        );
+
+    QCOMPARE(
+        pausedRead.observation.kind,
+        LiveFileObservationKind::Appended
+        );
+
+    QCOMPARE(
+        pausedRead.observation
+            .availableByteCount,
+        qint64(
+            appendedBytes.size()
+            )
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        startingOffset
+        );
+
+    QVERIFY(
+        follower.resume()
+        );
+
+    const LiveFileReadResult resumedRead =
+        follower.readAvailableBytes();
+
+    QVERIFY(
+        resumedRead.succeeded
+        );
+
+    QCOMPARE(
+        resumedRead.bytes,
+        appendedBytes
+        );
+}
+
+void LiveFileFollowerTests::
+    sourceResetReadBeginsAtNewGenerationStart()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    file.write(
+        QByteArray(
+            "old-record-one\n"
+            "old-record-two\n"
+            )
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    const QByteArray replacement(
+        "new\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            | QIODevice::Truncate
+            )
+        );
+
+    file.write(
+        replacement
+        );
+
+    file.close();
+
+    const LiveFileReadResult result =
+        follower.readAvailableBytes();
+
+    QVERIFY(
+        result.succeeded
+        );
+
+    QCOMPARE(
+        result.observation.kind,
+        LiveFileObservationKind::SourceReset
+        );
+
+    QCOMPARE(
+        follower.state()
+            .sourceGeneration(),
+        quint64(1)
+        );
+
+    QCOMPARE(
+        result.bytes,
+        replacement
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        qint64(
+            replacement.size()
+            )
+        );
+}
+
+void LiveFileFollowerTests::
+    rejectsInvalidReadChunkSize()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    file.write(
+        QByteArray("existing\n")
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::Append
+            )
+        );
+
+    file.write(
+        QByteArray("new\n")
+        );
+
+    file.close();
+
+    const qint64 startingOffset =
+        follower.state().readOffset();
+
+    const LiveFileReadResult result =
+        follower.readAvailableBytes(
+            0
+            );
+
+    QVERIFY(
+        !result.succeeded
+        );
+
+    QVERIFY(
+        !result.errorMessage.isEmpty()
+        );
+
+    QVERIFY(
+        result.bytes.isEmpty()
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        startingOffset
         );
 }
 

@@ -23,12 +23,16 @@ namespace
 {
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
+
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -84,7 +88,9 @@ QString JsonLinesImporter::displayName() const
 
 ImportResult JsonLinesImporter::importLines(
     const QStringList &lines,
-    const QString &sourcePath
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
     ) const
 {
     ImportResult result;
@@ -95,7 +101,9 @@ ImportResult JsonLinesImporter::importLines(
         processLine(
             lines.at(index),
             sourcePath,
-            index + 1,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
             result
             );
     }
@@ -190,6 +198,7 @@ ImportResult JsonLinesImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 result
                 );
         }
@@ -227,6 +236,7 @@ void JsonLinesImporter::processLine(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     ImportResult &result
     ) const
 {
@@ -242,7 +252,8 @@ void JsonLinesImporter::processLine(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     QJsonParseError parseError;
