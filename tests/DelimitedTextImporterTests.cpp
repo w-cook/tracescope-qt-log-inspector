@@ -101,6 +101,10 @@ private slots:
     void importFileReportsOpenFailure();
     void importFileReportsProgress();
     void importFileCanBeCancelled();
+
+    void incrementalCsvPreservesHeaderAcrossBatches();
+    void incrementalStateInitializesFromExistingHeader();
+    void incrementalStateCanAwaitHeaderForEmptySource();
 };
 
 void DelimitedTextImporterTests::csvImporterHasStableIdentity()
@@ -964,6 +968,184 @@ void DelimitedTextImporterTests::
         );
 
     QVERIFY(!result.sourceTruncated);
+}
+
+void DelimitedTextImporterTests::
+    incrementalCsvPreservesHeaderAcrossBatches()
+{
+    ImportProfile profile;
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral("message");
+
+    const DelimitedTextImporter importer =
+        createCsvImporter(
+            profile
+            );
+
+    DelimitedTextImportState state;
+
+    const ImportResult headerResult =
+        importer.importIncrementalLines(
+            {
+                QStringLiteral(
+                    "timestamp,message"
+                    )
+            },
+            state,
+            QStringLiteral(
+                "samples/live/session.csv"
+                ),
+            40,
+            2
+            );
+
+    QVERIFY(
+        headerResult.records.isEmpty()
+        );
+
+    QCOMPARE(
+        state.headerStatus,
+        DelimitedTextHeaderStatus::Ready
+        );
+
+    QCOMPARE(
+        state.headers,
+        QStringList({
+            QStringLiteral("timestamp"),
+            QStringLiteral("message")
+        })
+        );
+
+    const ImportResult recordResult =
+        importer.importIncrementalLines(
+            {
+                QStringLiteral(
+                    "2026-09-10T10:00:00Z,"
+                    "Live record"
+                    )
+            },
+            state,
+            QStringLiteral(
+                "samples/live/session.csv"
+                ),
+            41,
+            2
+            );
+
+    QCOMPARE(
+        recordResult.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        recordResult.records.first();
+
+    QCOMPARE(
+        record.source.recordNumber,
+        qint64(41)
+        );
+
+    QCOMPARE(
+        record.source.sourceGeneration,
+        quint64(2)
+        );
+
+    QCOMPARE(
+        record.message,
+        std::optional<QString>(
+            QStringLiteral("Live record")
+            )
+        );
+}
+
+void DelimitedTextImporterTests::
+    incrementalStateInitializesFromExistingHeader()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        writeTemporaryContent(
+            file,
+            QStringLiteral(
+                "\n"
+                "timestamp,level,message\n"
+                "2026-09-10T10:00:00Z,INFO,Existing\n"
+                "2026-09-10T10:00:01Z,WARN,Existing two\n"
+                )
+            )
+        );
+
+    const DelimitedTextImporter importer =
+        createCsvImporter();
+
+    DelimitedTextImportState state;
+
+    const auto initialization =
+        importer.initializeIncrementalStateFromFile(
+            file.fileName(),
+            state
+            );
+
+    QVERIFY(
+        initialization.succeeded
+        );
+
+    QVERIFY(
+        initialization.errorMessage.isEmpty()
+        );
+
+    QCOMPARE(
+        state.headerStatus,
+        DelimitedTextHeaderStatus::Ready
+        );
+
+    QCOMPARE(
+        state.headers,
+        QStringList({
+            QStringLiteral("timestamp"),
+            QStringLiteral("level"),
+            QStringLiteral("message")
+        })
+        );
+}
+
+void DelimitedTextImporterTests::
+    incrementalStateCanAwaitHeaderForEmptySource()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        writeTemporaryContent(
+            file,
+            QString()
+            )
+        );
+
+    const DelimitedTextImporter importer =
+        createCsvImporter();
+
+    DelimitedTextImportState state;
+
+    const auto initialization =
+        importer.initializeIncrementalStateFromFile(
+            file.fileName(),
+            state
+            );
+
+    QVERIFY(
+        initialization.succeeded
+        );
+
+    QCOMPARE(
+        state.headerStatus,
+        DelimitedTextHeaderStatus::
+        AwaitingHeader
+        );
+
+    QVERIFY(
+        state.headers.isEmpty()
+        );
 }
 
 QTEST_MAIN(DelimitedTextImporterTests)

@@ -1787,6 +1787,29 @@ add_test(
 )
 
 qt_add_executable(
+    LiveLineSourceContextTests
+
+    LiveLineSourceContextTests.cpp
+
+    ../src/live/LiveLineSourceContext.h
+    ../src/live/LiveLineSourceContext.cpp
+    ../src/live/LiveLineRecordFramer.h
+    ../src/live/LiveLineRecordFramer.cpp
+)
+
+target_link_libraries(
+    LiveLineSourceContextTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveLineSourceContextTests
+    COMMAND LiveLineSourceContextTests
+)
+
+qt_add_executable(
     LiveLogScenarioLoaderTests
 
     LiveLogScenarioLoaderTests.cpp

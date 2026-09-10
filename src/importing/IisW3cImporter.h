@@ -4,6 +4,17 @@
 
 #include "ILogImporter.h"
 #include "ImportProfile.h"
+#include "IncrementalImportInitializationResult.h"
+
+struct IisW3cImportState
+{
+    QStringList activeFields;
+
+    void reset()
+    {
+        activeFields.clear();
+    }
+};
 
 class IisW3cImporter final : public ILogImporter
 {
@@ -25,6 +36,20 @@ public:
     ImportResult importLines(
         const QStringList &lines,
         const QString &sourcePath = {}
+        ) const;
+
+    ImportResult importIncrementalLines(
+        const QStringList &lines,
+        IisW3cImportState &state,
+        const QString &sourcePath = {},
+        qint64 firstPhysicalLineNumber = 1,
+        quint64 sourceGeneration = 0
+        ) const;
+
+    IncrementalImportInitializationResult
+    initializeIncrementalStateFromFile(
+        const QString &sourcePath,
+        IisW3cImportState &state
         ) const;
 
 private:

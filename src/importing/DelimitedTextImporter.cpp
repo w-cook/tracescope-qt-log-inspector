@@ -26,12 +26,16 @@ struct ParsedDelimitedRecord
 
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
+
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -476,6 +480,7 @@ ParsedDelimitedHeader parseDelimitedHeader(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     QChar delimiter,
     ImportResult &result
     )
@@ -485,7 +490,8 @@ ParsedDelimitedHeader parseDelimitedHeader(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     const ParsedDelimitedRecord parsed =
@@ -586,6 +592,7 @@ void processDelimitedRecord(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     QChar delimiter,
     const QStringList &headers,
     const ImportProfile &profile,
@@ -601,7 +608,8 @@ void processDelimitedRecord(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     const ParsedDelimitedRecord parsed =
@@ -702,22 +710,20 @@ ImportResult DelimitedTextImporter::importLines(
     const QString &sourcePath
     ) const
 {
-    ImportResult result;
+    DelimitedTextImportState state;
 
-    qsizetype headerIndex = -1;
+    ImportResult result =
+        importIncrementalLines(
+            lines,
+            state,
+            sourcePath,
+            1,
+            0
+            );
 
-    for (qsizetype index = 0;
-         index < lines.size();
-         ++index) {
-        if (!lines.at(index)
-                 .trimmed()
-                 .isEmpty()) {
-            headerIndex = index;
-            break;
-        }
-    }
-
-    if (headerIndex < 0) {
+    if (state.headerStatus
+        == DelimitedTextHeaderStatus::
+        AwaitingHeader) {
         appendDiagnostic(
             result,
             QStringLiteral(
@@ -733,36 +739,217 @@ ImportResult DelimitedTextImporter::importLines(
                 0
                 )
             );
+    }
 
+    return result;
+}
+
+IncrementalImportInitializationResult
+    DelimitedTextImporter::
+    initializeIncrementalStateFromFile(
+        const QString &sourcePath,
+        DelimitedTextImportState &state
+        ) const
+{
+    IncrementalImportInitializationResult
+        initialization;
+
+    state.reset();
+
+    QFile file(
+        sourcePath
+        );
+
+    if (!file.open(
+            QIODevice::ReadOnly
+            | QIODevice::Text
+            )) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing delimited source "
+                "could not be opened while "
+                "initializing incremental import: %1"
+                )
+                .arg(
+                    file.errorString()
+                    );
+
+        return initialization;
+    }
+
+    qint64 physicalLineNumber = 0;
+
+    while (!file.atEnd()) {
+        QByteArray lineBytes =
+            file.readLine();
+
+        ++physicalLineNumber;
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.trimmed().isEmpty()) {
+            continue;
+        }
+
+        ImportResult parseResult;
+
+        const ParsedDelimitedHeader
+            parsedHeader =
+            parseDelimitedHeader(
+                rawSource,
+                sourcePath,
+                physicalLineNumber,
+                0,
+                delimiter,
+                parseResult
+                );
+
+        if (!parsedHeader.valid) {
+            state.headerStatus =
+                DelimitedTextHeaderStatus::
+                Invalid;
+
+            initialization.succeeded =
+                false;
+
+            if (!parseResult
+                     .diagnostics
+                     .isEmpty()) {
+                initialization.errorMessage =
+                    parseResult
+                        .diagnostics
+                        .first()
+                        .message;
+            } else {
+                initialization.errorMessage =
+                    QStringLiteral(
+                        "The existing delimited "
+                        "source header is invalid."
+                        );
+            }
+
+            return initialization;
+        }
+
+        state.headers =
+            parsedHeader.headers;
+
+        state.headerStatus =
+            DelimitedTextHeaderStatus::Ready;
+
+        return initialization;
+    }
+
+    if (file.error()
+        != QFileDevice::NoError) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing delimited source "
+                "could not be completely read while "
+                "initializing incremental import: %1"
+                )
+                .arg(
+                    file.errorString()
+                    );
+
+        return initialization;
+    }
+
+    /*
+     * An empty or whitespace-only file is not an
+     * initialization failure. Incremental import can
+     * remain waiting for a future header.
+     */
+    return initialization;
+}
+
+ImportResult
+DelimitedTextImporter::importIncrementalLines(
+    const QStringList &lines,
+    DelimitedTextImportState &state,
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
+    ) const
+{
+    ImportResult result;
+
+    if (state.headerStatus
+        == DelimitedTextHeaderStatus::Invalid) {
         return result;
     }
 
-    const ParsedDelimitedHeader parsedHeader =
-        parseDelimitedHeader(
-            lines.at(headerIndex),
-            sourcePath,
-            headerIndex + 1,
-            delimiter,
-            result
-            );
-
-    if (!parsedHeader.valid) {
-        return result;
-    }
-
-    const QStringList &headers =
-        parsedHeader.headers;
-
-    for (qsizetype index =
-         headerIndex + 1;
+    for (qsizetype index = 0;
          index < lines.size();
          ++index) {
+        const QString &rawSource =
+            lines.at(index);
+
+        const qint64 physicalLineNumber =
+            firstPhysicalLineNumber
+            + index;
+
+        if (state.headerStatus
+            == DelimitedTextHeaderStatus::
+            AwaitingHeader) {
+            if (rawSource.trimmed().isEmpty()) {
+                continue;
+            }
+
+            const ParsedDelimitedHeader
+                parsedHeader =
+                parseDelimitedHeader(
+                    rawSource,
+                    sourcePath,
+                    physicalLineNumber,
+                    sourceGeneration,
+                    delimiter,
+                    result
+                    );
+
+            if (!parsedHeader.valid) {
+                state.headerStatus =
+                    DelimitedTextHeaderStatus::
+                    Invalid;
+
+                return result;
+            }
+
+            state.headers =
+                parsedHeader.headers;
+
+            state.headerStatus =
+                DelimitedTextHeaderStatus::Ready;
+
+            continue;
+        }
+
+        if (rawSource.trimmed().isEmpty()) {
+            continue;
+        }
+
         processDelimitedRecord(
-            lines.at(index),
+            rawSource,
             sourcePath,
-            index + 1,
+            physicalLineNumber,
+            sourceGeneration,
             delimiter,
-            headers,
+            state.headers,
             profile,
             result
             );
@@ -861,6 +1048,7 @@ ImportResult DelimitedTextImporter::importFile(
                         rawSource,
                         filePath,
                         physicalLineNumber,
+                        0,
                         delimiter,
                         result
                         );
@@ -894,6 +1082,7 @@ ImportResult DelimitedTextImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 delimiter,
                 headers,
                 profile,

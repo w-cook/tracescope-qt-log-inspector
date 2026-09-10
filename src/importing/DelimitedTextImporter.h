@@ -6,6 +6,30 @@
 
 #include "ILogImporter.h"
 #include "ImportProfile.h"
+#include "IncrementalImportInitializationResult.h"
+
+enum class DelimitedTextHeaderStatus
+{
+    AwaitingHeader,
+    Ready,
+    Invalid
+};
+
+struct DelimitedTextImportState
+{
+    DelimitedTextHeaderStatus headerStatus =
+        DelimitedTextHeaderStatus::AwaitingHeader;
+
+    QStringList headers;
+
+    void reset()
+    {
+        headerStatus =
+            DelimitedTextHeaderStatus::AwaitingHeader;
+
+        headers.clear();
+    }
+};
 
 class DelimitedTextImporter final : public ILogImporter
 {
@@ -30,6 +54,20 @@ public:
     ImportResult importLines(
         const QStringList &lines,
         const QString &sourcePath = {}
+        ) const;
+
+    ImportResult importIncrementalLines(
+        const QStringList &lines,
+        DelimitedTextImportState &state,
+        const QString &sourcePath = {},
+        qint64 firstPhysicalLineNumber = 1,
+        quint64 sourceGeneration = 0
+        ) const;
+
+    IncrementalImportInitializationResult
+    initializeIncrementalStateFromFile(
+        const QString &sourcePath,
+        DelimitedTextImportState &state
         ) const;
 
 private:

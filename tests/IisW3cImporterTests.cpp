@@ -32,6 +32,10 @@ private slots:
     void reportsFileOpenFailure();
     void importFileReportsProgress();
     void importFileCanBeCancelled();
+
+    void incrementalImportPreservesFieldsAcrossBatches();
+    void incrementalStateInitializesFromLatestFieldsDirective();
+    void incrementalStateClearsOnEmptyLatestFieldsDirective();
 };
 
 namespace
@@ -1155,6 +1159,207 @@ void IisW3cImporterTests::
         QStringLiteral(
             "GET /first"
             )
+        );
+}
+
+void IisW3cImporterTests::
+    incrementalImportPreservesFieldsAcrossBatches()
+{
+    IisW3cImporter importer =
+        createImporter();
+
+    IisW3cImportState state;
+
+    const ImportResult fieldsResult =
+        importer.importIncrementalLines(
+            {
+                QStringLiteral(
+                    "#Fields: date time "
+                    "cs-method cs-uri-stem "
+                    "sc-status"
+                    )
+            },
+            state,
+            QStringLiteral(
+                "samples/live/iis.log"
+                ),
+            17,
+            3
+            );
+
+    QVERIFY(
+        fieldsResult.records.isEmpty()
+        );
+
+    QCOMPARE(
+        fieldsResult.processedRecordCount,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        state.activeFields,
+        QStringList({
+            QStringLiteral("date"),
+            QStringLiteral("time"),
+            QStringLiteral("cs-method"),
+            QStringLiteral("cs-uri-stem"),
+            QStringLiteral("sc-status")
+        })
+        );
+
+    const ImportResult recordResult =
+        importer.importIncrementalLines(
+            {
+                QStringLiteral(
+                    "2026-09-10 10:15:00 "
+                    "GET /api/orders 200"
+                    )
+            },
+            state,
+            QStringLiteral(
+                "samples/live/iis.log"
+                ),
+            18,
+            3
+            );
+
+    QCOMPARE(
+        recordResult.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        recordResult.records.first();
+
+    QCOMPARE(
+        record.source.recordNumber,
+        qint64(18)
+        );
+
+    QCOMPARE(
+        record.source.sourceGeneration,
+        quint64(3)
+        );
+
+    QCOMPARE(
+        record.message,
+        std::optional<QString>(
+            QStringLiteral(
+                "GET /api/orders"
+                )
+            )
+        );
+}
+
+void IisW3cImporterTests::
+    incrementalStateInitializesFromLatestFieldsDirective()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        file.open()
+        );
+
+    QTextStream stream(
+        &file
+        );
+
+    stream
+        << "#Fields: date time "
+           "cs-method cs-uri-stem sc-status\n"
+        << "2026-09-10 10:00:00 "
+           "GET /first 200\n"
+        << "#Fields: date time "
+           "c-ip cs-method cs-uri-stem "
+           "sc-status time-taken\n"
+        << "2026-09-10 10:01:00 "
+           "198.51.100.20 GET /second "
+           "500 42\n";
+
+    stream.flush();
+
+    const QString sourcePath =
+        file.fileName();
+
+    file.close();
+
+    IisW3cImporter importer =
+        createImporter();
+
+    IisW3cImportState state;
+
+    const auto initialization =
+        importer.initializeIncrementalStateFromFile(
+            sourcePath,
+            state
+            );
+
+    QVERIFY(
+        initialization.succeeded
+        );
+
+    QVERIFY(
+        initialization.errorMessage.isEmpty()
+        );
+
+    QCOMPARE(
+        state.activeFields,
+        QStringList({
+            QStringLiteral("date"),
+            QStringLiteral("time"),
+            QStringLiteral("c-ip"),
+            QStringLiteral("cs-method"),
+            QStringLiteral("cs-uri-stem"),
+            QStringLiteral("sc-status"),
+            QStringLiteral("time-taken")
+        })
+        );
+}
+
+void IisW3cImporterTests::
+    incrementalStateClearsOnEmptyLatestFieldsDirective()
+{
+    QTemporaryFile file;
+
+    QVERIFY(
+        file.open()
+        );
+
+    QTextStream stream(
+        &file
+        );
+
+    stream
+        << "#Fields: date time "
+           "cs-method cs-uri-stem sc-status\n"
+        << "2026-09-10 10:00:00 "
+           "GET /first 200\n"
+        << "#Fields:\n";
+
+    stream.flush();
+
+    const QString sourcePath =
+        file.fileName();
+
+    file.close();
+
+    IisW3cImporter importer =
+        createImporter();
+
+    IisW3cImportState state;
+
+    const auto initialization =
+        importer.initializeIncrementalStateFromFile(
+            sourcePath,
+            state
+            );
+
+    QVERIFY(
+        initialization.succeeded
+        );
+
+    QVERIFY(
+        state.activeFields.isEmpty()
         );
 }
 

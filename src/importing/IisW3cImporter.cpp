@@ -15,7 +15,8 @@ namespace
 {
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
@@ -25,6 +26,9 @@ RecordSourceMetadata createSourceMetadata(
 
     source.recordNumber =
         recordNumber;
+
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -295,6 +299,7 @@ void processIisLine(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     QStringList &activeFields,
     const ImportProfile &profile,
     ImportResult &result
@@ -315,7 +320,8 @@ void processIisLine(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     /*
@@ -483,9 +489,130 @@ ImportResult IisW3cImporter::importLines(
     const QString &sourcePath
     ) const
 {
-    ImportResult result;
+    IisW3cImportState state;
 
-    QStringList activeFields;
+    return importIncrementalLines(
+        lines,
+        state,
+        sourcePath,
+        1,
+        0
+        );
+}
+
+IncrementalImportInitializationResult
+    IisW3cImporter::
+    initializeIncrementalStateFromFile(
+        const QString &sourcePath,
+        IisW3cImportState &state
+        ) const
+{
+    IncrementalImportInitializationResult
+        initialization;
+
+    state.reset();
+
+    QFile file(
+        sourcePath
+        );
+
+    if (!file.open(
+            QIODevice::ReadOnly
+            | QIODevice::Text
+            )) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing IIS W3C source "
+                "could not be opened while "
+                "initializing incremental import: %1"
+                )
+                .arg(
+                    file.errorString()
+                    );
+
+        return initialization;
+    }
+
+    while (!file.atEnd()) {
+        QByteArray lineBytes =
+            file.readLine();
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        const QString trimmed =
+            normalizeLine(
+                rawSource
+                )
+                .trimmed();
+
+        if (!isFieldsDirective(
+                trimmed
+                )) {
+            continue;
+        }
+
+        const QStringList fields =
+            parseFieldsDirective(
+                trimmed
+                );
+
+        /*
+         * Match normal IIS import semantics: an
+         * empty #Fields directive invalidates the
+         * previously active field definition.
+         */
+        if (fields.isEmpty()) {
+            state.activeFields.clear();
+            continue;
+        }
+
+        state.activeFields =
+            fields;
+    }
+
+    if (file.error()
+        != QFileDevice::NoError) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing IIS W3C source "
+                "could not be completely read while "
+                "initializing incremental import: %1"
+                )
+                .arg(
+                    file.errorString()
+                    );
+
+        return initialization;
+    }
+
+    return initialization;
+}
+
+ImportResult
+IisW3cImporter::importIncrementalLines(
+    const QStringList &lines,
+    IisW3cImportState &state,
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
+    ) const
+{
+    ImportResult result;
 
     for (qsizetype index = 0;
          index < lines.size();
@@ -493,8 +620,10 @@ ImportResult IisW3cImporter::importLines(
         processIisLine(
             lines.at(index),
             sourcePath,
-            index + 1,
-            activeFields,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
+            state.activeFields,
             profile,
             result
             );
@@ -599,6 +728,7 @@ ImportResult IisW3cImporter::importFile(
             rawSource,
             filePath,
             physicalLineNumber,
+            0,
             activeFields,
             profile,
             result
