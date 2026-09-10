@@ -198,6 +198,10 @@ qt_add_executable(TraceScope
     src/exporting/InvestigationReportHtmlRenderer.cpp
     src/exporting/InvestigationReportHtmlExporter.h
     src/exporting/InvestigationReportHtmlExporter.cpp
+    src/live/LiveFileFollowState.h
+    src/live/LiveFileFollowState.cpp
+    src/live/LiveFileFollower.h
+    src/live/LiveFileFollower.cpp
 
 )
 

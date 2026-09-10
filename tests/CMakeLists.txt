@@ -1722,6 +1722,50 @@ set_tests_properties(
 )
 
 qt_add_executable(
+    LiveFileFollowStateTests
+
+    LiveFileFollowStateTests.cpp
+
+    ../src/live/LiveFileFollowState.h
+    ../src/live/LiveFileFollowState.cpp
+)
+
+target_link_libraries(
+    LiveFileFollowStateTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveFileFollowStateTests
+    COMMAND LiveFileFollowStateTests
+)
+
+qt_add_executable(
+    LiveFileFollowerTests
+
+    LiveFileFollowerTests.cpp
+
+    ../src/live/LiveFileFollowState.h
+    ../src/live/LiveFileFollowState.cpp
+    ../src/live/LiveFileFollower.h
+    ../src/live/LiveFileFollower.cpp
+)
+
+target_link_libraries(
+    LiveFileFollowerTests
+    PRIVATE
+        Qt6::Test
+        Qt6::Core
+)
+
+add_test(
+    NAME LiveFileFollowerTests
+    COMMAND LiveFileFollowerTests
+)
+
+qt_add_executable(
     LiveLogScenarioLoaderTests
 
     LiveLogScenarioLoaderTests.cpp
