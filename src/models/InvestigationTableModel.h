@@ -39,6 +39,10 @@ public:
 
     void setRecords(const QVector<InvestigationRecord> &records);
 
+    void appendRecords(
+        QVector<InvestigationRecord> records
+        );
+
     const QVector<InvestigationRecord> &records() const;
 
     const InvestigationRecord *recordAt(int row) const;
@@ -63,6 +67,10 @@ private:
     QVector<ColumnDefinition> m_columns;
 
     void rebuildColumns();
+
+    bool appendRequiresColumnRebuild(
+        const QVector<InvestigationRecord> &records
+        ) const;
 
     QVariant displayValue(
         const InvestigationRecord &record,

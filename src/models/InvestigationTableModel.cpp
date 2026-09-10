@@ -118,6 +118,67 @@ void InvestigationTableModel::setRecords(
     endResetModel();
 }
 
+void InvestigationTableModel::appendRecords(
+    QVector<InvestigationRecord> records
+    )
+{
+    if (records.isEmpty()) {
+        return;
+    }
+
+    if (appendRequiresColumnRebuild(
+            records
+            )) {
+        beginResetModel();
+
+        m_records.reserve(
+            m_records.size()
+            + records.size()
+            );
+
+        for (InvestigationRecord &record
+             : records) {
+            m_records.append(
+                std::move(record)
+                );
+        }
+
+        rebuildColumns();
+
+        endResetModel();
+
+        return;
+    }
+
+    const int firstRow =
+        m_records.size();
+
+    const int lastRow =
+        firstRow
+        + records.size()
+        - 1;
+
+    beginInsertRows(
+        QModelIndex(),
+        firstRow,
+        lastRow
+        );
+
+    m_records.reserve(
+        m_records.size()
+        + records.size()
+        );
+
+    for (InvestigationRecord &record
+         : records) {
+        m_records.append(
+            std::move(record)
+            );
+    }
+
+    endInsertRows();
+}
+
 const QVector<InvestigationRecord> &
 InvestigationTableModel::records() const
 {
@@ -158,6 +219,103 @@ QString InvestigationTableModel::
     }
 
     return m_columns[column].key;
+}
+
+bool InvestigationTableModel::
+    appendRequiresColumnRebuild(
+        const QVector<InvestigationRecord> &records
+        ) const
+{
+    if (records.isEmpty()) {
+        return false;
+    }
+
+    /*
+     * An empty model exposes the complete canonical
+     * placeholder schema. The first real dataset must
+     * therefore rebuild its columns according to the
+     * fields actually present.
+     */
+    if (m_records.isEmpty()) {
+        return true;
+    }
+
+    QSet<QString> existingColumnKeys;
+
+    existingColumnKeys.reserve(
+        m_columns.size()
+        );
+
+    for (const ColumnDefinition &column
+         : m_columns) {
+        existingColumnKeys.insert(
+            column.key
+            );
+    }
+
+    for (const InvestigationRecord &record
+         : records) {
+        if (record.timestamp.has_value()
+            && !existingColumnKeys.contains(
+                TimestampKey
+                )) {
+            return true;
+        }
+
+        if (record.severity.has_value()
+            && !existingColumnKeys.contains(
+                SeverityKey
+                )) {
+            return true;
+        }
+
+        if (record.subsystem.has_value()
+            && !existingColumnKeys.contains(
+                SubsystemKey
+                )) {
+            return true;
+        }
+
+        if (record.eventCode.has_value()
+            && !existingColumnKeys.contains(
+                EventCodeKey
+                )) {
+            return true;
+        }
+
+        if (record.entityId.has_value()
+            && !existingColumnKeys.contains(
+                EntityIdKey
+                )) {
+            return true;
+        }
+
+        if (record.message.has_value()
+            && !existingColumnKeys.contains(
+                MessageKey
+                )) {
+            return true;
+        }
+
+        for (
+            auto attributeIterator =
+            record.customAttributes.constBegin();
+            attributeIterator
+            != record.customAttributes.constEnd();
+            ++attributeIterator
+            ) {
+            if (!isCanonicalKey(
+                    attributeIterator.key()
+                    )
+                && !existingColumnKeys.contains(
+                    attributeIterator.key()
+                    )) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void InvestigationTableModel::rebuildColumns()

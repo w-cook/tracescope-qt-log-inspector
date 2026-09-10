@@ -14,6 +14,8 @@ private slots:
     void addsDynamicCustomColumns();
     void customColumnsAreDeterministicallySorted();
     void recordAtReturnsSourceRecord();
+    void appendsRecordsWithoutResetWhenSchemaIsStable();
+    void rebuildsModelWhenAppendedRecordsExpandSchema();
     void exposesTypedSortValues();
 };
 
@@ -333,6 +335,184 @@ void InvestigationTableModelTests::recordAtReturnsSourceRecord()
 
     QVERIFY(model.recordAt(-1) == nullptr);
     QVERIFY(model.recordAt(1) == nullptr);
+}
+
+void InvestigationTableModelTests::
+    appendsRecordsWithoutResetWhenSchemaIsStable()
+{
+    InvestigationRecord first;
+
+    first.recordId =
+        QStringLiteral("record-1");
+
+    first.message =
+        QStringLiteral("First event");
+
+    InvestigationTableModel model;
+
+    model.setRecords({
+        first
+    });
+
+    QSignalSpy rowsInsertedSpy(
+        &model,
+        &QAbstractItemModel::rowsInserted
+        );
+
+    QSignalSpy modelResetSpy(
+        &model,
+        &QAbstractItemModel::modelReset
+        );
+
+    InvestigationRecord second;
+
+    second.recordId =
+        QStringLiteral("record-2");
+
+    second.message =
+        QStringLiteral("Second event");
+
+    InvestigationRecord third;
+
+    third.recordId =
+        QStringLiteral("record-3");
+
+    third.message =
+        QStringLiteral("Third event");
+
+    model.appendRecords({
+        second,
+        third
+    });
+
+    QCOMPARE(
+        model.rowCount(),
+        3
+        );
+
+    QCOMPARE(
+        rowsInsertedSpy.count(),
+        1
+        );
+
+    QCOMPARE(
+        modelResetSpy.count(),
+        0
+        );
+
+    const QList<QVariant> arguments =
+        rowsInsertedSpy.takeFirst();
+
+    QCOMPARE(
+        arguments.at(1).toInt(),
+        1
+        );
+
+    QCOMPARE(
+        arguments.at(2).toInt(),
+        2
+        );
+
+    QCOMPARE(
+        model.recordAt(0)->recordId,
+        QStringLiteral("record-1")
+        );
+
+    QCOMPARE(
+        model.recordAt(1)->recordId,
+        QStringLiteral("record-2")
+        );
+
+    QCOMPARE(
+        model.recordAt(2)->recordId,
+        QStringLiteral("record-3")
+        );
+}
+
+void InvestigationTableModelTests::
+    rebuildsModelWhenAppendedRecordsExpandSchema()
+{
+    InvestigationRecord first;
+
+    first.recordId =
+        QStringLiteral("record-1");
+
+    first.message =
+        QStringLiteral("First event");
+
+    InvestigationTableModel model;
+
+    model.setRecords({
+        first
+    });
+
+    QCOMPARE(
+        model.columnCount(),
+        1
+        );
+
+    QSignalSpy rowsInsertedSpy(
+        &model,
+        &QAbstractItemModel::rowsInserted
+        );
+
+    QSignalSpy modelResetSpy(
+        &model,
+        &QAbstractItemModel::modelReset
+        );
+
+    InvestigationRecord second;
+
+    second.recordId =
+        QStringLiteral("record-2");
+
+    second.message =
+        QStringLiteral("Second event");
+
+    second.customAttributes.insert(
+        QStringLiteral("host"),
+        QStringLiteral("server-02")
+        );
+
+    model.appendRecords({
+        second
+    });
+
+    QCOMPARE(
+        model.rowCount(),
+        2
+        );
+
+    QCOMPARE(
+        rowsInsertedSpy.count(),
+        0
+        );
+
+    QCOMPARE(
+        modelResetSpy.count(),
+        1
+        );
+
+    QCOMPARE(
+        model.columnCount(),
+        2
+        );
+
+    QCOMPARE(
+        model.headerData(
+                 0,
+                 Qt::Horizontal
+                 ).toString(),
+        QStringLiteral("Message")
+        );
+
+    QCOMPARE(
+        model.headerData(
+                 1,
+                 Qt::Horizontal
+                 ).toString(),
+        QStringLiteral("host")
+        );
 }
 
 void InvestigationTableModelTests::exposesTypedSortValues()
