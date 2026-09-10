@@ -154,6 +154,72 @@ void InvestigationSession::reload(
         );
 }
 
+void InvestigationSession::
+    appendLiveImportResult(
+        ImportResult result
+        )
+{
+    const qint64 skippedRecordCount =
+        std::max<qint64>(
+            0,
+            result.processedRecordCount
+                - result.records.size()
+            );
+
+    if (!result.diagnostics.isEmpty()) {
+        m_diagnostics.reserve(
+            m_diagnostics.size()
+            + result.diagnostics.size()
+            );
+
+        for (ImportDiagnostic &diagnostic
+             : result.diagnostics) {
+            m_diagnostics.append(
+                std::move(diagnostic)
+                );
+        }
+    }
+
+    QVector<InvestigationRecord>
+        appendedRecords;
+
+    appendedRecords.reserve(
+        result.records.size()
+        );
+
+    for (InvestigationRecord &record
+         : result.records) {
+        if (!record.recordId.isEmpty()
+            && m_recordIds.contains(
+                record.recordId
+                )) {
+            continue;
+        }
+
+        if (!record.recordId.isEmpty()) {
+            m_recordIds.insert(
+                record.recordId
+                );
+        }
+
+        appendedRecords.append(
+            std::move(record)
+            );
+    }
+
+    m_processedRecordCount +=
+        skippedRecordCount
+        + appendedRecords.size();
+
+    updateDerivedDataForAppendedRecords(
+        appendedRecords
+        );
+
+    m_investigationController.appendRecords(
+        std::move(appendedRecords)
+        );
+}
+
 bool InvestigationSession::
     hasSeverityData() const
 {
@@ -335,21 +401,12 @@ void InvestigationSession::installImportResult(
         result.records
         );
 
-    QSet<QString> recordIds;
-
-    for (const InvestigationRecord &record
-         : std::as_const(result.records)) {
-        if (!record.recordId.isEmpty()) {
-            recordIds.insert(record.recordId);
-        }
-    }
-
     m_investigationStateStore.retainOnly(
-        recordIds
+        m_recordIds
         );
 
     if (!m_selectedRecordId.isEmpty()
-        && !recordIds.contains(
+        && !m_recordIds.contains(
             m_selectedRecordId
             )) {
         m_selectedRecordId.clear();
@@ -384,17 +441,24 @@ void InvestigationSession::rebuildDerivedData(
     m_availableEventCodes.clear();
     m_availableEntities.clear();
 
-    QSet<QString> eventCodes;
-    QSet<QString> entities;
+    m_recordIds.clear();
+
+    m_knownSubsystems.clear();
+    m_knownEventCodes.clear();
+    m_knownEntities.clear();
+    m_knownCustomFields.clear();
 
     m_firstTimestamp.reset();
     m_lastTimestamp.reset();
 
-    QSet<QString> subsystems;
-    QSet<QString> customFields;
-
     for (const InvestigationRecord &record
          : records) {
+        if (!record.recordId.isEmpty()) {
+            m_recordIds.insert(
+                record.recordId
+                );
+        }
+
         m_hasSeverityData =
             m_hasSeverityData
             || record.severity.has_value();
@@ -403,7 +467,7 @@ void InvestigationSession::rebuildDerivedData(
             && !record.subsystem->isEmpty()) {
             m_hasSubsystemData = true;
 
-            subsystems.insert(
+            m_knownSubsystems.insert(
                 record.subsystem.value()
                 );
         }
@@ -414,7 +478,7 @@ void InvestigationSession::rebuildDerivedData(
                     .isEmpty()) {
             m_hasEventCodeData = true;
 
-            eventCodes.insert(
+            m_knownEventCodes.insert(
                 record.eventCode.value()
                 );
         }
@@ -425,7 +489,7 @@ void InvestigationSession::rebuildDerivedData(
                     .isEmpty()) {
             m_hasEntityData = true;
 
-            entities.insert(
+            m_knownEntities.insert(
                 record.entityId.value()
                 );
         }
@@ -443,7 +507,7 @@ void InvestigationSession::rebuildDerivedData(
 
             m_hasCustomFieldData = true;
 
-            customFields.insert(
+            m_knownCustomFields.insert(
                 iterator.key()
                 );
         }
@@ -471,13 +535,13 @@ void InvestigationSession::rebuildDerivedData(
     }
 
     m_availableSubsystems =
-        subsystems.values();
+        m_knownSubsystems.values();
 
     m_availableEventCodes =
-        eventCodes.values();
+        m_knownEventCodes.values();
 
     m_availableCustomFields =
-        customFields.values();
+        m_knownCustomFields.values();
 
     std::sort(
         m_availableCustomFields.begin(),
@@ -494,7 +558,7 @@ void InvestigationSession::rebuildDerivedData(
         );
 
     m_availableEntities =
-        entities.values();
+        m_knownEntities.values();
 
     std::sort(
         m_availableSubsystems.begin(),
@@ -507,6 +571,161 @@ void InvestigationSession::rebuildDerivedData(
                        ) < 0;
         }
         );
+}
+
+void InvestigationSession::
+    updateDerivedDataForAppendedRecords(
+        const QVector<InvestigationRecord> &records
+        )
+{
+    bool subsystemListChanged = false;
+    bool customFieldListChanged = false;
+
+    for (const InvestigationRecord &record
+         : records) {
+        m_hasSeverityData =
+            m_hasSeverityData
+            || record.severity.has_value();
+
+        if (record.subsystem.has_value()
+            && !record.subsystem->isEmpty()
+            && !m_knownSubsystems.contains(
+                record.subsystem.value()
+                )) {
+            m_hasSubsystemData = true;
+
+            m_knownSubsystems.insert(
+                record.subsystem.value()
+                );
+
+            m_availableSubsystems.append(
+                record.subsystem.value()
+                );
+
+            subsystemListChanged = true;
+        }
+
+        if (record.eventCode.has_value()
+            && !record.eventCode
+                    ->trimmed()
+                    .isEmpty()) {
+            m_hasEventCodeData = true;
+
+            if (!m_knownEventCodes.contains(
+                    record.eventCode.value()
+                    )) {
+                m_knownEventCodes.insert(
+                    record.eventCode.value()
+                    );
+
+                m_availableEventCodes.append(
+                    record.eventCode.value()
+                    );
+            }
+        }
+
+        if (record.entityId.has_value()
+            && !record.entityId
+                    ->trimmed()
+                    .isEmpty()) {
+            m_hasEntityData = true;
+
+            if (!m_knownEntities.contains(
+                    record.entityId.value()
+                    )) {
+                m_knownEntities.insert(
+                    record.entityId.value()
+                    );
+
+                m_availableEntities.append(
+                    record.entityId.value()
+                    );
+            }
+        }
+
+        for (
+            auto iterator =
+            record.customAttributes.constBegin();
+            iterator !=
+            record.customAttributes.constEnd();
+            ++iterator
+            ) {
+            if (iterator.key().isEmpty()) {
+                continue;
+            }
+
+            m_hasCustomFieldData = true;
+
+            if (!m_knownCustomFields.contains(
+                    iterator.key()
+                    )) {
+                m_knownCustomFields.insert(
+                    iterator.key()
+                    );
+
+                m_availableCustomFields.append(
+                    iterator.key()
+                    );
+
+                customFieldListChanged = true;
+            }
+        }
+
+        if (!record.timestamp.has_value()) {
+            continue;
+        }
+
+        const QDateTime timestamp =
+            record.timestamp->toUTC();
+
+        if (!timestamp.isValid()) {
+            continue;
+        }
+
+        if (!m_firstTimestamp.has_value()
+            || timestamp < *m_firstTimestamp) {
+            m_firstTimestamp =
+                timestamp;
+        }
+
+        if (!m_lastTimestamp.has_value()
+            || timestamp > *m_lastTimestamp) {
+            m_lastTimestamp =
+                timestamp;
+        }
+    }
+
+    if (subsystemListChanged) {
+        std::sort(
+            m_availableSubsystems.begin(),
+            m_availableSubsystems.end(),
+            [](
+                const QString &left,
+                const QString &right
+                ) {
+                return left.compare(
+                           right,
+                           Qt::CaseInsensitive
+                           ) < 0;
+            }
+            );
+    }
+
+    if (customFieldListChanged) {
+        std::sort(
+            m_availableCustomFields.begin(),
+            m_availableCustomFields.end(),
+            [](
+                const QString &left,
+                const QString &right
+                ) {
+                return left.compare(
+                           right,
+                           Qt::CaseInsensitive
+                           ) < 0;
+            }
+            );
+    }
 }
 
 InvestigationBurstTimingMode

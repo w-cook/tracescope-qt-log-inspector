@@ -8,6 +8,7 @@ class InvestigationControllerTests : public QObject
 
 private slots:
     void setRecordsUpdatesModels();
+    void appendsRecordsThroughActiveFilters();
     void filtersVisibleRecords();
     void filtersMultipleSeverities();
     void filtersMultipleSubsystems();
@@ -176,6 +177,165 @@ void InvestigationControllerTests::
     QCOMPARE(
         controller.proxyModel()->rowCount(),
         3
+        );
+}
+
+void InvestigationControllerTests::
+    appendsRecordsThroughActiveFilters()
+{
+    InvestigationController controller;
+
+    controller.setRecords(
+        sampleRecords()
+        );
+
+    controller.setFilters(
+        QStringList(),
+        QStringList {
+            QStringLiteral("Comms")
+        },
+        QString()
+        );
+
+    QCOMPARE(
+        controller.totalRecordCount(),
+        3
+        );
+
+    QCOMPARE(
+        controller.visibleRecords().size(),
+        1
+        );
+
+    InvestigationRecord matching;
+
+    matching.recordId =
+        QStringLiteral(
+            "record-live-comms"
+            );
+
+    matching.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:03:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    matching.severity =
+        RecordSeverity::Error;
+
+    matching.subsystem =
+        QStringLiteral("Comms");
+
+    matching.eventCode =
+        QStringLiteral("RECONNECT");
+
+    matching.entityId =
+        QStringLiteral("node-b");
+
+    matching.message =
+        QStringLiteral(
+            "Connection restored"
+            );
+
+    matching.customAttributes.insert(
+        QStringLiteral("region"),
+        QStringLiteral("east")
+        );
+
+    InvestigationRecord nonMatching;
+
+    nonMatching.recordId =
+        QStringLiteral(
+            "record-live-startup"
+            );
+
+    nonMatching.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:04:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    nonMatching.severity =
+        RecordSeverity::Info;
+
+    nonMatching.subsystem =
+        QStringLiteral("Startup");
+
+    nonMatching.eventCode =
+        QStringLiteral("HEALTH_CHECK");
+
+    nonMatching.entityId =
+        QStringLiteral("node-a");
+
+    nonMatching.message =
+        QStringLiteral(
+            "Health check completed"
+            );
+
+    nonMatching.customAttributes.insert(
+        QStringLiteral("region"),
+        QStringLiteral("east")
+        );
+
+    controller.appendRecords({
+        matching,
+        nonMatching
+    });
+
+    QCOMPARE(
+        controller.totalRecordCount(),
+        5
+        );
+
+    QCOMPARE(
+        controller.allRecords().size(),
+        5
+        );
+
+    QCOMPARE(
+        controller
+            .proxyModel()
+            ->subsystemFilters(),
+        QStringList({
+            QStringLiteral("Comms")
+        })
+        );
+
+    const QVector<InvestigationRecord>
+        visibleRecords =
+        controller.visibleRecords();
+
+    QCOMPARE(
+        visibleRecords.size(),
+        2
+        );
+
+    QCOMPARE(
+        controller
+            .recordsForAnalysis()
+            .size(),
+        2
+        );
+
+    QVERIFY(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "record-live-comms"
+                )
+            ) >= 0
+        );
+
+    QCOMPARE(
+        controller.proxyRowForRecordId(
+            QStringLiteral(
+                "record-live-startup"
+                )
+            ),
+        -1
         );
 }
 

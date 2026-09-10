@@ -2,9 +2,10 @@
 
 #include <optional>
 
-#include <QStringList>
 #include <QDateTime>
+#include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include "InvestigationStateStore.h"
@@ -102,6 +103,10 @@ public:
     investigationStateStore() const;
 
     void reload(
+        ImportResult result
+        );
+
+    void appendLiveImportResult(
         ImportResult result
         );
 
@@ -215,6 +220,12 @@ private:
     QStringList m_availableEventCodes;
     QStringList m_availableEntities;
 
+    QSet<QString> m_recordIds;
+    QSet<QString> m_knownSubsystems;
+    QSet<QString> m_knownEventCodes;
+    QSet<QString> m_knownEntities;
+    QSet<QString> m_knownCustomFields;
+
     std::optional<QDateTime>
         m_firstTimestamp;
 
@@ -249,6 +260,10 @@ private:
         );
 
     void rebuildDerivedData(
+        const QVector<InvestigationRecord> &records
+        );
+
+    void updateDerivedDataForAppendedRecords(
         const QVector<InvestigationRecord> &records
         );
 };

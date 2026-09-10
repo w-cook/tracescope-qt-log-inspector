@@ -3,6 +3,7 @@
 #include <QSet>
 
 #include <algorithm>
+#include <utility>
 
 namespace
 {
@@ -59,6 +60,15 @@ void InvestigationController::setRecords(
     )
 {
     m_sourceModel.setRecords(records);
+}
+
+void InvestigationController::appendRecords(
+    QVector<InvestigationRecord> records
+    )
+{
+    m_sourceModel.appendRecords(
+        std::move(records)
+        );
 }
 
 void InvestigationController::setFilterState(
