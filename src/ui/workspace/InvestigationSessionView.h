@@ -20,6 +20,7 @@ class InvestigationSessionSummaryPanel;
 class InvestigationTimelinePanel;
 class QSplitter;
 class QResizeEvent;
+class QTimer;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
@@ -136,6 +137,12 @@ private:
 
     void exportFilteredResults();
 
+    void refreshDerivedViewsForCurrentFilter();
+
+    void scheduleLiveRefresh();
+
+    void refreshLiveSessionPresentation();
+
     InvestigationSession *m_session =
         nullptr;
 
@@ -173,5 +180,8 @@ private:
         nullptr;
 
     QSplitter *m_mainSplitter =
+        nullptr;
+
+    QTimer *m_liveRefreshTimer =
         nullptr;
 };

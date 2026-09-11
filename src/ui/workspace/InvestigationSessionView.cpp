@@ -258,6 +258,9 @@ InvestigationSessionView::
             Qt::Vertical,
             this
             )
+        ),
+    m_liveRefreshTimer(
+        new QTimer(this)
         )
 {
     m_issueSummaryPanel =
@@ -584,6 +587,22 @@ InvestigationSessionView::
             );
     }
 
+    m_liveRefreshTimer->setSingleShot(
+        true
+        );
+
+    m_liveRefreshTimer->setInterval(
+        750
+        );
+
+    connect(
+        m_liveRefreshTimer,
+        &QTimer::timeout,
+        this,
+        &InvestigationSessionView::
+        refreshLiveSessionPresentation
+        );
+
     refreshSession();
 }
 
@@ -604,6 +623,10 @@ void InvestigationSessionView::
 {
     if (m_session == nullptr) {
         return;
+    }
+
+    if (m_liveRefreshTimer != nullptr) {
+        m_liveRefreshTimer->stop();
     }
 
     m_filterPanel->setSession(
@@ -981,6 +1004,15 @@ QWidget *InvestigationSessionView::
         liveFollowStateChanged
         );
 
+    connect(
+        control,
+        &LiveFollowTabControl::
+        liveSessionUpdated,
+        this,
+        &InvestigationSessionView::
+        scheduleLiveRefresh
+        );
+
     return control;
 }
 
@@ -1003,7 +1035,14 @@ void InvestigationSessionView::
         m_session
             ->selectedRecordId();
 
+    /*
+     * This is the user-driven path. Only here do we
+     * push the filter control state back into the
+     * proxy model.
+     */
     m_filterPanel->applyToSession();
+
+    refreshDerivedViewsForCurrentFilter();
 
     const int selectedProxyRow =
         !selectedRecordId.isEmpty()
@@ -1012,36 +1051,6 @@ void InvestigationSessionView::
                       selectedRecordId
                       )
             : -1;
-
-    const QVector<InvestigationRecord>
-        visibleRecords =
-        controller
-            ->recordsForAnalysis();
-
-    m_summaryPanel->refresh(
-        visibleRecords
-        );
-
-    if (
-        m_session->hasSeverityData()
-        && m_session
-               ->hasSubsystemData()
-        ) {
-        m_issueSummaryPanel
-            ->updateRecords(
-                visibleRecords
-                );
-    } else {
-        m_issueSummaryPanel->clear();
-    }
-
-    m_analyticsPanel->updateRecords(
-        visibleRecords
-        );
-
-    m_timelinePanel->updateRecords(
-        visibleRecords
-        );
 
     if (selectedProxyRow >= 0) {
         m_eventPanel->selectProxyRow(
@@ -1055,8 +1064,6 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
-
-    updateFindingsExportState();
 }
 
 void InvestigationSessionView::
@@ -2034,4 +2041,140 @@ void InvestigationSessionView::
             )
             .arg(records.size())
         );
+}
+
+void InvestigationSessionView::
+    refreshDerivedViewsForCurrentFilter()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    const QVector<InvestigationRecord>
+        visibleRecords =
+        controller
+            ->recordsForAnalysis();
+
+    m_summaryPanel->refresh(
+        visibleRecords
+        );
+
+    if (
+        m_session->hasSeverityData()
+        && m_session
+               ->hasSubsystemData()
+        ) {
+        m_issueSummaryPanel
+            ->updateRecords(
+                visibleRecords
+                );
+    } else {
+        m_issueSummaryPanel->clear();
+    }
+
+    m_analyticsPanel->updateRecords(
+        visibleRecords
+        );
+
+    m_timelinePanel->updateRecords(
+        visibleRecords
+        );
+
+    updateFindingsExportState();
+}
+
+void InvestigationSessionView::
+    scheduleLiveRefresh()
+{
+    if (m_liveRefreshTimer == nullptr
+        || m_liveRefreshTimer
+               ->isActive()) {
+        return;
+    }
+
+    /*
+     * Throttle rather than debounce. Continuous live
+     * input must still refresh the derived surfaces
+     * periodically.
+     */
+    m_liveRefreshTimer->start();
+}
+
+void InvestigationSessionView::
+    refreshLiveSessionPresentation()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    /*
+     * The proxy model already handles newly inserted
+     * source rows dynamically. Do not reapply the
+     * user's filters here.
+     */
+    m_filterPanel
+        ->refreshAvailableOptions();
+
+    const bool issueSummaryAvailable =
+        m_session->hasSeverityData()
+        && m_session
+               ->hasSubsystemData();
+
+    m_reviewPanel
+        ->setIssueSummaryAvailable(
+            issueSummaryAvailable
+            );
+
+    refreshDerivedViewsForCurrentFilter();
+
+    /*
+     * Ordinary inserts preserve the current selection.
+     * A rare dynamic-column schema expansion can reset
+     * the table model, however, so restore the persisted
+     * record only when the view actually lost it.
+     *
+     * Do not repeatedly reselect an intact row: that
+     * would continually scroll the user back to it.
+     */
+    const QString selectedRecordId =
+        m_session
+            ->selectedRecordId();
+
+    if (
+        !selectedRecordId.isEmpty()
+        && m_eventPanel
+                   ->selectedRecord()
+               == nullptr
+        ) {
+        const int selectedProxyRow =
+            controller
+                ->proxyRowForRecordId(
+                    selectedRecordId
+                    );
+
+        if (selectedProxyRow >= 0) {
+            m_eventPanel->selectProxyRow(
+                selectedProxyRow
+                );
+        }
+    }
+
+    m_eventPanel
+        ->refreshNavigationState();
 }

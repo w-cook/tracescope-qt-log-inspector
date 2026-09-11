@@ -410,6 +410,8 @@ void LiveFollowTabControl::
         [this]() {
             clearError();
             refreshPresentation();
+
+            emit liveSessionUpdated();
         }
         );
 

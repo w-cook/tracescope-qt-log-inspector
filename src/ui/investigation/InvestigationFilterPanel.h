@@ -91,6 +91,8 @@ public:
 
     bool bookmarksOnly() const;
 
+    void refreshAvailableOptions();
+
 signals:
     /*
      * User interaction inside the filter surface

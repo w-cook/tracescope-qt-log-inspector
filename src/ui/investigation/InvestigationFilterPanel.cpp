@@ -3249,6 +3249,113 @@ bool InvestigationFilterPanel::
         ->isChecked();
 }
 
+void InvestigationFilterPanel::
+    refreshAvailableOptions()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    refreshSubsystemOptions();
+    refreshCanonicalOptions();
+
+    {
+        const QSignalBlocker blocker(
+            m_customFieldFilterEditor
+            );
+
+        m_customFieldFilterEditor
+            ->setAvailableFields(
+                m_session
+                        ->hasCustomFieldData()
+                    ? m_session
+                          ->availableCustomFields()
+                    : QStringList()
+                );
+    }
+
+    const bool hasTimestampData =
+        m_session
+            ->firstTimestamp()
+            .has_value()
+        && m_session
+               ->lastTimestamp()
+               .has_value();
+
+    /*
+     * Keep inactive time-range controls synchronized
+     * with the growing source bounds. Explicit user
+     * boundaries remain untouched.
+     */
+    if (hasTimestampData) {
+        if (
+            !m_timeRangeStartCheckBox
+                 ->isChecked()
+            ) {
+            const QSignalBlocker blocker(
+                m_timeRangeStartEdit
+                );
+
+            m_timeRangeStartEdit
+                ->setDateTime(
+                    m_session
+                        ->firstTimestamp()
+                        .value()
+                    );
+        }
+
+        if (
+            !m_timeRangeEndCheckBox
+                 ->isChecked()
+            ) {
+            const QSignalBlocker blocker(
+                m_timeRangeEndEdit
+                );
+
+            m_timeRangeEndEdit
+                ->setDateTime(
+                    m_session
+                        ->lastTimestamp()
+                        .value()
+                    );
+        }
+    }
+
+    /*
+     * Live records can introduce capabilities that
+     * were absent from the static baseline.
+     */
+    m_levelFilterCombo->setVisible(
+        m_session->hasSeverityData()
+        );
+
+    m_subsystemFilterCombo->setVisible(
+        m_session->hasSubsystemData()
+        );
+
+    m_eventCodeFilterWidget->setVisible(
+        m_session->hasEventCodeData()
+        );
+
+    m_entityFilterWidget->setVisible(
+        m_session->hasEntityData()
+        );
+
+    m_timeRangeButton->setVisible(
+        hasTimestampData
+        );
+
+    m_customFiltersButton->setVisible(
+        m_session->hasCustomFieldData()
+        );
+
+    updateCustomFiltersButton();
+    updateTimeRangeButton();
+
+    resizeCustomFiltersDialogToContents();
+    updateResponsiveLayout();
+}
+
 int InvestigationFilterPanel::
     secondaryWideLayoutMinimumWidth() const
 {

@@ -22,6 +22,8 @@ public:
 signals:
     void liveFollowStateChanged();
 
+    void liveSessionUpdated();
+
 private:
     void attachCoordinator(
         LiveSessionFollowCoordinator *coordinator
