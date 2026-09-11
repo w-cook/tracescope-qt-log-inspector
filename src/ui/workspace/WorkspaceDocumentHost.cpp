@@ -676,6 +676,22 @@ bool WorkspaceDocumentHost::
         document->toolTip()
         );
 
+    QWidget *tabAccessory =
+        document
+            ->createTabAccessoryWidget(
+                m_tabs->workspaceTabBar()
+                );
+
+    if (tabAccessory != nullptr) {
+        m_tabs
+            ->workspaceTabBar()
+            ->setTabButton(
+                insertedIndex,
+                QTabBar::LeftSide,
+                tabAccessory
+                );
+    }
+
     connect(
         document,
         &WorkspaceDocument::

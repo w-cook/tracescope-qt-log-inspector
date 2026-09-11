@@ -99,3 +99,13 @@ void WorkspaceDocument::populateExportMenu(
         }
         );
 }
+
+QWidget *WorkspaceDocument::
+    createTabAccessoryWidget(
+        QWidget *parent
+        )
+{
+    Q_UNUSED(parent);
+
+    return nullptr;
+}

@@ -29,6 +29,10 @@ public:
         QMenu *menu
         );
 
+    virtual QWidget *createTabAccessoryWidget(
+        QWidget *parent
+        );
+
 signals:
     void documentTitleChanged(
         const QString &title
