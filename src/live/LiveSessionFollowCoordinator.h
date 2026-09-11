@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 
 #include "LiveFileFollower.h"
 #include "LiveLineImportAdapter.h"
@@ -61,10 +62,36 @@ public:
         DefaultReadChunkSizeBytes
         );
 
+    inline static constexpr int
+        DefaultPollIntervalMilliseconds = 250;
+
+    int pollIntervalMilliseconds() const;
+
+    bool setPollIntervalMilliseconds(
+        int intervalMilliseconds
+        );
+
+signals:
+    void stateChanged();
+
+    void sessionUpdated();
+
+    void sourceGenerationChanged(
+        quint64 sourceGeneration
+        );
+
+    void pollError(
+        const QString &errorMessage
+        );
+
 private:
+    void pollFromTimer();
+
     InvestigationSession *m_session = nullptr;
 
     LiveFileFollower m_follower;
     LiveLineSourceContext m_sourceContext;
     LiveLineImportAdapter m_importAdapter;
+
+    QTimer m_pollTimer;
 };

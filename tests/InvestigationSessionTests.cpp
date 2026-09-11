@@ -29,6 +29,10 @@ private slots:
     void followsAppendedJsonLinesIntoExistingSession();
     void rejectsLiveFollowForExistingUnterminatedLine();
     void followsReplacementAsNewSourceGeneration();
+    void automaticallyPollsLiveSession();
+    void pausePreservesAutomaticPollingBacklog();
+    void stopPreventsAutomaticPolling();
+    void followsReplacementAfterPausedObservation();
 };
 
 void InvestigationSessionTests::
@@ -2157,6 +2161,903 @@ void InvestigationSessionTests::
         restartedRecords.at(2)
             .source.sourceGeneration,
         quint64(1)
+        );
+}
+
+void InvestigationSessionTests::
+    automaticallyPollsLiveSession()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "automatic-live-session.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Existing record"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    if (coordinator == nullptr) {
+        QFAIL(
+            "Expected the session to create a "
+            "live-follow coordinator."
+            );
+
+        return;
+    }
+
+    QVERIFY(
+        coordinator
+            ->setPollIntervalMilliseconds(
+                10
+                )
+        );
+
+    QCOMPARE(
+        coordinator
+            ->pollIntervalMilliseconds(),
+        10
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isFollowing()
+        );
+
+    const QByteArray appendedRecord(
+        R"({"message":"Automatically followed record"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            appendedRecord
+            ),
+        qint64(
+            appendedRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    /*
+     * No explicit pollOnce() call is made here.
+     * The coordinator's timer must observe, frame,
+     * import, and append the new physical record.
+     */
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.importedRecordCount(),
+        qint64(2),
+        1000
+        );
+
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(2)
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Automatically followed record"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+}
+
+void InvestigationSessionTests::
+    pausePreservesAutomaticPollingBacklog()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "paused-live-session.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Existing record"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    if (coordinator == nullptr) {
+        QFAIL(
+            "Expected the session to create a "
+            "live-follow coordinator."
+            );
+
+        return;
+    }
+
+    QVERIFY(
+        coordinator
+            ->setPollIntervalMilliseconds(
+                10
+                )
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .readOffset(),
+        startResult.baselineByteCount
+        );
+
+    QVERIFY(
+        coordinator->pause()
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isPaused()
+        );
+
+    const qint64 pausedReadOffset =
+        coordinator
+            ->state()
+            .readOffset();
+
+    const QByteArray appendedRecord(
+        R"({"message":"Backlogged while paused"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            appendedRecord
+            ),
+        qint64(
+            appendedRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    /*
+     * The timer continues polling while paused, but
+     * the follower must not consume the newly
+     * available bytes.
+     */
+    QTest::qWait(
+        75
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .readOffset(),
+        pausedReadOffset
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isPaused()
+        );
+
+    /*
+     * Resume must consume the unread backlog rather
+     * than establishing a new EOF baseline.
+     */
+    QVERIFY(
+        coordinator->resume()
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isFollowing()
+        );
+
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.importedRecordCount(),
+        qint64(2),
+        1000
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Backlogged while paused"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+}
+
+void InvestigationSessionTests::
+    stopPreventsAutomaticPolling()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "stopped-live-session.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Existing record"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    if (coordinator == nullptr) {
+        QFAIL(
+            "Expected the session to create a "
+            "live-follow coordinator."
+            );
+
+        return;
+    }
+
+    QVERIFY(
+        coordinator
+            ->setPollIntervalMilliseconds(
+                10
+                )
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    /*
+     * First prove that automatic polling is active
+     * before testing the stop boundary.
+     */
+    const QByteArray followedRecord(
+        R"({"message":"Followed before stop"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            followedRecord
+            ),
+        qint64(
+            followedRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.importedRecordCount(),
+        qint64(2),
+        1000
+        );
+
+    QVERIFY(
+        coordinator->stop()
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isStopped()
+        );
+
+    const qint64 stoppedReadOffset =
+        coordinator
+            ->state()
+            .readOffset();
+
+    const QByteArray afterStopRecord(
+        R"({"message":"Must not be followed after stop"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            afterStopRecord
+            ),
+        qint64(
+            afterStopRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    /*
+     * Multiple former timer intervals pass here.
+     * Once stopped, no further automatic observation
+     * or ingestion should advance the live session.
+     */
+    QTest::qWait(
+        75
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(2)
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .readOffset(),
+        stoppedReadOffset
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .size(),
+        2
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .last()
+            .message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Followed before stop"
+                )
+            )
+        );
+}
+
+void InvestigationSessionTests::
+    followsReplacementAfterPausedObservation()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "paused-replacement.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Original generation"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    if (coordinator == nullptr) {
+        QFAIL(
+            "Expected the session to create a "
+            "live-follow coordinator."
+            );
+
+        return;
+    }
+
+    QVERIFY(
+        coordinator
+            ->setPollIntervalMilliseconds(
+                10
+                )
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QVERIFY(
+        coordinator->pause()
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isPaused()
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .sourceGeneration(),
+        quint64(0)
+        );
+
+    /*
+     * Replace the physical source while following
+     * remains paused. The timer should still observe
+     * the replacement, but must not consume it.
+     */
+    const QByteArray replacementRecord(
+        R"({"message":"Replacement generation"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Truncate
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            replacementRecord
+            ),
+        qint64(
+            replacementRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    /*
+     * Wait for the timer to observe the replacement
+     * and advance the physical source generation.
+     */
+    QTRY_COMPARE_WITH_TIMEOUT(
+        coordinator
+            ->state()
+            .sourceGeneration(),
+        quint64(1),
+        1000
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isPaused()
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .readOffset(),
+        qint64(0)
+        );
+
+    /*
+     * Observation while paused must not import the
+     * replacement source yet.
+     */
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .size(),
+        1
+        );
+
+    /*
+     * Resuming should consume the replacement source
+     * from byte zero as generation 1.
+     */
+    QVERIFY(
+        coordinator->resume()
+        );
+
+    QTRY_COMPARE_WITH_TIMEOUT(
+        session.importedRecordCount(),
+        qint64(2),
+        1000
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Original generation"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Replacement generation"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(1)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QVERIFY(
+        records.at(0).recordId
+        != records.at(1).recordId
         );
 }
 

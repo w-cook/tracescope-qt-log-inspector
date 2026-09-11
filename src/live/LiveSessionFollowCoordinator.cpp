@@ -21,6 +21,25 @@ LiveSessionFollowCoordinator::
         session.importProfile()
         )
 {
+    m_pollTimer.setInterval(
+        DefaultPollIntervalMilliseconds
+        );
+
+    connect(
+        &m_pollTimer,
+        &QTimer::timeout,
+        this,
+        &LiveSessionFollowCoordinator::
+        pollFromTimer
+        );
+
+    connect(
+        &m_follower,
+        &LiveFileFollower::stateChanged,
+        this,
+        &LiveSessionFollowCoordinator::
+        stateChanged
+        );
 }
 
 bool LiveSessionFollowCoordinator::
@@ -158,6 +177,8 @@ LiveSessionFollowCoordinator::start()
         return result;
     }
 
+    m_pollTimer.start();
+
     return result;
 }
 
@@ -173,6 +194,8 @@ bool LiveSessionFollowCoordinator::resume()
 
 bool LiveSessionFollowCoordinator::stop()
 {
+    m_pollTimer.stop();
+
     return m_follower.stop();
 }
 
@@ -279,4 +302,53 @@ LiveSessionFollowCoordinator::pollOnce(
         );
 
     return result;
+}
+
+int LiveSessionFollowCoordinator::
+    pollIntervalMilliseconds() const
+{
+    return m_pollTimer.interval();
+}
+
+bool LiveSessionFollowCoordinator::
+    setPollIntervalMilliseconds(
+        int intervalMilliseconds
+        )
+{
+    if (intervalMilliseconds <= 0) {
+        return false;
+    }
+
+    m_pollTimer.setInterval(
+        intervalMilliseconds
+        );
+
+    return true;
+}
+
+void LiveSessionFollowCoordinator::
+    pollFromTimer()
+{
+    const LiveSessionFollowPollResult result =
+        pollOnce();
+
+    if (!result.succeeded) {
+        emit pollError(
+            result.errorMessage
+            );
+
+        return;
+    }
+
+    if (result.sourceGenerationChanged) {
+        emit sourceGenerationChanged(
+            m_follower
+                .state()
+                .sourceGeneration()
+            );
+    }
+
+    if (result.processedRecordCount > 0) {
+        emit sessionUpdated();
+    }
 }
