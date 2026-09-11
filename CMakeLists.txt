@@ -211,6 +211,8 @@ qt_add_executable(TraceScope
     src/live/LiveLineImportAdapter.cpp
     src/live/LiveSessionFollowCoordinator.h
     src/live/LiveSessionFollowCoordinator.cpp
+    src/ui/workspace/LiveFollowTabControl.h
+    src/ui/workspace/LiveFollowTabControl.cpp
 
 )
 

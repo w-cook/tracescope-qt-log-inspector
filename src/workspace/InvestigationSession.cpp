@@ -259,6 +259,13 @@ LiveSessionFollowCoordinator *
     return m_liveFollowCoordinator.get();
 }
 
+LiveSessionFollowCoordinator *
+    InvestigationSession::
+    liveFollowCoordinator()
+{
+    return m_liveFollowCoordinator.get();
+}
+
 const LiveSessionFollowCoordinator *
     InvestigationSession::
     liveFollowCoordinator() const

@@ -60,6 +60,10 @@ public:
         QMenu *menu
         ) override;
 
+    QWidget *createTabAccessoryWidget(
+        QWidget *parent
+        ) override;
+
 protected:
     void resizeEvent(
         QResizeEvent *event

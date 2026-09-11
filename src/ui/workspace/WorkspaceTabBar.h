@@ -23,6 +23,10 @@ public:
         QWidget *parent = nullptr
         );
 
+    void refreshTabAccessoryLayout(
+        QWidget *accessory
+        );
+
 signals:
     void documentDragStarted(
         const QString &documentId

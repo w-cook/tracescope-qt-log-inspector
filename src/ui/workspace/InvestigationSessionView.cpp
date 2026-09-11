@@ -41,6 +41,8 @@
 #include "../../workspace/InvestigationSession.h"
 #include "../../workspace/InvestigationStateStore.h"
 
+#include "LiveFollowTabControl.h"
+
 namespace
 {
 QString documentIdFor(
@@ -950,6 +952,23 @@ void InvestigationSessionView::
                 Bookmarked
                 );
         }
+        );
+}
+
+QWidget *InvestigationSessionView::
+    createTabAccessoryWidget(
+        QWidget *parent
+        )
+{
+    if (m_session == nullptr
+        || !m_session
+                ->supportsLiveFollowing()) {
+        return nullptr;
+    }
+
+    return new LiveFollowTabControl(
+        m_session,
+        parent
         );
 }
 

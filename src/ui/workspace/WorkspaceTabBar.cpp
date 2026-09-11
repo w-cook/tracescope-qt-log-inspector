@@ -55,6 +55,54 @@ WorkspaceTabBar::WorkspaceTabBar(
         );
 }
 
+void WorkspaceTabBar::
+    refreshTabAccessoryLayout(
+        QWidget *accessory
+        )
+{
+    if (accessory == nullptr) {
+        return;
+    }
+
+    for (int index = 0;
+         index < count();
+         ++index) {
+        if (
+            tabButton(
+                index,
+                QTabBar::LeftSide
+                )
+            != accessory
+            ) {
+            continue;
+        }
+
+        /*
+         * QTabBar does not reliably recalculate its
+         * tab geometry when a custom tab-side widget
+         * merely changes its own size hint.
+         *
+         * Reinstalling the same accessory through
+         * setTabButton() forces QTabBar to rebuild
+         * the tab layout using the accessory's
+         * current size.
+         */
+        setTabButton(
+            index,
+            QTabBar::LeftSide,
+            nullptr
+            );
+
+        setTabButton(
+            index,
+            QTabBar::LeftSide,
+            accessory
+            );
+
+        return;
+    }
+}
+
 void WorkspaceTabBar::mousePressEvent(
     QMouseEvent *event
     )

@@ -1604,8 +1604,12 @@ qt_add_executable(
 
     ../src/ui/workspace/InvestigationSessionView.h
     ../src/ui/workspace/InvestigationSessionView.cpp
+    ../src/ui/workspace/LiveFollowTabControl.h
+    ../src/ui/workspace/LiveFollowTabControl.cpp
     ../src/ui/workspace/WorkspaceDocument.h
     ../src/ui/workspace/WorkspaceDocument.cpp
+    ../src/ui/workspace/WorkspaceTabBar.h
+    ../src/ui/workspace/WorkspaceTabBar.cpp
 
     ../src/workspace/InvestigationPresentationState.h
     ../src/workspace/InvestigationSession.h

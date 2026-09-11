@@ -120,6 +120,9 @@ public:
     LiveSessionFollowCoordinator *
     ensureLiveFollowCoordinator();
 
+    LiveSessionFollowCoordinator *
+    liveFollowCoordinator();
+
     const LiveSessionFollowCoordinator *
     liveFollowCoordinator() const;
 
