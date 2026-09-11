@@ -22,6 +22,8 @@ private slots:
     void retainsInvestigationStateForRecordsThatSurviveReload();
     void restoresExplicitSessionIdentity();
     void capturesAndRestoresPersistedInvestigationState();
+    void ownsLiveFollowCoordinatorLazily();
+    void reloadDiscardsLiveFollowCoordinator();
     void appendsLiveRecordsWithoutDiscardingInvestigationState();
     void ignoresDuplicateLiveRecordIds();
     void followsAppendedJsonLinesIntoExistingSession();
@@ -654,6 +656,379 @@ void InvestigationSessionTests::
 
     QVERIFY(
         restoredProxy->bookmarkedOnly()
+        );
+}
+
+void InvestigationSessionTests::
+    ownsLiveFollowCoordinatorLazily()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live-ownership.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Existing record"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    /*
+     * Merely checking support must not allocate
+     * live-follow state for an otherwise static
+     * investigation session.
+     */
+    QVERIFY(
+        session.supportsLiveFollowing()
+        );
+
+    QVERIFY(
+        session.liveFollowCoordinator()
+        == nullptr
+        );
+
+    /*
+     * The coordinator is created only when live
+     * following is actually requested.
+     */
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        coordinator != nullptr
+        );
+
+    QVERIFY(
+        session.liveFollowCoordinator()
+        == coordinator
+        );
+
+    /*
+     * Repeated requests must return the one
+     * coordinator owned by this session rather
+     * than constructing parallel live pipelines.
+     */
+    QCOMPARE(
+        session.ensureLiveFollowCoordinator(),
+        coordinator
+        );
+
+    /*
+     * Structured JSON is a valid TraceScope import
+     * format, but it does not yet have incremental
+     * structural framing. It therefore remains
+     * ineligible for live following at this stage.
+     */
+    ImportProfile unsupportedProfile;
+
+    unsupportedProfile.name =
+        QStringLiteral(
+            "Structured JSON"
+            );
+
+    unsupportedProfile.importerId =
+        QStringLiteral(
+            "structured-json"
+            );
+
+    ImportResult unsupportedResult;
+
+    InvestigationSession unsupportedSession(
+        sourcePath,
+        unsupportedProfile,
+        std::move(
+            unsupportedResult
+            )
+        );
+
+    QVERIFY(
+        !unsupportedSession
+             .supportsLiveFollowing()
+        );
+
+    QVERIFY(
+        unsupportedSession
+            .liveFollowCoordinator()
+        == nullptr
+        );
+
+    QVERIFY(
+        unsupportedSession
+            .ensureLiveFollowCoordinator()
+        == nullptr
+        );
+
+    QVERIFY(
+        unsupportedSession
+            .liveFollowCoordinator()
+        == nullptr
+        );
+}
+
+void InvestigationSessionTests::
+    reloadDiscardsLiveFollowCoordinator()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live-reload.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Existing record"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        sourcePath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        initialResult.processedRecordCount,
+        qint64(1)
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        coordinator != nullptr
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QVERIFY(
+        coordinator
+            ->state()
+            .isFollowing()
+        );
+
+    /*
+     * A destructive static reload establishes a
+     * completely new session baseline. Any follower,
+     * byte offset, framing state, and incremental
+     * importer state associated with the old baseline
+     * must therefore be discarded.
+     */
+    ImportResult reloadedResult;
+
+    InvestigationRecord reloadedRecord;
+
+    reloadedRecord.recordId =
+        QStringLiteral(
+            "reloaded-record"
+            );
+
+    reloadedRecord.message =
+        QStringLiteral(
+            "Reloaded record"
+            );
+
+    reloadedResult.records.append(
+        reloadedRecord
+        );
+
+    reloadedResult.processedRecordCount = 1;
+
+    session.reload(
+        std::move(
+            reloadedResult
+            )
+        );
+
+    /*
+     * Do not inspect `coordinator` below this point.
+     * The reload intentionally destroyed the object
+     * it previously referred to.
+     */
+    QVERIFY(
+        session.liveFollowCoordinator()
+        == nullptr
+        );
+
+    /*
+     * Reloading removes the old live-follow runtime
+     * state, but does not change the session's import
+     * profile or its eligibility to begin following
+     * again later.
+     */
+    QVERIFY(
+        session.supportsLiveFollowing()
+        );
+
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session.skippedRecordCount(),
+        qint64(0)
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        1
+        );
+
+    QCOMPARE(
+        records.first().recordId,
+        QStringLiteral(
+            "reloaded-record"
+            )
+        );
+
+    QCOMPARE(
+        records.first().message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Reloaded record"
+                )
+            )
         );
 }
 
@@ -1689,6 +2064,99 @@ void InvestigationSessionTests::
     QVERIFY(
         records.at(0).recordId
         != records.at(1).recordId
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+
+    const LiveSessionFollowStartResult
+        restartResult =
+        coordinator.start();
+
+    QVERIFY2(
+        restartResult.succeeded,
+        qPrintable(
+            restartResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        coordinator
+            .state()
+            .sourceGeneration(),
+        quint64(1)
+        );
+
+    const QByteArray restartedRecord(
+        R"({"message":"After live restart"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            restartedRecord
+            ),
+        qint64(
+            restartedRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    const LiveSessionFollowPollResult
+        restartedPollResult =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        restartedPollResult.succeeded,
+        qPrintable(
+            restartedPollResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        restartedPollResult.observation.kind,
+        LiveFileObservationKind::Appended
+        );
+
+    const QVector<InvestigationRecord>
+        &restartedRecords =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        restartedRecords.size(),
+        3
+        );
+
+    QCOMPARE(
+        restartedRecords.at(2).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "After live restart"
+                )
+            )
+        );
+
+    QCOMPARE(
+        restartedRecords.at(2)
+            .source.recordNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        restartedRecords.at(2)
+            .source.sourceGeneration,
+        quint64(1)
         );
 }
 

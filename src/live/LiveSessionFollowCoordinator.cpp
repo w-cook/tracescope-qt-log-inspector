@@ -24,6 +24,16 @@ LiveSessionFollowCoordinator::
 }
 
 bool LiveSessionFollowCoordinator::
+    supportsProfile(
+        const ImportProfile &profile
+        )
+{
+    return LiveLineImportAdapter(
+               profile
+               ).isSupported();
+}
+
+bool LiveSessionFollowCoordinator::
     isSupported() const
 {
     return m_importAdapter.isSupported();
@@ -73,6 +83,11 @@ LiveSessionFollowCoordinator::start()
     result.baselineByteCount =
         m_follower.state().readOffset();
 
+    const quint64 sourceGeneration =
+        m_follower
+            .state()
+            .sourceGeneration();
+
     /*
      * Seed physical line numbering from exactly the
      * same byte range captured by the follower.
@@ -82,7 +97,8 @@ LiveSessionFollowCoordinator::start()
         m_sourceContext
             .initializeFromExistingFile(
                 m_follower.sourcePath(),
-                result.baselineByteCount
+                result.baselineByteCount,
+                sourceGeneration
                 );
 
     if (!sourceInitialization.succeeded) {

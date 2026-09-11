@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include <QDateTime>
@@ -52,6 +53,8 @@ enum class InvestigationBurstTimingMode
     Manual
 };
 
+class LiveSessionFollowCoordinator;
+
 class InvestigationSession
 {
 public:
@@ -67,6 +70,8 @@ public:
         ImportProfile profile,
         ImportResult result
         );
+
+    ~InvestigationSession();
 
     const QString &id() const;
 
@@ -109,6 +114,14 @@ public:
     void appendLiveImportResult(
         ImportResult result
         );
+
+    bool supportsLiveFollowing() const;
+
+    LiveSessionFollowCoordinator *
+    ensureLiveFollowCoordinator();
+
+    const LiveSessionFollowCoordinator *
+    liveFollowCoordinator() const;
 
     bool hasSeverityData() const;
     bool hasSubsystemData() const;
@@ -252,6 +265,9 @@ private:
 
     BurstDetectionSettings
         m_burstDetectionSettings;
+
+    std::unique_ptr<LiveSessionFollowCoordinator>
+        m_liveFollowCoordinator;
 
     void refreshSourceMetadata();
 

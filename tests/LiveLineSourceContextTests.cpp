@@ -50,7 +50,8 @@ void LiveLineSourceContextTests::
     const auto result =
         context.initializeFromExistingFile(
             path,
-            QFileInfo(path).size()
+            QFileInfo(path).size(),
+            0
             );
 
     QVERIFY(
@@ -121,7 +122,8 @@ void LiveLineSourceContextTests::
     const auto result =
         context.initializeFromExistingFile(
             path,
-            QFileInfo(path).size()
+            QFileInfo(path).size(),
+            0
             );
 
     QVERIFY(
@@ -186,7 +188,8 @@ void LiveLineSourceContextTests::
     const auto result =
         context.initializeFromExistingFile(
             path,
-            QFileInfo(path).size()
+            QFileInfo(path).size(),
+            0
             );
 
     QVERIFY(
@@ -370,6 +373,7 @@ void LiveLineSourceContextTests::
             QStringLiteral(
                 "missing/live.log"
                 ),
+            0,
             0
             );
 
@@ -465,7 +469,8 @@ void LiveLineSourceContextTests::
     const auto result =
         context.initializeFromExistingFile(
             path,
-            baselineByteCount
+            baselineByteCount,
+            0
             );
 
     QVERIFY(

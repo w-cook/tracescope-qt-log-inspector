@@ -16,7 +16,8 @@ LiveLineSourceInitializationResult
     LiveLineSourceContext::
     initializeFromExistingFile(
         const QString &sourcePath,
-        qint64 existingByteCount
+        qint64 existingByteCount,
+        quint64 sourceGeneration
         )
 {
     LiveLineSourceInitializationResult result;
@@ -143,7 +144,8 @@ LiveLineSourceInitializationResult
         result.existingPhysicalLineCount
         + 1;
 
-    m_sourceGeneration = 0;
+    m_sourceGeneration =
+        sourceGeneration;
 
     m_framer.reset();
 

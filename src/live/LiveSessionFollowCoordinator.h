@@ -41,6 +41,10 @@ public:
         QObject *parent = nullptr
         );
 
+    static bool supportsProfile(
+        const ImportProfile &profile
+        );
+
     bool isSupported() const;
 
     const LiveFileFollowState &state() const;

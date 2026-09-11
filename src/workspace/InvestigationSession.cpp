@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "../live/LiveSessionFollowCoordinator.h"
+
 InvestigationSession::InvestigationSession(
     const QString &filePath,
     ImportProfile profile,
@@ -47,6 +49,9 @@ InvestigationSession::InvestigationSession(
         std::move(result)
         );
 }
+
+InvestigationSession::~InvestigationSession() =
+    default;
 
 const QString &
 InvestigationSession::id() const
@@ -147,6 +152,11 @@ void InvestigationSession::reload(
     ImportResult result
     )
 {
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
     refreshSourceMetadata();
 
     installImportResult(
@@ -218,6 +228,42 @@ void InvestigationSession::
     m_investigationController.appendRecords(
         std::move(appendedRecords)
         );
+}
+
+bool InvestigationSession::
+    supportsLiveFollowing() const
+{
+    return LiveSessionFollowCoordinator::
+        supportsProfile(
+            m_importProfile
+            );
+}
+
+LiveSessionFollowCoordinator *
+    InvestigationSession::
+    ensureLiveFollowCoordinator()
+{
+    if (!supportsLiveFollowing()) {
+        return nullptr;
+    }
+
+    if (!m_liveFollowCoordinator) {
+        m_liveFollowCoordinator =
+            std::make_unique<
+                LiveSessionFollowCoordinator
+                >(
+                *this
+                );
+    }
+
+    return m_liveFollowCoordinator.get();
+}
+
+const LiveSessionFollowCoordinator *
+    InvestigationSession::
+    liveFollowCoordinator() const
+{
+    return m_liveFollowCoordinator.get();
 }
 
 bool InvestigationSession::

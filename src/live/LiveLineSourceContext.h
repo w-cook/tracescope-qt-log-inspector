@@ -41,7 +41,8 @@ public:
     LiveLineSourceInitializationResult
     initializeFromExistingFile(
         const QString &sourcePath,
-        qint64 existingByteCount
+        qint64 existingByteCount,
+        quint64 sourceGeneration
         );
 
     LiveFramedLineBatch appendBytes(
