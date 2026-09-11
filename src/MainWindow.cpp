@@ -40,6 +40,7 @@
 #include "exporting/InvestigationReportSnapshotBuilder.h"
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
+#include "live/LiveSessionFollowCoordinator.h"
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/InvestigationComparisonDialog.h"
 #include "ui/InvestigationReportExportDialog.h"
@@ -457,6 +458,15 @@ MainWindow::MainWindow(QWidget *parent)
                     &filterPresetStore
                     );
 
+            connect(
+                sessionView,
+                &InvestigationSessionView::
+                liveFollowStateChanged,
+                this,
+                &MainWindow::
+                updateReloadActionState
+                );
+
             /*
              * InvestigationWorkspace::addSession()
              * emits sessionAdded before it activates
@@ -568,12 +578,7 @@ MainWindow::MainWindow(QWidget *parent)
                         );
             }
 
-            if (reloadAction != nullptr) {
-                reloadAction->setEnabled(
-                    session != nullptr
-                    && importWatcher == nullptr
-                    );
-            }
+            updateReloadActionState();
         }
         );
 
@@ -1114,10 +1119,6 @@ bool MainWindow::startLogFileImport(
         return false;
     }
 
-    if (reloadAction != nullptr) {
-        reloadAction->setEnabled(false);
-    }
-
     const ImporterRegistry registry =
         createBuiltInImporterRegistry(
             profile
@@ -1149,6 +1150,8 @@ bool MainWindow::startLogFileImport(
 
     importWatcher =
         watcher;
+
+    updateReloadActionState();
 
     const QString displayFileName =
         QFileInfo(filePath)
@@ -1284,18 +1287,7 @@ bool MainWindow::startLogFileImport(
 
             setAcceptDrops(true);
 
-            /*
-             * Restore normal session-reload
-             * availability regardless of whether the
-             * import completed or was cancelled.
-             */
-            if (reloadAction != nullptr) {
-                reloadAction->setEnabled(
-                    workspace != nullptr
-                    && workspace->activeSession()
-                           != nullptr
-                    );
-            }
+            updateReloadActionState();
 
             if (cancelled) {
                 watcher->deleteLater();
@@ -1720,6 +1712,41 @@ void MainWindow::
         workspace != nullptr
         && workspace->sessionCount()
                >= 2
+        );
+}
+
+void MainWindow::
+    updateReloadActionState()
+{
+    if (reloadAction == nullptr) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace != nullptr
+            ? workspace->activeSession()
+            : nullptr;
+
+    bool liveFollowActive =
+        false;
+
+    if (session != nullptr) {
+        const LiveSessionFollowCoordinator
+            *coordinator =
+            session
+                ->liveFollowCoordinator();
+
+        liveFollowActive =
+            coordinator != nullptr
+            && !coordinator
+                    ->state()
+                    .isStopped();
+    }
+
+    reloadAction->setEnabled(
+        session != nullptr
+        && importWatcher == nullptr
+        && !liveFollowActive
         );
 }
 

@@ -64,6 +64,9 @@ public:
         QWidget *parent
         ) override;
 
+signals:
+    void liveFollowStateChanged();
+
 protected:
     void resizeEvent(
         QResizeEvent *event

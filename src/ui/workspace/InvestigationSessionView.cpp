@@ -966,10 +966,22 @@ QWidget *InvestigationSessionView::
         return nullptr;
     }
 
-    return new LiveFollowTabControl(
-        m_session,
-        parent
+    auto *control =
+        new LiveFollowTabControl(
+            m_session,
+            parent
+            );
+
+    connect(
+        control,
+        &LiveFollowTabControl::
+        liveFollowStateChanged,
+        this,
+        &InvestigationSessionView::
+        liveFollowStateChanged
         );
+
+    return control;
 }
 
 void InvestigationSessionView::

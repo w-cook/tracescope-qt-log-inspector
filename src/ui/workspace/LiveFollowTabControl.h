@@ -19,6 +19,9 @@ public:
         QWidget *parent = nullptr
         );
 
+signals:
+    void liveFollowStateChanged();
+
 private:
     void attachCoordinator(
         LiveSessionFollowCoordinator *coordinator

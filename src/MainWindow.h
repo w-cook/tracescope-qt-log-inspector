@@ -127,6 +127,8 @@ private:
         );
     void updateComparisonActionState();
 
+    void updateReloadActionState();
+
     void refreshRecentFilesMenu();
 
     void refreshRecentWorkspacesMenu();

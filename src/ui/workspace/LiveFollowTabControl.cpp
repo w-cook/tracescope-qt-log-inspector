@@ -397,6 +397,8 @@ void LiveFollowTabControl::
         [this]() {
             clearError();
             refreshPresentation();
+
+            emit liveFollowStateChanged();
         }
         );
 
