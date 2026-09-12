@@ -298,6 +298,7 @@ The launcher exposes:
 * output-format selection
 * playback-speed selection
 * optional looping
+* selectable loop behavior: continuous append or output restart
 * Play and Stop controls
 * playback status
 * captured generator standard output and error output
@@ -306,7 +307,7 @@ The launcher starts `TraceScopeLiveLogGenerator` as a child process through `QPr
 
 Starting playback constructs the same arguments that may be supplied directly to the command-line interface. The launcher therefore does not introduce a separate playback path or alternate interpretation of scenarios.
 
-While playback is active, scenario, output, format, speed, and loop controls are disabled. Normal completion restores the controls and reports that playback completed.
+While playback is active, scenario, output, format, speed, loop, and loop-behavior controls are disabled. The loop-behavior control is available only when looping is enabled. Normal completion restores the controls and reports that playback completed.
 
 For looping scenarios, Stop intentionally terminates the child generator process and reports the stop as an expected user action rather than a playback failure. Closing the launcher while playback is active also terminates the child process so the generator is not left running independently.
 
@@ -335,6 +336,7 @@ TraceScopeLiveLogGenerator
     --format <format-id>
     [--speed <multiplier>]
     [--loop]
+    [--loop-mode <append|restart>]
 ```
 
 Example:
@@ -373,9 +375,49 @@ Playback speed affects waits and partial-write hold periods. It does not alter s
 
 ### `--loop`
 
-Restarts the scenario after it completes.
+Continuously replays the scenario after each completed iteration.
 
 Looping is optional. Finite execution remains the default so scenarios are deterministic and easy to verify.
+
+By default, looping uses `append` behavior. The next scenario iteration continues writing to the same active physical output file without truncating or recreating it. Record-separator state and other active-file state therefore continue across the iteration boundary.
+
+Each new iteration receives a fresh scenario start timestamp while retaining the same physical source unless the scenario itself performs an explicit truncate, replacement, or rotation step.
+
+### `--loop-mode`
+
+Selects the physical output behavior between loop iterations.
+
+Supported values are:
+
+* `append` — continues the next scenario iteration in the current active output file. This is the default and represents an application continuing to produce workload into the same live source.
+* `restart` — finalizes the completed iteration where required by the renderer, recreates the active output file, and begins the next scenario iteration from a fresh source. This preserves the generator's original looping behavior for testing source restarts and whole-file rewrites.
+
+`--loop-mode` defaults to `append`.
+
+Explicit scenario lifecycle steps remain independent of the selected loop mode. A scenario may still truncate, replace, or rotate its active source during an iteration.
+
+Continuous append looping:
+
+```text
+TraceScopeLiveLogGenerator
+    --scenario samples/live/checkout-api-payment-regression-live-scenario.json
+    --output live-test.jsonl
+    --format jsonl
+    --speed 0.5
+    --loop
+```
+
+Explicit restart looping:
+
+```text
+TraceScopeLiveLogGenerator
+    --scenario samples/live/checkout-api-payment-regression-live-scenario.json
+    --output live-test.jsonl
+    --format jsonl
+    --speed 0.5
+    --loop
+    --loop-mode restart
+```
 
 Additional controls such as starting from a particular step should be added only if Phase 15 testing demonstrates a concrete need.
 
@@ -434,6 +476,10 @@ The scenario player owns:
 * rotation
 * structured-file finalization
 * looping
+
+Loop boundaries are also owned by the scenario player. In `append` mode, an ordinary iteration boundary does not finalize, truncate, replace, or reopen the active output file; playback simply continues into the same source. In `restart` mode, the completed iteration is finalized where required and the active output file is recreated before the next iteration begins.
+
+This distinction allows ordinary looping to model continuous application workload while retaining the previous whole-file restart behavior as an explicit test mode.
 
 A partial record does not count as complete until its final bytes are written.
 

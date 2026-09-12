@@ -56,6 +56,7 @@ private:
 
     QComboBox *formatComboBox = nullptr;
     QComboBox *speedComboBox = nullptr;
+    QComboBox *loopBehaviorComboBox = nullptr;
 
     QCheckBox *loopCheckBox = nullptr;
 

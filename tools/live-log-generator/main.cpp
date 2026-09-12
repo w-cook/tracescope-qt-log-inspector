@@ -87,8 +87,17 @@ int main(int argc, char *argv[])
     const QCommandLineOption loopOption(
         QStringLiteral("loop"),
         QStringLiteral(
-            "Restart the scenario after it completes."
+            "Continuously replay the scenario."
             )
+        );
+
+    const QCommandLineOption loopModeOption(
+        QStringLiteral("loop-mode"),
+        QStringLiteral(
+            "Loop behavior: append or restart."
+            ),
+        QStringLiteral("mode"),
+        QStringLiteral("append")
         );
 
     parser.addOption(scenarioOption);
@@ -96,6 +105,7 @@ int main(int argc, char *argv[])
     parser.addOption(formatOption);
     parser.addOption(speedOption);
     parser.addOption(loopOption);
+    parser.addOption(loopModeOption);
 
     parser.process(application);
 
@@ -150,6 +160,36 @@ int main(int argc, char *argv[])
         parser.value(formatOption)
             .trimmed()
             .toLower();
+
+    const bool loop =
+        parser.isSet(loopOption);
+
+    const QString loopMode =
+        parser.value(loopModeOption)
+            .trimmed()
+            .toLower();
+
+    LiveLogLoopBehavior loopBehavior =
+        LiveLogLoopBehavior::Append;
+
+    if (loopMode
+        == QStringLiteral("append")) {
+        loopBehavior =
+            LiveLogLoopBehavior::Append;
+    }
+    else if (loopMode
+             == QStringLiteral("restart")) {
+        loopBehavior =
+            LiveLogLoopBehavior::Restart;
+    }
+    else {
+        return fail(
+            QStringLiteral(
+                "--loop-mode must be either "
+                "'append' or 'restart'."
+                )
+            );
+    }
 
     const LiveLogScenarioLoadResult loadResult =
         LiveLogScenarioLoader().loadFile(
@@ -210,11 +250,18 @@ int main(int argc, char *argv[])
         << "x\n"
         << "Loop: "
         << (
-               parser.isSet(loopOption)
+               loop
                    ? "yes"
                    : "no"
                )
         << '\n';
+
+    if (loop) {
+        output
+            << "Loop mode: "
+            << loopMode
+            << '\n';
+    }
 
     LiveLogScenarioPlayer player;
 
@@ -229,47 +276,50 @@ int main(int argc, char *argv[])
     playOptions.speed =
         speed;
 
-    do {
-        playOptions.scenarioStart =
-            QDateTime::currentDateTimeUtc();
+    playOptions.loop =
+        loop;
 
-        output
-            << "Playback started at "
-            << playOptions.scenarioStart
-                   .toString(
-                       Qt::ISODateWithMs
-                       )
-            << '\n';
+    playOptions.loopBehavior =
+        loopBehavior;
 
-        output.flush();
+    playOptions.scenarioStart =
+        QDateTime::currentDateTimeUtc();
 
-        const LiveLogScenarioPlayResult
-            playResult =
-            player.play(
-                scenario,
-                renderer,
-                playOptions
-                );
+    output
+        << "Playback started at "
+        << playOptions.scenarioStart
+               .toString(
+                   Qt::ISODateWithMs
+                   )
+        << '\n';
 
-        if (!playResult.isSuccess()) {
-            return fail(
-                QStringLiteral(
-                    "%1: %2"
+    output.flush();
+
+    const LiveLogScenarioPlayResult
+        playResult =
+        player.play(
+            scenario,
+            renderer,
+            playOptions
+            );
+
+    if (!playResult.isSuccess()) {
+        return fail(
+            QStringLiteral(
+                "%1: %2"
+                )
+                .arg(
+                    playResult.errorCode,
+                    playResult.errorMessage
                     )
-                    .arg(
-                        playResult.errorCode,
-                        playResult.errorMessage
-                        )
-                );
-        }
+            );
+    }
 
-        output
-            << "Playback completed."
-            << '\n';
+    output
+        << "Playback completed."
+        << '\n';
 
-        output.flush();
-
-    } while (parser.isSet(loopOption));
+    output.flush();
 
     return 0;
 }

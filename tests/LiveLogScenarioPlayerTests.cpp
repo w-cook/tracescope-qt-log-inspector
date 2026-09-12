@@ -93,6 +93,8 @@ class LiveLogScenarioPlayerTests : public QObject
 
 private slots:
     void normalRecordsAreWritten();
+    void loopContinuesWithinExistingOutput();
+    void loopRestartsOutputWhenRequested();
     void waitsAreScaledByPlaybackSpeed();
     void partialRecordIsVisibleDuringHold();
     void truncateRemovesPreviousContent();
@@ -215,6 +217,130 @@ void LiveLogScenarioPlayerTests::
                   ).toString(),
         QStringLiteral(
             "2026-09-06T12:00:02.500Z"
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    loopContinuesWithinExistingOutput()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.container")
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Repeated record."
+                    )
+                )
+        }
+        );
+
+    int continuationChecks = 0;
+
+    const LiveLogScenarioPlayer player(
+        [](qint64) {},
+        [&continuationChecks]() {
+            ++continuationChecks;
+
+            return continuationChecks < 2;
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.loop =
+        true;
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            ContainerRenderer(),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    QCOMPARE(
+        readFile(outputPath),
+        QByteArray(
+            "[\"Repeated record.\","
+            "\"Repeated record.\"]"
+            )
+        );
+}
+
+void LiveLogScenarioPlayerTests::
+    loopRestartsOutputWhenRequested()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.container")
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral(
+                    "Repeated record."
+                    )
+                )
+        }
+        );
+
+    int continuationChecks = 0;
+
+    const LiveLogScenarioPlayer player(
+        [](qint64) {},
+        [&continuationChecks]() {
+            ++continuationChecks;
+
+            return continuationChecks < 2;
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.loop =
+        true;
+
+    options.loopBehavior =
+        LiveLogLoopBehavior::Restart;
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            ContainerRenderer(),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    QCOMPARE(
+        readFile(outputPath),
+        QByteArray(
+            "[\"Repeated record.\"]"
             )
         );
 }

@@ -152,6 +152,27 @@ LiveLogGeneratorLauncherWindow::
             this
             );
 
+    loopBehaviorComboBox =
+        new QComboBox(this);
+
+    loopBehaviorComboBox->addItem(
+        QStringLiteral(
+            "Append continuously"
+            ),
+        QStringLiteral("append")
+        );
+
+    loopBehaviorComboBox->addItem(
+        QStringLiteral(
+            "Restart output each iteration"
+            ),
+        QStringLiteral("restart")
+        );
+
+    loopBehaviorComboBox->setEnabled(
+        false
+        );
+
     playButton =
         new QPushButton(
             QStringLiteral("Play"),
@@ -221,6 +242,16 @@ LiveLogGeneratorLauncherWindow::
         loopCheckBox
         );
 
+    formLayout->addRow(
+        QString(),
+        loopCheckBox
+        );
+
+    formLayout->addRow(
+        QStringLiteral("Loop behavior:"),
+        loopBehaviorComboBox
+        );
+
     auto *buttonLayout =
         new QHBoxLayout;
 
@@ -267,6 +298,20 @@ LiveLogGeneratorLauncherWindow::
         this,
         &LiveLogGeneratorLauncherWindow::
         browseOutput
+        );
+
+    connect(
+        loopCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this](bool checked) {
+            if (process->state()
+                == QProcess::NotRunning) {
+                loopBehaviorComboBox->setEnabled(
+                    checked
+                    );
+            }
+        }
         );
 
     connect(
@@ -738,6 +783,11 @@ void LiveLogGeneratorLauncherWindow::
         !running
         );
 
+    loopBehaviorComboBox->setEnabled(
+        !running
+        && loopCheckBox->isChecked()
+        );
+
     playButton->setEnabled(
         !running
         );
@@ -789,6 +839,16 @@ QStringList LiveLogGeneratorLauncherWindow::
     if (loopCheckBox->isChecked()) {
         arguments.append(
             QStringLiteral("--loop")
+            );
+
+        arguments.append(
+            QStringLiteral("--loop-mode")
+            );
+
+        arguments.append(
+            loopBehaviorComboBox
+                ->currentData()
+                .toString()
             );
     }
 
