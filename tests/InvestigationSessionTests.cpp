@@ -789,12 +789,12 @@ void InvestigationSessionTests::
 
     unsupportedProfile.name =
         QStringLiteral(
-            "Structured JSON"
+            "Unsupported Test Profile"
             );
 
     unsupportedProfile.importerId =
         QStringLiteral(
-            "structured-json"
+            "unsupported-test-importer"
             );
 
     ImportResult unsupportedResult;

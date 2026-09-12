@@ -214,6 +214,15 @@ qt_add_executable(TraceScope
     src/ui/workspace/LiveFollowTabControl.h
     src/ui/workspace/LiveFollowTabControl.cpp
 
+
+    src/live/LiveStructuredJsonImportAdapter.h
+    src/live/LiveStructuredJsonImportAdapter.cpp
+    src/live/LiveStructuredJsonRecordBatch.h
+    src/live/LiveStructuredJsonSourceContext.h
+    src/live/LiveStructuredJsonSourceContext.cpp
+    src/importing/StructuredJsonRecordStreamFramer.h
+    src/importing/StructuredJsonRecordStreamFramer.cpp
+
 )
 
 target_link_libraries(TraceScope

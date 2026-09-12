@@ -29,6 +29,8 @@ set(INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES
     ../src/importing/KeyValueTextImporter.cpp
     ../src/importing/RegexTextImporter.h
     ../src/importing/RegexTextImporter.cpp
+    ../src/importing/StructuredJsonRecordStreamFramer.h
+    ../src/importing/StructuredJsonRecordStreamFramer.cpp
     ../src/importing/SyslogImporter.h
     ../src/importing/SyslogImporter.cpp
 
@@ -44,6 +46,11 @@ set(INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES
     ../src/live/LiveLineSourceContext.cpp
     ../src/live/LiveSessionFollowCoordinator.h
     ../src/live/LiveSessionFollowCoordinator.cpp
+    ../src/live/LiveStructuredJsonImportAdapter.h
+    ../src/live/LiveStructuredJsonImportAdapter.cpp
+    ../src/live/LiveStructuredJsonRecordBatch.h
+    ../src/live/LiveStructuredJsonSourceContext.h
+    ../src/live/LiveStructuredJsonSourceContext.cpp
 )
 
 # ----------------------------------------------------------------------------
@@ -537,6 +544,8 @@ qt_add_executable(
     ../src/importing/StructuredJsonImportConfig.h
     ../src/importing/StructuredJsonImporter.h
     ../src/importing/StructuredJsonImporter.cpp
+    ../src/importing/StructuredJsonRecordStreamFramer.h
+    ../src/importing/StructuredJsonRecordStreamFramer.cpp
     ../src/importing/SyslogImporter.h
     ../src/importing/SyslogImporter.cpp
     ../src/importing/XmlImporter.h
@@ -800,6 +809,8 @@ qt_add_executable(
     ../src/importing/StructuredJsonImportConfig.h
     ../src/importing/StructuredJsonImporter.h
     ../src/importing/StructuredJsonImporter.cpp
+    ../src/importing/StructuredJsonRecordStreamFramer.h
+    ../src/importing/StructuredJsonRecordStreamFramer.cpp
 )
 
 target_link_libraries(
@@ -812,6 +823,27 @@ target_link_libraries(
 add_test(
     NAME StructuredJsonImporterTests
     COMMAND StructuredJsonImporterTests
+)
+
+qt_add_executable(
+    StructuredJsonRecordStreamFramerTests
+
+    StructuredJsonRecordStreamFramerTests.cpp
+
+    ../src/importing/StructuredJsonRecordStreamFramer.h
+    ../src/importing/StructuredJsonRecordStreamFramer.cpp
+)
+
+target_link_libraries(
+    StructuredJsonRecordStreamFramerTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME StructuredJsonRecordStreamFramerTests
+    COMMAND StructuredJsonRecordStreamFramerTests
 )
 
 qt_add_executable(
@@ -1859,6 +1891,51 @@ add_test(
 )
 
 qt_add_executable(
+    LiveSessionFollowCoordinatorTests
+
+    LiveSessionFollowCoordinatorTests.cpp
+
+    ${INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES}
+
+    ../src/analysis/BurstDetectionSettings.h
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/StructuredJsonImportConfig.h
+    ../src/importing/StructuredJsonImporter.h
+    ../src/importing/StructuredJsonImporter.cpp
+
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+)
+
+target_link_libraries(
+    LiveSessionFollowCoordinatorTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME LiveSessionFollowCoordinatorTests
+    COMMAND LiveSessionFollowCoordinatorTests
+)
+
+qt_add_executable(
     LiveLineImportAdapterTests
 
     LiveLineImportAdapterTests.cpp
@@ -1917,6 +1994,46 @@ add_test(
 )
 
 qt_add_executable(
+    LiveStructuredJsonImportAdapterTests
+
+    LiveStructuredJsonImportAdapterTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/live/LiveStructuredJsonImportAdapter.h
+    ../src/live/LiveStructuredJsonImportAdapter.cpp
+)
+
+target_link_libraries(
+    LiveStructuredJsonImportAdapterTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME LiveStructuredJsonImportAdapterTests
+    COMMAND LiveStructuredJsonImportAdapterTests
+)
+
+qt_add_executable(
     LiveLineRecordFramerTests
 
     LiveLineRecordFramerTests.cpp
@@ -1958,6 +2075,31 @@ target_link_libraries(
 add_test(
     NAME LiveLineSourceContextTests
     COMMAND LiveLineSourceContextTests
+)
+
+qt_add_executable(
+    LiveStructuredJsonSourceContextTests
+
+    LiveStructuredJsonSourceContextTests.cpp
+
+    ../src/importing/StructuredJsonRecordStreamFramer.h
+    ../src/importing/StructuredJsonRecordStreamFramer.cpp
+
+    ../src/live/LiveStructuredJsonRecordBatch.h
+    ../src/live/LiveStructuredJsonSourceContext.h
+    ../src/live/LiveStructuredJsonSourceContext.cpp
+)
+
+target_link_libraries(
+    LiveStructuredJsonSourceContextTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME LiveStructuredJsonSourceContextTests
+    COMMAND LiveStructuredJsonSourceContextTests
 )
 
 # ----------------------------------------------------------------------------

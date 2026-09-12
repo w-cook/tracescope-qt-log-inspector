@@ -7,6 +7,8 @@
 #include "LiveFileFollower.h"
 #include "LiveLineImportAdapter.h"
 #include "LiveLineSourceContext.h"
+#include "LiveStructuredJsonImportAdapter.h"
+#include "LiveStructuredJsonSourceContext.h"
 
 class InvestigationSession;
 
@@ -85,13 +87,37 @@ signals:
         );
 
 private:
+    enum class IngestionKind
+    {
+        Unsupported,
+        Line,
+        StructuredJson
+    };
+
+    static IngestionKind ingestionKindForProfile(
+        const ImportProfile &profile
+        );
+
     void pollFromTimer();
 
     InvestigationSession *m_session = nullptr;
 
     LiveFileFollower m_follower;
-    LiveLineSourceContext m_sourceContext;
-    LiveLineImportAdapter m_importAdapter;
+
+    LiveLineSourceContext
+        m_lineSourceContext;
+
+    LiveLineImportAdapter
+        m_lineImportAdapter;
+
+    LiveStructuredJsonSourceContext
+        m_structuredJsonSourceContext;
+
+    LiveStructuredJsonImportAdapter
+        m_structuredJsonImportAdapter;
+
+    IngestionKind m_ingestionKind =
+        IngestionKind::Unsupported;
 
     QTimer m_pollTimer;
 };

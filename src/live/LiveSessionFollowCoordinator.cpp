@@ -17,8 +17,21 @@ LiveSessionFollowCoordinator::
             .sourcePath,
         this
         ),
-    m_importAdapter(
+    m_lineImportAdapter(
         session.importProfile()
+        ),
+    m_structuredJsonSourceContext(
+        session
+            .importProfile()
+            .recordPath
+        ),
+    m_structuredJsonImportAdapter(
+        session.importProfile()
+        ),
+    m_ingestionKind(
+        ingestionKindForProfile(
+            session.importProfile()
+            )
         )
 {
     m_pollTimer.setInterval(
@@ -47,15 +60,17 @@ bool LiveSessionFollowCoordinator::
         const ImportProfile &profile
         )
 {
-    return LiveLineImportAdapter(
+    return ingestionKindForProfile(
                profile
-               ).isSupported();
+               )
+           != IngestionKind::Unsupported;
 }
 
 bool LiveSessionFollowCoordinator::
     isSupported() const
 {
-    return m_importAdapter.isSupported();
+    return m_ingestionKind
+           != IngestionKind::Unsupported;
 }
 
 const LiveFileFollowState &
@@ -69,14 +84,13 @@ LiveSessionFollowCoordinator::start()
 {
     LiveSessionFollowStartResult result;
 
-    if (!m_importAdapter.isSupported()) {
+    if (!isSupported()) {
         result.succeeded = false;
 
         result.errorMessage =
             QStringLiteral(
                 "The session's importer does not "
-                "currently support line-oriented "
-                "live following."
+                "currently support live following."
                 );
 
         return result;
@@ -84,8 +98,8 @@ LiveSessionFollowCoordinator::start()
 
     /*
      * Capture the physical source boundary first.
-     * Everything before this byte position belongs
-     * to the already-imported static session.
+     * Everything after this byte position belongs
+     * to normal live polling.
      */
     if (!m_follower.start()) {
         result.succeeded = false;
@@ -107,72 +121,141 @@ LiveSessionFollowCoordinator::start()
             .state()
             .sourceGeneration();
 
-    /*
-     * Seed physical line numbering from exactly the
-     * same byte range captured by the follower.
-     */
-    const LiveLineSourceInitializationResult
-        sourceInitialization =
-        m_sourceContext
-            .initializeFromExistingFile(
-                m_follower.sourcePath(),
-                result.baselineByteCount,
-                sourceGeneration
-                );
+    switch (m_ingestionKind) {
+    case IngestionKind::Line: {
+        /*
+         * Seed physical line numbering from exactly
+         * the same captured byte range used by the
+         * follower.
+         */
+        const LiveLineSourceInitializationResult
+            sourceInitialization =
+            m_lineSourceContext
+                .initializeFromExistingFile(
+                    m_follower.sourcePath(),
+                    result.baselineByteCount,
+                    sourceGeneration
+                    );
 
-    if (!sourceInitialization.succeeded) {
-        m_follower.stop();
+        if (!sourceInitialization.succeeded) {
+            m_follower.stop();
 
-        result.succeeded = false;
-        result.errorMessage =
-            sourceInitialization.errorMessage;
+            result.succeeded = false;
 
-        return result;
+            result.errorMessage =
+                sourceInitialization.errorMessage;
+
+            return result;
+        }
+
+        /*
+         * Static line importers may already have
+         * treated an unterminated final physical
+         * line as a record. Do not ambiguously join
+         * later bytes to that already-imported
+         * evidence.
+         */
+        if (result.baselineByteCount > 0
+            && !sourceInitialization
+                    .endsAtLineBoundary) {
+            m_follower.stop();
+
+            result.succeeded = false;
+
+            result.errorMessage =
+                QStringLiteral(
+                    "Live following cannot begin "
+                    "because the existing source "
+                    "does not end at a physical "
+                    "line boundary."
+                    );
+
+            return result;
+        }
+
+        /*
+         * Stateful line importers reconstruct only
+         * parser state belonging to the captured
+         * baseline.
+         */
+        const IncrementalImportInitializationResult
+            importInitialization =
+            m_lineImportAdapter
+                .initializeFromExistingFile(
+                    m_follower.sourcePath(),
+                    result.baselineByteCount
+                    );
+
+        if (!importInitialization.succeeded) {
+            m_follower.stop();
+
+            result.succeeded = false;
+
+            result.errorMessage =
+                importInitialization.errorMessage;
+
+            return result;
+        }
+
+        break;
     }
 
-    /*
-     * Static line importers may already have treated
-     * an unterminated final physical line as a record.
-     * Continuing that physical line live would make
-     * evidence identity ambiguous, so activation is
-     * rejected conservatively.
-     */
-    if (result.baselineByteCount > 0
-        && !sourceInitialization
-                .endsAtLineBoundary) {
+    case IngestionKind::StructuredJson: {
+        /*
+         * Structured JSON may deliberately have an
+         * open outer container while an application
+         * is still writing records.
+         *
+         * The normal StructuredJsonImporter has
+         * already imported every complete record
+         * available at session-open time.
+         *
+         * Scan the exact captured baseline again
+         * only to reconstruct:
+         *
+         * - record-array framing state
+         * - any incomplete trailing record bytes
+         * - the next logical record number
+         * - the current source generation
+         *
+         * Do NOT append the recovered baseline
+         * records again. They already belong to the
+         * investigation.
+         */
+        const
+            LiveStructuredJsonSourceInitializationResult
+                sourceInitialization =
+            m_structuredJsonSourceContext
+                .initializeFromExistingFile(
+                    m_follower.sourcePath(),
+                    result.baselineByteCount,
+                    sourceGeneration
+                    );
+
+        if (!sourceInitialization.succeeded) {
+            m_follower.stop();
+
+            result.succeeded = false;
+
+            result.errorMessage =
+                sourceInitialization.errorMessage;
+
+            return result;
+        }
+
+        break;
+    }
+
+    case IngestionKind::Unsupported:
         m_follower.stop();
 
         result.succeeded = false;
 
         result.errorMessage =
             QStringLiteral(
-                "Live following cannot begin because "
-                "the existing source does not end at "
-                "a physical line boundary."
+                "The session's importer does not "
+                "currently support live following."
                 );
-
-        return result;
-    }
-
-    /*
-     * Stateful line importers such as CSV/TSV and
-     * IIS reconstruct only the parser state that
-     * existed inside the same captured baseline.
-     */
-    const IncrementalImportInitializationResult
-        importInitialization =
-        m_importAdapter
-            .initializeFromExistingFile(
-                m_follower.sourcePath(),
-                result.baselineByteCount
-                );
-
-    if (!importInitialization.succeeded) {
-        m_follower.stop();
-
-        result.succeeded = false;
-        result.errorMessage =
-            importInitialization.errorMessage;
 
         return result;
     }
@@ -215,32 +298,42 @@ LiveSessionFollowCoordinator::pollOnce(
         readResult.observation;
 
     /*
-     * A new physical source generation invalidates
-     * framing and format-specific parser state even
-     * though previously imported investigation
-     * evidence remains intact.
-     *
-     * Do this even if the subsequent physical read
-     * fails; the follower itself has already changed
-     * generations at this point.
+     * Source replacement/truncation invalidates the
+     * active framing state before any bytes from the
+     * new generation are interpreted.
      */
     if (readResult.observation.kind
         == LiveFileObservationKind::
         SourceReset) {
-        result.sourceGenerationChanged = true;
+        result.sourceGenerationChanged =
+            true;
 
         const quint64 sourceGeneration =
             m_follower
                 .state()
                 .sourceGeneration();
 
-        m_sourceContext
-            .beginSourceGeneration(
-                sourceGeneration
-                );
+        switch (m_ingestionKind) {
+        case IngestionKind::Line:
+            m_lineSourceContext
+                .beginSourceGeneration(
+                    sourceGeneration
+                    );
 
-        m_importAdapter
-            .beginSourceGeneration();
+            m_lineImportAdapter
+                .beginSourceGeneration();
+            break;
+
+        case IngestionKind::StructuredJson:
+            m_structuredJsonSourceContext
+                .beginSourceGeneration(
+                    sourceGeneration
+                    );
+            break;
+
+        case IngestionKind::Unsupported:
+            break;
+        }
     }
 
     if (!readResult.succeeded) {
@@ -252,36 +345,92 @@ LiveSessionFollowCoordinator::pollOnce(
     }
 
     /*
-     * No physical bytes may simply mean no growth,
-     * a paused follower, a missing source, or an
-     * empty new source generation. None requires
-     * semantic import work.
+     * No bytes may mean no growth, pause, missing
+     * source, or an empty new generation.
      */
     if (readResult.bytes.isEmpty()) {
         return result;
     }
 
-    LiveFramedLineBatch batch =
-        m_sourceContext.appendBytes(
-            std::move(
-                readResult.bytes
-                )
-            );
+    ImportResult importResult;
 
-    /*
-     * An incomplete trailing physical line remains
-     * owned by the framer until a later read
-     * completes it.
-     */
-    if (batch.lines.isEmpty()) {
-        return result;
+    switch (m_ingestionKind) {
+    case IngestionKind::Line: {
+        LiveFramedLineBatch batch =
+            m_lineSourceContext.appendBytes(
+                std::move(
+                    readResult.bytes
+                    )
+                );
+
+        /*
+         * An incomplete trailing physical line stays
+         * inside the framer until a later poll.
+         */
+        if (batch.lines.isEmpty()) {
+            return result;
+        }
+
+        importResult =
+            m_lineImportAdapter.importBatch(
+                batch,
+                m_follower.sourcePath()
+                );
+
+        break;
     }
 
-    ImportResult importResult =
-        m_importAdapter.importBatch(
-            batch,
-            m_follower.sourcePath()
-            );
+    case IngestionKind::StructuredJson: {
+        LiveStructuredJsonSourceAppendResult
+            appendResult =
+            m_structuredJsonSourceContext
+                .appendBytes(
+                    std::move(
+                        readResult.bytes
+                        )
+                    );
+
+        if (!appendResult.succeeded) {
+            result.succeeded = false;
+
+            result.errorMessage =
+                appendResult.errorMessage;
+
+            return result;
+        }
+
+        /*
+         * An incomplete JSON object stays inside the
+         * structured framer until a later poll.
+         */
+        if (appendResult
+                .batch
+                .records
+                .isEmpty()) {
+            return result;
+        }
+
+        importResult =
+            m_structuredJsonImportAdapter
+                .importBatch(
+                    appendResult.batch,
+                    m_follower.sourcePath()
+                    );
+
+        break;
+    }
+
+    case IngestionKind::Unsupported:
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The active live-follow importer "
+                "is unsupported."
+                );
+
+        return result;
+    }
 
     result.processedRecordCount =
         importResult.processedRecordCount;
@@ -290,10 +439,13 @@ LiveSessionFollowCoordinator::pollOnce(
         importResult.importedRecordCount();
 
     /*
-     * Append even when no records were produced:
-     * malformed live source records may still carry
-     * diagnostics and processed-record accounting
-     * that belong to the investigation.
+     * This is the single convergence point for every
+     * supported live-ingestion strategy.
+     *
+     * Do not rebuild the session or reapply filters.
+     * InvestigationController::appendRecords() lets
+     * the existing proxy evaluate inserted rows
+     * against its already-active filter state.
      */
     m_session->appendLiveImportResult(
         std::move(
@@ -324,6 +476,28 @@ bool LiveSessionFollowCoordinator::
         );
 
     return true;
+}
+
+LiveSessionFollowCoordinator::IngestionKind
+    LiveSessionFollowCoordinator::
+    ingestionKindForProfile(
+        const ImportProfile &profile
+        )
+{
+    if (LiveLineImportAdapter(
+            profile
+            ).isSupported()) {
+        return IngestionKind::Line;
+    }
+
+    if (LiveStructuredJsonImportAdapter(
+            profile
+            ).isSupported()) {
+        return IngestionKind::
+            StructuredJson;
+    }
+
+    return IngestionKind::Unsupported;
 }
 
 void LiveSessionFollowCoordinator::
