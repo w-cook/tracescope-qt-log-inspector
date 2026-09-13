@@ -44,6 +44,7 @@ public:
 
     bool recordPathLocated() const;
     bool recordContainerLocated() const;
+    bool recordContainerClosed() const;
     bool documentClosed() const;
     bool hasIncompleteRecord() const;
 
@@ -57,6 +58,7 @@ private:
     };
 
     bool currentPathIsRecord() const;
+    bool currentPathIsRecordContainer() const;
 
     void updateRecordContainerLocation();
 
@@ -92,6 +94,7 @@ private:
 
     bool m_recordPathLocated = false;
     bool m_recordContainerLocated = false;
+    bool m_recordContainerClosed = false;
     bool m_documentClosed = false;
 
     bool m_failed = false;

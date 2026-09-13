@@ -6,14 +6,10 @@
 #include <QBuffer>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QJsonValue>
-#include <QXmlStreamReader>
-#include <QXmlStreamWriter>
 
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
+#include "StructuredXmlRecordStreamParser.h"
 
 namespace
 {
@@ -24,12 +20,17 @@ RecordSourceMetadata createSourceMetadata(
 {
     RecordSourceMetadata source;
 
-    source.sourcePath = sourcePath;
-    source.recordNumber = recordNumber;
+    source.sourcePath =
+        sourcePath;
+
+    source.recordNumber =
+        recordNumber;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
-            QFileInfo(sourcePath).fileName();
+            QFileInfo(
+                sourcePath
+                ).fileName();
     }
 
     return source;
@@ -46,165 +47,25 @@ void appendDiagnostic(
 {
     ImportDiagnostic diagnostic;
 
-    diagnostic.code = code;
-    diagnostic.message = message;
-    diagnostic.severity = severity;
-    diagnostic.source = source;
+    diagnostic.code =
+        code;
+
+    diagnostic.message =
+        message;
+
+    diagnostic.severity =
+        severity;
+
+    diagnostic.source =
+        source;
 
     result.diagnostics.append(
         diagnostic
         );
 }
 
-bool appendNamedDataValue(
-    QJsonObject &object,
-    const QString &elementName,
-    const QJsonValue &value
-    )
-{
-    /*
-     * Some structured XML formats represent a
-     * dynamic field collection with elements such
-     * as:
-     *
-     * <Data Name="ProcessName">worker.exe</Data>
-     *
-     * Keep those fields individually addressable
-     * instead of collapsing them into a positional
-     * array.
-     *
-     * The original XML remains preserved separately
-     * as rawSource.
-     */
-    if (elementName
-            != QStringLiteral("Data")
-        || !value.isObject()) {
-        return false;
-    }
-
-    const QJsonObject dataObject =
-        value.toObject();
-
-    const QJsonValue nameValue =
-        dataObject.value(
-            QStringLiteral("@Name")
-            );
-
-    if (!nameValue.isString()) {
-        return false;
-    }
-
-    const QString fieldName =
-        nameValue
-            .toString()
-            .trimmed();
-
-    if (fieldName.isEmpty()) {
-        return false;
-    }
-
-    const QJsonValue fieldValue =
-        dataObject.contains(
-            QStringLiteral("#text")
-            )
-            ? dataObject.value(
-                  QStringLiteral("#text")
-                  )
-            : QJsonValue(
-                  QString()
-                  );
-
-    QJsonObject namedValues =
-        object.value(
-                  QStringLiteral(
-                      "NamedData"
-                      )
-                  )
-            .toObject();
-
-    if (!namedValues.contains(
-            fieldName
-            )) {
-        namedValues.insert(
-            fieldName,
-            fieldValue
-            );
-    } else {
-        QJsonArray repeatedValues;
-
-        const QJsonValue existing =
-            namedValues.value(
-                fieldName
-                );
-
-        if (existing.isArray()) {
-            repeatedValues =
-                existing.toArray();
-        } else {
-            repeatedValues.append(
-                existing
-                );
-        }
-
-        repeatedValues.append(
-            fieldValue
-            );
-
-        namedValues.insert(
-            fieldName,
-            repeatedValues
-            );
-    }
-
-    object.insert(
-        QStringLiteral("NamedData"),
-        namedValues
-        );
-
-    return true;
-}
-
-void appendChildValue(
-    QJsonObject &object,
-    const QString &name,
-    const QJsonValue &value
-    )
-{
-    if (appendNamedDataValue(
-            object,
-            name,
-            value
-            )) {
-        return;
-    }
-
-    if (!object.contains(name)) {
-        object.insert(
-            name,
-            value
-            );
-
-        return;
-    }
-
-    QJsonArray values;
-
-    const QJsonValue existing =
-        object.value(name);
-
-    if (existing.isArray()) {
-        values = existing.toArray();
-    } else {
-        values.append(existing);
-    }
-
-    values.append(value);
-
-    object.insert(
-        name,
-        values
-        );
-}
+constexpr qint64 parserReadChunkSize =
+    64 * 1024;
 
 constexpr qint64 progressReportByteInterval =
     256 * 1024;
@@ -236,181 +97,41 @@ void reportProgressIfNeeded(
         bytesProcessed;
 }
 
-QJsonValue readElementValue(
-    QXmlStreamReader &reader,
-    QXmlStreamWriter &writer,
-    QIODevice &device,
-    qint64 totalBytes,
-    qint64 processedRecordCount,
-    qint64 &lastReportedBytes,
-    const ImportExecutionContext &executionContext,
-    bool &cancelled
+void processRecord(
+    const StructuredXmlRecord &record,
+    const QString &sourcePath,
+    const ImportProfile &profile,
+    ImportResult &result
     )
 {
-    /*
-     * The reader must be positioned on the
-     * element's StartElement token.
-     */
-    writer.writeCurrentToken(reader);
+    ++result.processedRecordCount;
 
-    QJsonObject object;
-
-    const QXmlStreamAttributes attributes =
-        reader.attributes();
-
-    for (const QXmlStreamAttribute &attribute
-         : attributes) {
-        object.insert(
-            QStringLiteral("@%1")
-                .arg(
-                    attribute.name()
-                        .toString()
-                    ),
-            attribute.value()
-                .toString()
-            );
-    }
-
-    QString text;
-    bool hasChildElements = false;
-
-    while (!reader.atEnd()) {
-        if (executionContext
-                .cancellationRequested()) {
-            cancelled = true;
-            return {};
-        }
-
-        reader.readNext();
-
-        reportProgressIfNeeded(
-            device,
-            totalBytes,
-            processedRecordCount,
-            lastReportedBytes,
-            executionContext
+    const RecordSourceMetadata source =
+        createSourceMetadata(
+            sourcePath,
+            result.processedRecordCount
             );
 
-        /*
-     * A parse error leaves QXmlStreamReader on an
-     * invalid token. Do not pass that token to
-     * QXmlStreamWriter::writeCurrentToken(), which
-     * would itself emit a warning while we are already
-     * handling the malformed source as an import
-     * diagnostic.
-     */
-        if (reader.hasError()) {
-            break;
-        }
-
-        if (reader.isStartElement()) {
-            hasChildElements = true;
-
-            const QString childName =
-                reader.name().toString();
-
-            const QJsonValue childValue =
-                readElementValue(
-                    reader,
-                    writer,
-                    device,
-                    totalBytes,
-                    processedRecordCount,
-                    lastReportedBytes,
-                    executionContext,
-                    cancelled
-                    );
-
-            if (cancelled) {
-                return {};
-            }
-
-            appendChildValue(
-                object,
-                childName,
-                childValue
-                );
-
-            continue;
-        }
-
-        if (reader.isCharacters()) {
-            writer.writeCurrentToken(reader);
-
-            text.append(
-                reader.text().toString()
-                );
-
-            continue;
-        }
-
-        if (reader.isEndElement()) {
-            writer.writeCurrentToken(reader);
-            break;
-        }
-
-        /*
-         * Preserve comments, entity references,
-         * processing instructions, and other
-         * valid tokens in the reconstructed
-         * raw-source XML.
-         */
-        writer.writeCurrentToken(reader);
-    }
-
-    const QString normalizedText =
-        text.trimmed();
-
-    if (!hasChildElements
-        && object.isEmpty()) {
-        return normalizedText;
-    }
-
-    if (!normalizedText.isEmpty()) {
-        object.insert(
-            QStringLiteral("#text"),
-            normalizedText
-            );
-    }
-
-    return object;
-}
-
-QJsonObject recordObject(
-    const QJsonValue &value
-    )
-{
-    if (value.isObject()) {
-        return value.toObject();
-    }
-
-    QJsonObject object;
-
-    object.insert(
-        QStringLiteral("#text"),
-        value
+    result.records.append(
+        JsonObjectRecordMapper::mapRecord(
+            record.object,
+            record.rawSource,
+            source,
+            profile,
+            result
+            )
         );
-
-    return object;
-}
-
-QStringList splitRecordPath(
-    const QString &recordPath
-    )
-{
-    return recordPath
-        .trimmed()
-        .split(
-            QLatin1Char('.'),
-            Qt::SkipEmptyParts
-            );
 }
 }
 
 XmlImporter::XmlImporter(
     ImportProfile profile
     )
-    : profile(std::move(profile))
+    : profile(
+          std::move(
+              profile
+              )
+          )
 {
     this->profile.importerId =
         QStringLiteral("xml");
@@ -436,8 +157,13 @@ ImportResult XmlImporter::importContent(
 {
     QBuffer buffer;
 
-    buffer.setData(xml);
-    buffer.open(QIODevice::ReadOnly);
+    buffer.setData(
+        xml
+        );
+
+    buffer.open(
+        QIODevice::ReadOnly
+        );
 
     return importDevice(
         buffer,
@@ -453,7 +179,9 @@ ImportResult XmlImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file(
+        filePath
+        );
 
     if (!file.open(
             QIODevice::ReadOnly
@@ -466,7 +194,8 @@ ImportResult XmlImporter::importFile(
                 "FILE_OPEN_FAILED"
                 ),
             QStringLiteral(
-                "The source file could not be opened: %1"
+                "The source file could not be "
+                "opened: %1"
                 )
                 .arg(
                     file.errorString()
@@ -509,47 +238,51 @@ ImportResult XmlImporter::importDevice(
         0
     });
 
-    QXmlStreamReader reader(&device);
+    StructuredXmlRecordStreamParser parser(
+        profile.recordPath
+        );
 
-    const QStringList recordPath =
-        splitRecordPath(
-            profile.recordPath
-            );
+    bool parseFailed = false;
+    QString parseErrorMessage;
 
-    const bool useDocumentRoot =
-        recordPath.isEmpty();
-
-    QStringList currentPath;
-
-    while (!reader.atEnd()) {
+    while (!device.atEnd()) {
         if (executionContext
                 .cancellationRequested()) {
             result.cancelled = true;
             break;
         }
 
-        reader.readNext();
-
-        reportProgressIfNeeded(
-            device,
-            totalBytes,
-            result.processedRecordCount,
-            lastReportedBytes,
-            executionContext
-            );
-
-        if (reader.isStartElement()) {
-            currentPath.append(
-                reader.name().toString()
+        QByteArray chunk =
+            device.read(
+                parserReadChunkSize
                 );
 
-            const bool isRecord =
-                useDocumentRoot
-                    ? currentPath.size() == 1
-                    : currentPath == recordPath;
+        if (chunk.isEmpty()) {
+            break;
+        }
 
-            if (!isRecord) {
-                continue;
+        const StructuredXmlRecordStreamParseResult
+            parseResult =
+            parser.appendBytes(
+                std::move(
+                    chunk
+                    )
+                );
+
+        /*
+         * A parser call may emit multiple complete
+         * records before reaching the current physical
+         * end of the file or encountering a later
+         * malformed record.
+         *
+         * Process those completed records first.
+         */
+        for (const StructuredXmlRecord &record
+             : parseResult.records) {
+            if (executionContext
+                    .cancellationRequested()) {
+                result.cancelled = true;
+                break;
             }
 
             if (maxProcessedRecords > 0
@@ -559,76 +292,52 @@ ImportResult XmlImporter::importDevice(
                 break;
             }
 
-            ++result.processedRecordCount;
-
-            QString rawSource;
-
-            QXmlStreamWriter writer(
-                &rawSource
+            processRecord(
+                record,
+                sourcePath,
+                profile,
+                result
                 );
-
-            const QJsonValue parsedValue =
-                readElementValue(
-                    reader,
-                    writer,
-                    device,
-                    totalBytes,
-                    result.processedRecordCount,
-                    lastReportedBytes,
-                    executionContext,
-                    result.cancelled
-                    );
-
-            if (result.cancelled) {
-                break;
-            }
-
-            /*
-             * A record whose element could not be parsed to
-             * completion is not a valid imported record.
-             *
-             * Keep any records that were fully parsed before
-             * the malformed portion of the document, but do
-             * not manufacture a partial record from the
-             * element in which parsing failed.
-             */
-            if (reader.hasError()) {
-                break;
-            }
-
-            const RecordSourceMetadata source =
-                createSourceMetadata(
-                    sourcePath,
-                    result.processedRecordCount
-                    );
-
-            result.records.append(
-                JsonObjectRecordMapper::mapRecord(
-                    recordObject(parsedValue),
-                    rawSource,
-                    source,
-                    profile,
-                    result
-                    )
-                );
-
-            /*
-             * readElementValue() consumed the
-             * matched element's EndElement token,
-             * so remove that path component here.
-             */
-            currentPath.removeLast();
-
-            continue;
         }
 
-        if (reader.isEndElement()
-            && !currentPath.isEmpty()) {
-            currentPath.removeLast();
+        reportProgressIfNeeded(
+            device,
+            totalBytes,
+            result.processedRecordCount,
+            lastReportedBytes,
+            executionContext
+            );
+
+        if (result.cancelled
+            || result.sourceTruncated) {
+            break;
+        }
+
+        if (!parseResult.succeeded) {
+            /*
+             * Preserve XmlImporter's historical
+             * accounting behavior:
+             *
+             * a malformed selected record counts as
+             * a processed/skipped source record even
+             * though no InvestigationRecord is
+             * manufactured from its incomplete
+             * contents.
+             */
+            if (parser.hasIncompleteRecord()) {
+                ++result.processedRecordCount;
+            }
+
+            parseFailed = true;
+
+            parseErrorMessage =
+                parseResult.errorMessage;
+
+            break;
         }
     }
 
-    if (reader.hasError()
+    if (parseFailed
         && !result.sourceTruncated
         && !result.cancelled) {
         appendDiagnostic(
@@ -636,19 +345,7 @@ ImportResult XmlImporter::importDevice(
             QStringLiteral(
                 "XML_PARSE_ERROR"
                 ),
-            QStringLiteral(
-                "The XML document could not be parsed "
-                "at line %1, column %2: %3"
-                )
-                .arg(
-                    reader.lineNumber()
-                    )
-                .arg(
-                    reader.columnNumber()
-                    )
-                .arg(
-                    reader.errorString()
-                    ),
+            parseErrorMessage,
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
                 sourcePath,
@@ -656,12 +353,133 @@ ImportResult XmlImporter::importDevice(
                 )
             );
 
+        executionContext.report({
+            device.pos(),
+            totalBytes,
+            result.processedRecordCount
+        });
+
+        return result;
+    }
+
+    /*
+     * Only classify the source as physically open
+     * after reaching the actual current end of the
+     * device.
+     *
+     * If import stopped because of a record limit or
+     * cancellation, the parser may simply not have
+     * reached a perfectly valid closing container yet.
+     */
+    const bool reachedCurrentSourceEnd =
+        !result.cancelled
+        && !result.sourceTruncated
+        && device.atEnd();
+
+    const bool hasConfiguredRecordPath =
+        !profile.recordPath
+             .trimmed()
+             .isEmpty();
+
+    const bool openRecordContainer =
+        reachedCurrentSourceEnd
+        && hasConfiguredRecordPath
+        && parser.recordContainerLocated()
+        && !parser.recordContainerClosed()
+        && !parser.documentClosed();
+
+    if (openRecordContainer) {
+        /*
+         * This is the expected shape of a structured
+         * XML source being actively written by another
+         * process:
+         *
+         * <session>
+         *   <events>
+         *     <event>...</event>
+         *     <event>...</event>
+         *     ...
+         *
+         * The outer record container intentionally
+         * remains open so future complete record
+         * elements can be appended.
+         *
+         * Any incomplete trailing record remains only
+         * in parser state and is not counted or
+         * imported by this initial static import.
+         */
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_OPEN_CONTAINER"
+                ),
+            QStringLiteral(
+                "The structured XML record container "
+                "is still open. Complete records "
+                "available at the current end of the "
+                "source were imported."
+                ),
+            ImportDiagnosticSeverity::Information,
+            createSourceMetadata(
+                sourcePath,
+                0
+                )
+            );
+    } else if (reachedCurrentSourceEnd
+               && !parser.documentClosed()) {
+        /*
+         * Premature EOF is recoverable inside the
+         * shared incremental parser because live
+         * ingestion may later provide more bytes.
+         *
+         * For ordinary static import, however, it is
+         * only valid when the configured repeating
+         * record container itself is still open.
+         *
+         * Examples rejected here include:
+         *
+         * - an incomplete document-root record
+         * - an incomplete prefix before the configured
+         *   record container was reached
+         * - a record container that already closed,
+         *   followed by a missing outer closing element
+         */
+        if (parser.hasIncompleteRecord()) {
+            ++result.processedRecordCount;
+        }
+
+        appendDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_PARSE_ERROR"
+                ),
+            QStringLiteral(
+                "The XML document ended before it "
+                "was complete."
+                ),
+            ImportDiagnosticSeverity::Error,
+            createSourceMetadata(
+                sourcePath,
+                0
+                )
+            );
+
+        executionContext.report({
+            device.pos(),
+            totalBytes,
+            result.processedRecordCount
+        });
+
         return result;
     }
 
     if (!result.cancelled
+        && !result.sourceTruncated
+        && !openRecordContainer
         && result.processedRecordCount == 0) {
-        if (useDocumentRoot) {
+        if (profile.recordPath
+                .trimmed()
+                .isEmpty()) {
             appendDiagnostic(
                 result,
                 QStringLiteral(

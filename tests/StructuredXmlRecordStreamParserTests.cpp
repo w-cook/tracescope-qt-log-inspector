@@ -80,6 +80,10 @@ void StructuredXmlRecordStreamParserTests::
         );
 
     QVERIFY(
+        !parser.recordContainerClosed()
+        );
+
+    QVERIFY(
         !parser.documentClosed()
         );
 
@@ -729,6 +733,10 @@ void StructuredXmlRecordStreamParserTests::
     QCOMPARE(
         result.records.size(),
         1
+        );
+
+    QVERIFY(
+        parser.recordContainerClosed()
         );
 
     QVERIFY(

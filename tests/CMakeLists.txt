@@ -546,6 +546,8 @@ qt_add_executable(
     ../src/importing/StructuredJsonImporter.cpp
     ../src/importing/StructuredJsonRecordStreamFramer.h
     ../src/importing/StructuredJsonRecordStreamFramer.cpp
+    ../src/importing/StructuredXmlRecordStreamParser.h
+    ../src/importing/StructuredXmlRecordStreamParser.cpp
     ../src/importing/SyslogImporter.h
     ../src/importing/SyslogImporter.cpp
     ../src/importing/XmlImporter.h
@@ -929,6 +931,8 @@ qt_add_executable(
     ../src/importing/ImportResult.cpp
     ../src/importing/JsonObjectRecordMapper.h
     ../src/importing/JsonObjectRecordMapper.cpp
+    ../src/importing/StructuredXmlRecordStreamParser.h
+    ../src/importing/StructuredXmlRecordStreamParser.cpp
     ../src/importing/XmlImporter.h
     ../src/importing/XmlImporter.cpp
 )

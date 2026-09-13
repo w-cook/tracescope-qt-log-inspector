@@ -330,6 +330,10 @@ StructuredXmlRecordStreamParseResult
 
         if (m_reader.isEndElement()
             && !m_currentPath.isEmpty()) {
+            if (currentPathIsRecordContainer()) {
+                m_recordContainerClosed = true;
+            }
+
             m_currentPath.removeLast();
         }
     }
@@ -385,6 +389,7 @@ void StructuredXmlRecordStreamParser::
 
     m_recordPathLocated = false;
     m_recordContainerLocated = false;
+    m_recordContainerClosed = false;
     m_documentClosed = false;
 
     m_failed = false;
@@ -401,6 +406,12 @@ bool StructuredXmlRecordStreamParser::
     recordContainerLocated() const
 {
     return m_recordContainerLocated;
+}
+
+bool StructuredXmlRecordStreamParser::
+    recordContainerClosed() const
+{
+    return m_recordContainerClosed;
 }
 
 bool StructuredXmlRecordStreamParser::
@@ -428,29 +439,12 @@ bool StructuredXmlRecordStreamParser::
            == m_recordPath;
 }
 
-void StructuredXmlRecordStreamParser::
-    updateRecordContainerLocation()
+bool StructuredXmlRecordStreamParser::
+    currentPathIsRecordContainer() const
 {
-    /*
-     * An open-stream record container only exists
-     * when the configured record path has an outer
-     * parent.
-     *
-     * Examples:
-     *
-     * session.events.event
-     *     container = session.events
-     *
-     * Events.Event
-     *     container = Events
-     *
-     * A document-root record does not have a
-     * repeatable outer record container.
-     */
-    if (m_recordContainerLocated
-        || m_useDocumentRoot
+    if (m_useDocumentRoot
         || m_recordPath.size() < 2) {
-        return;
+        return false;
     }
 
     const qsizetype containerDepth =
@@ -458,7 +452,7 @@ void StructuredXmlRecordStreamParser::
 
     if (m_currentPath.size()
         != containerDepth) {
-        return;
+        return false;
     }
 
     for (qsizetype index = 0;
@@ -466,11 +460,20 @@ void StructuredXmlRecordStreamParser::
          ++index) {
         if (m_currentPath.at(index)
             != m_recordPath.at(index)) {
-            return;
+            return false;
         }
     }
 
-    m_recordContainerLocated = true;
+    return true;
+}
+
+void StructuredXmlRecordStreamParser::
+    updateRecordContainerLocation()
+{
+    if (!m_recordContainerLocated
+        && currentPathIsRecordContainer()) {
+        m_recordContainerLocated = true;
+    }
 }
 
 void StructuredXmlRecordStreamParser::
@@ -684,7 +687,7 @@ void StructuredXmlRecordStreamParser::
 {
     fail(
         QStringLiteral(
-            "The XML stream could not be parsed "
+            "The XML document could not be parsed "
             "at line %1, column %2: %3"
             )
             .arg(

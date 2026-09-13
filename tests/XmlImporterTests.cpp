@@ -87,6 +87,10 @@ private slots:
     void importFileCanBeCancelled();
     void convertsNamedDataElementsToFields();
     void preservesRepeatedNamedDataValues();
+    void importsCompleteRecordsFromOpenContainer();
+    void leavesIncompleteTrailingRecordUnprocessed();
+    void importsWindowsEventRecordsFromOpenContainer();
+    void rejectsIncompleteDocumentAfterRecordContainerCloses();
 };
 
 void
@@ -1215,6 +1219,374 @@ void
     QCOMPARE(
         values.at(1).toString(),
         QStringLiteral("latency")
+        );
+}
+
+void
+    XmlImporterTests::
+    importsCompleteRecordsFromOpenContainer()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.events.event"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "details.message"
+            );
+
+    XmlImporter importer(
+        profile
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<?xml version=\"1.0\"?>"
+                "<session>"
+                "<events>"
+                "<event>"
+                "<details>"
+                "<message>First</message>"
+                "</details>"
+                "</event>"
+                "<event>"
+                "<details>"
+                "<message>Second</message>"
+                "</details>"
+                "</event>"
+                )
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.records.at(0)
+            .message.value(),
+        QStringLiteral("First")
+        );
+
+    QCOMPARE(
+        result.records.at(1)
+            .message.value(),
+        QStringLiteral("Second")
+        );
+
+    QVERIFY(
+        !result.hasErrors()
+        );
+
+    const ImportDiagnostic *diagnostic =
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_OPEN_CONTAINER"
+                )
+            );
+
+    QVERIFY(
+        diagnostic != nullptr
+        );
+
+    QCOMPARE(
+        diagnostic->severity,
+        ImportDiagnosticSeverity::Information
+        );
+}
+
+void
+    XmlImporterTests::
+    leavesIncompleteTrailingRecordUnprocessed()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.events.event"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "details.message"
+            );
+
+    XmlImporter importer(
+        profile
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<session>"
+                "<events>"
+                "<event>"
+                "<details>"
+                "<message>Complete</message>"
+                "</details>"
+                "</event>"
+                "<event>"
+                "<details>"
+                "<message>Still being written"
+                )
+            );
+
+    /*
+     * The second source record has begun physically,
+     * but it has not yet become a complete XML record.
+     * It therefore belongs to future live ingestion,
+     * not the initial static import.
+     */
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        result.records.first()
+            .message.value(),
+        QStringLiteral(
+            "Complete"
+            )
+        );
+
+    QCOMPARE(
+        result.skippedRecordCount(),
+        qint64(0)
+        );
+
+    QVERIFY(
+        !result.hasErrors()
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_OPEN_CONTAINER"
+                )
+            )
+        != nullptr
+        );
+}
+
+void
+    XmlImporterTests::
+    importsWindowsEventRecordsFromOpenContainer()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "Events.Event"
+            );
+
+    profile.canonicalFields.timestampPath =
+        QStringLiteral(
+            "System.TimeCreated.@SystemTime"
+            );
+
+    profile.canonicalFields.subsystemPath =
+        QStringLiteral(
+            "System.Provider.@Name"
+            );
+
+    profile.canonicalFields.eventCodePath =
+        QStringLiteral(
+            "EventData.NamedData.EventCode"
+            );
+
+    profile.canonicalFields.entityIdPath =
+        QStringLiteral(
+            "EventData.NamedData.DeviceId"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "RenderingInfo.Message"
+            );
+
+    XmlImporter importer(
+        profile
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<?xml version=\"1.0\" "
+                "encoding=\"UTF-8\"?>"
+                "<Events>"
+                "<Event "
+                "xmlns=\"http://schemas.microsoft.com/"
+                "win/2004/08/events/event\">"
+                "<System>"
+                "<Provider Name=\"CheckoutApi\"/>"
+                "<EventID>4102</EventID>"
+                "<Level>2</Level>"
+                "<TimeCreated "
+                "SystemTime="
+                "\"2026-09-13T12:00:00.000Z\"/>"
+                "</System>"
+                "<EventData>"
+                "<Data Name=\"EventCode\">"
+                "PAYMENT_FAILURE"
+                "</Data>"
+                "<Data Name=\"DeviceId\">"
+                "checkout-01"
+                "</Data>"
+                "</EventData>"
+                "<RenderingInfo>"
+                "<Message>"
+                "Payment processing failed"
+                "</Message>"
+                "</RenderingInfo>"
+                "</Event>"
+                )
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QVERIFY(
+        record.timestamp.has_value()
+        );
+
+    QCOMPARE(
+        record.subsystem.value(),
+        QStringLiteral(
+            "CheckoutApi"
+            )
+        );
+
+    QCOMPARE(
+        record.eventCode.value(),
+        QStringLiteral(
+            "PAYMENT_FAILURE"
+            )
+        );
+
+    QCOMPARE(
+        record.entityId.value(),
+        QStringLiteral(
+            "checkout-01"
+            )
+        );
+
+    QCOMPARE(
+        record.message.value(),
+        QStringLiteral(
+            "Payment processing failed"
+            )
+        );
+
+    QVERIFY(
+        !result.hasErrors()
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_OPEN_CONTAINER"
+                )
+            )
+        != nullptr
+        );
+}
+
+void
+    XmlImporterTests::
+    rejectsIncompleteDocumentAfterRecordContainerCloses()
+{
+    ImportProfile profile =
+        xmlProfile();
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.events.event"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "message"
+            );
+
+    XmlImporter importer(
+        profile
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "<session>"
+                "<events>"
+                "<event>"
+                "<message>Complete</message>"
+                "</event>"
+                "</events>"
+                )
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    QVERIFY(
+        result.hasErrors()
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_PARSE_ERROR"
+                )
+            )
+        != nullptr
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "XML_OPEN_CONTAINER"
+                )
+            )
+        == nullptr
         );
 }
 
