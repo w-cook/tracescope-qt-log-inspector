@@ -232,6 +232,13 @@ qt_add_executable(TraceScope
     src/sources/RotatedSourceRule.h
     src/sources/RotatedSourceDiscoveryService.h
     src/sources/RotatedSourceDiscoveryService.cpp
+    src/ui/RotatedSourceConfigurationDialog.h
+    src/ui/RotatedSourceConfigurationDialog.cpp
+    src/preferences/RotatedSourceSettingsStore.h
+    src/preferences/RotatedSourceSettingsStore.cpp
+    src/importing/SourceFamilyImportService.h
+    src/importing/SourceFamilyImportService.cpp
+    src/sources/SourceFamilyConfiguration.h
 
 )
 

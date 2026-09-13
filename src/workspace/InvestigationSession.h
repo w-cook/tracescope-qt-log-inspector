@@ -16,6 +16,7 @@
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
 #include "../importing/ImportResult.h"
+#include "../sources/SourceFamilyConfiguration.h"
 
 struct InvestigationSessionSourceMetadata
 {
@@ -61,14 +62,18 @@ public:
     InvestigationSession(
         const QString &filePath,
         ImportProfile profile,
-        ImportResult result
+        ImportResult result,
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration = {}
         );
 
     InvestigationSession(
         QString sessionId,
         const QString &filePath,
         ImportProfile profile,
-        ImportResult result
+        ImportResult result,
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration = {}
         );
 
     ~InvestigationSession();
@@ -83,6 +88,13 @@ public:
 
     const InvestigationSessionSourceMetadata &
     sourceMetadata() const;
+
+    const SourceFamilyConfiguration &
+    sourceFamilyConfiguration() const;
+
+    void setSourceFamilyConfiguration(
+        SourceFamilyConfiguration configuration
+        );
 
     const ImportProfile &importProfile() const;
 
@@ -205,6 +217,9 @@ private:
 
     InvestigationSessionSourceMetadata
         m_sourceMetadata;
+
+    SourceFamilyConfiguration
+        m_sourceFamilyConfiguration;
 
     ImportProfile m_importProfile;
 

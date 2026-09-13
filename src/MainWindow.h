@@ -14,6 +14,8 @@
 #include "importing/ImportResult.h"
 #include "preferences/FilterPresetStore.h"
 #include "preferences/RecentItemsStore.h"
+#include "preferences/RotatedSourceSettingsStore.h"
+#include "sources/SourceFamilyConfiguration.h"
 #include "workspace/InvestigationWorkspace.h"
 #include "workspace/WorkspacePersistenceState.h"
 
@@ -74,6 +76,7 @@ private:
     QSettings settings;
     RecentItemsStore recentItemsStore;
     FilterPresetStore filterPresetStore;
+    RotatedSourceSettingsStore rotatedSourceSettingsStore;
 
     QMenu *recentFilesMenu = nullptr;
     QMenu *recentWorkspacesMenu = nullptr;
@@ -105,16 +108,21 @@ private:
         const QString &filePath,
         const ImportProfile &profile,
         const QString &reloadSessionId =
-        QString()
+        QString(),
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration = {}
         );
     bool startLogFileImport(
-        const QString &filePath,
+        const QString &activeFilePath,
+        const QStringList &orderedSourcePaths,
         const ImportProfile &profile,
         ImportCompletionHandler completion
         );
     void completeLogFileImport(
         const QString &filePath,
         const ImportProfile &profile,
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration,
         ImportResult result,
         const QString &reloadSessionId
         );
@@ -178,5 +186,11 @@ private:
 
     void exportInvestigationReport(
         const QString &originDocumentId
+        );
+
+    std::optional<SourceFamilyConfiguration>
+    resolveSourceFamilyConfiguration(
+        const QString &activeFilePath,
+        SourceFamilyConfiguration configuration
         );
 };

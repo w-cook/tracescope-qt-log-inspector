@@ -3,6 +3,7 @@
 #include "BuiltInImporterRegistry.h"
 #include "ILogImporter.h"
 #include "ImportProfileValidator.h"
+#include "SourceFamilyImportService.h"
 
 namespace
 {
@@ -29,6 +30,23 @@ ImportPreviewResult ImportPreviewService::previewFile(
     const ImportExecutionContext &executionContext
     ) const
 {
+    return previewFiles(
+        QStringList {
+            filePath
+        },
+        profile,
+        maxProcessedRecords,
+        executionContext
+        );
+}
+
+ImportPreviewResult ImportPreviewService::previewFiles(
+    const QStringList &orderedFilePaths,
+    const ImportProfile &profile,
+    qint64 maxProcessedRecords,
+    const ImportExecutionContext &executionContext
+    ) const
+{
     ImportPreviewResult result;
 
     result.profileValidation =
@@ -47,7 +65,21 @@ ImportPreviewResult ImportPreviewService::previewFile(
                 "INVALID_PREVIEW_LIMIT"
                 ),
             QStringLiteral(
-                "The preview record limit must be greater than zero."
+                "The preview record limit must "
+                "be greater than zero."
+                )
+            );
+    }
+
+    if (orderedFilePaths.isEmpty()) {
+        return serviceFailure(
+            result.profileValidation,
+            QStringLiteral(
+                "PREVIEW_SOURCE_MISSING"
+                ),
+            QStringLiteral(
+                "At least one source file is "
+                "required for preview."
                 )
             );
     }
@@ -69,17 +101,32 @@ ImportPreviewResult ImportPreviewService::previewFile(
                 "PREVIEW_IMPORTER_UNSUPPORTED"
                 ),
             QStringLiteral(
-                "Preview is not implemented for importer '%1'."
-                ).arg(profile.importerId)
+                "Preview is not implemented for "
+                "importer '%1'."
+                )
+                .arg(
+                    profile.importerId
+                    )
             );
     }
 
+    SourceFamilyImportOptions options;
+
+    options.maxProcessedRecords =
+        maxProcessedRecords;
+
+    options.recordLimitMode =
+        SourceFamilyRecordLimitMode::
+        DistributedAcrossSources;
+
     result.importResult =
-        importer->importFile(
-            filePath,
-            maxProcessedRecords,
-            executionContext
-            );
+        SourceFamilyImportService()
+            .importFiles(
+                orderedFilePaths,
+                *importer,
+                options,
+                executionContext
+                );
 
     result.sourceTruncated =
         result.importResult.sourceTruncated;

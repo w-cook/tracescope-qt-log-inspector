@@ -12,7 +12,9 @@
 InvestigationSession::InvestigationSession(
     const QString &filePath,
     ImportProfile profile,
-    ImportResult result
+    ImportResult result,
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration
     )
     : InvestigationSession(
           QUuid::createUuid().toString(
@@ -20,7 +22,10 @@ InvestigationSession::InvestigationSession(
               ),
           filePath,
           std::move(profile),
-          std::move(result)
+          std::move(result),
+          std::move(
+              sourceFamilyConfiguration
+              )
           )
 {
 }
@@ -29,11 +34,18 @@ InvestigationSession::InvestigationSession(
     QString sessionId,
     const QString &filePath,
     ImportProfile profile,
-    ImportResult result
+    ImportResult result,
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration
     )
     : m_id(
           std::move(sessionId)
           ),
+    m_sourceFamilyConfiguration(
+        std::move(
+            sourceFamilyConfiguration
+            )
+        ),
     m_importProfile(
         std::move(profile)
         )
@@ -77,6 +89,22 @@ const InvestigationSessionSourceMetadata &
 InvestigationSession::sourceMetadata() const
 {
     return m_sourceMetadata;
+}
+
+const SourceFamilyConfiguration &
+    InvestigationSession::
+    sourceFamilyConfiguration() const
+{
+    return m_sourceFamilyConfiguration;
+}
+
+void InvestigationSession::
+    setSourceFamilyConfiguration(
+        SourceFamilyConfiguration configuration
+        )
+{
+    m_sourceFamilyConfiguration =
+        std::move(configuration);
 }
 
 const ImportProfile &

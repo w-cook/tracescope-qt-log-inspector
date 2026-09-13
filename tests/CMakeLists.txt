@@ -574,6 +574,8 @@ qt_add_executable(
     ../src/importing/KeyValueTextImporter.cpp
     ../src/importing/RegexTextImporter.h
     ../src/importing/RegexTextImporter.cpp
+    ../src/importing/SourceFamilyImportService.h
+    ../src/importing/SourceFamilyImportService.cpp
     ../src/importing/StructuredJsonImportConfig.h
     ../src/importing/StructuredJsonImporter.h
     ../src/importing/StructuredJsonImporter.cpp
@@ -980,6 +982,48 @@ target_link_libraries(
 add_test(
     NAME XmlImporterTests
     COMMAND XmlImporterTests
+)
+
+qt_add_executable(
+    SourceFamilyImportServiceTests
+
+    SourceFamilyImportServiceTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportExecutionContext.h
+    ../src/importing/ImportProgress.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+    ../src/importing/SourceFamilyImportService.h
+    ../src/importing/SourceFamilyImportService.cpp
+)
+
+target_link_libraries(
+    SourceFamilyImportServiceTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME SourceFamilyImportServiceTests
+    COMMAND SourceFamilyImportServiceTests
 )
 
 # ----------------------------------------------------------------------------
@@ -1479,6 +1523,29 @@ target_link_libraries(
 add_test(
     NAME RecentItemsStoreTests
     COMMAND RecentItemsStoreTests
+)
+
+qt_add_executable(
+    RotatedSourceSettingsStoreTests
+
+    RotatedSourceSettingsStoreTests.cpp
+
+    ../src/preferences/RotatedSourceSettingsStore.h
+    ../src/preferences/RotatedSourceSettingsStore.cpp
+
+    ../src/sources/RotatedSourceRule.h
+)
+
+target_link_libraries(
+    RotatedSourceSettingsStoreTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME RotatedSourceSettingsStoreTests
+    COMMAND RotatedSourceSettingsStoreTests
 )
 
 # ----------------------------------------------------------------------------

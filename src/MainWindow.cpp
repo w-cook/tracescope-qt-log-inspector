@@ -40,7 +40,9 @@
 #include "exporting/InvestigationReportSnapshotBuilder.h"
 #include "importing/BuiltInImporterRegistry.h"
 #include "importing/ILogImporter.h"
+#include "importing/SourceFamilyImportService.h"
 #include "live/LiveSessionFollowCoordinator.h"
+#include "sources/RotatedSourceDiscoveryService.h"
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/InvestigationComparisonDialog.h"
 #include "ui/InvestigationReportExportDialog.h"
@@ -426,6 +428,7 @@ MainWindow::MainWindow(QWidget *parent)
     settings(),
     recentItemsStore(settings),
     filterPresetStore(settings),
+    rotatedSourceSettingsStore(settings),
     workspace(new InvestigationWorkspace(this))
 {
     setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
@@ -1057,7 +1060,8 @@ void MainWindow::openLogFile(const QString &initialFilePath)
 
     ImportConfigurationDialog dialog(
         this,
-        &recentItemsStore
+        &recentItemsStore,
+        &rotatedSourceSettingsStore
         );
 
     if (!initialFilePath.isEmpty()) {
@@ -1070,36 +1074,99 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         return;
     }
 
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration;
+
+    sourceFamilyConfiguration
+        .includeRotatedSources =
+        dialog.includeRotatedSources();
+
+    sourceFamilyConfiguration
+        .rotationRule =
+        dialog.rotatedSourceRule();
+
+    if (sourceFamilyConfiguration
+            .includeRotatedSources) {
+        for (const RotatedSourceMatch &match
+             : dialog.rotatedSources()) {
+            sourceFamilyConfiguration
+                .rotatedSourcePaths
+                .append(
+                    match.filePath
+                    );
+        }
+    }
+
     loadLogFile(
         dialog.selectedFilePath(),
-        dialog.configuredProfile()
+        dialog.configuredProfile(),
+        QString(),
+        std::move(
+            sourceFamilyConfiguration
+            )
         );
 }
 
 void MainWindow::loadLogFile(
     const QString &filePath,
     const ImportProfile &profile,
-    const QString &reloadSessionId
+    const QString &reloadSessionId,
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration
     )
 {
+    const QString activeFilePath =
+        QFileInfo(filePath)
+            .absoluteFilePath();
+
+    std::optional<
+        SourceFamilyConfiguration>
+        resolvedConfiguration =
+        resolveSourceFamilyConfiguration(
+            activeFilePath,
+            std::move(
+                sourceFamilyConfiguration
+                )
+            );
+
+    if (!resolvedConfiguration
+             .has_value()) {
+        return;
+    }
+
+    SourceFamilyConfiguration
+        resolved =
+        std::move(
+            resolvedConfiguration.value()
+            );
+
+    const QStringList orderedSourcePaths =
+        resolved.orderedSourcePaths(
+            activeFilePath
+            );
+
     startLogFileImport(
-        filePath,
+        activeFilePath,
+        orderedSourcePaths,
         profile,
         [
             this,
-            filePath,
+            activeFilePath,
             profile,
-            reloadSessionId
-    ](
+            reloadSessionId,
+            resolved =
+            std::move(resolved)
+        ](
             std::optional<ImportResult> result
-            ) {
+            ) mutable {
             if (!result.has_value()) {
                 return;
             }
 
             completeLogFileImport(
-                filePath,
+                activeFilePath,
                 profile,
+                std::move(resolved),
                 std::move(
                     result.value()
                     ),
@@ -1110,7 +1177,8 @@ void MainWindow::loadLogFile(
 }
 
 bool MainWindow::startLogFileImport(
-    const QString &filePath,
+    const QString &activeFilePath,
+    const QStringList &orderedSourcePaths,
     const ImportProfile &profile,
     ImportCompletionHandler completion
     )
@@ -1154,7 +1222,7 @@ bool MainWindow::startLogFileImport(
     updateReloadActionState();
 
     const QString displayFileName =
-        QFileInfo(filePath)
+        QFileInfo(activeFilePath)
             .fileName();
 
     auto *progressDialog =
@@ -1320,7 +1388,7 @@ bool MainWindow::startLogFileImport(
         QtConcurrent::run(
             [
                 importer,
-                filePath
+                orderedSourcePaths
             ](
                 QPromise<ImportResult> &promise
                 ) {
@@ -1405,13 +1473,24 @@ bool MainWindow::startLogFileImport(
                                 );
                     };
 
+                SourceFamilyImportOptions options;
+
+                options.maxProcessedRecords =
+                    ILogImporter::
+                    UnlimitedRecordLimit;
+
+                options.recordLimitMode =
+                    SourceFamilyRecordLimitMode::
+                    Sequential;
+
                 ImportResult result =
-                    importer->importFile(
-                        filePath,
-                        ILogImporter::
-                        UnlimitedRecordLimit,
-                        executionContext
-                        );
+                    SourceFamilyImportService()
+                        .importFiles(
+                            orderedSourcePaths,
+                            *importer,
+                            options,
+                            executionContext
+                            );
 
                 /*
                  * A cancelled future intentionally
@@ -1448,6 +1527,8 @@ bool MainWindow::startLogFileImport(
 void MainWindow::completeLogFileImport(
     const QString &filePath,
     const ImportProfile &profile,
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration,
     ImportResult result,
     const QString &reloadSessionId
     )
@@ -1465,18 +1546,53 @@ void MainWindow::completeLogFileImport(
                 InvestigationSession>(
                 filePath,
                 profile,
-                std::move(result)
+                std::move(result),
+                sourceFamilyConfiguration
                 );
 
         workspace->addSession(
             std::move(session)
             );
     } else {
+        const int sessionIndex =
+            workspace->indexOfSession(
+                reloadSessionId
+                );
+
+        InvestigationSession *session =
+            sessionIndex >= 0
+                ? workspace->sessionAt(
+                      sessionIndex
+                      )
+                : nullptr;
+
+        if (session != nullptr) {
+            session
+                ->setSourceFamilyConfiguration(
+                    sourceFamilyConfiguration
+                    );
+        }
+
         workspace->reloadSession(
             reloadSessionId,
             std::move(result)
             );
     }
+
+    /*
+     * Only reaching this point means the actual
+     * import completed and was installed.
+     */
+    rotatedSourceSettingsStore
+        .rememberSourceConfiguration(
+            {
+                filePath,
+                sourceFamilyConfiguration
+                    .rotationRule,
+                sourceFamilyConfiguration
+                    .includeRotatedSources
+            }
+            );
 
     recentItemsStore.addRecentFile(
         filePath
@@ -1573,7 +1689,9 @@ void MainWindow::reloadActiveSession()
             ->sourceMetadata()
             .sourcePath,
         session->importProfile(),
-        session->id()
+        session->id(),
+        session
+            ->sourceFamilyConfiguration()
         );
 }
 
@@ -2531,6 +2649,9 @@ void MainWindow::continueWorkspaceOpen(
     const bool started =
         startLogFileImport(
             persistedSession.sourcePath,
+            QStringList {
+                persistedSession.sourcePath
+            },
             persistedSession.importProfile,
             [
                 this,
@@ -3078,4 +3199,71 @@ void MainWindow::exportInvestigationReport(
             )
             .arg(filePath)
         );
+}
+
+std::optional<SourceFamilyConfiguration>
+MainWindow::resolveSourceFamilyConfiguration(
+    const QString &activeFilePath,
+    SourceFamilyConfiguration configuration
+    )
+{
+    configuration.rotatedSourcePaths.clear();
+
+    if (!configuration
+             .includeRotatedSources) {
+        return configuration;
+    }
+
+    const RotatedSourceDiscoveryResult
+        discovery =
+        RotatedSourceDiscoveryService::discover(
+            activeFilePath,
+            configuration.rotationRule
+            );
+
+    if (!discovery.succeeded) {
+        QMessageBox::warning(
+            this,
+            tr("Source Family Discovery Failed"),
+            tr(
+                "TraceScope could not discover the "
+                "rotated files configured for this "
+                "source.\n\n%1"
+                )
+                .arg(
+                    discovery.errorMessage
+                    )
+            );
+
+        return std::nullopt;
+    }
+
+    if (discovery.rotatedSources.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            tr("Rotated Sources Not Found"),
+            tr(
+                "This import is configured to include "
+                "rotated files, but no rotated files "
+                "currently match the selected source "
+                "family rule."
+                )
+            );
+
+        return std::nullopt;
+    }
+
+    for (const RotatedSourceMatch &match
+         : discovery.rotatedSources) {
+        configuration
+            .rotatedSourcePaths
+            .append(
+                QFileInfo(
+                    match.filePath
+                    )
+                    .absoluteFilePath()
+                );
+    }
+
+    return configuration;
 }

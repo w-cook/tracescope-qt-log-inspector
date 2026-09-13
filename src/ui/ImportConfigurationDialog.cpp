@@ -1,42 +1,47 @@
 #include "ImportConfigurationDialog.h"
 
+#include <QAction>
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QDragEnterEvent>
-#include <QDropEvent>
-#include <QMimeData>
-#include <QUrl>
-#include <QSignalBlocker>
-#include <QCheckBox>
-#include <QHeaderView>
-#include <QTableWidget>
-#include <QComboBox>
-#include <QScrollArea>
-#include <QPlainTextEdit>
-#include <QSplitter>
-#include <QSet>
-#include <QMessageBox>
-#include <QSaveFile>
-#include <QTimer>
-#include <QFile>
-#include <QtConcurrentRun>
-#include <QPromise>
 #include <QMenu>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QPlainTextEdit>
+#include <QPromise>
+#include <QPushButton>
+#include <QSaveFile>
+#include <QScrollArea>
+#include <QSet>
+#include <QSignalBlocker>
+#include <QSplitter>
+#include <QTableWidget>
+#include <QTimer>
+#include <QUrl>
+#include <QVBoxLayout>
+#include <QtConcurrentRun>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "../importing/BuiltInImporterRegistry.h"
 #include "../importing/BuiltInImportProfilePresets.h"
 #include "../importing/ILogImporter.h"
+#include "../preferences/RotatedSourceSettingsStore.h"
+
+#include "RotatedSourceConfigurationDialog.h"
 
 namespace
 {
@@ -64,27 +69,68 @@ bool requiresManualStructuredDocumentPreview(
 {
     const bool isStructuredDocument =
         profile.importerId
-            == QStringLiteral(
-                "structured-json"
-                )
+            == QStringLiteral("structured-json")
         || profile.importerId
-               == QStringLiteral(
-                   "xml"
-                   );
+               == QStringLiteral("xml");
 
     return isStructuredDocument
            && fileInfo.size()
                   > AutomaticStructuredDocumentPreviewMaxBytes;
 }
+
+bool requiresManualStructuredDocumentPreview(
+    const QStringList &filePaths,
+    const ImportProfile &profile
+    )
+{
+    for (const QString &filePath
+         : filePaths) {
+        if (requiresManualStructuredDocumentPreview(
+                QFileInfo(filePath),
+                profile
+                )) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+QList<CustomFieldMapping> retainedCustomMappings(
+    const ImportProfile &profile,
+    const QSet<QString> &autoDetectedKeys
+    )
+{
+    QList<CustomFieldMapping> retained;
+
+    for (const CustomFieldMapping &mapping
+         : profile.customFields) {
+        if (autoDetectedKeys.contains(
+                customFieldMappingKey(mapping)
+                )) {
+            continue;
+        }
+
+        retained.append(mapping);
+    }
+
+    return retained;
+}
 }
 
 ImportConfigurationDialog::ImportConfigurationDialog(
     QWidget *parent,
-    RecentItemsStore *recentItemsStore
+    RecentItemsStore *recentItemsStore,
+    RotatedSourceSettingsStore *rotatedSourceSettingsStore
     )
     : QDialog(parent),
     recentItemsStore(recentItemsStore),
-    filePathEdit(new QLineEdit(this)),
+    rotatedSourceSettingsStore(
+        rotatedSourceSettingsStore
+        ),
+    filePathEdit(
+        new QLineEdit(this)
+        ),
     browseButton(
         new QPushButton(
             tr("Browse..."),
@@ -94,18 +140,27 @@ ImportConfigurationDialog::ImportConfigurationDialog(
     formatSuggestionLabel(
         new QLabel(this)
         ),
+    includeRotatedSourcesCheckBox(
+        new QCheckBox(
+            tr("Include rotations"),
+            this
+            )
+        ),
+    reviewRotatedSourcesButton(
+        new QPushButton(
+            tr("Review..."),
+            this
+            )
+        ),
     previewSummaryLabel(
         new QLabel(this)
         ),
     previewTable(
         new QTableWidget(
             0,
-            8,
+            7,
             this
             )
-        ),
-    previewRefreshTimer(
-        new QTimer(this)
         ),
     rawSourcePreview(
         new QPlainTextEdit(this)
@@ -115,6 +170,9 @@ ImportConfigurationDialog::ImportConfigurationDialog(
             tr("Refresh Preview"),
             this
             )
+        ),
+    previewRefreshTimer(
+        new QTimer(this)
         ),
     profileNameEdit(
         new QLineEdit(this)
@@ -257,14 +315,20 @@ ImportConfigurationDialog::ImportConfigurationDialog(
         );
 
     setAcceptDrops(true);
-
     resize(1100, 700);
 
     workingProfile.name =
-        QStringLiteral("Default JSON Lines");
+        QStringLiteral(
+            "Default JSON Lines"
+            );
 
-    previewRefreshTimer->setSingleShot(true);
-    previewRefreshTimer->setInterval(250);
+    previewRefreshTimer->setSingleShot(
+        true
+        );
+
+    previewRefreshTimer->setInterval(
+        250
+        );
 
     connect(
         previewRefreshTimer,
@@ -275,7 +339,7 @@ ImportConfigurationDialog::ImportConfigurationDialog(
                     == QStringLiteral(
                         "regex-text"
                         )
-                && customFieldDetectionSourcePath
+                && customFieldDetectionSourceKey
                        .isEmpty()) {
                 detectCustomFieldMappings();
             }
@@ -292,24 +356,53 @@ ImportConfigurationDialog::ImportConfigurationDialog(
     updateValidationState();
 }
 
-QString ImportConfigurationDialog::selectedFilePath() const
+QString ImportConfigurationDialog::
+    selectedFilePath() const
 {
-    return filePathEdit->text().trimmed();
+    return filePathEdit
+        ->text()
+        .trimmed();
 }
 
-ImportProfile ImportConfigurationDialog::configuredProfile() const
+void ImportConfigurationDialog::
+    setSelectedFilePath(
+        const QString &filePath
+        )
+{
+    filePathEdit->setText(
+        filePath
+        );
+}
+
+ImportProfile ImportConfigurationDialog::
+    configuredProfile() const
 {
     return workingProfile;
 }
 
-void ImportConfigurationDialog::setSelectedFilePath(
-    const QString &filePath
-    )
+bool ImportConfigurationDialog::
+    includeRotatedSources() const
 {
-    filePathEdit->setText(filePath);
+    return includeRotatedSourcesCheckBox
+        ->isChecked();
 }
 
-void ImportConfigurationDialog::buildLayout()
+const RotatedSourceRule &
+ImportConfigurationDialog::
+    rotatedSourceRule() const
+{
+    return rotatedSourceRuleState;
+}
+
+const QVector<RotatedSourceMatch> &
+ImportConfigurationDialog::
+    rotatedSources() const
+{
+    return rotatedSourceMatches;
+}
+
+void ImportConfigurationDialog::
+    buildLayout()
 {
     auto *mainLayout =
         new QVBoxLayout(this);
@@ -326,7 +419,6 @@ void ImportConfigurationDialog::buildLayout()
             );
 
     introLabel->setWordWrap(true);
-
     mainLayout->addWidget(introLabel);
 
     auto *sourceGroup =
@@ -338,15 +430,46 @@ void ImportConfigurationDialog::buildLayout()
     auto *sourceLayout =
         new QFormLayout(sourceGroup);
 
-    auto *fileRow =
+    formatSuggestionLabel->setWordWrap(
+        true
+        );
+
+    auto *formatRow =
         new QHBoxLayout();
 
-    formatSuggestionLabel->setWordWrap(true);
+    formatRow->addWidget(
+        formatSuggestionLabel,
+        1
+        );
+
+    includeRotatedSourcesCheckBox
+        ->setEnabled(false);
+
+    formatRow->addWidget(
+        includeRotatedSourcesCheckBox
+        );
+
+    reviewRotatedSourcesButton
+        ->setEnabled(false);
+
+    reviewRotatedSourcesButton
+        ->setMinimumWidth(
+            browseButton
+                ->sizeHint()
+                .width()
+            );
+
+    formatRow->addWidget(
+        reviewRotatedSourcesButton
+        );
 
     sourceLayout->addRow(
         tr("Likely format:"),
-        formatSuggestionLabel
+        formatRow
         );
+
+    auto *fileRow =
+        new QHBoxLayout();
 
     filePathEdit->setPlaceholderText(
         tr("Select a log file...")
@@ -366,13 +489,20 @@ void ImportConfigurationDialog::buildLayout()
         fileRow
         );
 
-    mainLayout->addWidget(sourceGroup);
+    mainLayout->addWidget(
+        sourceGroup
+        );
 
     auto *scrollArea =
         new QScrollArea(this);
 
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidgetResizable(
+        true
+        );
+
+    scrollArea->setFrameShape(
+        QFrame::NoFrame
+        );
 
     auto *scrollContent =
         new QWidget(scrollArea);
@@ -446,7 +576,9 @@ void ImportConfigurationDialog::buildLayout()
         QPlainTextEdit::NoWrap
         );
 
-    regexPatternEdit->setFixedHeight(70);
+    regexPatternEdit->setFixedHeight(
+        70
+        );
 
     profileLayout->addRow(
         tr("Regex pattern:"),
@@ -506,7 +638,9 @@ void ImportConfigurationDialog::buildLayout()
         profileButtonLayout
         );
 
-    scrollLayout->addWidget(profileGroup);
+    scrollLayout->addWidget(
+        profileGroup
+        );
 
     auto *mappingGroup =
         new QGroupBox(
@@ -571,7 +705,9 @@ void ImportConfigurationDialog::buildLayout()
         messagePathEdit
         );
 
-    scrollLayout->addWidget(mappingGroup);
+    scrollLayout->addWidget(
+        mappingGroup
+        );
 
     auto *customFieldsGroup =
         new QGroupBox(
@@ -580,7 +716,9 @@ void ImportConfigurationDialog::buildLayout()
             );
 
     auto *customFieldsLayout =
-        new QVBoxLayout(customFieldsGroup);
+        new QVBoxLayout(
+            customFieldsGroup
+            );
 
     customFieldTable->setHorizontalHeaderLabels(
         {
@@ -611,7 +749,9 @@ void ImportConfigurationDialog::buildLayout()
         QAbstractItemView::SingleSelection
         );
 
-    customFieldTable->setMinimumHeight(130);
+    customFieldTable->setMinimumHeight(
+        130
+        );
 
     customFieldsLayout->addWidget(
         customFieldTable
@@ -645,7 +785,9 @@ void ImportConfigurationDialog::buildLayout()
             );
 
     auto *severityAliasLayout =
-        new QVBoxLayout(severityAliasGroup);
+        new QVBoxLayout(
+            severityAliasGroup
+            );
 
     severityAliasTable->setHorizontalHeaderLabels(
         {
@@ -676,7 +818,9 @@ void ImportConfigurationDialog::buildLayout()
         QAbstractItemView::SingleSelection
         );
 
-    severityAliasTable->setMinimumHeight(120);
+    severityAliasTable->setMinimumHeight(
+        120
+        );
 
     severityAliasLayout->addWidget(
         severityAliasTable
@@ -710,7 +854,9 @@ void ImportConfigurationDialog::buildLayout()
             );
 
     auto *timestampRuleLayout =
-        new QVBoxLayout(timestampRuleGroup);
+        new QVBoxLayout(
+            timestampRuleGroup
+            );
 
     timestampRuleTable->setHorizontalHeaderLabels(
         {
@@ -741,7 +887,9 @@ void ImportConfigurationDialog::buildLayout()
         QAbstractItemView::SingleSelection
         );
 
-    timestampRuleTable->setMinimumHeight(120);
+    timestampRuleTable->setMinimumHeight(
+        120
+        );
 
     timestampRuleLayout->addWidget(
         timestampRuleTable
@@ -770,7 +918,9 @@ void ImportConfigurationDialog::buildLayout()
 
     scrollLayout->addStretch();
 
-    scrollArea->setWidget(scrollContent);
+    scrollArea->setWidget(
+        scrollContent
+        );
 
     auto *previewGroup =
         new QGroupBox(
@@ -779,9 +929,13 @@ void ImportConfigurationDialog::buildLayout()
             );
 
     auto *previewLayout =
-        new QVBoxLayout(previewGroup);
+        new QVBoxLayout(
+            previewGroup
+            );
 
-    previewSummaryLabel->setWordWrap(true);
+    previewSummaryLabel->setWordWrap(
+        true
+        );
 
     auto *previewHeaderLayout =
         new QHBoxLayout();
@@ -802,8 +956,6 @@ void ImportConfigurationDialog::buildLayout()
     refreshPreviewButton->setVisible(
         false
         );
-
-    previewTable->setColumnCount(7);
 
     previewTable->setHorizontalHeaderLabels(
         {
@@ -829,7 +981,9 @@ void ImportConfigurationDialog::buildLayout()
         QAbstractItemView::SingleSelection
         );
 
-    previewTable->setWordWrap(false);
+    previewTable->setWordWrap(
+        false
+        );
 
     QHeaderView *previewHeader =
         previewTable->horizontalHeader();
@@ -838,24 +992,45 @@ void ImportConfigurationDialog::buildLayout()
         QHeaderView::Interactive
         );
 
-    previewHeader->setMinimumSectionSize(70);
+    previewHeader->setMinimumSectionSize(
+        70
+        );
 
-    previewTable->setColumnWidth(0, 180); // Timestamp
-    previewTable->setColumnWidth(1, 80);  // Severity
-    previewTable->setColumnWidth(2, 120); // Subsystem
-    previewTable->setColumnWidth(3, 140); // Event Code
-    previewTable->setColumnWidth(4, 120); // Entity ID
-    previewTable->setColumnWidth(5, 300); // Message
-    previewTable->setColumnWidth(6, 220); // Unmapped Custom Fields
+    previewTable->setColumnWidth(
+        0,
+        180
+        );
 
-    /*
-     * Let the record table and selected raw-source
-     * view share the available preview space through
-     * a vertical splitter. The raw-source section
-     * starts compact but can be expanded for
-     * multiline JSON, XML, stack traces, and similar
-     * records.
-     */
+    previewTable->setColumnWidth(
+        1,
+        80
+        );
+
+    previewTable->setColumnWidth(
+        2,
+        120
+        );
+
+    previewTable->setColumnWidth(
+        3,
+        140
+        );
+
+    previewTable->setColumnWidth(
+        4,
+        120
+        );
+
+    previewTable->setColumnWidth(
+        5,
+        300
+        );
+
+    previewTable->setColumnWidth(
+        6,
+        220
+        );
+
     auto *previewSplitter =
         new QSplitter(
             Qt::Vertical,
@@ -866,12 +1041,6 @@ void ImportConfigurationDialog::buildLayout()
         false
         );
 
-    /*
-     * The table should receive additional space when
-     * the dialog grows. The raw-source panel keeps
-     * its user-selected size unless the splitter is
-     * moved explicitly.
-     */
     previewSplitter->setStretchFactor(
         0,
         1
@@ -949,12 +1118,6 @@ void ImportConfigurationDialog::buildLayout()
         rawSourcePanel
         );
 
-    /*
-     * Keep the default appearance close to the
-     * existing compact raw-source preview. The user
-     * can drag the splitter upward whenever more
-     * vertical space is useful.
-     */
     previewSplitter->setSizes(
         QList<int>{
             360,
@@ -1003,9 +1166,14 @@ void ImportConfigurationDialog::buildLayout()
             );
 
     auto *validationLayout =
-        new QVBoxLayout(validationGroup);
+        new QVBoxLayout(
+            validationGroup
+            );
 
-    validationLabel->setWordWrap(true);
+    validationLabel->setWordWrap(
+        true
+        );
+
     validationLabel->setTextInteractionFlags(
         Qt::TextSelectableByMouse
         );
@@ -1014,14 +1182,18 @@ void ImportConfigurationDialog::buildLayout()
         validationLabel
         );
 
-    mainLayout->addWidget(validationGroup);
+    mainLayout->addWidget(
+        validationGroup
+        );
 
     buttonBox->addButton(
         importButton,
         QDialogButtonBox::AcceptRole
         );
 
-    mainLayout->addWidget(buttonBox);
+    mainLayout->addWidget(
+        buttonBox
+        );
 
     connect(
         browseButton,
@@ -1029,6 +1201,30 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             browseForFile();
+        }
+        );
+
+    connect(
+        reviewRotatedSourcesButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            reviewRotatedSources();
+        }
+        );
+
+    connect(
+        includeRotatedSourcesCheckBox,
+        &QCheckBox::toggled,
+        this,
+        [this]() {
+            cancelManualPreview();
+            customFieldDetectionSourceKey.clear();
+
+            detectCustomFieldMappings();
+
+            previewRefreshTimer->stop();
+            updatePreview();
         }
         );
 
@@ -1053,43 +1249,17 @@ void ImportConfigurationDialog::buildLayout()
                     ->currentData()
                     .toString();
 
-            /*
-             * Automatically detected mappings belong
-             * to the previous interpretation of the
-             * source, so discard only those mappings.
-             */
-            QList<CustomFieldMapping>
-                retainedMappings;
-
-            for (const CustomFieldMapping &mapping
-                 : std::as_const(
-                     workingProfile.customFields
-                     )) {
-                if (autoDetectedCustomFieldKeys
-                        .contains(
-                            customFieldMappingKey(
-                                mapping
-                                )
-                            )) {
-                    continue;
-                }
-
-                retainedMappings.append(
-                    mapping
-                    );
-            }
-
             workingProfile.customFields =
-                std::move(
-                    retainedMappings
+                retainedCustomMappings(
+                    workingProfile,
+                    autoDetectedCustomFieldKeys
                     );
 
             autoDetectedCustomFieldKeys.clear();
-            customFieldDetectionSourcePath.clear();
+            customFieldDetectionSourceKey.clear();
 
             populateCustomFieldMappings();
             updateFormatSpecificControls();
-
             updateValidationState();
         }
         );
@@ -1105,11 +1275,7 @@ void ImportConfigurationDialog::buildLayout()
                 regexPatternEdit
                     ->toPlainText();
 
-            /*
-             * A changed pattern defines a different
-             * source-field set.
-             */
-            customFieldDetectionSourcePath.clear();
+            customFieldDetectionSourceKey.clear();
 
             updateValidationState();
         }
@@ -1121,7 +1287,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             updateWorkingProfile();
         }
         );
@@ -1159,7 +1324,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             addCustomFieldMapping();
         }
         );
@@ -1170,7 +1334,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             removeSelectedCustomFieldMapping();
         }
         );
@@ -1179,12 +1342,8 @@ void ImportConfigurationDialog::buildLayout()
         customFieldTable,
         &QTableWidget::cellChanged,
         this,
-        [this](
-            int,
-            int
-            ) {
+        [this](int, int) {
             profileIsUserConfigured = true;
-
             updateCustomFieldMappings();
         }
         );
@@ -1195,7 +1354,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             addSeverityAlias();
         }
         );
@@ -1206,7 +1364,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             removeSelectedSeverityAlias();
         }
         );
@@ -1215,12 +1372,8 @@ void ImportConfigurationDialog::buildLayout()
         severityAliasTable,
         &QTableWidget::cellChanged,
         this,
-        [this](
-            int,
-            int
-            ) {
+        [this](int, int) {
             profileIsUserConfigured = true;
-
             updateSeverityAliases();
         }
         );
@@ -1231,7 +1384,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             addTimestampRule();
         }
         );
@@ -1242,7 +1394,6 @@ void ImportConfigurationDialog::buildLayout()
         this,
         [this]() {
             profileIsUserConfigured = true;
-
             removeSelectedTimestampRule();
         }
         );
@@ -1251,12 +1402,8 @@ void ImportConfigurationDialog::buildLayout()
         timestampRuleTable,
         &QTableWidget::cellChanged,
         this,
-        [this](
-            int,
-            int
-            ) {
+        [this](int, int) {
             profileIsUserConfigured = true;
-
             updateTimestampRules();
         }
         );
@@ -1296,11 +1443,7 @@ void ImportConfigurationDialog::buildLayout()
             workingProfile.recordPath =
                 recordPathEdit->text();
 
-            // A changed structured-document record path
-            // selects a different logical record set,
-            // so previously cached source detection
-            // is no longer sufficient.
-            customFieldDetectionSourcePath.clear();
+            customFieldDetectionSourceKey.clear();
 
             updateValidationState();
         }
@@ -1329,14 +1472,15 @@ void ImportConfigurationDialog::buildLayout()
         }
         );
 
-    const QList<QLineEdit *> previewRelevantProfileEdits {
-        timestampPathEdit,
-        severityPathEdit,
-        subsystemPathEdit,
-        eventCodePathEdit,
-        entityIdPathEdit,
-        messagePathEdit
-    };
+    const QList<QLineEdit *>
+        previewRelevantProfileEdits {
+            timestampPathEdit,
+            severityPathEdit,
+            subsystemPathEdit,
+            eventCodePathEdit,
+            entityIdPathEdit,
+            messagePathEdit
+        };
 
     for (QLineEdit *edit
          : previewRelevantProfileEdits) {
@@ -1346,7 +1490,6 @@ void ImportConfigurationDialog::buildLayout()
             this,
             [this]() {
                 profileIsUserConfigured = true;
-
                 updateWorkingProfile();
             }
             );
@@ -1362,7 +1505,9 @@ void ImportConfigurationDialog::buildLayout()
             workingProfile.name =
                 profileNameEdit->text();
 
-            updateValidationState(false);
+            updateValidationState(
+                false
+                );
         }
         );
 
@@ -1383,7 +1528,8 @@ void ImportConfigurationDialog::buildLayout()
     refreshRecentProfilesMenu();
 }
 
-void ImportConfigurationDialog::browseForFile()
+void ImportConfigurationDialog::
+    browseForFile()
 {
     const QString filePath =
         QFileDialog::getOpenFileName(
@@ -1406,18 +1552,441 @@ void ImportConfigurationDialog::browseForFile()
         return;
     }
 
-    setSelectedFilePath(filePath);
+    setSelectedFilePath(
+        filePath
+        );
 }
 
-void ImportConfigurationDialog::updateSourceState()
+void ImportConfigurationDialog::
+    updateRotatedSourceState()
+{
+    const QFileInfo fileInfo(
+        selectedFilePath()
+        );
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        rotationConfigurationSourcePath.clear();
+        rotatedSourceRuleState =
+            RotatedSourceRule();
+        rotatedSourceMatches.clear();
+
+        const QSignalBlocker blocker(
+            includeRotatedSourcesCheckBox
+            );
+
+        includeRotatedSourcesCheckBox
+            ->setChecked(false);
+
+        updateRotatedSourceControls();
+        return;
+    }
+
+    const QString absolutePath =
+        fileInfo.absoluteFilePath();
+
+    const bool sourceChanged =
+        rotationConfigurationSourcePath
+        != absolutePath;
+
+    if (sourceChanged) {
+        rotationConfigurationSourcePath =
+            absolutePath;
+
+        customFieldDetectionSourceKey.clear();
+        previewSourceKey.clear();
+
+        const QSignalBlocker blocker(
+            includeRotatedSourcesCheckBox
+            );
+
+        includeRotatedSourcesCheckBox
+            ->setChecked(false);
+
+        rotatedSourceRuleState =
+            RotatedSourceRule();
+
+        rotatedSourceMatches.clear();
+
+        bool restoredRememberedConfiguration =
+            false;
+
+        if (rotatedSourceSettingsStore
+            != nullptr) {
+            const auto remembered =
+                rotatedSourceSettingsStore
+                    ->rememberedSourceConfiguration(
+                        absolutePath
+                        );
+
+            if (remembered.has_value()) {
+                rotatedSourceRuleState =
+                    remembered->rule;
+
+                includeRotatedSourcesCheckBox
+                    ->setChecked(
+                        remembered
+                            ->includeRotatedSources
+                        );
+
+                restoredRememberedConfiguration =
+                    true;
+            }
+        }
+
+        if (!restoredRememberedConfiguration) {
+            int bestMatchCount = 0;
+            bool bestCandidateIsSaved = false;
+
+            const auto considerCandidate =
+                [
+                    this,
+                    &bestMatchCount,
+                    &bestCandidateIsSaved
+                ](
+                    const RotatedSourceRule &rule,
+                    int matchCount,
+                    bool savedRule
+                    ) {
+                    if (matchCount <= 0) {
+                        return;
+                    }
+
+                    if (matchCount < bestMatchCount) {
+                        return;
+                    }
+
+                    if (matchCount
+                            == bestMatchCount
+                        && !savedRule
+                        && bestCandidateIsSaved) {
+                        return;
+                    }
+
+                    if (matchCount
+                            == bestMatchCount
+                        && savedRule
+                            == bestCandidateIsSaved) {
+                        return;
+                    }
+
+                    rotatedSourceRuleState =
+                        rule;
+
+                    bestMatchCount =
+                        matchCount;
+
+                    bestCandidateIsSaved =
+                        savedRule;
+                };
+
+            const auto builtInSuggestions =
+                RotatedSourceDiscoveryService::
+                    suggestRules(
+                        absolutePath
+                        );
+
+            if (builtInSuggestions.succeeded) {
+                for (const auto &suggestion
+                     : builtInSuggestions
+                           .suggestions) {
+                    considerCandidate(
+                        suggestion.rule,
+                        suggestion.matchCount,
+                        false
+                        );
+                }
+            }
+
+            if (rotatedSourceSettingsStore
+                != nullptr) {
+                const auto savedRules =
+                    rotatedSourceSettingsStore
+                        ->savedCustomRules();
+
+                for (const auto &savedRule
+                     : savedRules) {
+                    const auto discovery =
+                        RotatedSourceDiscoveryService::
+                            discover(
+                                absolutePath,
+                                savedRule.rule
+                                );
+
+                    if (!discovery.succeeded) {
+                        continue;
+                    }
+
+                    considerCandidate(
+                        savedRule.rule,
+                        discovery
+                            .rotatedSources
+                            .size(),
+                        true
+                        );
+                }
+            }
+        }
+    }
+
+    rotatedSourceMatches.clear();
+
+    if (rotatedSourceRuleState.namingScheme
+        != RotatedSourceNamingScheme::
+            Disabled) {
+        const auto discovery =
+            RotatedSourceDiscoveryService::
+                discover(
+                    absolutePath,
+                    rotatedSourceRuleState
+                    );
+
+        if (discovery.succeeded) {
+            rotatedSourceMatches =
+                discovery.rotatedSources;
+        }
+    }
+
+    updateRotatedSourceControls();
+}
+
+void ImportConfigurationDialog::
+    updateRotatedSourceControls()
+{
+    const QFileInfo sourceInfo(
+        selectedFilePath()
+        );
+
+    const bool sourceIsValid =
+        sourceInfo.exists()
+        && sourceInfo.isFile();
+
+    reviewRotatedSourcesButton
+        ->setEnabled(
+            sourceIsValid
+            );
+
+    const int count =
+        rotatedSourceMatches.size();
+
+    {
+        const QSignalBlocker blocker(
+            includeRotatedSourcesCheckBox
+            );
+
+        includeRotatedSourcesCheckBox
+            ->setEnabled(
+                sourceIsValid
+                && count > 0
+                );
+
+        if (count <= 0) {
+            includeRotatedSourcesCheckBox
+                ->setChecked(false);
+        }
+    }
+
+    if (count <= 0) {
+        includeRotatedSourcesCheckBox
+            ->setText(
+                tr("Include rotations")
+                );
+
+        includeRotatedSourcesCheckBox
+            ->setToolTip(
+                sourceIsValid
+                    ? tr(
+                          "No related rotated files "
+                          "are currently detected. "
+                          "Choose Review to configure "
+                          "a different naming rule."
+                          )
+                    : QString()
+                );
+
+        reviewRotatedSourcesButton
+            ->setToolTip(
+                sourceIsValid
+                    ? tr(
+                          "Review or configure how "
+                          "rotated files belonging to "
+                          "this source are identified."
+                          )
+                    : QString()
+                );
+
+        return;
+    }
+
+    includeRotatedSourcesCheckBox
+        ->setText(
+            count == 1
+                ? tr("Include 1 rotation")
+                : tr(
+                      "Include %1 rotations"
+                      )
+                      .arg(count)
+            );
+
+    const QString toolTip =
+        tr(
+            "%1 rotated %2 detected.\n"
+            "Oldest: %3\n"
+            "Newest rotated: %4\n"
+            "Active: %5"
+            )
+            .arg(
+                QString::number(count),
+                count == 1
+                    ? tr("file")
+                    : tr("files"),
+                rotatedSourceMatches
+                    .first()
+                    .fileName,
+                rotatedSourceMatches
+                    .last()
+                    .fileName,
+                sourceInfo.fileName()
+                );
+
+    includeRotatedSourcesCheckBox
+        ->setToolTip(
+            toolTip
+            );
+
+    reviewRotatedSourcesButton
+        ->setToolTip(
+            toolTip
+            );
+}
+
+void ImportConfigurationDialog::
+    reviewRotatedSources()
+{
+    const QFileInfo fileInfo(
+        selectedFilePath()
+        );
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        return;
+    }
+
+    RotatedSourceConfigurationDialog dialog(
+        fileInfo.absoluteFilePath(),
+        rotatedSourceRuleState,
+        includeRotatedSourcesCheckBox
+            ->isChecked(),
+        rotatedSourceSettingsStore,
+        this
+        );
+
+    if (dialog.exec()
+        != QDialog::Accepted) {
+        return;
+    }
+
+    rotatedSourceRuleState =
+        dialog.configuredRule();
+
+    rotatedSourceMatches =
+        dialog.rotatedSources();
+
+    {
+        const QSignalBlocker blocker(
+            includeRotatedSourcesCheckBox
+            );
+
+        includeRotatedSourcesCheckBox
+            ->setChecked(
+                dialog.includeRotatedSources()
+                );
+    }
+
+    updateRotatedSourceControls();
+
+    customFieldDetectionSourceKey.clear();
+    previewSourceKey.clear();
+
+    detectCustomFieldMappings();
+
+    previewRefreshTimer->stop();
+    updatePreview();
+}
+
+bool ImportConfigurationDialog::
+    previewIncludesRotations() const
+{
+    return includeRotatedSourcesCheckBox
+               ->isChecked()
+           && !rotatedSourceMatches
+                   .isEmpty();
+}
+
+QStringList ImportConfigurationDialog::
+    previewSourcePaths() const
+{
+    const QFileInfo activeInfo(
+        selectedFilePath()
+        );
+
+    if (!activeInfo.exists()
+        || !activeInfo.isFile()) {
+        return {};
+    }
+
+    QStringList paths;
+
+    if (previewIncludesRotations()) {
+        for (const RotatedSourceMatch &match
+             : rotatedSourceMatches) {
+            paths.append(
+                QFileInfo(
+                    match.filePath
+                    )
+                    .absoluteFilePath()
+                );
+        }
+    }
+
+    paths.append(
+        activeInfo.absoluteFilePath()
+        );
+
+    return paths;
+}
+
+QString ImportConfigurationDialog::
+    previewSelectionKey() const
+{
+    const QStringList paths =
+        previewSourcePaths();
+
+    if (paths.isEmpty()) {
+        return {};
+    }
+
+    return (
+        previewIncludesRotations()
+            ? QStringLiteral("family:")
+            : QStringLiteral("single:")
+        )
+        + paths.join(
+            QChar(0x1f)
+            );
+}
+
+void ImportConfigurationDialog::
+    updateSourceState()
 {
     cancelManualPreview();
+
     updateFormatSuggestion();
+    updateRotatedSourceState();
 
-    const QString filePath =
-        selectedFilePath();
-
-    const QFileInfo fileInfo(filePath);
+    const QFileInfo fileInfo(
+        selectedFilePath()
+        );
 
     const bool sourceIsValid =
         fileInfo.exists()
@@ -1425,9 +1994,12 @@ void ImportConfigurationDialog::updateSourceState()
 
     if (sourceIsValid
         && !profileIsUserConfigured
-        && customFieldDetectionSourcePath
-               != filePath) {
-        createProfileFromSource(false);
+        && customFieldDetectionSourceKey
+               != previewSelectionKey()) {
+        createProfileFromSource(
+            false
+            );
+
         updateImportAvailability();
         return;
     }
@@ -1438,198 +2010,63 @@ void ImportConfigurationDialog::updateSourceState()
     updateImportAvailability();
 }
 
-void ImportConfigurationDialog::detectCustomFieldMappings()
+void ImportConfigurationDialog::
+    detectCustomFieldMappings()
 {
-    const QString filePath =
-        selectedFilePath();
+    const QStringList sourcePaths =
+        previewSourcePaths();
 
-    const QFileInfo fileInfo(filePath);
-
-    if (!fileInfo.exists()
-        || !fileInfo.isFile()) {
+    if (sourcePaths.isEmpty()) {
         return;
     }
 
+    const QString sourceKey =
+        previewSelectionKey();
+
     if (requiresManualStructuredDocumentPreview(
-            fileInfo,
+            sourcePaths,
             workingProfile
             )) {
         return;
     }
 
-    if (customFieldDetectionSourcePath
-        == filePath) {
+    if (customFieldDetectionSourceKey
+        == sourceKey) {
         return;
     }
 
-    /*
-     * Build the detection profile without mappings
-     * that TraceScope generated automatically during
-     * the previous detection pass.
-     *
-     * Explicit/user-edited mappings remain in place.
-     */
     ImportProfile detectionProfile =
         workingProfile;
 
-    QList<CustomFieldMapping>
-        retainedMappings;
-
-    for (const CustomFieldMapping &mapping
-         : std::as_const(
-             detectionProfile.customFields
-             )) {
-        if (autoDetectedCustomFieldKeys.contains(
-                customFieldMappingKey(
-                    mapping
-                    )
-                )) {
-            continue;
-        }
-
-        retainedMappings.append(
-            mapping
-            );
-    }
-
     detectionProfile.customFields =
-        retainedMappings;
+        retainedCustomMappings(
+            detectionProfile,
+            autoDetectedCustomFieldKeys
+            );
 
     detectionProfile.preserveUnmappedFields =
         true;
 
     const ImportPreviewResult preview =
-        previewService.previewFile(
-            filePath,
+        previewService.previewFiles(
+            sourcePaths,
             detectionProfile
             );
 
-    /*
-     * Do not modify the working profile unless the
-     * new logical record set could actually be
-     * previewed.
-     */
     if (!preview.canDisplayPreview()) {
         return;
     }
 
-    QSet<QString> explicitlyMappedNames;
-
-    for (const CustomFieldMapping &mapping
-         : std::as_const(
-             retainedMappings
-             )) {
-        explicitlyMappedNames.insert(
-            mapping.name
-                .trimmed()
-                .toCaseFolded()
-            );
-    }
-
-    QSet<QString> detectedFields;
-
-    for (const InvestigationRecord &record
-         : preview.importResult.records) {
-        for (auto iterator =
-             record.customAttributes
-                 .constBegin();
-             iterator !=
-             record.customAttributes
-                 .constEnd();
-             ++iterator) {
-            const QString fieldName =
-                iterator.key().trimmed();
-
-            if (fieldName.isEmpty()) {
-                continue;
-            }
-
-            if (explicitlyMappedNames.contains(
-                    fieldName.toCaseFolded()
-                    )) {
-                continue;
-            }
-
-            detectedFields.insert(
-                fieldName
-                );
-        }
-    }
-
-    QStringList sortedFields =
-        detectedFields.values();
-
-    sortedFields.sort(
-        Qt::CaseInsensitive
+    applyDetectedCustomFieldMappings(
+        preview
         );
 
-    QList<CustomFieldMapping>
-        updatedMappings =
-        retainedMappings;
-
-    QSet<QString>
-        updatedAutoDetectedKeys;
-
-    for (const QString &fieldName
-         : std::as_const(
-             sortedFields
-             )) {
-        bool alreadyMapped = false;
-
-        for (const CustomFieldMapping &mapping
-             : std::as_const(
-                 updatedMappings
-                 )) {
-            if (mapping.sourcePath
-                    .trimmed()
-                    .compare(
-                        fieldName,
-                        Qt::CaseInsensitive
-                        )
-                == 0) {
-                alreadyMapped = true;
-                break;
-            }
-        }
-
-        if (alreadyMapped) {
-            continue;
-        }
-
-        const CustomFieldMapping mapping {
-            fieldName,
-            fieldName
-        };
-
-        updatedMappings.append(
-            mapping
-            );
-
-        updatedAutoDetectedKeys.insert(
-            customFieldMappingKey(
-                mapping
-                )
-            );
-    }
-
-    workingProfile.customFields =
-        std::move(
-            updatedMappings
-            );
-
-    autoDetectedCustomFieldKeys =
-        std::move(
-            updatedAutoDetectedKeys
-            );
-
-    customFieldDetectionSourcePath =
-        filePath;
-
-    populateCustomFieldMappings();
-    updateValidationState(false);
+    customFieldDetectionSourceKey =
+        sourceKey;
 }
 
-void ImportConfigurationDialog::updateImportAvailability()
+void ImportConfigurationDialog::
+    updateImportAvailability()
 {
     const QFileInfo fileInfo(
         selectedFilePath()
@@ -1639,13 +2076,16 @@ void ImportConfigurationDialog::updateImportAvailability()
         fileInfo.exists()
         && fileInfo.isFile();
 
-    newProfileFromSourceButton->setEnabled(
-        sourceIsValid
-        );
+    newProfileFromSourceButton
+        ->setEnabled(
+            sourceIsValid
+            );
 
     const bool profileIsValid =
         profileValidator
-            .validate(workingProfile)
+            .validate(
+                workingProfile
+                )
             .isValid();
 
     saveProfileButton->setEnabled(
@@ -1658,30 +2098,39 @@ void ImportConfigurationDialog::updateImportAvailability()
         );
 }
 
-void ImportConfigurationDialog::updateFormatSuggestion()
+void ImportConfigurationDialog::
+    updateFormatSuggestion()
 {
     const QString filePath =
         selectedFilePath();
 
     if (filePath.isEmpty()) {
-        formatSuggestionLabel->setText(
-            tr("Select a source file.")
-            );
+        formatSuggestionLabel
+            ->setText(
+                tr(
+                    "Select a source file."
+                    )
+                );
+
         return;
     }
 
     const ImportFormatSuggestion suggestion =
         formatSuggestionService
-            .suggestForFile(filePath);
+            .suggestForFile(
+                filePath
+                );
 
     if (!suggestion.hasSuggestion()) {
-        formatSuggestionLabel->setText(
-            tr(
-                "No supported format could be "
-                "suggested from the filename "
-                "or sampled content."
-                )
-            );
+        formatSuggestionLabel
+            ->setText(
+                tr(
+                    "No supported format could be "
+                    "suggested from the filename "
+                    "or sampled content."
+                    )
+                );
+
         return;
     }
 
@@ -1694,11 +2143,36 @@ void ImportConfigurationDialog::updateFormatSuggestion()
         );
 }
 
-void ImportConfigurationDialog::clearPreview(
-    const QString &message
-    )
+void ImportConfigurationDialog::
+    clearPreview(
+        const QString &message
+        )
 {
-    previewTable->setRowCount(0);
+    previewTable->setRowCount(
+        0
+        );
+
+    /*
+     * Never leave a stale family-only Source column
+     * behind after rotations are turned off.
+     */
+    if (!previewIncludesRotations()
+        && previewTable->columnCount()
+               > 0) {
+        QTableWidgetItem *firstHeader =
+            previewTable
+                ->horizontalHeaderItem(
+                    0
+                    );
+
+        if (firstHeader != nullptr
+            && firstHeader->text()
+                   == tr("Source")) {
+            previewTable->removeColumn(
+                0
+                );
+        }
+    }
 
     previewSummaryLabel->setText(
         message
@@ -1706,15 +2180,17 @@ void ImportConfigurationDialog::clearPreview(
 
     rawSourcePreview->clear();
 
-    previewSourcePath.clear();
+    previewSourceKey.clear();
 }
 
-void ImportConfigurationDialog::updatePreview()
+void ImportConfigurationDialog::
+    updatePreview()
 {
-    const QString filePath =
-        selectedFilePath();
+    const QFileInfo activeInfo(
+        selectedFilePath()
+        );
 
-    if (filePath.isEmpty()) {
+    if (selectedFilePath().isEmpty()) {
         clearPreview(
             tr(
                 "Select a source file to preview "
@@ -1725,10 +2201,8 @@ void ImportConfigurationDialog::updatePreview()
         return;
     }
 
-    const QFileInfo fileInfo(filePath);
-
-    if (!fileInfo.exists()
-        || !fileInfo.isFile()) {
+    if (!activeInfo.exists()
+        || !activeInfo.isFile()) {
         clearPreview(
             tr(
                 "The selected source file does not "
@@ -1739,14 +2213,28 @@ void ImportConfigurationDialog::updatePreview()
         return;
     }
 
+    const QStringList sourcePaths =
+        previewSourcePaths();
+
+    const QString sourceKey =
+        previewSelectionKey();
+
+    const bool showSourceColumn =
+        previewIncludesRotations();
+
+    const int physicalSourceCount =
+        sourcePaths.size();
+
     const ProfileValidationResult validation =
         profileValidator.validate(
             workingProfile
             );
 
     if (!validation.isValid()) {
-        if (previewSourcePath == filePath
-            && previewTable->rowCount() > 0) {
+        if (previewSourceKey
+                == sourceKey
+            && previewTable->rowCount()
+                   > 0) {
             previewSummaryLabel->setText(
                 tr(
                     "Profile configuration is currently "
@@ -1769,7 +2257,7 @@ void ImportConfigurationDialog::updatePreview()
 
     const bool requiresManualPreview =
         requiresManualStructuredDocumentPreview(
-            fileInfo,
+            sourcePaths,
             workingProfile
             );
 
@@ -1779,36 +2267,52 @@ void ImportConfigurationDialog::updatePreview()
 
     if (requiresManualPreview) {
         clearPreview(
-            tr(
-                "Automatic preview is disabled for "
-                "large structured documents to keep the "
-                "Import Configuration interface responsive. "
-                "Import configuration remains available. "
-                "Click Refresh Preview to generate the "
-                "first %1 processed records in the background."
-                )
-                .arg(
-                    ImportPreviewService::
-                    DefaultMaxProcessedRecords
-                    )
+            showSourceColumn
+                ? tr(
+                      "Automatic preview is disabled because "
+                      "at least one selected structured source "
+                      "is large. Click Refresh Preview to "
+                      "generate up to %1 processed records "
+                      "across the selected source family."
+                      )
+                      .arg(
+                          ImportPreviewService::
+                              DefaultMaxProcessedRecords
+                          )
+                : tr(
+                      "Automatic preview is disabled for "
+                      "large structured documents to keep the "
+                      "Import Configuration interface responsive. "
+                      "Click Refresh Preview to generate the "
+                      "first %1 processed records in the background."
+                      )
+                      .arg(
+                          ImportPreviewService::
+                              DefaultMaxProcessedRecords
+                          )
             );
 
         return;
     }
 
     const ImportPreviewResult preview =
-        previewService.previewFile(
-            filePath,
+        previewService.previewFiles(
+            sourcePaths,
             workingProfile
             );
 
     displayPreviewResult(
-        filePath,
-        preview
+        sourceKey,
+        preview,
+        showSourceColumn,
+        physicalSourceCount
         );
 }
 
-void ImportConfigurationDialog::updateRawSourcePreview(int row)
+void ImportConfigurationDialog::
+    updateRawSourcePreview(
+        int row
+        )
 {
     if (row < 0
         || row >= previewTable->rowCount()) {
@@ -1830,13 +2334,15 @@ void ImportConfigurationDialog::updateRawSourcePreview(int row)
     rawSourcePreview->setPlainText(
         item->data(
                 Qt::UserRole
-                ).toString()
+                )
+            .toString()
         );
 }
 
-void ImportConfigurationDialog::dragEnterEvent(
-    QDragEnterEvent *event
-    )
+void ImportConfigurationDialog::
+    dragEnterEvent(
+        QDragEnterEvent *event
+        )
 {
     if (!event->mimeData()->hasUrls()) {
         return;
@@ -1853,9 +2359,10 @@ void ImportConfigurationDialog::dragEnterEvent(
     event->acceptProposedAction();
 }
 
-void ImportConfigurationDialog::dropEvent(
-    QDropEvent *event
-    )
+void ImportConfigurationDialog::
+    dropEvent(
+        QDropEvent *event
+        )
 {
     if (!event->mimeData()->hasUrls()) {
         return;
@@ -1876,7 +2383,8 @@ void ImportConfigurationDialog::dropEvent(
     event->acceptProposedAction();
 }
 
-void ImportConfigurationDialog::populateProfileControls()
+void ImportConfigurationDialog::
+    populateProfileControls()
 {
     const QSignalBlocker profileNameBlocker(
         profileNameEdit
@@ -1948,7 +2456,8 @@ void ImportConfigurationDialog::populateProfileControls()
     updateFormatSpecificControls();
 
     preserveUnmappedCheckBox->setChecked(
-        workingProfile.preserveUnmappedFields
+        workingProfile
+            .preserveUnmappedFields
         );
 
     timestampPathEdit->setText(
@@ -1992,22 +2501,25 @@ void ImportConfigurationDialog::populateProfileControls()
     populateTimestampRules();
 }
 
-void ImportConfigurationDialog::populateCustomFieldMappings()
+void ImportConfigurationDialog::
+    populateCustomFieldMappings()
 {
     const QSignalBlocker blocker(
         customFieldTable
         );
 
-    customFieldTable->setRowCount(0);
+    customFieldTable->setRowCount(
+        0
+        );
 
     for (const CustomFieldMapping &mapping
-         : std::as_const(
-             workingProfile.customFields
-             )) {
+         : std::as_const(workingProfile.customFields)) {
         const int row =
             customFieldTable->rowCount();
 
-        customFieldTable->insertRow(row);
+        customFieldTable->insertRow(
+            row
+            );
 
         customFieldTable->setItem(
             row,
@@ -2027,7 +2539,8 @@ void ImportConfigurationDialog::populateCustomFieldMappings()
     }
 }
 
-void ImportConfigurationDialog::addCustomFieldMapping()
+void ImportConfigurationDialog::
+    addCustomFieldMapping()
 {
     QSignalBlocker blocker(
         customFieldTable
@@ -2036,7 +2549,9 @@ void ImportConfigurationDialog::addCustomFieldMapping()
     const int row =
         customFieldTable->rowCount();
 
-    customFieldTable->insertRow(row);
+    customFieldTable->insertRow(
+        row
+        );
 
     customFieldTable->setItem(
         row,
@@ -2067,7 +2582,8 @@ void ImportConfigurationDialog::addCustomFieldMapping()
         );
 }
 
-void ImportConfigurationDialog::removeSelectedCustomFieldMapping()
+void ImportConfigurationDialog::
+    removeSelectedCustomFieldMapping()
 {
     const int row =
         customFieldTable->currentRow();
@@ -2081,44 +2597,45 @@ void ImportConfigurationDialog::removeSelectedCustomFieldMapping()
             customFieldTable
             );
 
-        customFieldTable->removeRow(row);
+        customFieldTable->removeRow(
+            row
+            );
     }
 
     updateCustomFieldMappings();
 }
 
-void ImportConfigurationDialog::updateCustomFieldMappings()
+void ImportConfigurationDialog::
+    updateCustomFieldMappings()
 {
     QList<CustomFieldMapping> mappings;
 
     for (int row = 0;
          row < customFieldTable->rowCount();
          ++row) {
-        QTableWidgetItem *nameItem =
-            customFieldTable->item(
-                row,
-                0
-                );
-
-        QTableWidgetItem *pathItem =
-            customFieldTable->item(
-                row,
-                1
-                );
-
         CustomFieldMapping mapping;
 
-        if (nameItem != nullptr) {
+        if (QTableWidgetItem *item =
+                customFieldTable->item(
+                    row,
+                    0
+                    )) {
             mapping.name =
-                nameItem->text();
+                item->text();
         }
 
-        if (pathItem != nullptr) {
+        if (QTableWidgetItem *item =
+                customFieldTable->item(
+                    row,
+                    1
+                    )) {
             mapping.sourcePath =
-                pathItem->text();
+                item->text();
         }
 
-        mappings.append(mapping);
+        mappings.append(
+            std::move(mapping)
+            );
     }
 
     workingProfile.customFields =
@@ -2127,7 +2644,8 @@ void ImportConfigurationDialog::updateCustomFieldMappings()
     updateValidationState();
 }
 
-void ImportConfigurationDialog::updateWorkingProfile()
+void ImportConfigurationDialog::
+    updateWorkingProfile()
 {
     workingProfile.name =
         profileNameEdit->text();
@@ -2145,7 +2663,8 @@ void ImportConfigurationDialog::updateWorkingProfile()
         recordPathEdit->text();
 
     workingProfile.preserveUnmappedFields =
-        preserveUnmappedCheckBox->isChecked();
+        preserveUnmappedCheckBox
+            ->isChecked();
 
     workingProfile
         .canonicalFields
@@ -2180,9 +2699,10 @@ void ImportConfigurationDialog::updateWorkingProfile()
     updateValidationState();
 }
 
-void ImportConfigurationDialog::updateValidationState(
-    bool refreshPreview
-    )
+void ImportConfigurationDialog::
+    updateValidationState(
+        bool refreshPreview
+        )
 {
     const ProfileValidationResult result =
         profileValidator.validate(
@@ -2191,12 +2711,15 @@ void ImportConfigurationDialog::updateValidationState(
 
     if (result.issues.isEmpty()) {
         validationLabel->setText(
-            tr("Profile configuration is valid.")
+            tr(
+                "Profile configuration is valid."
+                )
             );
 
         if (refreshPreview) {
             schedulePreviewRefresh();
         }
+
         updateImportAvailability();
         return;
     }
@@ -2207,7 +2730,8 @@ void ImportConfigurationDialog::updateValidationState(
          : result.issues) {
         const QString prefix =
             issue.severity
-                    == ProfileValidationSeverity::Error
+                    == ProfileValidationSeverity::
+                        Error
                 ? tr("Error")
                 : tr("Warning");
 
@@ -2229,10 +2753,13 @@ void ImportConfigurationDialog::updateValidationState(
     if (refreshPreview) {
         schedulePreviewRefresh();
     }
+
     updateImportAvailability();
 }
 
-QComboBox *ImportConfigurationDialog::createSeverityCombo(
+QComboBox *
+ImportConfigurationDialog::
+    createSeverityCombo(
         RecordSeverity severity
         )
 {
@@ -2253,18 +2780,26 @@ QComboBox *ImportConfigurationDialog::createSeverityCombo(
     for (const RecordSeverity value
          : severities) {
         combo->addItem(
-            recordSeverityToString(value),
-            static_cast<int>(value)
+            recordSeverityToString(
+                value
+                ),
+            static_cast<int>(
+                value
+                )
             );
     }
 
     const int index =
         combo->findData(
-            static_cast<int>(severity)
+            static_cast<int>(
+                severity
+                )
             );
 
     if (index >= 0) {
-        combo->setCurrentIndex(index);
+        combo->setCurrentIndex(
+            index
+            );
     }
 
     connect(
@@ -2279,27 +2814,32 @@ QComboBox *ImportConfigurationDialog::createSeverityCombo(
     return combo;
 }
 
-void ImportConfigurationDialog::populateSeverityAliases()
+void ImportConfigurationDialog::
+    populateSeverityAliases()
 {
     const QSignalBlocker blocker(
         severityAliasTable
         );
 
-    severityAliasTable->setRowCount(0);
+    severityAliasTable->setRowCount(
+        0
+        );
 
     for (auto iterator =
-         workingProfile
-             .severityAliases
-             .constBegin();
+             workingProfile
+                 .severityAliases
+                 .constBegin();
          iterator !=
-         workingProfile
-             .severityAliases
-             .constEnd();
+             workingProfile
+                 .severityAliases
+                 .constEnd();
          ++iterator) {
         const int row =
             severityAliasTable->rowCount();
 
-        severityAliasTable->insertRow(row);
+        severityAliasTable->insertRow(
+            row
+            );
 
         severityAliasTable->setItem(
             row,
@@ -2319,7 +2859,8 @@ void ImportConfigurationDialog::populateSeverityAliases()
     }
 }
 
-void ImportConfigurationDialog::addSeverityAlias()
+void ImportConfigurationDialog::
+    addSeverityAlias()
 {
     const QSignalBlocker blocker(
         severityAliasTable
@@ -2328,7 +2869,9 @@ void ImportConfigurationDialog::addSeverityAlias()
     const int row =
         severityAliasTable->rowCount();
 
-    severityAliasTable->insertRow(row);
+    severityAliasTable->insertRow(
+        row
+        );
 
     severityAliasTable->setItem(
         row,
@@ -2359,7 +2902,8 @@ void ImportConfigurationDialog::addSeverityAlias()
         );
 }
 
-void ImportConfigurationDialog::removeSelectedSeverityAlias()
+void ImportConfigurationDialog::
+    removeSelectedSeverityAlias()
 {
     const int row =
         severityAliasTable->currentRow();
@@ -2373,13 +2917,16 @@ void ImportConfigurationDialog::removeSelectedSeverityAlias()
             severityAliasTable
             );
 
-        severityAliasTable->removeRow(row);
+        severityAliasTable->removeRow(
+            row
+            );
     }
 
     updateSeverityAliases();
 }
 
-void ImportConfigurationDialog::updateSeverityAliases()
+void ImportConfigurationDialog::
+    updateSeverityAliases()
 {
     QMap<QString, RecordSeverity> aliases;
 
@@ -2427,7 +2974,9 @@ void ImportConfigurationDialog::updateSeverityAliases()
     updateValidationState();
 }
 
-QComboBox *ImportConfigurationDialog::createTimestampRuleTypeCombo(
+QComboBox *
+ImportConfigurationDialog::
+    createTimestampRuleTypeCombo(
         TimestampRuleType type
         )
 {
@@ -2452,11 +3001,15 @@ QComboBox *ImportConfigurationDialog::createTimestampRuleTypeCombo(
 
     const int index =
         combo->findData(
-            static_cast<int>(type)
+            static_cast<int>(
+                type
+                )
             );
 
     if (index >= 0) {
-        combo->setCurrentIndex(index);
+        combo->setCurrentIndex(
+            index
+            );
     }
 
     connect(
@@ -2471,22 +3024,25 @@ QComboBox *ImportConfigurationDialog::createTimestampRuleTypeCombo(
     return combo;
 }
 
-void ImportConfigurationDialog::populateTimestampRules()
+void ImportConfigurationDialog::
+    populateTimestampRules()
 {
     const QSignalBlocker blocker(
         timestampRuleTable
         );
 
-    timestampRuleTable->setRowCount(0);
+    timestampRuleTable->setRowCount(
+        0
+        );
 
     for (const TimestampRule &rule
-         : std::as_const(
-             workingProfile.timestampRules
-             )) {
+         : std::as_const(workingProfile.timestampRules)) {
         const int row =
             timestampRuleTable->rowCount();
 
-        timestampRuleTable->insertRow(row);
+        timestampRuleTable->insertRow(
+            row
+            );
 
         timestampRuleTable->setCellWidget(
             row,
@@ -2506,7 +3062,8 @@ void ImportConfigurationDialog::populateTimestampRules()
     }
 }
 
-void ImportConfigurationDialog::addTimestampRule()
+void ImportConfigurationDialog::
+    addTimestampRule()
 {
     const QSignalBlocker blocker(
         timestampRuleTable
@@ -2515,7 +3072,9 @@ void ImportConfigurationDialog::addTimestampRule()
     const int row =
         timestampRuleTable->rowCount();
 
-    timestampRuleTable->insertRow(row);
+    timestampRuleTable->insertRow(
+        row
+        );
 
     timestampRuleTable->setCellWidget(
         row,
@@ -2539,7 +3098,8 @@ void ImportConfigurationDialog::addTimestampRule()
     updateTimestampRules();
 }
 
-void ImportConfigurationDialog::removeSelectedTimestampRule()
+void ImportConfigurationDialog::
+    removeSelectedTimestampRule()
 {
     const int row =
         timestampRuleTable->currentRow();
@@ -2553,13 +3113,16 @@ void ImportConfigurationDialog::removeSelectedTimestampRule()
             timestampRuleTable
             );
 
-        timestampRuleTable->removeRow(row);
+        timestampRuleTable->removeRow(
+            row
+            );
     }
 
     updateTimestampRules();
 }
 
-void ImportConfigurationDialog::updateTimestampRules()
+void ImportConfigurationDialog::
+    updateTimestampRules()
 {
     QList<TimestampRule> rules;
 
@@ -2608,7 +3171,8 @@ void ImportConfigurationDialog::updateTimestampRules()
     updateValidationState();
 }
 
-void ImportConfigurationDialog::saveProfile()
+void ImportConfigurationDialog::
+    saveProfile()
 {
     const ProfileValidationResult validation =
         profileValidator.validate(
@@ -2657,7 +3221,9 @@ void ImportConfigurationDialog::saveProfile()
             workingProfile
             );
 
-    QSaveFile file(filePath);
+    QSaveFile file(
+        filePath
+        );
 
     if (!file.open(
             QIODevice::WriteOnly
@@ -2682,8 +3248,8 @@ void ImportConfigurationDialog::saveProfile()
             serializedProfile
             );
 
-    if (bytesWritten !=
-        serializedProfile.size()) {
+    if (bytesWritten
+        != serializedProfile.size()) {
         file.cancelWriting();
 
         QMessageBox::critical(
@@ -2734,7 +3300,8 @@ void ImportConfigurationDialog::saveProfile()
         );
 }
 
-void ImportConfigurationDialog::loadProfile()
+void ImportConfigurationDialog::
+    loadProfile()
 {
     const QString filePath =
         QFileDialog::getOpenFileName(
@@ -2756,11 +3323,14 @@ void ImportConfigurationDialog::loadProfile()
         );
 }
 
-void ImportConfigurationDialog::loadProfileFromPath(
-    const QString &filePath
-    )
+void ImportConfigurationDialog::
+    loadProfileFromPath(
+        const QString &filePath
+        )
 {
-    QFile file(filePath);
+    QFile file(
+        filePath
+        );
 
     if (!file.open(
             QIODevice::ReadOnly
@@ -2835,7 +3405,8 @@ void ImportConfigurationDialog::loadProfileFromPath(
         for (const ProfileValidationIssue &issue
              : validation.issues) {
             if (issue.severity
-                != ProfileValidationSeverity::Error) {
+                != ProfileValidationSeverity::
+                    Error) {
                 continue;
             }
 
@@ -2897,14 +3468,17 @@ void ImportConfigurationDialog::loadProfileFromPath(
     profileIsUserConfigured =
         true;
 
-    customFieldDetectionSourcePath =
-        selectedFilePath();
+    customFieldDetectionSourceKey =
+        previewSelectionKey();
 
     previewRefreshTimer->stop();
 
     populateProfileControls();
 
-    updateValidationState(false);
+    updateValidationState(
+        false
+        );
+
     updatePreview();
     updateImportAvailability();
 
@@ -2917,20 +3491,24 @@ void ImportConfigurationDialog::loadProfileFromPath(
     }
 }
 
-void ImportConfigurationDialog::schedulePreviewRefresh()
+void ImportConfigurationDialog::
+    schedulePreviewRefresh()
 {
     cancelManualPreview();
     previewRefreshTimer->start();
 }
 
-void ImportConfigurationDialog::createProfileFromSource(
-    bool userInitiated
-    )
+void ImportConfigurationDialog::
+    createProfileFromSource(
+        bool userInitiated
+        )
 {
     const QString filePath =
         selectedFilePath();
 
-    const QFileInfo fileInfo(filePath);
+    const QFileInfo fileInfo(
+        filePath
+        );
 
     if (!fileInfo.exists()
         || !fileInfo.isFile()) {
@@ -2950,7 +3528,7 @@ void ImportConfigurationDialog::createProfileFromSource(
 
     if (userInitiated
         && profileIsUserConfigured) {
-        const QMessageBox::StandardButton response =
+        const auto response =
             QMessageBox::question(
                 this,
                 tr("Create New Profile"),
@@ -2965,7 +3543,8 @@ void ImportConfigurationDialog::createProfileFromSource(
                 QMessageBox::No
                 );
 
-        if (response != QMessageBox::Yes) {
+        if (response
+            != QMessageBox::Yes) {
             return;
         }
     }
@@ -2976,16 +3555,17 @@ void ImportConfigurationDialog::createProfileFromSource(
     autoDetectedCustomFieldKeys.clear();
 
     const ImportFormatSuggestion suggestion =
-        formatSuggestionService.suggestForFile(
-            filePath
-            );
+        formatSuggestionService
+            .suggestForFile(
+                filePath
+                );
 
     if (suggestion.hasSuggestion()) {
         const std::optional<ImportProfile>
             preset =
-            builtInImportProfilePreset(
-                suggestion.profilePresetId
-                );
+                builtInImportProfilePreset(
+                    suggestion.profilePresetId
+                    );
 
         if (preset.has_value()) {
             workingProfile =
@@ -2995,7 +3575,9 @@ void ImportConfigurationDialog::createProfileFromSource(
                 suggestion.importerId;
 
             workingProfile.name =
-                QStringLiteral("Default %1")
+                QStringLiteral(
+                    "Default %1"
+                    )
                     .arg(
                         suggestion.displayName
                         );
@@ -3009,13 +3591,15 @@ void ImportConfigurationDialog::createProfileFromSource(
                 );
     }
 
-    profileIsUserConfigured = false;
+    profileIsUserConfigured =
+        false;
 
-    customFieldDetectionSourcePath.clear();
+    customFieldDetectionSourceKey.clear();
 
     populateProfileControls();
 
-    if (!workingProfile.importerId.isEmpty()
+    if (!workingProfile.importerId
+             .isEmpty()
         && workingProfile.importerId
                != QStringLiteral(
                    "structured-json"
@@ -3033,15 +3617,20 @@ void ImportConfigurationDialog::createProfileFromSource(
 
     previewRefreshTimer->stop();
 
-    updateValidationState(false);
+    updateValidationState(
+        false
+        );
+
     updatePreview();
 
     if (userInitiated) {
-        profileIsUserConfigured = true;
+        profileIsUserConfigured =
+            true;
     }
 }
 
-void ImportConfigurationDialog::populateImporterOptions()
+void ImportConfigurationDialog::
+    populateImporterOptions()
 {
     const QSignalBlocker blocker(
         importerComboBox
@@ -3059,11 +3648,16 @@ void ImportConfigurationDialog::populateImporterOptions()
             workingProfile
             );
 
-    const QVector<std::shared_ptr<ILogImporter>> importers =
+    const QVector<
+        std::shared_ptr<ILogImporter>
+        > importers =
         registry.importers();
 
-    for (const std::shared_ptr<ILogImporter> &importer
-         : importers) {
+    for (
+        const std::shared_ptr<ILogImporter>
+            &importer
+        : importers
+        ) {
         importerComboBox->addItem(
             importer->displayName(),
             importer->id()
@@ -3071,7 +3665,8 @@ void ImportConfigurationDialog::populateImporterOptions()
     }
 }
 
-void ImportConfigurationDialog::updateFormatSpecificControls()
+void ImportConfigurationDialog::
+    updateFormatSpecificControls()
 {
     const QString importerId =
         importerComboBox
@@ -3097,13 +3692,19 @@ void ImportConfigurationDialog::updateFormatSpecificControls()
         );
 }
 
-void ImportConfigurationDialog::displayPreviewResult(
-    const QString &filePath,
-    const ImportPreviewResult &preview)
+void ImportConfigurationDialog::
+    displayPreviewResult(
+        const QString &sourceKey,
+        const ImportPreviewResult &preview,
+        bool showSourceColumn,
+        int physicalSourceCount
+        )
 {
     if (!preview.errorMessage.isEmpty()) {
         clearPreview(
-            tr("Preview unavailable: %1")
+            tr(
+                "Preview unavailable: %1"
+                )
                 .arg(
                     preview.errorMessage
                     )
@@ -3112,11 +3713,11 @@ void ImportConfigurationDialog::displayPreviewResult(
         return;
     }
 
-    const QVector<InvestigationRecord> &records =
+    const auto &records =
         preview.importResult.records;
 
-    previewSourcePath =
-        filePath;
+    previewSourceKey =
+        sourceKey;
 
     const bool showTimestamp =
         !workingProfile
@@ -3162,6 +3763,12 @@ void ImportConfigurationDialog::displayPreviewResult(
 
     QStringList headers;
 
+    if (showSourceColumn) {
+        headers.append(
+            tr("Source")
+            );
+    }
+
     if (showTimestamp) {
         headers.append(
             tr("Timestamp")
@@ -3198,15 +3805,11 @@ void ImportConfigurationDialog::displayPreviewResult(
             );
     }
 
-    const int canonicalColumnCount =
-        headers.size();
-
-    QSet<QString> mappedCustomFieldNames;
+    QSet<QString>
+        mappedCustomFieldNames;
 
     for (const CustomFieldMapping &mapping
-         : std::as_const(
-             workingProfile.customFields
-             )) {
+         : std::as_const(workingProfile.customFields)) {
         headers.append(
             mapping.name
             );
@@ -3233,17 +3836,17 @@ void ImportConfigurationDialog::displayPreviewResult(
         headers
         );
 
-    QHeaderView *previewHeader =
+    QHeaderView *header =
         previewTable->horizontalHeader();
 
-    previewHeader->setStretchLastSection(false);
+    header->setStretchLastSection(
+        false
+        );
 
-    for (
-        int column = 0;
-        column < headers.size();
-        ++column
-        ) {
-        previewHeader->setSectionResizeMode(
+    for (int column = 0;
+         column < headers.size();
+         ++column) {
+        header->setSectionResizeMode(
             column,
             QHeaderView::Interactive
             );
@@ -3251,22 +3854,52 @@ void ImportConfigurationDialog::displayPreviewResult(
 
     if (previousColumnCount
         != headers.size()) {
-        for (
-            int column =
-            canonicalColumnCount;
-            column < headers.size() - 1;
-            ++column
-            ) {
+        for (int column = 0;
+             column < headers.size();
+             ++column) {
+            const QString label =
+                headers.at(column);
+
+            int width = 140;
+
+            if (label == tr("Source")) {
+                width = 180;
+            } else if (
+                label == tr("Timestamp")
+                ) {
+                width = 180;
+            } else if (
+                label == tr("Severity")
+                ) {
+                width = 80;
+            } else if (
+                label == tr("Subsystem")
+                ) {
+                width = 120;
+            } else if (
+                label == tr("Event Code")
+                ) {
+                width = 140;
+            } else if (
+                label == tr("Entity ID")
+                ) {
+                width = 120;
+            } else if (
+                label == tr("Message")
+                ) {
+                width = 300;
+            } else if (
+                label
+                == tr(
+                    "Unmapped Custom Fields"
+                    )
+                ) {
+                width = 220;
+            }
+
             previewTable->setColumnWidth(
                 column,
-                140
-                );
-        }
-
-        if (!headers.isEmpty()) {
-            previewTable->setColumnWidth(
-                headers.size() - 1,
-                220
+                width
                 );
         }
     }
@@ -3281,68 +3914,87 @@ void ImportConfigurationDialog::displayPreviewResult(
         const InvestigationRecord &record =
             records.at(row);
 
-        const QString timestamp =
-            record.timestamp.has_value()
-                ? record.timestamp
-                      ->toString(
-                          Qt::ISODateWithMs
-                          )
-                : QString();
+        QStringList values;
 
-        const QString severity =
-            record.severity.has_value()
-                ? recordSeverityToString(
-                      record.severity.value()
-                      )
-                : QString();
-
-        const QString subsystem =
-            record.subsystem.value_or(
-                QString()
-                );
-
-        const QString eventCode =
-            record.eventCode.value_or(
-                QString()
-                );
-
-        const QString entityId =
-            record.entityId.value_or(
-                QString()
-                );
-
-        const QString message =
-            record.message.value_or(
-                QString()
-                );
-
-        QStringList mappedCustomValues;
-
-        for (const CustomFieldMapping &mapping
-             : std::as_const(
-                 workingProfile.customFields
-                 )) {
-            const auto iterator =
-                record.customAttributes.constFind(
-                    mapping.name
-                    );
-
-            if (iterator ==
-                record.customAttributes.constEnd()) {
-                mappedCustomValues.append(
-                    QString()
-                    );
-
-                continue;
-            }
-
-            mappedCustomValues.append(
-                iterator.value().toString()
+        if (showSourceColumn) {
+            values.append(
+                record.source.sourceName
                 );
         }
 
-        QStringList unmappedFieldValues;
+        if (showTimestamp) {
+            values.append(
+                record.timestamp.has_value()
+                    ? record.timestamp
+                          ->toString(
+                              Qt::ISODateWithMs
+                              )
+                    : QString()
+                );
+        }
 
+        if (showSeverity) {
+            values.append(
+                record.severity.has_value()
+                    ? recordSeverityToString(
+                          record.severity.value()
+                          )
+                    : QString()
+                );
+        }
+
+        if (showSubsystem) {
+            values.append(
+                record.subsystem.value_or(
+                    QString()
+                    )
+                );
+        }
+
+        if (showEventCode) {
+            values.append(
+                record.eventCode.value_or(
+                    QString()
+                    )
+                );
+        }
+
+        if (showEntityId) {
+            values.append(
+                record.entityId.value_or(
+                    QString()
+                    )
+                );
+        }
+
+        if (showMessage) {
+            values.append(
+                record.message.value_or(
+                    QString()
+                    )
+                );
+        }
+
+        for (const CustomFieldMapping &mapping
+             : std::as_const(workingProfile.customFields)) {
+            const auto iterator =
+                record.customAttributes
+                    .constFind(
+                        mapping.name
+                        );
+
+            values.append(
+                iterator
+                        != record
+                               .customAttributes
+                               .constEnd()
+                    ? iterator.value()
+                          .toString()
+                    : QString()
+                );
+        }
+
+        QStringList unmappedValues;
         QStringList attributeNames =
             record.customAttributes.keys();
 
@@ -3351,16 +4003,13 @@ void ImportConfigurationDialog::displayPreviewResult(
             );
 
         for (const QString &name
-             : std::as_const(
-                 attributeNames
-                 )) {
-            if (mappedCustomFieldNames.contains(
-                    name
-                    )) {
+             : std::as_const(attributeNames)) {
+            if (mappedCustomFieldNames
+                    .contains(name)) {
                 continue;
             }
 
-            unmappedFieldValues.append(
+            unmappedValues.append(
                 QStringLiteral("%1=%2")
                     .arg(
                         name,
@@ -3372,55 +4021,10 @@ void ImportConfigurationDialog::displayPreviewResult(
                 );
         }
 
-        const QString unmappedFields =
-            unmappedFieldValues.join(
+        values.append(
+            unmappedValues.join(
                 QStringLiteral("; ")
-                );
-
-        QStringList values;
-
-        if (showTimestamp) {
-            values.append(
-                timestamp
-                );
-        }
-
-        if (showSeverity) {
-            values.append(
-                severity
-                );
-        }
-
-        if (showSubsystem) {
-            values.append(
-                subsystem
-                );
-        }
-
-        if (showEventCode) {
-            values.append(
-                eventCode
-                );
-        }
-
-        if (showEntityId) {
-            values.append(
-                entityId
-                );
-        }
-
-        if (showMessage) {
-            values.append(
-                message
-                );
-        }
-
-        values.append(
-            mappedCustomValues
-            );
-
-        values.append(
-            unmappedFields
+                )
             );
 
         for (int column = 0;
@@ -3464,10 +4068,25 @@ void ImportConfigurationDialog::displayPreviewResult(
                     .skippedRecordCount()
                 );
 
-    if (!records.isEmpty()) {
-        previewTable->selectRow(0);
+    if (showSourceColumn) {
+        summary =
+            tr(
+                "Source family: %1 physical files. "
+                )
+                .arg(
+                    physicalSourceCount
+                    )
+            + summary;
+    }
 
-        updateRawSourcePreview(0);
+    if (!records.isEmpty()) {
+        previewTable->selectRow(
+            0
+            );
+
+        updateRawSourcePreview(
+            0
+            );
     } else {
         rawSourcePreview->clear();
     }
@@ -3476,24 +4095,40 @@ void ImportConfigurationDialog::displayPreviewResult(
              .diagnostics
              .isEmpty()) {
         summary +=
-            tr(" %1 diagnostic(s).")
+            tr(
+                " %1 diagnostic(s)."
+                )
                 .arg(
-                    preview.importResult
+                    preview
+                        .importResult
                         .diagnostics
                         .size()
                     );
     }
 
     if (preview.sourceTruncated) {
-        summary +=
-            tr(
-                " Preview is limited to the first "
-                "%1 processed records."
-                )
-                .arg(
-                    ImportPreviewService::
-                    DefaultMaxProcessedRecords
-                    );
+        if (showSourceColumn) {
+            summary +=
+                tr(
+                    " Preview is limited to %1 "
+                    "processed records distributed "
+                    "across the selected sources."
+                    )
+                    .arg(
+                        ImportPreviewService::
+                            DefaultMaxProcessedRecords
+                        );
+        } else {
+            summary +=
+                tr(
+                    " Preview is limited to the first "
+                    "%1 processed records."
+                    )
+                    .arg(
+                        ImportPreviewService::
+                            DefaultMaxProcessedRecords
+                        );
+        }
     }
 
     previewSummaryLabel->setText(
@@ -3511,33 +4146,17 @@ void ImportConfigurationDialog::
     }
 
     QList<CustomFieldMapping>
-        retainedMappings;
-
-    for (const CustomFieldMapping &mapping
-         : std::as_const(
-             workingProfile.customFields
-             )) {
-        if (autoDetectedCustomFieldKeys
-                .contains(
-                    customFieldMappingKey(
-                        mapping
-                        )
-                    )) {
-            continue;
-        }
-
-        retainedMappings.append(
-            mapping
-            );
-    }
+        retainedMappings =
+            retainedCustomMappings(
+                workingProfile,
+                autoDetectedCustomFieldKeys
+                );
 
     QSet<QString>
         explicitlyMappedNames;
 
     for (const CustomFieldMapping &mapping
-         : std::as_const(
-             retainedMappings
-             )) {
+         : std::as_const(retainedMappings)) {
         explicitlyMappedNames.insert(
             mapping.name
                 .trimmed()
@@ -3550,24 +4169,22 @@ void ImportConfigurationDialog::
     for (const InvestigationRecord &record
          : preview.importResult.records) {
         for (auto iterator =
-             record.customAttributes
-                 .constBegin();
+                 record.customAttributes
+                     .constBegin();
              iterator !=
-             record.customAttributes
-                 .constEnd();
+                 record.customAttributes
+                     .constEnd();
              ++iterator) {
             const QString fieldName =
-                iterator.key().trimmed();
+                iterator.key()
+                    .trimmed();
 
-            if (fieldName.isEmpty()) {
-                continue;
-            }
-
-            if (explicitlyMappedNames
-                    .contains(
-                        fieldName
-                            .toCaseFolded()
-                        )) {
+            if (fieldName.isEmpty()
+                || explicitlyMappedNames
+                       .contains(
+                           fieldName
+                               .toCaseFolded()
+                           )) {
                 continue;
             }
 
@@ -3586,21 +4203,17 @@ void ImportConfigurationDialog::
 
     QList<CustomFieldMapping>
         updatedMappings =
-        retainedMappings;
+            retainedMappings;
 
     QSet<QString>
         updatedAutoDetectedKeys;
 
     for (const QString &fieldName
-         : std::as_const(
-             sortedFields
-             )) {
+         : std::as_const(sortedFields)) {
         bool alreadyMapped = false;
 
         for (const CustomFieldMapping &mapping
-             : std::as_const(
-                 updatedMappings
-                 )) {
+             : updatedMappings) {
             if (mapping.sourcePath
                     .trimmed()
                     .compare(
@@ -3644,8 +4257,9 @@ void ImportConfigurationDialog::
             );
 
     populateCustomFieldMappings();
-
-    updateValidationState(false);
+    updateValidationState(
+        false
+        );
 }
 
 void ImportConfigurationDialog::
@@ -3655,17 +4269,21 @@ void ImportConfigurationDialog::
         return;
     }
 
-    const QString filePath =
-        selectedFilePath();
+    const QStringList sourcePaths =
+        previewSourcePaths();
 
-    const QFileInfo fileInfo(
-        filePath
-        );
-
-    if (!fileInfo.exists()
-        || !fileInfo.isFile()) {
+    if (sourcePaths.isEmpty()) {
         return;
     }
+
+    const QString sourceKey =
+        previewSelectionKey();
+
+    const bool showSourceColumn =
+        previewIncludesRotations();
+
+    const int physicalSourceCount =
+        sourcePaths.size();
 
     const ProfileValidationResult validation =
         profileValidator.validate(
@@ -3680,40 +4298,16 @@ void ImportConfigurationDialog::
         workingProfile;
 
     const bool detectCustomFields =
-        customFieldDetectionSourcePath
-        != filePath;
+        customFieldDetectionSourceKey
+        != sourceKey;
 
     if (detectCustomFields) {
-        QList<CustomFieldMapping>
-            retainedMappings;
-
-        for (const CustomFieldMapping &mapping
-             : std::as_const(
-                 previewProfile.customFields
-                 )) {
-            if (autoDetectedCustomFieldKeys
-                    .contains(
-                        customFieldMappingKey(
-                            mapping
-                            )
-                        )) {
-                continue;
-            }
-
-            retainedMappings.append(
-                mapping
-                );
-        }
-
         previewProfile.customFields =
-            std::move(
-                retainedMappings
+            retainedCustomMappings(
+                previewProfile,
+                autoDetectedCustomFieldKeys
                 );
 
-        /*
-         * Detection needs visibility into source
-         * fields that are not already mapped.
-         */
         previewProfile.preserveUnmappedFields =
             true;
     }
@@ -3759,20 +4353,27 @@ void ImportConfigurationDialog::
         [
             this,
             watcher,
-            filePath,
+            sourceKey,
+            showSourceColumn,
+            physicalSourceCount,
             profileSnapshot,
             detectCustomFields
         ]() {
             const bool cancelled =
                 watcher->isCanceled();
 
-            if (previewWatcher == watcher) {
-                previewWatcher = nullptr;
+            if (previewWatcher
+                == watcher) {
+                previewWatcher =
+                    nullptr;
             }
 
             watcher->deleteLater();
 
-            refreshPreviewButton->setEnabled(true);
+            refreshPreviewButton
+                ->setEnabled(
+                    true
+                    );
 
             refreshPreviewButton->setText(
                 tr("Refresh Preview")
@@ -3786,13 +4387,8 @@ void ImportConfigurationDialog::
             const ImportPreviewResult preview =
                 watcher->result();
 
-            /*
-             * Do not display a preview that was
-             * generated for a file or profile the
-             * user has since changed.
-             */
-            if (selectedFilePath()
-                    != filePath
+            if (previewSelectionKey()
+                    != sourceKey
                 || profileSerializer.serialize(
                        workingProfile
                        )
@@ -3802,19 +4398,20 @@ void ImportConfigurationDialog::
             }
 
             if (detectCustomFields
-                && preview
-                       .canDisplayPreview()) {
+                && preview.canDisplayPreview()) {
                 applyDetectedCustomFieldMappings(
                     preview
                     );
 
-                customFieldDetectionSourcePath =
-                    filePath;
+                customFieldDetectionSourceKey =
+                    sourceKey;
             }
 
             displayPreviewResult(
-                filePath,
-                preview
+                sourceKey,
+                preview,
+                showSourceColumn,
+                physicalSourceCount
                 );
         }
         );
@@ -3822,10 +4419,11 @@ void ImportConfigurationDialog::
     watcher->setFuture(
         QtConcurrent::run(
             [
-                filePath,
+                sourcePaths,
                 previewProfile
             ](
-                QPromise<ImportPreviewResult> &promise
+                QPromise<ImportPreviewResult>
+                    &promise
                 ) {
                 ImportExecutionContext
                     executionContext;
@@ -3838,16 +4436,18 @@ void ImportConfigurationDialog::
 
                 ImportPreviewResult preview =
                     ImportPreviewService()
-                        .previewFile(
-                            filePath,
+                        .previewFiles(
+                            sourcePaths,
                             previewProfile,
                             ImportPreviewService::
-                            DefaultMaxProcessedRecords,
+                                DefaultMaxProcessedRecords,
                             executionContext
                             );
 
                 if (promise.isCanceled()
-                    || preview.importResult.cancelled) {
+                    || preview
+                           .importResult
+                           .cancelled) {
                     return;
                 }
 
@@ -3859,7 +4459,8 @@ void ImportConfigurationDialog::
         );
 }
 
-void ImportConfigurationDialog::cancelManualPreview()
+void ImportConfigurationDialog::
+    cancelManualPreview()
 {
     if (previewWatcher == nullptr) {
         return;
@@ -3889,7 +4490,9 @@ void ImportConfigurationDialog::
 
     for (const QString &filePath
          : profiles) {
-        const QFileInfo fileInfo(filePath);
+        const QFileInfo fileInfo(
+            filePath
+            );
 
         if (!fileInfo.exists()
             || !fileInfo.isFile()) {
@@ -3902,9 +4505,10 @@ void ImportConfigurationDialog::
         }
 
         QAction *action =
-            recentProfilesMenu->addAction(
-                fileInfo.fileName()
-                );
+            recentProfilesMenu
+                ->addAction(
+                    fileInfo.fileName()
+                    );
 
         action->setToolTip(
             filePath
