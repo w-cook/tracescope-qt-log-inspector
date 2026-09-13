@@ -9,6 +9,8 @@
 #include "LiveLineSourceContext.h"
 #include "LiveStructuredJsonImportAdapter.h"
 #include "LiveStructuredJsonSourceContext.h"
+#include "LiveStructuredXmlImportAdapter.h"
+#include "LiveStructuredXmlSourceContext.h"
 
 class InvestigationSession;
 
@@ -91,7 +93,8 @@ private:
     {
         Unsupported,
         Line,
-        StructuredJson
+        StructuredJson,
+        StructuredXml
     };
 
     static IngestionKind ingestionKindForProfile(
@@ -115,6 +118,12 @@ private:
 
     LiveStructuredJsonImportAdapter
         m_structuredJsonImportAdapter;
+
+    LiveStructuredXmlSourceContext
+        m_structuredXmlSourceContext;
+
+    LiveStructuredXmlImportAdapter
+        m_structuredXmlImportAdapter;
 
     IngestionKind m_ingestionKind =
         IngestionKind::Unsupported;

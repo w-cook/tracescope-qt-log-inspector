@@ -28,6 +28,14 @@ LiveSessionFollowCoordinator::
     m_structuredJsonImportAdapter(
         session.importProfile()
         ),
+    m_structuredXmlSourceContext(
+        session
+            .importProfile()
+            .recordPath
+        ),
+    m_structuredXmlImportAdapter(
+        session.importProfile()
+        ),
     m_ingestionKind(
         ingestionKindForProfile(
             session.importProfile()
@@ -246,6 +254,46 @@ LiveSessionFollowCoordinator::start()
         break;
     }
 
+    case IngestionKind::StructuredXml: {
+        /*
+         * Static XmlImporter has already imported every
+         * complete record available at the captured
+         * baseline.
+         *
+         * Rescan exactly that same baseline only to
+         * reconstruct:
+         *
+         * - the open outer XML/container state
+         * - any incomplete trailing record
+         * - subsequent logical record numbering
+         * - the active physical source generation
+         *
+         * Never append recovered baseline records again.
+         */
+        const
+            LiveStructuredXmlSourceInitializationResult
+                sourceInitialization =
+            m_structuredXmlSourceContext
+                .initializeFromExistingFile(
+                    m_follower.sourcePath(),
+                    result.baselineByteCount,
+                    sourceGeneration
+                    );
+
+        if (!sourceInitialization.succeeded) {
+            m_follower.stop();
+
+            result.succeeded = false;
+
+            result.errorMessage =
+                sourceInitialization.errorMessage;
+
+            return result;
+        }
+
+        break;
+    }
+
     case IngestionKind::Unsupported:
         m_follower.stop();
 
@@ -326,6 +374,13 @@ LiveSessionFollowCoordinator::pollOnce(
 
         case IngestionKind::StructuredJson:
             m_structuredJsonSourceContext
+                .beginSourceGeneration(
+                    sourceGeneration
+                    );
+            break;
+
+        case IngestionKind::StructuredXml:
+            m_structuredXmlSourceContext
                 .beginSourceGeneration(
                     sourceGeneration
                     );
@@ -420,6 +475,47 @@ LiveSessionFollowCoordinator::pollOnce(
         break;
     }
 
+    case IngestionKind::StructuredXml: {
+        LiveStructuredXmlSourceAppendResult
+            appendResult =
+            m_structuredXmlSourceContext
+                .appendBytes(
+                    std::move(
+                        readResult.bytes
+                        )
+                    );
+
+        if (!appendResult.succeeded) {
+            result.succeeded = false;
+
+            result.errorMessage =
+                appendResult.errorMessage;
+
+            return result;
+        }
+
+        /*
+         * An incomplete XML record remains inside the
+         * persistent XML parser until a later poll
+         * provides its closing bytes.
+         */
+        if (appendResult
+                .batch
+                .records
+                .isEmpty()) {
+            return result;
+        }
+
+        importResult =
+            m_structuredXmlImportAdapter
+                .importBatch(
+                    appendResult.batch,
+                    m_follower.sourcePath()
+                    );
+
+        break;
+    }
+
     case IngestionKind::Unsupported:
         result.succeeded = false;
 
@@ -495,6 +591,13 @@ LiveSessionFollowCoordinator::IngestionKind
             ).isSupported()) {
         return IngestionKind::
             StructuredJson;
+    }
+
+    if (LiveStructuredXmlImportAdapter(
+            profile
+            ).isSupported()) {
+        return IngestionKind::
+            StructuredXml;
     }
 
     return IngestionKind::Unsupported;

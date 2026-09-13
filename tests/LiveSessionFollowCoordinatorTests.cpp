@@ -4,6 +4,7 @@
 #include <QTemporaryDir>
 
 #include "../src/importing/StructuredJsonImporter.h"
+#include "../src/importing/XmlImporter.h"
 #include "../src/live/LiveSessionFollowCoordinator.h"
 #include "../src/workspace/InvestigationSession.h"
 
@@ -31,6 +32,72 @@ ImportProfile structuredJsonProfile()
     profile.canonicalFields.messagePath =
         QStringLiteral(
             "message"
+            );
+
+    profile.preserveUnmappedFields =
+        true;
+
+    return profile;
+}
+
+ImportProfile structuredXmlProfile()
+{
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral("xml");
+
+    profile.recordPath =
+        QStringLiteral(
+            "session.events.event"
+            );
+
+    profile.canonicalFields.subsystemPath =
+        QStringLiteral(
+            "metadata.component"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "details.message"
+            );
+
+    profile.preserveUnmappedFields =
+        true;
+
+    return profile;
+}
+
+ImportProfile windowsEventXmlProfile()
+{
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral("xml");
+
+    profile.recordPath =
+        QStringLiteral(
+            "Events.Event"
+            );
+
+    profile.canonicalFields.subsystemPath =
+        QStringLiteral(
+            "System.Provider.@Name"
+            );
+
+    profile.canonicalFields.eventCodePath =
+        QStringLiteral(
+            "EventData.NamedData.EventCode"
+            );
+
+    profile.canonicalFields.entityIdPath =
+        QStringLiteral(
+            "EventData.NamedData.DeviceId"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "RenderingInfo.Message"
             );
 
     profile.preserveUnmappedFields =
@@ -91,8 +158,14 @@ class LiveSessionFollowCoordinatorTests
 
 private slots:
     void supportsStructuredJsonProfile();
+    void supportsStructuredXmlProfile();
+
     void structuredJsonBaselineAndGrowthUseIncrementalSessionPath();
     void structuredJsonReplacementStartsNewSourceGeneration();
+
+    void structuredXmlBaselineAndGrowthUseIncrementalSessionPath();
+    void windowsEventXmlBaselineAndGrowthUseIncrementalSessionPath();
+    void structuredXmlReplacementStartsNewSourceGeneration();
 };
 
 void LiveSessionFollowCoordinatorTests::
@@ -109,13 +182,48 @@ void LiveSessionFollowCoordinatorTests::
 
     unsupported.importerId =
         QStringLiteral(
-            "xml"
+            "unsupported-importer"
             );
 
     QVERIFY(
         !LiveSessionFollowCoordinator::
         supportsProfile(
             unsupported
+            )
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
+    supportsStructuredXmlProfile()
+{
+    QVERIFY(
+        LiveSessionFollowCoordinator::
+        supportsProfile(
+            structuredXmlProfile()
+            )
+        );
+
+    QVERIFY(
+        LiveSessionFollowCoordinator::
+        supportsProfile(
+            windowsEventXmlProfile()
+            )
+        );
+
+    /*
+     * XML document-root import remains valid for
+     * ordinary static import, but live following
+     * requires a repeating record path/container.
+     */
+    ImportProfile rootXml;
+
+    rootXml.importerId =
+        QStringLiteral("xml");
+
+    QVERIFY(
+        !LiveSessionFollowCoordinator::
+        supportsProfile(
+            rootXml
             )
         );
 }
@@ -727,6 +835,714 @@ void LiveSessionFollowCoordinatorTests::
      * The partial object retained from generation
      * zero must have been discarded when the new
      * physical generation began.
+     */
+    QVERIFY(
+        !records.at(1)
+             .rawSource
+             .contains(
+                 QStringLiteral(
+                     "old-partial"
+                     )
+                 )
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
+    structuredXmlBaselineAndGrowthUseIncrementalSessionPath()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.xml"
+                )
+            );
+
+    /*
+     * One complete baseline record plus one
+     * incomplete record. The outer XML record
+     * container remains intentionally open.
+     */
+    const QByteArray baseline(
+        "<?xml version=\"1.0\"?>"
+        "<session>"
+        "<events>"
+        "<event>"
+        "<metadata>"
+        "<component>Payments</component>"
+        "</metadata>"
+        "<details>"
+        "<message>first</message>"
+        "</details>"
+        "</event>"
+        "<event>"
+        "<metadata>"
+        "<component>Checkout</component>"
+        "</metadata>"
+        "<details>"
+        "<message>sec"
+        );
+
+    writeFile(
+        sourcePath,
+        baseline
+        );
+
+    const ImportProfile profile =
+        structuredXmlProfile();
+
+    XmlImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    QCOMPARE(
+        initialResult.records.first()
+            .message,
+        std::optional<QString>(
+            QStringLiteral("first")
+            )
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    QVERIFY(
+        coordinator.isSupported()
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator.start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        startResult.baselineByteCount,
+        qint64(
+            baseline.size()
+            )
+        );
+
+    /*
+     * Baseline reconstruction must not duplicate the
+     * already-imported complete record.
+     */
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .size(),
+        1
+        );
+
+    /*
+     * Establish a filter before live growth. The
+     * proxy must remain active during incremental
+     * record insertion.
+     */
+    session
+        .investigationController()
+        ->setFilters(
+            QString(),
+            QStringLiteral(
+                "Payments"
+                ),
+            QString()
+            );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->visibleRecords()
+            .size(),
+        1
+        );
+
+    const QByteArray appended(
+        "ond</message>"
+        "</details>"
+        "</event>"
+        "<event>"
+        "<metadata>"
+        "<component>Payments</component>"
+        "</metadata>"
+        "<details>"
+        "<message>third</message>"
+        "</details>"
+        "</event>"
+        );
+
+    appendFile(
+        sourcePath,
+        appended
+        );
+
+    const LiveSessionFollowPollResult
+        pollResult =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        pollResult.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        pollResult.importedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        session.processedRecordCount(),
+        qint64(3)
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(3)
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        3
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        records.at(2)
+            .source.recordNumber,
+        qint64(3)
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    QCOMPARE(
+        records.at(2)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral("second")
+            )
+        );
+
+    QCOMPARE(
+        records.at(2).message,
+        std::optional<QString>(
+            QStringLiteral("third")
+            )
+        );
+
+    /*
+     * Checkout stays hidden. The newly appended
+     * Payments record enters the existing proxy
+     * automatically.
+     */
+    const QVector<InvestigationRecord>
+        visibleRecords =
+        session
+            .investigationController()
+            ->visibleRecords();
+
+    QCOMPARE(
+        visibleRecords.size(),
+        2
+        );
+
+    QCOMPARE(
+        visibleRecords.at(0).message,
+        std::optional<QString>(
+            QStringLiteral("first")
+            )
+        );
+
+    QCOMPARE(
+        visibleRecords.at(1).message,
+        std::optional<QString>(
+            QStringLiteral("third")
+            )
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
+    windowsEventXmlBaselineAndGrowthUseIncrementalSessionPath()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "windows-events.xml"
+                )
+            );
+
+    const QByteArray baseline(
+        "<?xml version=\"1.0\"?>"
+        "<Events>"
+        "<Event "
+        "xmlns=\"http://schemas.microsoft.com/"
+        "win/2004/08/events/event\">"
+        "<System>"
+        "<Provider Name=\"CheckoutApi\"/>"
+        "<EventID>4101</EventID>"
+        "<Level>4</Level>"
+        "</System>"
+        "<EventData>"
+        "<Data Name=\"EventCode\">STARTED</Data>"
+        "<Data Name=\"DeviceId\">node-01</Data>"
+        "</EventData>"
+        "<RenderingInfo>"
+        "<Message>Service started</Message>"
+        "</RenderingInfo>"
+        "</Event>"
+        );
+
+    writeFile(
+        sourcePath,
+        baseline
+        );
+
+    const ImportProfile profile =
+        windowsEventXmlProfile();
+
+    XmlImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator.start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    /*
+     * Starting follow must only reconstruct the open
+     * <Events> container.
+     */
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    const QByteArray appended(
+        "<Event "
+        "xmlns=\"http://schemas.microsoft.com/"
+        "win/2004/08/events/event\">"
+        "<System>"
+        "<Provider Name=\"PaymentsWorker\"/>"
+        "<EventID>4102</EventID>"
+        "<Level>2</Level>"
+        "</System>"
+        "<EventData>"
+        "<Data Name=\"EventCode\">PAYMENT_FAILURE</Data>"
+        "<Data Name=\"DeviceId\">node-07</Data>"
+        "</EventData>"
+        "<RenderingInfo>"
+        "<Message>Payment processing failed</Message>"
+        "</RenderingInfo>"
+        "</Event>"
+        );
+
+    appendFile(
+        sourcePath,
+        appended
+        );
+
+    const LiveSessionFollowPollResult
+        pollResult =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        pollResult.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        pollResult.importedRecordCount,
+        qint64(1)
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    const InvestigationRecord &liveRecord =
+        records.at(1);
+
+    QCOMPARE(
+        liveRecord.source.recordNumber,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        liveRecord.source.sourceGeneration,
+        quint64(0)
+        );
+
+    QCOMPARE(
+        liveRecord.subsystem,
+        std::optional<QString>(
+            QStringLiteral(
+                "PaymentsWorker"
+                )
+            )
+        );
+
+    QCOMPARE(
+        liveRecord.eventCode,
+        std::optional<QString>(
+            QStringLiteral(
+                "PAYMENT_FAILURE"
+                )
+            )
+        );
+
+    QCOMPARE(
+        liveRecord.entityId,
+        std::optional<QString>(
+            QStringLiteral(
+                "node-07"
+                )
+            )
+        );
+
+    QCOMPARE(
+        liveRecord.message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Payment processing failed"
+                )
+            )
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
+    structuredXmlReplacementStartsNewSourceGeneration()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.xml"
+                )
+            );
+
+    /*
+     * Deliberately make generation zero larger than
+     * the replacement so truncation is unambiguous.
+     */
+    const QByteArray original(
+        "<session>"
+        "<events>"
+        "<event>"
+        "<details>"
+        "<message>"
+        "Original generation record with enough "
+        "text to keep this source larger than its "
+        "replacement"
+        "</message>"
+        "</details>"
+        "</event>"
+        "<event>"
+        "<details>"
+        "<message>old-partial"
+        );
+
+    writeFile(
+        sourcePath,
+        original
+        );
+
+    const ImportProfile profile =
+        structuredXmlProfile();
+
+    XmlImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator.start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    const QByteArray replacement(
+        "<session>"
+        "<events>"
+        "<event>"
+        "<details>"
+        "<message>Replacement record</message>"
+        "</details>"
+        "</event>"
+        );
+
+    QVERIFY(
+        replacement.size()
+        < original.size()
+        );
+
+    writeFile(
+        sourcePath,
+        replacement
+        );
+
+    const LiveSessionFollowPollResult
+        pollResult =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
+        );
+
+    QVERIFY(
+        pollResult.sourceGenerationChanged
+        );
+
+    QCOMPARE(
+        pollResult.observation.kind,
+        LiveFileObservationKind::
+        SourceReset
+        );
+
+    QCOMPARE(
+        pollResult.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        pollResult.importedRecordCount,
+        qint64(1)
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        records.at(0)
+            .source.sourceGeneration,
+        quint64(0)
+        );
+
+    /*
+     * Replacement generation starts source-local
+     * numbering again at one while preserving the
+     * historical generation-zero evidence.
+     */
+    QCOMPARE(
+        records.at(1)
+            .source.recordNumber,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source.sourceGeneration,
+        quint64(1)
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Replacement record"
+                )
+            )
+        );
+
+    /*
+     * Parser state retained from generation zero
+     * must not contaminate the replacement.
      */
     QVERIFY(
         !records.at(1)
