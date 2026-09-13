@@ -181,6 +181,32 @@ add_test(
 )
 
 # ----------------------------------------------------------------------------
+# Source discovery
+# ----------------------------------------------------------------------------
+
+qt_add_executable(
+    RotatedSourceDiscoveryServiceTests
+
+    RotatedSourceDiscoveryServiceTests.cpp
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/RotatedSourceDiscoveryService.h
+    ../src/sources/RotatedSourceDiscoveryService.cpp
+)
+
+target_link_libraries(
+    RotatedSourceDiscoveryServiceTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME RotatedSourceDiscoveryServiceTests
+    COMMAND RotatedSourceDiscoveryServiceTests
+)
+
+# ----------------------------------------------------------------------------
 # Analysis
 # ----------------------------------------------------------------------------
 

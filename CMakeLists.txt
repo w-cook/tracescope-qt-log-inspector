@@ -229,6 +229,9 @@ qt_add_executable(TraceScope
     src/live/LiveStructuredXmlSourceContext.cpp
     src/live/LiveStructuredXmlImportAdapter.h
     src/live/LiveStructuredXmlImportAdapter.cpp
+    src/sources/RotatedSourceRule.h
+    src/sources/RotatedSourceDiscoveryService.h
+    src/sources/RotatedSourceDiscoveryService.cpp
 
 )
 
