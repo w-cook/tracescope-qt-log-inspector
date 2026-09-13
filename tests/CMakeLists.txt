@@ -847,6 +847,27 @@ add_test(
 )
 
 qt_add_executable(
+    StructuredXmlRecordStreamParserTests
+
+    StructuredXmlRecordStreamParserTests.cpp
+
+    ../src/importing/StructuredXmlRecordStreamParser.h
+    ../src/importing/StructuredXmlRecordStreamParser.cpp
+)
+
+target_link_libraries(
+    StructuredXmlRecordStreamParserTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME StructuredXmlRecordStreamParserTests
+    COMMAND StructuredXmlRecordStreamParserTests
+)
+
+qt_add_executable(
     SyslogImporterTests
 
     SyslogImporterTests.cpp

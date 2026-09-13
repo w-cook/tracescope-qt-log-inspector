@@ -222,6 +222,8 @@ qt_add_executable(TraceScope
     src/live/LiveStructuredJsonSourceContext.cpp
     src/importing/StructuredJsonRecordStreamFramer.h
     src/importing/StructuredJsonRecordStreamFramer.cpp
+    src/importing/StructuredXmlRecordStreamParser.h
+    src/importing/StructuredXmlRecordStreamParser.cpp
 
 )
 
