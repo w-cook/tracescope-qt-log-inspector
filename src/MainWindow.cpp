@@ -2442,6 +2442,178 @@ bool MainWindow::resolveWorkspaceSourcePaths(
     return true;
 }
 
+MainWindow::WorkspaceSourceFamilyResolutionOutcome
+MainWindow::resolveWorkspaceSourceFamilyConfiguration(
+    PersistedInvestigationSession &persistedSession,
+    SourceFamilyConfiguration &resolvedConfiguration
+    )
+{
+    resolvedConfiguration = {};
+
+    resolvedConfiguration
+        .includeRotatedSources =
+        persistedSession
+            .sourceFamilyConfiguration
+            .includeRotatedSources;
+
+    resolvedConfiguration
+        .rotationRule =
+        persistedSession
+            .sourceFamilyConfiguration
+            .rotationRule;
+
+    if (!resolvedConfiguration
+             .includeRotatedSources) {
+        return
+            WorkspaceSourceFamilyResolutionOutcome::
+            Resolved;
+    }
+
+    const RotatedSourceDiscoveryResult discovery =
+        RotatedSourceDiscoveryService::discover(
+            persistedSession.sourcePath,
+            resolvedConfiguration.rotationRule
+            );
+
+    if (!discovery.succeeded) {
+        QMessageBox::warning(
+            this,
+            tr("Source Family Discovery Failed"),
+            tr(
+                "TraceScope could not discover the "
+                "rotated files configured for this "
+                "workspace session.\n\n%1"
+                )
+                .arg(
+                    discovery.errorMessage
+                    )
+            );
+
+        return
+            WorkspaceSourceFamilyResolutionOutcome::
+            Abort;
+    }
+
+    if (!discovery.rotatedSources.isEmpty()) {
+        for (const RotatedSourceMatch &match
+             : discovery.rotatedSources) {
+            resolvedConfiguration
+                .rotatedSourcePaths
+                .append(
+                    QFileInfo(
+                        match.filePath
+                        )
+                        .absoluteFilePath()
+                    );
+        }
+
+        return
+            WorkspaceSourceFamilyResolutionOutcome::
+            Resolved;
+    }
+
+    QMessageBox prompt(this);
+
+    prompt.setIcon(
+        QMessageBox::Warning
+        );
+
+    prompt.setWindowTitle(
+        tr(
+            "Workspace Rotated Sources Not Found"
+            )
+        );
+
+    prompt.setText(
+        tr(
+            "The active source file exists, but "
+            "none of the rotated files saved for "
+            "this workspace session can currently "
+            "be rediscovered."
+            )
+        );
+
+    prompt.setInformativeText(
+        tr(
+            "Active source:\n%1\n\n"
+            "You can restore this session using "
+            "only the active source, skip the "
+            "session, or cancel opening the "
+            "workspace."
+            )
+            .arg(
+                persistedSession.sourcePath
+                )
+        );
+
+    QPushButton *activeOnlyButton =
+        prompt.addButton(
+            tr("Open Active Source Only"),
+            QMessageBox::AcceptRole
+            );
+
+    QPushButton *skipButton =
+        prompt.addButton(
+            tr("Skip Session"),
+            QMessageBox::ActionRole
+            );
+
+    QPushButton *cancelButton =
+        prompt.addButton(
+            QMessageBox::Cancel
+            );
+
+    prompt.setDefaultButton(
+        activeOnlyButton
+        );
+
+    prompt.exec();
+
+    if (prompt.clickedButton()
+        == cancelButton) {
+        return
+            WorkspaceSourceFamilyResolutionOutcome::
+            Abort;
+    }
+
+    if (prompt.clickedButton()
+        == skipButton) {
+        return
+            WorkspaceSourceFamilyResolutionOutcome::
+            SkipSession;
+    }
+
+    if (prompt.clickedButton()
+        != activeOnlyButton) {
+        return
+            WorkspaceSourceFamilyResolutionOutcome::
+            Abort;
+    }
+
+    /*
+     * The session is intentionally being restored as
+     * active-only. Update the staged persistence state
+     * as well so Reload and a subsequent workspace Save
+     * do not immediately expect the unavailable family.
+     */
+    persistedSession
+        .sourceFamilyConfiguration
+        .includeRotatedSources =
+        false;
+
+    resolvedConfiguration
+        .includeRotatedSources =
+        false;
+
+    resolvedConfiguration
+        .rotatedSourcePaths
+        .clear();
+
+    return
+        WorkspaceSourceFamilyResolutionOutcome::
+        Resolved;
+}
+
 void MainWindow::openWorkspace(const QString &initialFilePath)
 {
     if (importWatcher != nullptr) {
@@ -2643,13 +2815,12 @@ void MainWindow::continueWorkspaceOpen(
     const int sessionIndex =
         operation->nextSessionIndex;
 
-    const PersistedInvestigationSession
+    PersistedInvestigationSession
         &persistedSession =
         operation->state
-            .sessions
-            .at(
+            .sessions[
                 sessionIndex
-                );
+            ];
 
     /*
      * Workspaces persist the logical source-family
@@ -2659,52 +2830,50 @@ void MainWindow::continueWorkspaceOpen(
      * Reconstruct that logical configuration first.
      */
     SourceFamilyConfiguration
-        sourceFamilyConfiguration;
+        resolvedSourceFamilyConfiguration;
 
-    sourceFamilyConfiguration
-        .includeRotatedSources =
-        persistedSession
-            .sourceFamilyConfiguration
-            .includeRotatedSources;
-
-    sourceFamilyConfiguration
-        .rotationRule =
-        persistedSession
-            .sourceFamilyConfiguration
-            .rotationRule;
-
-    /*
-     * Rediscover the physical source family that
-     * exists now.
-     *
-     * This is the same resolution path used by normal
-     * imports and reloads, so stale rotated filenames
-     * are never taken from workspace persistence.
-     */
-    std::optional<SourceFamilyConfiguration>
-        resolvedConfiguration =
-        resolveSourceFamilyConfiguration(
-            persistedSession.sourcePath,
-            std::move(
-                sourceFamilyConfiguration
-                )
+    const WorkspaceSourceFamilyResolutionOutcome
+        familyResolution =
+        resolveWorkspaceSourceFamilyConfiguration(
+            persistedSession,
+            resolvedSourceFamilyConfiguration
             );
 
-    if (!resolvedConfiguration.has_value()) {
+    if (familyResolution
+        == WorkspaceSourceFamilyResolutionOutcome::
+        Abort) {
         /*
-         * The resolver already displayed the relevant
-         * source-family error. Abort workspace opening
-         * without replacing the currently open
-         * workspace.
+         * No installed workspace has been changed yet.
+         * Cancelling family recovery therefore leaves
+         * the current workspace untouched.
          */
         return;
     }
 
-    SourceFamilyConfiguration
-        resolvedSourceFamilyConfiguration =
-        std::move(
-            resolvedConfiguration.value()
+    if (familyResolution
+        == WorkspaceSourceFamilyResolutionOutcome::
+        SkipSession) {
+        ++operation->skippedSessionCount;
+
+        /*
+         * Remove the skipped persisted session so the
+         * remaining persistence entries continue to line
+         * up one-for-one with stagedSessions during final
+         * installation.
+         *
+         * Do not advance nextSessionIndex: after removal,
+         * the next session occupies this same index.
+         */
+        operation->state.sessions.removeAt(
+            sessionIndex
             );
+
+        continueWorkspaceOpen(
+            operation
+            );
+
+        return;
+    }
 
     /*
      * For a normal legacy/single-file session this is:
@@ -2734,7 +2903,7 @@ void MainWindow::continueWorkspaceOpen(
                 operation,
                 sessionIndex,
                 resolvedSourceFamilyConfiguration
-    ](
+            ](
                 std::optional<ImportResult>
                     result
                 ) {

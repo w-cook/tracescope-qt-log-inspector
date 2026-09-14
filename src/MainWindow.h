@@ -163,6 +163,19 @@ private:
         WorkspacePersistenceState &state
         );
 
+    enum class WorkspaceSourceFamilyResolutionOutcome
+    {
+        Resolved,
+        SkipSession,
+        Abort
+    };
+
+    WorkspaceSourceFamilyResolutionOutcome
+    resolveWorkspaceSourceFamilyConfiguration(
+        PersistedInvestigationSession &persistedSession,
+        SourceFamilyConfiguration &resolvedConfiguration
+        );
+
     struct WorkspaceOpenOperation;
 
     void openWorkspace(
