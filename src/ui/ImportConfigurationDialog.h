@@ -134,6 +134,8 @@ private:
     QString rotationConfigurationSourcePath;
     RotatedSourceRule rotatedSourceRuleState;
     QVector<RotatedSourceMatch> rotatedSourceMatches;
+    bool rotatedSourceRuleWasAutomaticallySuggested =
+        false;
 
     QString previewSourceKey;
     QString customFieldDetectionSourceKey;
@@ -145,6 +147,7 @@ private:
     void updateRotatedSourceState();
     void updateRotatedSourceControls();
     void reviewRotatedSources();
+    void refineSuggestedNumericRotationDirectionFromTimestamps();
 
     bool previewIncludesRotations() const;
     QStringList previewSourcePaths() const;

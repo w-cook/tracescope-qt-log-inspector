@@ -1578,6 +1578,9 @@ void ImportConfigurationDialog::
         includeRotatedSourcesCheckBox
             ->setChecked(false);
 
+        rotatedSourceRuleWasAutomaticallySuggested =
+            false;
+
         updateRotatedSourceControls();
         return;
     }
@@ -1608,6 +1611,9 @@ void ImportConfigurationDialog::
 
         rotatedSourceMatches.clear();
 
+        rotatedSourceRuleWasAutomaticallySuggested =
+            false;
+
         bool restoredRememberedConfiguration =
             false;
 
@@ -1636,94 +1642,45 @@ void ImportConfigurationDialog::
 
         if (!restoredRememberedConfiguration) {
             int bestMatchCount = 0;
-            bool bestCandidateIsSaved = false;
 
-            const auto considerCandidate =
-                [
-                    this,
-                    &bestMatchCount,
-                    &bestCandidateIsSaved
-                ](
-                    const RotatedSourceRule &rule,
-                    int matchCount,
-                    bool savedRule
-                    ) {
-                    if (matchCount <= 0) {
-                        return;
-                    }
-
-                    if (matchCount < bestMatchCount) {
-                        return;
-                    }
-
-                    if (matchCount
-                            == bestMatchCount
-                        && !savedRule
-                        && bestCandidateIsSaved) {
-                        return;
-                    }
-
-                    if (matchCount
-                            == bestMatchCount
-                        && savedRule
-                            == bestCandidateIsSaved) {
-                        return;
-                    }
-
-                    rotatedSourceRuleState =
-                        rule;
-
-                    bestMatchCount =
-                        matchCount;
-
-                    bestCandidateIsSaved =
-                        savedRule;
-                };
-
+            /*
+             * Automatic source-family suggestions must be
+             * derived from the active source itself.
+             *
+             * Built-in rules satisfy that requirement because
+             * their filename patterns are constructed from the
+             * selected active filename.
+             *
+             * Saved custom schemes are intentionally excluded
+             * here. A custom regular expression may match files
+             * elsewhere in the same directory without having
+             * any relationship to the selected active source.
+             * Saved schemes remain available explicitly through
+             * the rotated-source configuration dialog.
+             */
             const auto builtInSuggestions =
                 RotatedSourceDiscoveryService::
-                    suggestRules(
-                        absolutePath
-                        );
+                suggestRules(
+                    absolutePath
+                    );
 
             if (builtInSuggestions.succeeded) {
                 for (const auto &suggestion
                      : builtInSuggestions
                            .suggestions) {
-                    considerCandidate(
-                        suggestion.rule,
-                        suggestion.matchCount,
-                        false
-                        );
-                }
-            }
-
-            if (rotatedSourceSettingsStore
-                != nullptr) {
-                const auto savedRules =
-                    rotatedSourceSettingsStore
-                        ->savedCustomRules();
-
-                for (const auto &savedRule
-                     : savedRules) {
-                    const auto discovery =
-                        RotatedSourceDiscoveryService::
-                            discover(
-                                absolutePath,
-                                savedRule.rule
-                                );
-
-                    if (!discovery.succeeded) {
+                    if (suggestion.matchCount
+                        <= bestMatchCount) {
                         continue;
                     }
 
-                    considerCandidate(
-                        savedRule.rule,
-                        discovery
-                            .rotatedSources
-                            .size(),
-                        true
-                        );
+                    rotatedSourceRuleState =
+                        suggestion.rule;
+
+                    bestMatchCount =
+                        suggestion.matchCount;
+
+                    rotatedSourceRuleWasAutomaticallySuggested =
+                        true;
                 }
             }
         }
@@ -1889,6 +1846,9 @@ void ImportConfigurationDialog::
     rotatedSourceRuleState =
         dialog.configuredRule();
 
+    rotatedSourceRuleWasAutomaticallySuggested =
+        false;
+
     rotatedSourceMatches =
         dialog.rotatedSources();
 
@@ -1912,6 +1872,203 @@ void ImportConfigurationDialog::
 
     previewRefreshTimer->stop();
     updatePreview();
+}
+
+void ImportConfigurationDialog::
+    refineSuggestedNumericRotationDirectionFromTimestamps()
+{
+    if (!rotatedSourceRuleWasAutomaticallySuggested) {
+        return;
+    }
+
+    const bool numericScheme =
+        rotatedSourceRuleState.namingScheme
+            == RotatedSourceNamingScheme::
+            NumericSuffix
+        || rotatedSourceRuleState.namingScheme
+               == RotatedSourceNamingScheme::
+               NumericBeforeExtension;
+
+    if (!numericScheme
+        || rotatedSourceMatches.size() < 2) {
+        return;
+    }
+
+    if (workingProfile
+            .canonicalFields
+            .timestampPath
+            .trimmed()
+            .isEmpty()) {
+        return;
+    }
+
+    if (!profileValidator
+             .validate(
+                 workingProfile
+                 )
+             .isValid()) {
+        return;
+    }
+
+    const RotatedSourceMatch *lowestIndexSource =
+        nullptr;
+
+    const RotatedSourceMatch *highestIndexSource =
+        nullptr;
+
+    for (const RotatedSourceMatch &match
+         : std::as_const(rotatedSourceMatches)) {
+        if (match.rotationIndex <= 0) {
+            continue;
+        }
+
+        if (lowestIndexSource == nullptr
+            || match.rotationIndex
+                   < lowestIndexSource
+                         ->rotationIndex) {
+            lowestIndexSource =
+                &match;
+        }
+
+        if (highestIndexSource == nullptr
+            || match.rotationIndex
+                   > highestIndexSource
+                         ->rotationIndex) {
+            highestIndexSource =
+                &match;
+        }
+    }
+
+    if (lowestIndexSource == nullptr
+        || highestIndexSource == nullptr
+        || lowestIndexSource == highestIndexSource) {
+        return;
+    }
+
+    const QStringList sampledPaths {
+        lowestIndexSource->filePath,
+        highestIndexSource->filePath
+    };
+
+    /*
+     * Some structured formats require loading the
+     * complete document before records can be sampled.
+     * Do not turn automatic chronology detection into
+     * an expensive or blocking import-dialog operation.
+     */
+    if (requiresManualStructuredDocumentPreview(
+            sampledPaths,
+            workingProfile
+            )) {
+        return;
+    }
+
+    const auto sampleTimestamp =
+        [this](
+            const QString &filePath
+            ) -> std::optional<QDateTime> {
+        constexpr qint64 SampleRecordLimit =
+            10;
+
+        const ImportPreviewResult preview =
+            previewService.previewFile(
+                filePath,
+                workingProfile,
+                SampleRecordLimit
+                );
+
+        if (!preview.canDisplayPreview()) {
+            return std::nullopt;
+        }
+
+        std::optional<QDateTime>
+            earliestTimestamp;
+
+        for (const InvestigationRecord &record
+             : preview.importResult.records) {
+            if (!record.timestamp.has_value()
+                || !record.timestamp
+                        ->isValid()) {
+                continue;
+            }
+
+            if (!earliestTimestamp.has_value()
+                || record.timestamp.value()
+                       < earliestTimestamp.value()) {
+                earliestTimestamp =
+                    record.timestamp.value();
+            }
+        }
+
+        return earliestTimestamp;
+    };
+
+    const std::optional<QDateTime>
+        lowestTimestamp =
+        sampleTimestamp(
+            lowestIndexSource->filePath
+            );
+
+    const std::optional<QDateTime>
+        highestTimestamp =
+        sampleTimestamp(
+            highestIndexSource->filePath
+            );
+
+    if (!lowestTimestamp.has_value()
+        || !highestTimestamp.has_value()
+        || lowestTimestamp.value()
+               == highestTimestamp.value()) {
+        return;
+    }
+
+    /*
+     * If lower numeric suffixes contain earlier
+     * timestamps, numbering grows forward with time:
+     *
+     *     .1 -> .2 -> .3 -> active
+     *
+     * Otherwise use conventional rollover semantics:
+     *
+     *     .3 -> .2 -> .1 -> active
+     */
+    const RotatedSourceOrderDirection
+        suggestedDirection =
+        lowestTimestamp.value()
+                < highestTimestamp.value()
+            ? RotatedSourceOrderDirection::
+            Ascending
+            : RotatedSourceOrderDirection::
+            Descending;
+
+    if (rotatedSourceRuleState
+            .numericOrderDirection
+        == suggestedDirection) {
+        return;
+    }
+
+    rotatedSourceRuleState
+        .numericOrderDirection =
+        suggestedDirection;
+
+    /*
+     * Re-run discovery so rotatedSourceMatches now
+     * reflects the newly inferred chronological order.
+     */
+    const RotatedSourceDiscoveryResult discovery =
+        RotatedSourceDiscoveryService::discover(
+            selectedFilePath(),
+            rotatedSourceRuleState
+            );
+
+    if (!discovery.succeeded) {
+        return;
+    }
+
+    rotatedSourceMatches =
+        discovery.rotatedSources;
+
+    updateRotatedSourceControls();
 }
 
 bool ImportConfigurationDialog::
@@ -2000,9 +2157,13 @@ void ImportConfigurationDialog::
             false
             );
 
+        refineSuggestedNumericRotationDirectionFromTimestamps();
+
         updateImportAvailability();
         return;
     }
+
+    refineSuggestedNumericRotationDirectionFromTimestamps();
 
     previewRefreshTimer->stop();
 
