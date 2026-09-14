@@ -160,6 +160,134 @@ findingStatusFromJson(
     return std::nullopt;
 }
 
+QString rotatedSourceNamingSchemeToJson(
+    RotatedSourceNamingScheme scheme
+    )
+{
+    switch (scheme) {
+    case RotatedSourceNamingScheme::Disabled:
+        return QStringLiteral("disabled");
+
+    case RotatedSourceNamingScheme::NumericSuffix:
+        return QStringLiteral("numericSuffix");
+
+    case RotatedSourceNamingScheme::NumericBeforeExtension:
+        return QStringLiteral("numericBeforeExtension");
+
+    case RotatedSourceNamingScheme::IsoDateTimeBeforeExtension:
+        return QStringLiteral("isoDateTimeBeforeExtension");
+
+    case RotatedSourceNamingScheme::CustomRegex:
+        return QStringLiteral("customRegex");
+    }
+
+    return QStringLiteral("disabled");
+}
+
+std::optional<RotatedSourceNamingScheme>
+rotatedSourceNamingSchemeFromJson(
+    const QString &value
+    )
+{
+    if (value == QStringLiteral("disabled")) {
+        return RotatedSourceNamingScheme::Disabled;
+    }
+
+    if (value == QStringLiteral("numericSuffix")) {
+        return RotatedSourceNamingScheme::NumericSuffix;
+    }
+
+    if (value ==
+        QStringLiteral("numericBeforeExtension")) {
+        return RotatedSourceNamingScheme::
+            NumericBeforeExtension;
+    }
+
+    if (value ==
+        QStringLiteral(
+            "isoDateTimeBeforeExtension"
+            )) {
+        return RotatedSourceNamingScheme::
+            IsoDateTimeBeforeExtension;
+    }
+
+    if (value == QStringLiteral("customRegex")) {
+        return RotatedSourceNamingScheme::CustomRegex;
+    }
+
+    return std::nullopt;
+}
+
+QString rotatedSourceOrderValueTypeToJson(
+    RotatedSourceOrderValueType type
+    )
+{
+    switch (type) {
+    case RotatedSourceOrderValueType::Numeric:
+        return QStringLiteral("numeric");
+
+    case RotatedSourceOrderValueType::Lexicographic:
+        return QStringLiteral("lexicographic");
+
+    case RotatedSourceOrderValueType::DateTime:
+        return QStringLiteral("dateTime");
+    }
+
+    return QStringLiteral("lexicographic");
+}
+
+std::optional<RotatedSourceOrderValueType>
+rotatedSourceOrderValueTypeFromJson(
+    const QString &value
+    )
+{
+    if (value == QStringLiteral("numeric")) {
+        return RotatedSourceOrderValueType::Numeric;
+    }
+
+    if (value == QStringLiteral("lexicographic")) {
+        return RotatedSourceOrderValueType::
+            Lexicographic;
+    }
+
+    if (value == QStringLiteral("dateTime")) {
+        return RotatedSourceOrderValueType::DateTime;
+    }
+
+    return std::nullopt;
+}
+
+QString rotatedSourceOrderDirectionToJson(
+    RotatedSourceOrderDirection direction
+    )
+{
+    switch (direction) {
+    case RotatedSourceOrderDirection::Ascending:
+        return QStringLiteral("ascending");
+
+    case RotatedSourceOrderDirection::Descending:
+        return QStringLiteral("descending");
+    }
+
+    return QStringLiteral("ascending");
+}
+
+std::optional<RotatedSourceOrderDirection>
+rotatedSourceOrderDirectionFromJson(
+    const QString &value
+    )
+{
+    if (value == QStringLiteral("ascending")) {
+        return RotatedSourceOrderDirection::Ascending;
+    }
+
+    if (value == QStringLiteral("descending")) {
+        return RotatedSourceOrderDirection::Descending;
+    }
+
+    return std::nullopt;
+}
+
 QJsonValue optionalDateTimeToJson(
     const std::optional<QDateTime> &value
     )
@@ -303,6 +431,68 @@ QByteArray WorkspaceSerializer::serialize(
         sessionObject.insert(
             QStringLiteral("sourcePath"),
             session.sourcePath
+            );
+
+        QJsonObject sourceFamilyObject;
+
+        sourceFamilyObject.insert(
+            QStringLiteral("includeRotatedSources"),
+            session
+                .sourceFamilyConfiguration
+                .includeRotatedSources
+            );
+
+        const RotatedSourceRule &rotationRule =
+            session
+                .sourceFamilyConfiguration
+                .rotationRule;
+
+        QJsonObject rotationRuleObject;
+
+        rotationRuleObject.insert(
+            QStringLiteral("namingScheme"),
+            rotatedSourceNamingSchemeToJson(
+                rotationRule.namingScheme
+                )
+            );
+
+        rotationRuleObject.insert(
+            QStringLiteral("customRegularExpression"),
+            rotationRule.customRegularExpression
+            );
+
+        rotationRuleObject.insert(
+            QStringLiteral("customOrderCaptureGroup"),
+            rotationRule.customOrderCaptureGroup
+            );
+
+        rotationRuleObject.insert(
+            QStringLiteral("customOrderValueType"),
+            rotatedSourceOrderValueTypeToJson(
+                rotationRule.customOrderValueType
+                )
+            );
+
+        rotationRuleObject.insert(
+            QStringLiteral("customOrderDirection"),
+            rotatedSourceOrderDirectionToJson(
+                rotationRule.customOrderDirection
+                )
+            );
+
+        rotationRuleObject.insert(
+            QStringLiteral("customDateTimeFormat"),
+            rotationRule.customDateTimeFormat
+            );
+
+        sourceFamilyObject.insert(
+            QStringLiteral("rotationRule"),
+            rotationRuleObject
+            );
+
+        sessionObject.insert(
+            QStringLiteral("sourceFamilyConfiguration"),
+            sourceFamilyObject
             );
 
         const QByteArray profileJson =
@@ -632,6 +822,212 @@ WorkspaceSerializer::deserialize(
                     "Each workspace session must have a non-empty sourcePath."
                     )
                 );
+        }
+
+        const QJsonValue sourceFamilyValue =
+            sessionObject.value(
+                QStringLiteral(
+                    "sourceFamilyConfiguration"
+                    )
+                );
+
+        if (!sourceFamilyValue.isUndefined()) {
+            if (!sourceFamilyValue.isObject()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The session sourceFamilyConfiguration field must be an object."
+                        )
+                    );
+            }
+
+            const QJsonObject sourceFamilyObject =
+                sourceFamilyValue.toObject();
+
+            const QJsonValue includeRotatedValue =
+                sourceFamilyObject.value(
+                    QStringLiteral(
+                        "includeRotatedSources"
+                        )
+                    );
+
+            if (!includeRotatedValue.isBool()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The persisted includeRotatedSources value must be boolean."
+                        )
+                    );
+            }
+
+            const QJsonValue rotationRuleValue =
+                sourceFamilyObject.value(
+                    QStringLiteral("rotationRule")
+                    );
+
+            if (!rotationRuleValue.isObject()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The persisted source-family rotationRule must be an object."
+                        )
+                    );
+            }
+
+            const QJsonObject rotationRuleObject =
+                rotationRuleValue.toObject();
+
+            QString namingSchemeText;
+            QString orderValueTypeText;
+            QString orderDirectionText;
+
+            if (!readRequiredString(
+                    rotationRuleObject,
+                    QStringLiteral("namingScheme"),
+                    namingSchemeText
+                    )
+                ||
+                !readRequiredString(
+                    rotationRuleObject,
+                    QStringLiteral(
+                        "customOrderValueType"
+                        ),
+                    orderValueTypeText
+                    )
+                ||
+                !readRequiredString(
+                    rotationRuleObject,
+                    QStringLiteral(
+                        "customOrderDirection"
+                        ),
+                    orderDirectionText
+                    )) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The persisted source-family rotation rule contains invalid enum values."
+                        )
+                    );
+            }
+
+            const auto namingScheme =
+                rotatedSourceNamingSchemeFromJson(
+                    namingSchemeText
+                    );
+
+            const auto orderValueType =
+                rotatedSourceOrderValueTypeFromJson(
+                    orderValueTypeText
+                    );
+
+            const auto orderDirection =
+                rotatedSourceOrderDirectionFromJson(
+                    orderDirectionText
+                    );
+
+            if (!namingScheme.has_value()
+                || !orderValueType.has_value()
+                || !orderDirection.has_value()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The persisted source-family rotation rule contains unsupported enum values."
+                        )
+                    );
+            }
+
+            const QJsonValue regularExpressionValue =
+                rotationRuleObject.value(
+                    QStringLiteral(
+                        "customRegularExpression"
+                        )
+                    );
+
+            const QJsonValue captureGroupValue =
+                rotationRuleObject.value(
+                    QStringLiteral(
+                        "customOrderCaptureGroup"
+                        )
+                    );
+
+            const QJsonValue dateTimeFormatValue =
+                rotationRuleObject.value(
+                    QStringLiteral(
+                        "customDateTimeFormat"
+                        )
+                    );
+
+            if (!regularExpressionValue.isString()
+                || !captureGroupValue.isDouble()
+                || !dateTimeFormatValue.isString()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The persisted source-family rotation rule contains invalid configuration values."
+                        )
+                    );
+            }
+
+            const double captureGroupNumber =
+                captureGroupValue.toDouble();
+
+            if (captureGroupNumber < 1
+                || captureGroupNumber >
+                       std::numeric_limits<int>::max()
+                ||
+                std::floor(captureGroupNumber)
+                    != captureGroupNumber) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        ),
+                    QStringLiteral(
+                        "The persisted custom rotation capture group must be a positive integer."
+                        )
+                    );
+            }
+
+            RotatedSourceRule &rotationRule =
+                session
+                    .sourceFamilyConfiguration
+                    .rotationRule;
+
+            session
+                .sourceFamilyConfiguration
+                .includeRotatedSources =
+                includeRotatedValue.toBool();
+
+            rotationRule.namingScheme =
+                *namingScheme;
+
+            rotationRule.customRegularExpression =
+                regularExpressionValue.toString();
+
+            rotationRule.customOrderCaptureGroup =
+                static_cast<int>(
+                    captureGroupNumber
+                    );
+
+            rotationRule.customOrderValueType =
+                *orderValueType;
+
+            rotationRule.customOrderDirection =
+                *orderDirection;
+
+            rotationRule.customDateTimeFormat =
+                dateTimeFormatValue.toString();
         }
 
         const QJsonValue profileValue =

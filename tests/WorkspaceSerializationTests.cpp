@@ -14,6 +14,9 @@ class WorkspaceSerializationTests
 private slots:
     void serializationProducesVersionedJson();
     void sessionContextRoundTripsThroughJson();
+    void sourceFamilyConfigurationRoundTripsThroughJson();
+    void missingSourceFamilyConfigurationUsesDefaults();
+    void invalidSourceFamilyConfigurationIsRejected();
     void comparisonRoundTripsThroughWorkspaceJson();
     void malformedJsonIsRejected();
     void unsupportedSchemaVersionIsRejected();
@@ -325,6 +328,417 @@ void WorkspaceSerializationTests::
         restoredSession
             .filterState
             .bookmarkedOnly
+        );
+}
+
+void WorkspaceSerializationTests::
+    sourceFamilyConfigurationRoundTripsThroughJson()
+{
+    WorkspacePersistenceState workspace;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral("source-family-session");
+
+    session.sourcePath =
+        QStringLiteral("/logs/current.log");
+
+    session.importProfile.name =
+        QStringLiteral("Source Family Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("regex-text");
+
+    session
+        .sourceFamilyConfiguration
+        .includeRotatedSources =
+        true;
+
+    RotatedSourceRule &rotationRule =
+        session
+            .sourceFamilyConfiguration
+            .rotationRule;
+
+    rotationRule.namingScheme =
+        RotatedSourceNamingScheme::
+        CustomRegex;
+
+    rotationRule.customRegularExpression =
+        QStringLiteral(
+            R"(archive-(\d+)\.log)"
+            );
+
+    rotationRule.customOrderCaptureGroup =
+        1;
+
+    rotationRule.customOrderValueType =
+        RotatedSourceOrderValueType::
+        Numeric;
+
+    rotationRule.customOrderDirection =
+        RotatedSourceOrderDirection::
+        Ascending;
+
+    rotationRule.customDateTimeFormat =
+        QStringLiteral(
+            "yyyy-MM-dd-HH-mm-ss"
+            );
+
+    workspace.sessions.append(
+        session
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray json =
+        serializer.serialize(
+            workspace
+            );
+
+    /*
+     * The workspace persists the logical family
+     * configuration, not the physical members that
+     * happened to exist when it was saved.
+     */
+    const QJsonDocument document =
+        QJsonDocument::fromJson(
+            json
+            );
+
+    QVERIFY(document.isObject());
+
+    const QJsonArray sessions =
+        document
+            .object()
+            .value(
+                QStringLiteral("sessions")
+                )
+            .toArray();
+
+    QCOMPARE(
+        sessions.size(),
+        1
+        );
+
+    const QJsonObject sessionObject =
+        sessions
+            .first()
+            .toObject();
+
+    QVERIFY(
+        sessionObject
+            .value(
+                QStringLiteral(
+                    "sourceFamilyConfiguration"
+                    )
+                )
+            .isObject()
+        );
+
+    const QJsonObject sourceFamilyObject =
+        sessionObject
+            .value(
+                QStringLiteral(
+                    "sourceFamilyConfiguration"
+                    )
+                )
+            .toObject();
+
+    QVERIFY(
+        sourceFamilyObject
+            .value(
+                QStringLiteral(
+                    "includeRotatedSources"
+                    )
+                )
+            .toBool()
+        );
+
+    QVERIFY(
+        !sourceFamilyObject.contains(
+            QStringLiteral(
+                "rotatedSourcePaths"
+                )
+            )
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            json
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.workspace.has_value());
+
+    const PersistedSourceFamilyConfiguration
+        &restored =
+        result
+            .workspace
+            ->sessions
+            .first()
+            .sourceFamilyConfiguration;
+
+    QVERIFY(
+        restored.includeRotatedSources
+        );
+
+    QVERIFY(
+        restored.rotationRule.namingScheme
+        ==
+        RotatedSourceNamingScheme::
+        CustomRegex
+        );
+
+    QCOMPARE(
+        restored
+            .rotationRule
+            .customRegularExpression,
+        rotationRule.customRegularExpression
+        );
+
+    QCOMPARE(
+        restored
+            .rotationRule
+            .customOrderCaptureGroup,
+        1
+        );
+
+    QVERIFY(
+        restored
+            .rotationRule
+            .customOrderValueType
+        ==
+        RotatedSourceOrderValueType::
+        Numeric
+        );
+
+    QVERIFY(
+        restored
+            .rotationRule
+            .customOrderDirection
+        ==
+        RotatedSourceOrderDirection::
+        Ascending
+        );
+
+    QCOMPARE(
+        restored
+            .rotationRule
+            .customDateTimeFormat,
+        QStringLiteral(
+            "yyyy-MM-dd-HH-mm-ss"
+            )
+        );
+}
+
+void WorkspaceSerializationTests::
+    missingSourceFamilyConfigurationUsesDefaults()
+{
+    WorkspacePersistenceState workspace;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral(
+            "legacy-source-family-session"
+            );
+
+    session.sourcePath =
+        QStringLiteral("legacy.jsonl");
+
+    session.importProfile.name =
+        QStringLiteral("Legacy Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("json-lines");
+
+    workspace.sessions.append(
+        session
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray serialized =
+        serializer.serialize(
+            workspace
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serialized
+            );
+
+    QJsonObject root =
+        document.object();
+
+    QJsonArray sessions =
+        root.value(
+                QStringLiteral("sessions")
+                )
+            .toArray();
+
+    QJsonObject sessionObject =
+        sessions.first().toObject();
+
+    /*
+     * Simulate a schema-v1 workspace written by a
+     * TraceScope version from before source-family
+     * persistence existed.
+     */
+    sessionObject.remove(
+        QStringLiteral(
+            "sourceFamilyConfiguration"
+            )
+        );
+
+    sessions[0] =
+        sessionObject;
+
+    root.insert(
+        QStringLiteral("sessions"),
+        sessions
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.workspace.has_value());
+
+    const PersistedSourceFamilyConfiguration
+        &restored =
+        result
+            .workspace
+            ->sessions
+            .first()
+            .sourceFamilyConfiguration;
+
+    QVERIFY(
+        !restored.includeRotatedSources
+        );
+
+    QVERIFY(
+        restored.rotationRule.namingScheme
+        ==
+        RotatedSourceNamingScheme::
+        Disabled
+        );
+}
+
+void WorkspaceSerializationTests::
+    invalidSourceFamilyConfigurationIsRejected()
+{
+    WorkspacePersistenceState workspace;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral(
+            "invalid-source-family-session"
+            );
+
+    session.sourcePath =
+        QStringLiteral("current.log");
+
+    session.importProfile.name =
+        QStringLiteral("Test Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("regex-text");
+
+    workspace.sessions.append(
+        session
+        );
+
+    const WorkspaceSerializer serializer;
+
+    const QByteArray validJson =
+        serializer.serialize(
+            workspace
+            );
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            validJson
+            );
+
+    QJsonObject root =
+        document.object();
+
+    QJsonArray sessions =
+        root.value(
+                QStringLiteral("sessions")
+                )
+            .toArray();
+
+    QJsonObject sessionObject =
+        sessions.first().toObject();
+
+    QJsonObject sourceFamilyObject =
+        sessionObject
+            .value(
+                QStringLiteral(
+                    "sourceFamilyConfiguration"
+                    )
+                )
+            .toObject();
+
+    QJsonObject rotationRuleObject =
+        sourceFamilyObject
+            .value(
+                QStringLiteral("rotationRule")
+                )
+            .toObject();
+
+    rotationRuleObject.insert(
+        QStringLiteral("namingScheme"),
+        QStringLiteral(
+            "definitely-not-a-scheme"
+            )
+        );
+
+    sourceFamilyObject.insert(
+        QStringLiteral("rotationRule"),
+        rotationRuleObject
+        );
+
+    sessionObject.insert(
+        QStringLiteral(
+            "sourceFamilyConfiguration"
+            ),
+        sourceFamilyObject
+        );
+
+    sessions[0] =
+        sessionObject;
+
+    root.insert(
+        QStringLiteral("sessions"),
+        sessions
+        );
+
+    const WorkspaceDeserializationResult
+        result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY(!result.isSuccess());
+
+    QCOMPARE(
+        result.errorCode,
+        QStringLiteral(
+            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+            )
         );
 }
 

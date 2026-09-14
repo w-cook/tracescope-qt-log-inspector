@@ -15,6 +15,7 @@
 #include "../analysis/InvestigationSessionComparison.h"
 #include "../domain/InvestigationRecordState.h"
 #include "../importing/ImportProfile.h"
+#include "../sources/RotatedSourceRule.h"
 
 struct PersistedInvestigationRecordState
 {
@@ -79,12 +80,22 @@ struct PersistedInvestigationComparison
         presentationState;
 };
 
+struct PersistedSourceFamilyConfiguration
+{
+    bool includeRotatedSources = false;
+
+    RotatedSourceRule rotationRule;
+};
+
 struct PersistedInvestigationSession
 {
     QString sessionId;
     QString sourcePath;
 
     ImportProfile importProfile;
+
+    PersistedSourceFamilyConfiguration
+        sourceFamilyConfiguration;
 
     QVector<PersistedInvestigationRecordState>
         recordStates;

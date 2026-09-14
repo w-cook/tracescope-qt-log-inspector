@@ -20,6 +20,22 @@ InvestigationSessionPersistence::capture(
     persisted.importProfile =
         session.importProfile();
 
+    const SourceFamilyConfiguration
+        &sourceFamilyConfiguration =
+        session.sourceFamilyConfiguration();
+
+    persisted
+        .sourceFamilyConfiguration
+        .includeRotatedSources =
+        sourceFamilyConfiguration
+            .includeRotatedSources;
+
+    persisted
+        .sourceFamilyConfiguration
+        .rotationRule =
+        sourceFamilyConfiguration
+            .rotationRule;
+
     const InvestigationStateStore *stateStore =
         session.investigationStateStore();
 
