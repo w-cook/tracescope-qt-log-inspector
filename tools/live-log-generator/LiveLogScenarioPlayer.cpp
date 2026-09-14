@@ -40,6 +40,58 @@ qint64 scaledDuration(
         );
 }
 
+qint64 scenarioTimestampAdvance(
+    const LiveLogScenario &scenario
+    )
+{
+    bool foundRecord = false;
+
+    qint64 firstOffset = 0;
+    qint64 lastOffset = 0;
+
+    for (const LiveLogScenarioStep &step
+         : scenario.steps) {
+        if (!std::holds_alternative<
+                LiveLogRecordStep
+                >(step)) {
+            continue;
+        }
+
+        const qint64 offset =
+            std::get<LiveLogRecordStep>(
+                step
+                )
+                .record
+                .timestampOffsetMs;
+
+        if (!foundRecord) {
+            firstOffset = offset;
+            lastOffset = offset;
+            foundRecord = true;
+            continue;
+        }
+
+        lastOffset =
+            std::max(
+                lastOffset,
+                offset
+                );
+    }
+
+    if (!foundRecord) {
+        return 0;
+    }
+
+    /*
+     * The next loop's first record should occur one
+     * millisecond after the latest timestamp emitted by
+     * the previous loop.
+     */
+    return lastOffset
+           - firstOffset
+           + 1;
+}
+
 LiveLogScenarioPlayResult writeBytes(
     QFile &file,
     const QByteArray &bytes
@@ -189,6 +241,11 @@ LiveLogScenarioPlayer::play(
         options.scenarioStart.isValid()
             ? options.scenarioStart.toUTC()
             : QDateTime::currentDateTimeUtc();
+
+    const qint64 loopTimestampAdvanceMs =
+        scenarioTimestampAdvance(
+            scenario
+            );
 
     QFile file(options.outputPath);
 
@@ -548,8 +605,16 @@ LiveLogScenarioPlayer::play(
             rotationIndex = 0;
         }
 
-        scenarioStart =
-            QDateTime::currentDateTimeUtc();
+        if (options.loopBehavior
+            == LiveLogLoopBehavior::Append) {
+            scenarioStart =
+                scenarioStart.addMSecs(
+                    loopTimestampAdvanceMs
+                    );
+        } else {
+            scenarioStart =
+                QDateTime::currentDateTimeUtc();
+        }
     }
 
     const QByteArray finalContent =

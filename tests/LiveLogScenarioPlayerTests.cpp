@@ -95,6 +95,7 @@ private slots:
     void normalRecordsAreWritten();
     void loopContinuesWithinExistingOutput();
     void loopRestartsOutputWhenRequested();
+    void loopAppendKeepsTimestampsSequential();
     void waitsAreScaledByPlaybackSpeed();
     void partialRecordIsVisibleDuringHold();
     void truncateRemovesPreviousContent();
@@ -343,6 +344,118 @@ void LiveLogScenarioPlayerTests::
             "[\"Repeated record.\"]"
             )
         );
+}
+
+void LiveLogScenarioPlayerTests::
+    loopAppendKeepsTimestampsSequential()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString outputPath =
+        directory.filePath(
+            QStringLiteral("live.jsonl")
+            );
+
+    LiveLogScenario scenario;
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                0,
+                QStringLiteral("First.")
+                )
+        }
+        );
+
+    scenario.steps.append(
+        LiveLogRecordStep {
+            record(
+                10000,
+                QStringLiteral("Last.")
+                )
+        }
+        );
+
+    int continuationChecks = 0;
+
+    const LiveLogScenarioPlayer player(
+        [](qint64) {},
+        [&continuationChecks]() {
+            ++continuationChecks;
+
+            return continuationChecks < 2;
+        }
+        );
+
+    LiveLogScenarioPlayerOptions options;
+
+    options.outputPath =
+        outputPath;
+
+    options.loop =
+        true;
+
+    options.loopBehavior =
+        LiveLogLoopBehavior::Append;
+
+    options.scenarioStart =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-14T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    const LiveLogScenarioPlayResult result =
+        player.play(
+            scenario,
+            JsonLinesRenderer(),
+            options
+            );
+
+    QVERIFY(result.isSuccess());
+
+    const QList<QByteArray> lines =
+        readFile(outputPath)
+            .split('\n');
+
+    QCOMPARE(lines.size(), 5);
+
+    const QStringList expected {
+        QStringLiteral(
+            "2026-09-14T12:00:00.000Z"
+            ),
+        QStringLiteral(
+            "2026-09-14T12:00:10.000Z"
+            ),
+        QStringLiteral(
+            "2026-09-14T12:00:10.001Z"
+            ),
+        QStringLiteral(
+            "2026-09-14T12:00:20.001Z"
+            )
+    };
+
+    for (int index = 0;
+         index < expected.size();
+         ++index) {
+        const QJsonObject object =
+            QJsonDocument::fromJson(
+                lines.at(index)
+                )
+                .object();
+
+        QCOMPARE(
+            object.value(
+                      QStringLiteral(
+                          "timestamp"
+                          )
+                      )
+                .toString(),
+            expected.at(index)
+            );
+    }
 }
 
 void LiveLogScenarioPlayerTests::
