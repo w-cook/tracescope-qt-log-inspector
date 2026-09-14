@@ -30,6 +30,24 @@ struct RotatedSourceRule
         RotatedSourceNamingScheme::Disabled;
 
     /*
+     * Numeric rotation schemes occur in both common
+     * directions.
+     *
+     * Descending:
+     *     service.log.3 -> service.log.2 ->
+     *     service.log.1 -> service.log
+     *
+     * Ascending:
+     *     service.log.1 -> service.log.2 ->
+     *     service.log.3 -> service.log
+     *
+     * Descending remains the default for conventional
+     * rollover naming.
+     */
+    RotatedSourceOrderDirection numericOrderDirection =
+        RotatedSourceOrderDirection::Descending;
+
+    /*
      * CustomRegex rules operate on the complete file
      * name, not the full path.
      *

@@ -63,6 +63,11 @@ const QString CustomDateTimeFormatKey =
         "rule/customDateTimeFormat"
         );
 
+const QString NumericOrderDirectionKey =
+    QStringLiteral(
+        "rule/numericOrderDirection"
+        );
+
 constexpr int CurrentVersion = 1;
 
 bool validNamingScheme(
@@ -126,6 +131,13 @@ void writeRule(
         );
 
     settings.setValue(
+        NumericOrderDirectionKey,
+        static_cast<int>(
+            rule.numericOrderDirection
+            )
+        );
+
+    settings.setValue(
         CustomRegularExpressionKey,
         rule.customRegularExpression
         );
@@ -171,6 +183,17 @@ readRule(
                 )
             .toInt();
 
+    const int numericOrderDirection =
+        settings
+            .value(
+                NumericOrderDirectionKey,
+                static_cast<int>(
+                    RotatedSourceOrderDirection::
+                    Descending
+                    )
+                )
+            .toInt();
+
     const int orderValueType =
         settings
             .value(
@@ -196,6 +219,9 @@ readRule(
     if (!validNamingScheme(
             namingScheme
             )
+        || !validOrderDirection(
+            numericOrderDirection
+            )
         || !validOrderValueType(
             orderValueType
             )
@@ -212,6 +238,13 @@ readRule(
             RotatedSourceNamingScheme
             >(
             namingScheme
+            );
+
+    rule.numericOrderDirection =
+        static_cast<
+            RotatedSourceOrderDirection
+            >(
+            numericOrderDirection
             );
 
     rule.customRegularExpression =

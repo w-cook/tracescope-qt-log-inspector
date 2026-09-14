@@ -31,21 +31,18 @@ bool rotatedSourceRulesEqual(
 {
     return left.namingScheme
                == right.namingScheme
+           && left.numericOrderDirection
+                  == right.numericOrderDirection
            && left.customRegularExpression
-                  == right
-                         .customRegularExpression
+                  == right.customRegularExpression
            && left.customOrderCaptureGroup
-                  == right
-                         .customOrderCaptureGroup
+                  == right.customOrderCaptureGroup
            && left.customOrderValueType
-                  == right
-                         .customOrderValueType
+                  == right.customOrderValueType
            && left.customOrderDirection
-                  == right
-                         .customOrderDirection
+                  == right.customOrderDirection
            && left.customDateTimeFormat
-                  == right
-                         .customDateTimeFormat;
+                  == right.customDateTimeFormat;
 }
 }
 
@@ -86,6 +83,12 @@ RotatedSourceConfigurationDialog::
         rotatedSourceSettingsStore
         ),
     m_namingSchemeComboBox(
+        new QComboBox(this)
+        ),
+    m_numericOptionsWidget(
+        new QWidget(this)
+        ),
+    m_numericOrderDirectionComboBox(
         new QComboBox(this)
         ),
     m_summaryLabel(
@@ -168,6 +171,16 @@ RotatedSourceConfigurationDialog::
         [this]() {
             updateWorkingRuleFromControls();
             updateCustomControlVisibility();
+            refreshDiscovery();
+        }
+        );
+
+    connect(
+        m_numericOrderDirectionComboBox,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this]() {
+            updateWorkingRuleFromControls();
             refreshDiscovery();
         }
         );
@@ -323,6 +336,27 @@ void RotatedSourceConfigurationDialog::
 
     mainLayout->addLayout(
         schemeLayout
+        );
+
+    auto *numericOptionsLayout =
+        new QFormLayout(
+            m_numericOptionsWidget
+            );
+
+    numericOptionsLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    numericOptionsLayout->addRow(
+        tr("Numeric chronology:"),
+        m_numericOrderDirectionComboBox
+        );
+
+    mainLayout->addWidget(
+        m_numericOptionsWidget
         );
 
     auto *customGroup =
@@ -531,6 +565,43 @@ void RotatedSourceConfigurationDialog::
                 );
     }
 
+    m_numericOrderDirectionComboBox->addItem(
+        tr(
+            "Higher numbers are older "
+            "(.3 → .2 → .1 → active)"
+            ),
+        static_cast<int>(
+            RotatedSourceOrderDirection::
+            Descending
+            )
+        );
+
+    m_numericOrderDirectionComboBox->addItem(
+        tr(
+            "Lower numbers are older "
+            "(.1 → .2 → .3 → active)"
+            ),
+        static_cast<int>(
+            RotatedSourceOrderDirection::
+            Ascending
+            )
+        );
+
+    const int numericDirectionIndex =
+        m_numericOrderDirectionComboBox->findData(
+            static_cast<int>(
+                m_workingRule
+                    .numericOrderDirection
+                )
+            );
+
+    if (numericDirectionIndex >= 0) {
+        m_numericOrderDirectionComboBox
+            ->setCurrentIndex(
+                numericDirectionIndex
+                );
+    }
+
     m_orderValueTypeComboBox->addItem(
         tr("Number"),
         static_cast<int>(
@@ -657,6 +728,15 @@ void RotatedSourceConfigurationDialog::
 
     m_workingRule.customDateTimeFormat =
         m_dateTimeFormatEdit->text();
+
+    m_workingRule.numericOrderDirection =
+        static_cast<
+            RotatedSourceOrderDirection
+            >(
+            m_numericOrderDirectionComboBox
+                ->currentData()
+                .toInt()
+            );
 }
 
 void RotatedSourceConfigurationDialog::
@@ -669,6 +749,18 @@ void RotatedSourceConfigurationDialog::
 
     m_customOptionsWidget->setVisible(
         custom
+        );
+
+    const bool numeric =
+        m_workingRule.namingScheme
+            == RotatedSourceNamingScheme::
+            NumericSuffix
+        || m_workingRule.namingScheme
+               == RotatedSourceNamingScheme::
+               NumericBeforeExtension;
+
+    m_numericOptionsWidget->setVisible(
+        numeric
         );
 
     const bool dateTimeOrdering =

@@ -457,6 +457,13 @@ QByteArray WorkspaceSerializer::serialize(
             );
 
         rotationRuleObject.insert(
+            QStringLiteral("numericOrderDirection"),
+            rotatedSourceOrderDirectionToJson(
+                rotationRule.numericOrderDirection
+                )
+            );
+
+        rotationRuleObject.insert(
             QStringLiteral("customRegularExpression"),
             rotationRule.customRegularExpression
             );
@@ -887,6 +894,33 @@ WorkspaceSerializer::deserialize(
             QString orderValueTypeText;
             QString orderDirectionText;
 
+            QString numericOrderDirectionText =
+                QStringLiteral("descending");
+
+            const QJsonValue numericOrderDirectionValue =
+                rotationRuleObject.value(
+                    QStringLiteral(
+                        "numericOrderDirection"
+                        )
+                    );
+
+            if (!numericOrderDirectionValue.isUndefined()) {
+                if (!numericOrderDirectionValue.isString()) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted numericOrderDirection "
+                            "value must be a string."
+                            )
+                        );
+                }
+
+                numericOrderDirectionText =
+                    numericOrderDirectionValue.toString();
+            }
+
             if (!readRequiredString(
                     rotationRuleObject,
                     QStringLiteral("namingScheme"),
@@ -933,7 +967,13 @@ WorkspaceSerializer::deserialize(
                     orderDirectionText
                     );
 
+            const auto numericOrderDirection =
+                rotatedSourceOrderDirectionFromJson(
+                    numericOrderDirectionText
+                    );
+
             if (!namingScheme.has_value()
+                || !numericOrderDirection.has_value()
                 || !orderValueType.has_value()
                 || !orderDirection.has_value()) {
                 return failure(
@@ -1011,6 +1051,9 @@ WorkspaceSerializer::deserialize(
 
             rotationRule.namingScheme =
                 *namingScheme;
+
+            rotationRule.numericOrderDirection =
+                *numericOrderDirection;
 
             rotationRule.customRegularExpression =
                 regularExpressionValue.toString();

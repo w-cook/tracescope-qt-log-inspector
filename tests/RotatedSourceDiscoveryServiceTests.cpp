@@ -40,6 +40,7 @@ class RotatedSourceDiscoveryServiceTests
 private slots:
     void disabledDiscoveryReturnsNoMatches();
     void discoversNumericSuffixRotationsOldestFirst();
+    void discoversNumericSuffixRotationsAscending();
     void discoversNumericBeforeExtensionRotationsOldestFirst();
     void ignoresUnrelatedAndInvalidNumericSuffixes();
     void missingActiveSourceFails();
@@ -196,6 +197,102 @@ void RotatedSourceDiscoveryServiceTests::
             .fileName,
         QStringLiteral(
             "test.log.1"
+            )
+        );
+}
+
+void RotatedSourceDiscoveryServiceTests::
+    discoversNumericSuffixRotationsAscending()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString activePath =
+        directory.filePath(
+            QStringLiteral(
+                "test.log"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            activePath
+            )
+        );
+
+    QVERIFY(
+        writeFile(
+            activePath
+            + QStringLiteral(".1")
+            )
+        );
+
+    QVERIFY(
+        writeFile(
+            activePath
+            + QStringLiteral(".2")
+            )
+        );
+
+    QVERIFY(
+        writeFile(
+            activePath
+            + QStringLiteral(".10")
+            )
+        );
+
+    RotatedSourceRule rule;
+
+    rule.namingScheme =
+        RotatedSourceNamingScheme::
+        NumericSuffix;
+
+    rule.numericOrderDirection =
+        RotatedSourceOrderDirection::
+        Ascending;
+
+    const RotatedSourceDiscoveryResult result =
+        RotatedSourceDiscoveryService::discover(
+            activePath,
+            rule
+            );
+
+    QVERIFY2(
+        result.succeeded,
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        result.rotatedSources.size(),
+        3
+        );
+
+    QCOMPARE(
+        result.rotatedSources.at(0)
+            .fileName,
+        QStringLiteral(
+            "test.log.1"
+            )
+        );
+
+    QCOMPARE(
+        result.rotatedSources.at(1)
+            .fileName,
+        QStringLiteral(
+            "test.log.2"
+            )
+        );
+
+    QCOMPARE(
+        result.rotatedSources.at(2)
+            .fileName,
+        QStringLiteral(
+            "test.log.10"
             )
         );
 }

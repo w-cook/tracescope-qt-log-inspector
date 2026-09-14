@@ -251,8 +251,7 @@ configurationForRule(
             Numeric;
 
         configuration.orderDirection =
-            RotatedSourceOrderDirection::
-            Descending;
+            rule.numericOrderDirection;
 
         configuration.numericRotationScheme =
             true;
@@ -271,8 +270,7 @@ configurationForRule(
             Numeric;
 
         configuration.orderDirection =
-            RotatedSourceOrderDirection::
-            Descending;
+            rule.numericOrderDirection;
 
         configuration.numericRotationScheme =
             true;

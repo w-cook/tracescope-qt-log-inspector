@@ -400,6 +400,10 @@ void RotatedSourceSettingsStoreTests::
         RotatedSourceNamingScheme::
         NumericBeforeExtension;
 
+    replacement.rule.numericOrderDirection =
+        RotatedSourceOrderDirection::
+        Ascending;
+
     replacement.includeRotatedSources =
         false;
 
@@ -424,6 +428,14 @@ void RotatedSourceSettingsStoreTests::
             .namingScheme,
         RotatedSourceNamingScheme::
         NumericBeforeExtension
+        );
+
+    QCOMPARE(
+        restored
+            ->rule
+            .numericOrderDirection,
+        RotatedSourceOrderDirection::
+        Ascending
         );
 
     QVERIFY(

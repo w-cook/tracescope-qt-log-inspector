@@ -57,6 +57,10 @@ private:
         m_rotatedSources;
 
     QComboBox *m_namingSchemeComboBox;
+
+    QWidget *m_numericOptionsWidget;
+    QComboBox *m_numericOrderDirectionComboBox;
+
     QLabel *m_summaryLabel;
     QTableWidget *m_sourceTable;
 

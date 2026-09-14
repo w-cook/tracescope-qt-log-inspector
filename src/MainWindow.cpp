@@ -2624,6 +2624,11 @@ void MainWindow::continueWorkspaceOpen(
         return;
     }
 
+    /*
+     * All persisted sessions have been imported and
+     * staged successfully. The current live workspace
+     * can now be replaced safely.
+     */
     if (operation->nextSessionIndex
         >= operation->state
                .sessions
@@ -2646,25 +2651,98 @@ void MainWindow::continueWorkspaceOpen(
                 sessionIndex
                 );
 
+    /*
+     * Workspaces persist the logical source-family
+     * configuration, not the physical rotated files
+     * that existed when the workspace was saved.
+     *
+     * Reconstruct that logical configuration first.
+     */
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration;
+
+    sourceFamilyConfiguration
+        .includeRotatedSources =
+        persistedSession
+            .sourceFamilyConfiguration
+            .includeRotatedSources;
+
+    sourceFamilyConfiguration
+        .rotationRule =
+        persistedSession
+            .sourceFamilyConfiguration
+            .rotationRule;
+
+    /*
+     * Rediscover the physical source family that
+     * exists now.
+     *
+     * This is the same resolution path used by normal
+     * imports and reloads, so stale rotated filenames
+     * are never taken from workspace persistence.
+     */
+    std::optional<SourceFamilyConfiguration>
+        resolvedConfiguration =
+        resolveSourceFamilyConfiguration(
+            persistedSession.sourcePath,
+            std::move(
+                sourceFamilyConfiguration
+                )
+            );
+
+    if (!resolvedConfiguration.has_value()) {
+        /*
+         * The resolver already displayed the relevant
+         * source-family error. Abort workspace opening
+         * without replacing the currently open
+         * workspace.
+         */
+        return;
+    }
+
+    SourceFamilyConfiguration
+        resolvedSourceFamilyConfiguration =
+        std::move(
+            resolvedConfiguration.value()
+            );
+
+    /*
+     * For a normal legacy/single-file session this is:
+     *
+     *     active.log
+     *
+     * For a source-family session this becomes:
+     *
+     *     oldest rotation
+     *     ...
+     *     newest rotation
+     *     active file
+     */
+    const QStringList orderedSourcePaths =
+        resolvedSourceFamilyConfiguration
+            .orderedSourcePaths(
+                persistedSession.sourcePath
+                );
+
     const bool started =
         startLogFileImport(
             persistedSession.sourcePath,
-            QStringList {
-                persistedSession.sourcePath
-            },
+            orderedSourcePaths,
             persistedSession.importProfile,
             [
                 this,
                 operation,
-                sessionIndex
-            ](
+                sessionIndex,
+                resolvedSourceFamilyConfiguration
+    ](
                 std::optional<ImportResult>
                     result
                 ) {
                 /*
-                 * A cancelled import aborts the open
-                 * operation. Nothing live has been
-                 * replaced yet.
+                 * Cancelling any staged import aborts
+                 * the entire workspace-open operation.
+                 * The currently installed workspace is
+                 * still untouched at this point.
                  */
                 if (!result.has_value()
                     || result->cancelled) {
@@ -2684,6 +2762,15 @@ void MainWindow::continueWorkspaceOpen(
                           ->emptySessionCount;
                 }
 
+                /*
+                 * Build the restored session with the
+                 * freshly resolved physical family.
+                 *
+                 * The active source path remains the
+                 * session's primary source metadata
+                 * path. Rotated members remain part of
+                 * SourceFamilyConfiguration.
+                 */
                 auto session =
                     std::make_unique<
                         InvestigationSession
@@ -2696,14 +2783,15 @@ void MainWindow::continueWorkspaceOpen(
                             .importProfile,
                         std::move(
                             result.value()
-                            )
+                            ),
+                        resolvedSourceFamilyConfiguration
                         );
 
                 /*
                  * Restore bookmarks, notes, findings,
                  * filters, selected record, and other
-                 * session/domain persistence before
-                 * the session ever enters the live
+                 * persisted investigation state before
+                 * the session enters the live
                  * workspace.
                  */
                 InvestigationSessionPersistence::
@@ -2722,6 +2810,12 @@ void MainWindow::continueWorkspaceOpen(
                 ++operation
                       ->nextSessionIndex;
 
+                /*
+                 * Restore the next persisted session.
+                 * Installation of the complete staged
+                 * workspace occurs only after every
+                 * session finishes successfully.
+                 */
                 continueWorkspaceOpen(
                     operation
                     );
@@ -2729,12 +2823,12 @@ void MainWindow::continueWorkspaceOpen(
             );
 
     /*
-     * An unsupported importer, or another inability
-     * to start the import, aborts restoration while
-     * preserving the currently open workspace.
+     * Unsupported importers or other failures that
+     * prevent the import from starting abort workspace
+     * restoration.
      *
-     * startLogFileImport() already presents the
-     * appropriate error message.
+     * startLogFileImport() already presents its own
+     * error message.
      */
     if (!started) {
         return;

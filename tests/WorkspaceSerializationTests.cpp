@@ -28,6 +28,7 @@ private slots:
     void documentLayoutRoundTripsThroughJson();
     void missingDocumentLayoutUsesDefaults();
     void missingMainWindowStateUsesDefaults();
+    void missingNumericOrderDirectionUsesDescendingDefault();
 };
 
 void WorkspaceSerializationTests::
@@ -364,6 +365,10 @@ void WorkspaceSerializationTests::
         RotatedSourceNamingScheme::
         CustomRegex;
 
+    rotationRule.numericOrderDirection =
+        RotatedSourceOrderDirection::
+        Ascending;
+
     rotationRule.customRegularExpression =
         QStringLiteral(
             R"(archive-(\d+)\.log)"
@@ -489,6 +494,15 @@ void WorkspaceSerializationTests::
         ==
         RotatedSourceNamingScheme::
         CustomRegex
+        );
+
+    QVERIFY(
+        restored
+            .rotationRule
+            .numericOrderDirection
+        ==
+        RotatedSourceOrderDirection::
+        Ascending
         );
 
     QCOMPARE(
@@ -2104,6 +2118,123 @@ void WorkspaceSerializationTests::
         !result.workspace
              ->documentLayout
              .mainWindowMaximized
+        );
+}
+
+void WorkspaceSerializationTests::
+    missingNumericOrderDirectionUsesDescendingDefault()
+{
+    WorkspacePersistenceState workspace;
+
+    PersistedInvestigationSession session;
+
+    session.sessionId =
+        QStringLiteral("legacy-numeric-order");
+
+    session.sourcePath =
+        QStringLiteral("/logs/service.log");
+
+    session.importProfile.name =
+        QStringLiteral("Legacy Profile");
+
+    session.importProfile.importerId =
+        QStringLiteral("json-lines");
+
+    session
+        .sourceFamilyConfiguration
+        .includeRotatedSources =
+        true;
+
+    session
+        .sourceFamilyConfiguration
+        .rotationRule
+        .namingScheme =
+        RotatedSourceNamingScheme::
+        NumericSuffix;
+
+    workspace.sessions.append(session);
+
+    const WorkspaceSerializer serializer;
+
+    QJsonDocument document =
+        QJsonDocument::fromJson(
+            serializer.serialize(workspace)
+            );
+
+    QJsonObject root =
+        document.object();
+
+    QJsonArray sessions =
+        root.value(
+                QStringLiteral("sessions")
+                )
+            .toArray();
+
+    QJsonObject sessionObject =
+        sessions.at(0).toObject();
+
+    QJsonObject familyObject =
+        sessionObject
+            .value(
+                QStringLiteral(
+                    "sourceFamilyConfiguration"
+                    )
+                )
+            .toObject();
+
+    QJsonObject ruleObject =
+        familyObject
+            .value(
+                QStringLiteral("rotationRule")
+                )
+            .toObject();
+
+    ruleObject.remove(
+        QStringLiteral(
+            "numericOrderDirection"
+            )
+        );
+
+    familyObject.insert(
+        QStringLiteral("rotationRule"),
+        ruleObject
+        );
+
+    sessionObject.insert(
+        QStringLiteral(
+            "sourceFamilyConfiguration"
+            ),
+        familyObject
+        );
+
+    sessions[0] =
+        sessionObject;
+
+    root.insert(
+        QStringLiteral("sessions"),
+        sessions
+        );
+
+    const WorkspaceDeserializationResult result =
+        serializer.deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY(result.isSuccess());
+    QVERIFY(result.workspace.has_value());
+
+    QCOMPARE(
+        result
+            .workspace
+            ->sessions
+            .first()
+            .sourceFamilyConfiguration
+            .rotationRule
+            .numericOrderDirection,
+        RotatedSourceOrderDirection::
+        Descending
         );
 }
 
