@@ -15,6 +15,8 @@
 #include "../domain/RecordIdentity.h"
 #include "../domain/RecordSeverity.h"
 #include "../domain/RecordTimestamp.h"
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 
 namespace
@@ -544,12 +546,18 @@ ImportResult RegexTextImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -561,7 +569,7 @@ ImportResult RegexTextImporter::importFile(
                 "The source file could not be opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(

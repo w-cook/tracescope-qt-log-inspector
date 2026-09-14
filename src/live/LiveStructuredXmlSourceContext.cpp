@@ -6,6 +6,8 @@
 #include <QFile>
 #include <QFileDevice>
 
+#include "../io/SharedReadFile.h"
+
 namespace
 {
 constexpr qint64 SourceScanChunkSizeBytes =
@@ -68,13 +70,16 @@ LiveStructuredXmlSourceInitializationResult
         .sourceGeneration =
         sourceGeneration;
 
-    QFile file(
-        sourcePath
-        );
+    QFile file;
 
-    if (!file.open(
-            QIODevice::ReadOnly
-            )) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            sourcePath
+            );
+
+    if (!openResult.succeeded) {
         result.succeeded = false;
 
         result.errorMessage =
@@ -84,7 +89,7 @@ LiveStructuredXmlSourceInitializationResult
                 "initializing record parsing: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     );
 
         return result;

@@ -8,6 +8,8 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -525,14 +527,18 @@ IncrementalImportInitializationResult
         return initialization;
     }
 
-    QFile file(
-        sourcePath
-        );
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            sourcePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         initialization.succeeded = false;
 
         initialization.errorMessage =
@@ -542,7 +548,7 @@ IncrementalImportInitializationResult
                 "initializing incremental import: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     );
 
         return initialization;
@@ -684,12 +690,18 @@ ImportResult IisW3cImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -701,7 +713,7 @@ ImportResult IisW3cImporter::importFile(
                 "The source file could not be opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(

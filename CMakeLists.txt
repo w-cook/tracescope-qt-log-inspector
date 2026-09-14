@@ -239,6 +239,8 @@ qt_add_executable(TraceScope
     src/importing/SourceFamilyImportService.h
     src/importing/SourceFamilyImportService.cpp
     src/sources/SourceFamilyConfiguration.h
+    src/io/SharedReadFile.h
+    src/io/SharedReadFile.cpp
 
 )
 

@@ -7,6 +7,8 @@
 #include <QFile>
 #include <QFileInfo>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 #include "StructuredXmlRecordStreamParser.h"
@@ -179,13 +181,16 @@ ImportResult XmlImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(
-        filePath
-        );
+    QFile file;
 
-    if (!file.open(
-            QIODevice::ReadOnly
-            )) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -198,7 +203,7 @@ ImportResult XmlImporter::importFile(
                 "opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(

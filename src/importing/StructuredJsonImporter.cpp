@@ -12,6 +12,8 @@
 #include <QJsonValue>
 #include <QStringList>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 #include "StructuredJsonRecordStreamFramer.h"
@@ -637,13 +639,16 @@ ImportResult StructuredJsonImporter::
         executionContext
         );
 
-    QFile file(
-        filePath
-        );
+    QFile file;
 
-    if (!file.open(
-            QIODevice::ReadOnly
-            )) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -656,7 +661,7 @@ ImportResult StructuredJsonImporter::
                 "opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(

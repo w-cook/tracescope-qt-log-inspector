@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "../io/SharedReadFile.h"
+
 namespace
 {
 constexpr qint64 SourceFingerprintByteCount =
@@ -265,13 +267,16 @@ LiveFileFollower::readAvailableBytes(
     const qint64 startingOffset =
         m_state.readOffset();
 
-    QFile file(
-        m_sourcePath
-        );
+    QFile file;
 
-    if (!file.open(
-            QIODevice::ReadOnly
-            )) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            m_sourcePath
+            );
+
+    if (!openResult.succeeded) {
         result.succeeded = false;
 
         result.errorMessage =
@@ -280,7 +285,7 @@ LiveFileFollower::readAvailableBytes(
                 "opened for reading: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     );
 
         return result;
@@ -391,13 +396,16 @@ LiveFileFollower::sourcePrefixFingerprint(
         return QByteArray();
     }
 
-    QFile file(
-        m_sourcePath
-        );
+    QFile file;
 
-    if (!file.open(
-            QIODevice::ReadOnly
-            )) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            m_sourcePath
+            );
+
+    if (!openResult.succeeded) {
         return QByteArray();
     }
 

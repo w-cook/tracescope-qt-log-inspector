@@ -16,6 +16,8 @@
 #include <QVariant>
 #include <QByteArray>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -117,9 +119,16 @@ ImportResult JsonLinesImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(QIODevice::ReadOnly)) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         const RecordSourceMetadata source =
@@ -135,7 +144,10 @@ ImportResult JsonLinesImporter::importFile(
                 ),
             QStringLiteral(
                 "The source file could not be opened: %1"
-                ).arg(file.errorString()),
+                )
+                .arg(
+                    openResult.errorMessage
+                    ),
             ImportDiagnosticSeverity::Error,
             source
             );

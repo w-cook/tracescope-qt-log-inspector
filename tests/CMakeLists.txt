@@ -1,8 +1,16 @@
 # Shared source sets
 
+set(SHARED_READ_FILE_SOURCES
+    ../src/io/SharedReadFile.h
+    ../src/io/SharedReadFile.cpp
+)
+
 # InvestigationSession now owns live-follow runtime state. Any test executable
 # that compiles InvestigationSession.cpp must also link this implementation closure.
 set(INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES
+
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
     ../src/domain/RecordTimestamp.h
@@ -118,6 +126,8 @@ qt_add_executable(
     ParserTests
 
     ParserTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/compatibility/TelemetryEventAdapter.h
     ../src/compatibility/TelemetryEventAdapter.cpp
@@ -403,6 +413,8 @@ qt_add_executable(
 
     DelimitedTextImporterTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
@@ -439,6 +451,8 @@ qt_add_executable(
     IisW3cImporterTests
 
     IisW3cImporterTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
@@ -509,6 +523,8 @@ qt_add_executable(
 
     ImportFormatSuggestionServiceTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/importing/BuiltInImportProfilePresets.h
     ../src/importing/ImportFormatSuggestion.h
     ../src/importing/ImportFormatSuggestionService.h
@@ -531,6 +547,8 @@ qt_add_executable(
     ImportPreviewServiceTests
 
     ImportPreviewServiceTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
@@ -709,6 +727,8 @@ qt_add_executable(
 
     JsonLinesImporterTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
@@ -749,6 +769,8 @@ qt_add_executable(
 
     KeyValueTextImporterTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
@@ -788,6 +810,8 @@ qt_add_executable(
 
     RegexTextImporterTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
@@ -824,6 +848,8 @@ qt_add_executable(
     StructuredJsonImporterTests
 
     StructuredJsonImporterTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
@@ -909,6 +935,8 @@ qt_add_executable(
 
     SyslogImporterTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
@@ -947,6 +975,8 @@ qt_add_executable(
     XmlImporterTests
 
     XmlImporterTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
@@ -989,6 +1019,8 @@ qt_add_executable(
 
     SourceFamilyImportServiceTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
     ../src/domain/RecordIdentity.cpp
@@ -1024,6 +1056,26 @@ target_link_libraries(
 add_test(
     NAME SourceFamilyImportServiceTests
     COMMAND SourceFamilyImportServiceTests
+)
+
+qt_add_executable(
+    SharedReadFileTests
+
+    SharedReadFileTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
+)
+
+target_link_libraries(
+    SharedReadFileTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME SharedReadFileTests
+    COMMAND SharedReadFileTests
 )
 
 # ----------------------------------------------------------------------------
@@ -1976,6 +2028,11 @@ qt_add_executable(
 
     LiveFileFollowerTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
+    ../src/io/SharedReadFile.h
+    ../src/io/SharedReadFile.cpp
+
     ../src/live/LiveFileFollower.h
     ../src/live/LiveFileFollower.cpp
     ../src/live/LiveFileFollowState.h
@@ -2066,6 +2123,8 @@ qt_add_executable(
     LiveLineImportAdapterTests
 
     LiveLineImportAdapterTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/domain/InvestigationRecord.h
     ../src/domain/RecordIdentity.h
@@ -2228,6 +2287,8 @@ qt_add_executable(
 
     LiveLineSourceContextTests.cpp
 
+    ${SHARED_READ_FILE_SOURCES}
+
     ../src/live/LiveLineRecordFramer.h
     ../src/live/LiveLineRecordFramer.cpp
     ../src/live/LiveLineSourceContext.h
@@ -2250,6 +2311,8 @@ qt_add_executable(
     LiveStructuredJsonSourceContextTests
 
     LiveStructuredJsonSourceContextTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/importing/StructuredJsonRecordStreamFramer.h
     ../src/importing/StructuredJsonRecordStreamFramer.cpp
@@ -2275,6 +2338,8 @@ qt_add_executable(
     LiveStructuredXmlSourceContextTests
 
     LiveStructuredXmlSourceContextTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
 
     ../src/importing/StructuredXmlRecordStreamParser.h
     ../src/importing/StructuredXmlRecordStreamParser.cpp
