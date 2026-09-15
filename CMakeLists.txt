@@ -259,6 +259,9 @@ qt_add_executable(TraceScope
     src/workspace/HybridInvestigationReconstructionService.h
     src/workspace/HybridInvestigationReconstructionService.cpp
     src/workspace/InvestigationSessionHybrid.cpp
+    src/workspace/InvestigationSessionBackingPersistence.h
+    src/workspace/InvestigationSessionBackingPersistenceSerialization.h
+    src/workspace/InvestigationSessionBackingPersistenceSerialization.cpp
 
 )
 

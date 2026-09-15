@@ -8,6 +8,7 @@
 #include "../src/persistence/InvestigationSessionSnapshotFile.h"
 #include "../src/sources/SourcePhysicalIdentity.h"
 #include "../src/workspace/InvestigationSession.h"
+#include "../src/workspace/InvestigationSessionPersistence.h"
 
 namespace
 {
@@ -131,6 +132,10 @@ class InvestigationSessionHybridReloadTests
 private slots:
     void reloadPreservesSnapshotEvidenceAndRecordState();
     void failedReloadLeavesSessionUntouched();
+
+    void capturesSourceBackedPersistence();
+    void capturesSnapshotBackedPersistence();
+    void capturesHybridPersistence();
 };
 
 void InvestigationSessionHybridReloadTests::
@@ -607,6 +612,554 @@ void InvestigationSessionHybridReloadTests::
             .externalSource()
             ->sourceGeneration,
         originalGeneration
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    capturesSourceBackedPersistence()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "source-backed.jsonl"
+                )
+            );
+
+    writeFile(
+        sourcePath,
+        QByteArray(
+            "{\"message\":\"record\"}\n"
+            )
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult importResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration;
+
+    sourceFamilyConfiguration
+        .includeRotatedSources = true;
+
+    sourceFamilyConfiguration
+        .rotationRule
+        .namingScheme =
+        RotatedSourceNamingScheme::
+        NumericSuffix;
+
+    /*
+     * These are current discovery results and must
+     * not be carried into durable persistence.
+     */
+    sourceFamilyConfiguration
+        .rotatedSourcePaths = {
+        directory.filePath(
+            QStringLiteral(
+                "source-backed.jsonl.2"
+                )
+            ),
+        directory.filePath(
+            QStringLiteral(
+                "source-backed.jsonl.1"
+                )
+            )
+    };
+
+    InvestigationSession session(
+        QStringLiteral(
+            "source-backed-session"
+            ),
+        sourcePath,
+        profile,
+        std::move(
+            importResult
+            ),
+        sourceFamilyConfiguration
+        );
+
+    constexpr quint64
+        ExpectedGeneration = 7;
+
+    const SourcePhysicalIdentityCaptureResult
+        identityResult =
+        captureSourcePhysicalIdentity(
+            sourcePath
+            );
+
+    QVERIFY2(
+        identityResult.succeeded,
+        qPrintable(
+            identityResult.errorMessage
+            )
+        );
+
+    session.updateExternalSourceRuntimeState(
+        ExpectedGeneration,
+        &identityResult.identity
+        );
+
+    const PersistedInvestigationSession
+        persisted =
+        InvestigationSessionPersistence::
+        capture(
+            session
+            );
+
+    QVERIFY(
+        persisted.backing.mode
+        == PersistedInvestigationSessionBackingMode::
+        SourceBacked
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .externalSourceBinding
+            .has_value()
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .sourceImportProfile
+            .has_value()
+        );
+
+    QVERIFY(
+        !persisted
+             .backing
+             .snapshotReference
+             .has_value()
+        );
+
+    const PersistedInvestigationExternalSourceBinding
+        &externalSource =
+        *persisted
+             .backing
+             .externalSourceBinding;
+
+    QCOMPARE(
+        externalSource.sourceGeneration,
+        ExpectedGeneration
+        );
+
+    QCOMPARE(
+        externalSource.sourcePath,
+        QFileInfo(
+            sourcePath
+            ).absoluteFilePath()
+        );
+
+    QVERIFY(
+        externalSource
+            .sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        externalSource
+            .sourceIdentity
+            ->prefixFingerprint,
+        identityResult
+            .identity
+            .prefixFingerprint
+        );
+
+    QVERIFY(
+        externalSource
+            .sourceFamilyConfiguration
+            .includeRotatedSources
+        );
+
+    QVERIFY(
+        externalSource
+            .sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .sourceImportProfile
+            ->importerId
+        == profile.importerId
+        );
+
+    /*
+     * Compatibility mirrors remain populated until
+     * schema-v2 restoration no longer needs them.
+     */
+    QCOMPARE(
+        persisted.sourcePath,
+        QFileInfo(
+            sourcePath
+            ).absoluteFilePath()
+        );
+
+    QCOMPARE(
+        persisted.importProfile.importerId,
+        profile.importerId
+        );
+
+    QVERIFY(
+        persisted
+            .sourceFamilyConfiguration
+            .includeRotatedSources
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    capturesSnapshotBackedPersistence()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString snapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "snapshot-only.tsinv"
+                )
+            );
+
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile =
+        jsonLinesProfile();
+
+    InvestigationRecord record;
+
+    record.recordId =
+        QStringLiteral(
+            "snapshot-record"
+            );
+
+    record.message =
+        QStringLiteral(
+            "Saved snapshot record"
+            );
+
+    record.source.sourcePath =
+        QStringLiteral(
+            "C:/original/source.jsonl"
+            );
+
+    record.source.sourceName =
+        QStringLiteral(
+            "source.jsonl"
+            );
+
+    record.source.recordNumber = 1;
+
+    snapshot.records.append(
+        record
+        );
+
+    snapshot.processedRecordCount = 1;
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-backed-session"
+                ),
+            snapshotPath,
+            snapshot
+            );
+
+    QVERIFY(
+        session != nullptr
+        );
+
+    const PersistedInvestigationSession
+        persisted =
+        InvestigationSessionPersistence::
+        capture(
+            *session
+            );
+
+    QVERIFY(
+        persisted.backing.mode
+        == PersistedInvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .snapshotReference
+            .has_value()
+        );
+
+    QVERIFY(
+        !persisted
+             .backing
+             .externalSourceBinding
+             .has_value()
+        );
+
+    QVERIFY(
+        !persisted
+             .backing
+             .sourceImportProfile
+             .has_value()
+        );
+
+    QCOMPARE(
+        *persisted
+             .backing
+             .snapshotReference,
+        QFileInfo(
+            snapshotPath
+            ).absoluteFilePath()
+        );
+
+    /*
+     * Snapshot-backed provenance can still populate
+     * the temporary compatibility sourcePath, but it
+     * must not become an external-source dependency.
+     */
+    QCOMPARE(
+        persisted.sourcePath,
+        QStringLiteral(
+            "C:/original/source.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        persisted.importProfile.importerId,
+        QStringLiteral(
+            "json-lines"
+            )
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    capturesHybridPersistence()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "hybrid.jsonl"
+                )
+            );
+
+    const QString snapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "hybrid.tsinv"
+                )
+            );
+
+    writeFile(
+        sourcePath,
+        QByteArray(
+            "{\"message\":\"current\"}\n"
+            )
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult imported =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        imported.records.size(),
+        1
+        );
+
+    constexpr quint64
+        ExpectedGeneration = 4;
+
+    rebaseRecords(
+        imported.records,
+        ExpectedGeneration
+        );
+
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile =
+        profile;
+
+    snapshot.records =
+        imported.records;
+
+    snapshot.processedRecordCount =
+        imported.processedRecordCount;
+
+    InvestigationExternalSourceBinding
+        externalSource =
+        makeExternalBinding(
+            sourcePath,
+            ExpectedGeneration
+            );
+
+    QVERIFY(
+        externalSource
+            .sourceIdentity
+            .has_value()
+        );
+
+    externalSource
+        .sourceFamilyConfiguration
+        .includeRotatedSources = true;
+
+    externalSource
+        .sourceFamilyConfiguration
+        .rotationRule
+        .namingScheme =
+        RotatedSourceNamingScheme::
+        NumericSuffix;
+
+    /*
+     * Physical family members must not survive the
+     * persistence capture.
+     */
+    externalSource
+        .sourceFamilyConfiguration
+        .rotatedSourcePaths = {
+        directory.filePath(
+            QStringLiteral(
+                "hybrid.jsonl.2"
+                )
+            ),
+        directory.filePath(
+            QStringLiteral(
+                "hybrid.jsonl.1"
+                )
+            )
+    };
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::createHybrid(
+            QStringLiteral(
+                "hybrid-session"
+                ),
+            snapshotPath,
+            snapshot,
+            externalSource
+            );
+
+    QVERIFY(
+        session != nullptr
+        );
+
+    const PersistedInvestigationSession
+        persisted =
+        InvestigationSessionPersistence::
+        capture(
+            *session
+            );
+
+    QVERIFY(
+        persisted.backing.mode
+        == PersistedInvestigationSessionBackingMode::
+        Hybrid
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .snapshotReference
+            .has_value()
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .externalSourceBinding
+            .has_value()
+        );
+
+    QVERIFY(
+        !persisted
+             .backing
+             .sourceImportProfile
+             .has_value()
+        );
+
+    QCOMPARE(
+        *persisted
+             .backing
+             .snapshotReference,
+        QFileInfo(
+            snapshotPath
+            ).absoluteFilePath()
+        );
+
+    const PersistedInvestigationExternalSourceBinding
+        &persistedExternalSource =
+        *persisted
+             .backing
+             .externalSourceBinding;
+
+    QCOMPARE(
+        persistedExternalSource.sourceGeneration,
+        ExpectedGeneration
+        );
+
+    QCOMPARE(
+        persistedExternalSource.sourcePath,
+        QFileInfo(
+            sourcePath
+            ).absoluteFilePath()
+        );
+
+    QVERIFY(
+        persistedExternalSource
+            .sourceIdentity
+            .has_value()
+        );
+
+    QVERIFY(
+        persistedExternalSource
+            .sourceFamilyConfiguration
+            .includeRotatedSources
+        );
+
+    QVERIFY(
+        persistedExternalSource
+            .sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    QCOMPARE(
+        persisted.importProfile.importerId,
+        profile.importerId
         );
 }
 

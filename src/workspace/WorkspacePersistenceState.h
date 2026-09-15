@@ -9,6 +9,7 @@
 #include <QStringList>
 
 #include "InvestigationPresentationState.h"
+#include "InvestigationSessionBackingPersistence.h"
 #include "WorkspaceDocumentLayoutState.h"
 
 #include "../analysis/BurstDetectionSettings.h"
@@ -90,6 +91,20 @@ struct PersistedSourceFamilyConfiguration
 struct PersistedInvestigationSession
 {
     QString sessionId;
+
+    PersistedInvestigationSessionBacking
+        backing;
+
+    /*
+     * Temporary compatibility mirrors.
+     *
+     * These keep the existing workspace-open path
+     * compiling while schema-v2 restoration is wired
+     * in. Schema v2 JSON will not persist these fields.
+     *
+     * Schema-v1 deserialization will populate both
+     * these mirrors and the normalized backing object.
+     */
     QString sourcePath;
 
     ImportProfile importProfile;

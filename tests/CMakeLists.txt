@@ -1976,6 +1976,40 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationSessionBackingPersistenceSerializationTests
+
+    InvestigationSessionBackingPersistenceSerializationTests.cpp
+
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/SourceFamilyConfiguration.h
+    ../src/sources/SourcePhysicalIdentity.h
+
+    ../src/workspace/InvestigationSessionBackingPersistence.h
+    ../src/workspace/InvestigationSessionBackingPersistenceSerialization.h
+    ../src/workspace/InvestigationSessionBackingPersistenceSerialization.cpp
+)
+
+target_link_libraries(
+    InvestigationSessionBackingPersistenceSerializationTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSessionBackingPersistenceSerializationTests
+    COMMAND InvestigationSessionBackingPersistenceSerializationTests
+)
+
+qt_add_executable(
     HybridInvestigationCandidateBuilderTests
 
     HybridInvestigationCandidateBuilderTests.cpp
@@ -2109,13 +2143,17 @@ qt_add_executable(
     ../src/workspace/HybridInvestigationCandidateBuilder.cpp
     ../src/workspace/HybridInvestigationReconstructionService.h
     ../src/workspace/HybridInvestigationReconstructionService.cpp
-    ../src/workspace/InvestigationSessionBacking.h
-    ../src/workspace/InvestigationSessionBacking.cpp
     ../src/workspace/InvestigationSession.h
     ../src/workspace/InvestigationSession.cpp
+    ../src/workspace/InvestigationSessionBacking.h
+    ../src/workspace/InvestigationSessionBacking.cpp
+    ../src/workspace/InvestigationSessionBackingPersistence.h
     ../src/workspace/InvestigationSessionHybrid.cpp
+    ../src/workspace/InvestigationSessionPersistence.h
+    ../src/workspace/InvestigationSessionPersistence.cpp
     ../src/workspace/InvestigationStateStore.h
     ../src/workspace/InvestigationStateStore.cpp
+    ../src/workspace/WorkspacePersistenceState.h
 )
 
 target_link_libraries(
