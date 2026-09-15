@@ -2251,11 +2251,17 @@ qt_add_executable(
     ../src/importing/ImportProfileSerialization.h
     ../src/importing/ImportProfileSerialization.cpp
 
+    ../src/sources/SourceFamilyConfiguration.h
+    ../src/sources/SourcePhysicalIdentity.h
+
     ../src/workspace/InvestigationComparisonPersistenceSerialization.h
     ../src/workspace/InvestigationComparisonPersistenceSerialization.cpp
     ../src/workspace/InvestigationPresentationState.h
     ../src/workspace/InvestigationPresentationStateSerialization.h
     ../src/workspace/InvestigationPresentationStateSerialization.cpp
+    ../src/workspace/InvestigationSessionBackingPersistence.h
+    ../src/workspace/InvestigationSessionBackingPersistenceSerialization.h
+    ../src/workspace/InvestigationSessionBackingPersistenceSerialization.cpp
     ../src/workspace/WorkspaceDocumentLayoutSerialization.h
     ../src/workspace/WorkspaceDocumentLayoutSerialization.cpp
     ../src/workspace/WorkspaceDocumentLayoutState.h

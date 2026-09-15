@@ -12,6 +12,7 @@
 
 #include "InvestigationComparisonPersistenceSerialization.h"
 #include "InvestigationPresentationStateSerialization.h"
+#include "InvestigationSessionBackingPersistenceSerialization.h"
 #include "WorkspaceDocumentLayoutSerialization.h"
 
 #include "../importing/ImportProfileSerialization.h"
@@ -398,6 +399,225 @@ customFieldFiltersFromJson(
 
     return filters;
 }
+
+SourceFamilyConfiguration sourceFamilyFromLegacy(
+    const PersistedSourceFamilyConfiguration
+        &persisted
+    )
+{
+    SourceFamilyConfiguration configuration;
+
+    configuration.includeRotatedSources =
+        persisted.includeRotatedSources;
+
+    configuration.rotationRule =
+        persisted.rotationRule;
+
+    /*
+     * Physical family members are never persisted.
+     * They are rediscovered when the source is opened.
+     */
+    configuration.rotatedSourcePaths.clear();
+
+    return configuration;
+}
+
+PersistedSourceFamilyConfiguration
+legacySourceFamilyFromConfiguration(
+    const SourceFamilyConfiguration
+        &configuration
+    )
+{
+    PersistedSourceFamilyConfiguration persisted;
+
+    persisted.includeRotatedSources =
+        configuration.includeRotatedSources;
+
+    persisted.rotationRule =
+        configuration.rotationRule;
+
+    return persisted;
+}
+
+bool hasCompleteBacking(
+    const PersistedInvestigationSessionBacking
+        &backing
+    )
+{
+    const bool hasSnapshot =
+        backing.snapshotReference.has_value()
+        && !backing
+                .snapshotReference
+                ->trimmed()
+                .isEmpty();
+
+    const bool hasExternal =
+        backing.externalSourceBinding.has_value()
+        && !backing
+                .externalSourceBinding
+                ->sourcePath
+                .trimmed()
+                .isEmpty();
+
+    const bool hasSourceProfile =
+        backing.sourceImportProfile.has_value();
+
+    switch (backing.mode) {
+    case PersistedInvestigationSessionBackingMode::
+        SourceBacked:
+        return hasExternal
+               && hasSourceProfile;
+
+    case PersistedInvestigationSessionBackingMode::
+        SnapshotBacked:
+        return hasSnapshot
+               && !hasExternal
+               && !hasSourceProfile;
+
+    case PersistedInvestigationSessionBackingMode::
+        Hybrid:
+        return hasSnapshot
+               && hasExternal
+               && !hasSourceProfile;
+    }
+
+    return false;
+}
+
+PersistedInvestigationSessionBacking
+effectiveBackingForSerialization(
+    const PersistedInvestigationSession &session
+    )
+{
+    /*
+     * Normal schema-v2 callers already populate the
+     * normalized backing object.
+     */
+    if (hasCompleteBacking(
+            session.backing
+            )) {
+        return session.backing;
+    }
+
+    /*
+     * Transitional compatibility:
+     *
+     * Existing callers/tests may still populate only
+     * the schema-v1 mirror fields. Normalize those to
+     * SourceBacked state before writing schema 2.
+     */
+    PersistedInvestigationSessionBacking backing;
+
+    backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        SourceBacked;
+
+    if (!session.sourcePath.trimmed().isEmpty()) {
+        PersistedInvestigationExternalSourceBinding
+            externalSource;
+
+        externalSource.sourcePath =
+            session.sourcePath;
+
+        externalSource.sourceFamilyConfiguration =
+            sourceFamilyFromLegacy(
+                session.sourceFamilyConfiguration
+                );
+
+        /*
+         * Schema 1 had no persisted logical source
+         * generation or physical identity.
+         */
+        externalSource.sourceGeneration = 0;
+
+        backing.externalSourceBinding =
+            std::move(externalSource);
+    }
+
+    backing.sourceImportProfile =
+        session.importProfile;
+
+    return backing;
+}
+
+void populateCompatibilityMirrors(
+    PersistedInvestigationSession &session
+    )
+{
+    session.sourcePath.clear();
+
+    session.importProfile =
+        ImportProfile();
+
+    session.sourceFamilyConfiguration =
+        PersistedSourceFamilyConfiguration();
+
+    if (session
+            .backing
+            .externalSourceBinding
+            .has_value()) {
+        const PersistedInvestigationExternalSourceBinding
+            &externalSource =
+            *session
+                 .backing
+                 .externalSourceBinding;
+
+        session.sourcePath =
+            externalSource.sourcePath;
+
+        session.sourceFamilyConfiguration =
+            legacySourceFamilyFromConfiguration(
+                externalSource
+                    .sourceFamilyConfiguration
+                );
+    }
+
+    if (session
+            .backing
+            .sourceImportProfile
+            .has_value()) {
+        session.importProfile =
+            *session
+                 .backing
+                 .sourceImportProfile;
+    }
+}
+
+void migrateLegacyBacking(
+    PersistedInvestigationSession &session
+    )
+{
+    PersistedInvestigationExternalSourceBinding
+        externalSource;
+
+    externalSource.sourcePath =
+        session.sourcePath;
+
+    externalSource.sourceFamilyConfiguration =
+        sourceFamilyFromLegacy(
+            session.sourceFamilyConfiguration
+            );
+
+    /*
+     * Schema 1 had no generation or physical identity.
+     * Generation zero is therefore the conservative
+     * migrated starting point.
+     */
+    externalSource.sourceGeneration = 0;
+
+    session.backing =
+        PersistedInvestigationSessionBacking();
+
+    session.backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        SourceBacked;
+
+    session.backing.externalSourceBinding =
+        std::move(externalSource);
+
+    session.backing.sourceImportProfile =
+        session.importProfile;
+}
 }
 
 QByteArray WorkspaceSerializer::serialize(
@@ -408,7 +628,8 @@ QByteArray WorkspaceSerializer::serialize(
 
     root.insert(
         QStringLiteral("schemaVersion"),
-        workspace.schemaVersion
+        WorkspacePersistenceState::
+        CurrentSchemaVersion
         );
 
     QJsonArray sessions;
@@ -419,6 +640,9 @@ QByteArray WorkspaceSerializer::serialize(
     const InvestigationPresentationStateSerializer
         presentationSerializer;
 
+    const InvestigationSessionBackingPersistenceSerializer
+        backingSerializer;
+
     for (const PersistedInvestigationSession &session
          : workspace.sessions) {
         QJsonObject sessionObject;
@@ -428,93 +652,17 @@ QByteArray WorkspaceSerializer::serialize(
             session.sessionId
             );
 
-        sessionObject.insert(
-            QStringLiteral("sourcePath"),
-            session.sourcePath
-            );
-
-        QJsonObject sourceFamilyObject;
-
-        sourceFamilyObject.insert(
-            QStringLiteral("includeRotatedSources"),
-            session
-                .sourceFamilyConfiguration
-                .includeRotatedSources
-            );
-
-        const RotatedSourceRule &rotationRule =
-            session
-                .sourceFamilyConfiguration
-                .rotationRule;
-
-        QJsonObject rotationRuleObject;
-
-        rotationRuleObject.insert(
-            QStringLiteral("namingScheme"),
-            rotatedSourceNamingSchemeToJson(
-                rotationRule.namingScheme
-                )
-            );
-
-        rotationRuleObject.insert(
-            QStringLiteral("numericOrderDirection"),
-            rotatedSourceOrderDirectionToJson(
-                rotationRule.numericOrderDirection
-                )
-            );
-
-        rotationRuleObject.insert(
-            QStringLiteral("customRegularExpression"),
-            rotationRule.customRegularExpression
-            );
-
-        rotationRuleObject.insert(
-            QStringLiteral("customOrderCaptureGroup"),
-            rotationRule.customOrderCaptureGroup
-            );
-
-        rotationRuleObject.insert(
-            QStringLiteral("customOrderValueType"),
-            rotatedSourceOrderValueTypeToJson(
-                rotationRule.customOrderValueType
-                )
-            );
-
-        rotationRuleObject.insert(
-            QStringLiteral("customOrderDirection"),
-            rotatedSourceOrderDirectionToJson(
-                rotationRule.customOrderDirection
-                )
-            );
-
-        rotationRuleObject.insert(
-            QStringLiteral("customDateTimeFormat"),
-            rotationRule.customDateTimeFormat
-            );
-
-        sourceFamilyObject.insert(
-            QStringLiteral("rotationRule"),
-            rotationRuleObject
-            );
-
-        sessionObject.insert(
-            QStringLiteral("sourceFamilyConfiguration"),
-            sourceFamilyObject
-            );
-
-        const QByteArray profileJson =
-            profileSerializer.serialize(
-                session.importProfile
-                );
-
-        const QJsonDocument profileDocument =
-            QJsonDocument::fromJson(
-                profileJson
+        const PersistedInvestigationSessionBacking
+            backing =
+            effectiveBackingForSerialization(
+                session
                 );
 
         sessionObject.insert(
-            QStringLiteral("importProfile"),
-            profileDocument.object()
+            QStringLiteral("backing"),
+            backingSerializer.serialize(
+                backing
+                )
             );
 
         QJsonArray recordStates;
@@ -738,9 +886,11 @@ WorkspaceSerializer::deserialize(
             );
     }
 
-    if (*schemaVersion !=
-        WorkspacePersistenceState::
-        CurrentSchemaVersion) {
+    if (*schemaVersion != 1
+        &&
+        *schemaVersion !=
+            WorkspacePersistenceState::
+            CurrentSchemaVersion) {
         return failure(
             QStringLiteral(
                 "UNSUPPORTED_SCHEMA_VERSION"
@@ -769,11 +919,20 @@ WorkspaceSerializer::deserialize(
 
     WorkspacePersistenceState workspace;
 
+    /*
+     * Deserialized workspaces are normalized into the
+     * current in-memory schema even when their source
+     * document was schema 1.
+     */
     workspace.schemaVersion =
-        *schemaVersion;
+        WorkspacePersistenceState::
+        CurrentSchemaVersion;
 
     const ImportProfileSerializer
         profileSerializer;
+
+    const InvestigationSessionBackingPersistenceSerializer
+        backingSerializer;
 
     const QJsonArray sessions =
         sessionsValue.toArray();
@@ -814,309 +973,371 @@ WorkspaceSerializer::deserialize(
                 );
         }
 
-        if (!readRequiredString(
-                sessionObject,
-                QStringLiteral("sourcePath"),
-                session.sourcePath
-                )
-            ||
-            session.sourcePath.isEmpty()) {
-            return failure(
-                QStringLiteral(
-                    "INVALID_SOURCE_PATH"
-                    ),
-                QStringLiteral(
-                    "Each workspace session must have a non-empty sourcePath."
+        if (*schemaVersion == 1) {
+            if (!readRequiredString(
+                    sessionObject,
+                    QStringLiteral("sourcePath"),
+                    session.sourcePath
                     )
-                );
-        }
-
-        const QJsonValue sourceFamilyValue =
-            sessionObject.value(
-                QStringLiteral(
-                    "sourceFamilyConfiguration"
-                    )
-                );
-
-        if (!sourceFamilyValue.isUndefined()) {
-            if (!sourceFamilyValue.isObject()) {
+                ||
+                session.sourcePath.isEmpty()) {
                 return failure(
                     QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                        "INVALID_SOURCE_PATH"
                         ),
                     QStringLiteral(
-                        "The session sourceFamilyConfiguration field must be an object."
+                        "Each workspace session must have a non-empty sourcePath."
                         )
                     );
             }
 
-            const QJsonObject sourceFamilyObject =
-                sourceFamilyValue.toObject();
-
-            const QJsonValue includeRotatedValue =
-                sourceFamilyObject.value(
+            const QJsonValue sourceFamilyValue =
+                sessionObject.value(
                     QStringLiteral(
-                        "includeRotatedSources"
+                        "sourceFamilyConfiguration"
                         )
                     );
 
-            if (!includeRotatedValue.isBool()) {
-                return failure(
-                    QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
-                        ),
-                    QStringLiteral(
-                        "The persisted includeRotatedSources value must be boolean."
-                        )
-                    );
-            }
-
-            const QJsonValue rotationRuleValue =
-                sourceFamilyObject.value(
-                    QStringLiteral("rotationRule")
-                    );
-
-            if (!rotationRuleValue.isObject()) {
-                return failure(
-                    QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
-                        ),
-                    QStringLiteral(
-                        "The persisted source-family rotationRule must be an object."
-                        )
-                    );
-            }
-
-            const QJsonObject rotationRuleObject =
-                rotationRuleValue.toObject();
-
-            QString namingSchemeText;
-            QString orderValueTypeText;
-            QString orderDirectionText;
-
-            QString numericOrderDirectionText =
-                QStringLiteral("descending");
-
-            const QJsonValue numericOrderDirectionValue =
-                rotationRuleObject.value(
-                    QStringLiteral(
-                        "numericOrderDirection"
-                        )
-                    );
-
-            if (!numericOrderDirectionValue.isUndefined()) {
-                if (!numericOrderDirectionValue.isString()) {
+            if (!sourceFamilyValue.isUndefined()) {
+                if (!sourceFamilyValue.isObject()) {
                     return failure(
                         QStringLiteral(
                             "INVALID_SOURCE_FAMILY_CONFIGURATION"
                             ),
                         QStringLiteral(
-                            "The persisted numericOrderDirection "
-                            "value must be a string."
+                            "The session sourceFamilyConfiguration field must be an object."
                             )
                         );
                 }
 
-                numericOrderDirectionText =
-                    numericOrderDirectionValue.toString();
-            }
+                const QJsonObject sourceFamilyObject =
+                    sourceFamilyValue.toObject();
 
-            if (!readRequiredString(
-                    rotationRuleObject,
-                    QStringLiteral("namingScheme"),
-                    namingSchemeText
-                    )
-                ||
-                !readRequiredString(
-                    rotationRuleObject,
-                    QStringLiteral(
-                        "customOrderValueType"
-                        ),
-                    orderValueTypeText
-                    )
-                ||
-                !readRequiredString(
-                    rotationRuleObject,
-                    QStringLiteral(
-                        "customOrderDirection"
-                        ),
-                    orderDirectionText
-                    )) {
-                return failure(
-                    QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
-                        ),
-                    QStringLiteral(
-                        "The persisted source-family rotation rule contains invalid enum values."
+                const QJsonValue includeRotatedValue =
+                    sourceFamilyObject.value(
+                        QStringLiteral(
+                            "includeRotatedSources"
+                            )
+                        );
+
+                if (!includeRotatedValue.isBool()) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted includeRotatedSources value must be boolean."
+                            )
+                        );
+                }
+
+                const QJsonValue rotationRuleValue =
+                    sourceFamilyObject.value(
+                        QStringLiteral("rotationRule")
+                        );
+
+                if (!rotationRuleValue.isObject()) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted source-family rotationRule must be an object."
+                            )
+                        );
+                }
+
+                const QJsonObject rotationRuleObject =
+                    rotationRuleValue.toObject();
+
+                QString namingSchemeText;
+                QString orderValueTypeText;
+                QString orderDirectionText;
+
+                QString numericOrderDirectionText =
+                    QStringLiteral("descending");
+
+                const QJsonValue numericOrderDirectionValue =
+                    rotationRuleObject.value(
+                        QStringLiteral(
+                            "numericOrderDirection"
+                            )
+                        );
+
+                if (!numericOrderDirectionValue.isUndefined()) {
+                    if (!numericOrderDirectionValue.isString()) {
+                        return failure(
+                            QStringLiteral(
+                                "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                                ),
+                            QStringLiteral(
+                                "The persisted numericOrderDirection "
+                                "value must be a string."
+                                )
+                            );
+                    }
+
+                    numericOrderDirectionText =
+                        numericOrderDirectionValue.toString();
+                }
+
+                if (!readRequiredString(
+                        rotationRuleObject,
+                        QStringLiteral("namingScheme"),
+                        namingSchemeText
                         )
-                    );
-            }
-
-            const auto namingScheme =
-                rotatedSourceNamingSchemeFromJson(
-                    namingSchemeText
-                    );
-
-            const auto orderValueType =
-                rotatedSourceOrderValueTypeFromJson(
-                    orderValueTypeText
-                    );
-
-            const auto orderDirection =
-                rotatedSourceOrderDirectionFromJson(
-                    orderDirectionText
-                    );
-
-            const auto numericOrderDirection =
-                rotatedSourceOrderDirectionFromJson(
-                    numericOrderDirectionText
-                    );
-
-            if (!namingScheme.has_value()
-                || !numericOrderDirection.has_value()
-                || !orderValueType.has_value()
-                || !orderDirection.has_value()) {
-                return failure(
-                    QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
-                        ),
-                    QStringLiteral(
-                        "The persisted source-family rotation rule contains unsupported enum values."
+                    ||
+                    !readRequiredString(
+                        rotationRuleObject,
+                        QStringLiteral(
+                            "customOrderValueType"
+                            ),
+                        orderValueTypeText
                         )
-                    );
-            }
+                    ||
+                    !readRequiredString(
+                        rotationRuleObject,
+                        QStringLiteral(
+                            "customOrderDirection"
+                            ),
+                        orderDirectionText
+                        )) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted source-family rotation rule contains invalid enum values."
+                            )
+                        );
+                }
 
-            const QJsonValue regularExpressionValue =
-                rotationRuleObject.value(
-                    QStringLiteral(
-                        "customRegularExpression"
-                        )
-                    );
+                const auto namingScheme =
+                    rotatedSourceNamingSchemeFromJson(
+                        namingSchemeText
+                        );
 
-            const QJsonValue captureGroupValue =
-                rotationRuleObject.value(
-                    QStringLiteral(
-                        "customOrderCaptureGroup"
-                        )
-                    );
+                const auto orderValueType =
+                    rotatedSourceOrderValueTypeFromJson(
+                        orderValueTypeText
+                        );
 
-            const QJsonValue dateTimeFormatValue =
-                rotationRuleObject.value(
-                    QStringLiteral(
-                        "customDateTimeFormat"
-                        )
-                    );
+                const auto orderDirection =
+                    rotatedSourceOrderDirectionFromJson(
+                        orderDirectionText
+                        );
 
-            if (!regularExpressionValue.isString()
-                || !captureGroupValue.isDouble()
-                || !dateTimeFormatValue.isString()) {
-                return failure(
-                    QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
-                        ),
-                    QStringLiteral(
-                        "The persisted source-family rotation rule contains invalid configuration values."
-                        )
-                    );
-            }
+                const auto numericOrderDirection =
+                    rotatedSourceOrderDirectionFromJson(
+                        numericOrderDirectionText
+                        );
 
-            const double captureGroupNumber =
-                captureGroupValue.toDouble();
+                if (!namingScheme.has_value()
+                    || !numericOrderDirection.has_value()
+                    || !orderValueType.has_value()
+                    || !orderDirection.has_value()) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted source-family rotation rule contains unsupported enum values."
+                            )
+                        );
+                }
 
-            if (captureGroupNumber < 1
-                || captureGroupNumber >
-                       std::numeric_limits<int>::max()
-                ||
-                std::floor(captureGroupNumber)
-                    != captureGroupNumber) {
-                return failure(
-                    QStringLiteral(
-                        "INVALID_SOURCE_FAMILY_CONFIGURATION"
-                        ),
-                    QStringLiteral(
-                        "The persisted custom rotation capture group must be a positive integer."
-                        )
-                    );
-            }
+                const QJsonValue regularExpressionValue =
+                    rotationRuleObject.value(
+                        QStringLiteral(
+                            "customRegularExpression"
+                            )
+                        );
 
-            RotatedSourceRule &rotationRule =
+                const QJsonValue captureGroupValue =
+                    rotationRuleObject.value(
+                        QStringLiteral(
+                            "customOrderCaptureGroup"
+                            )
+                        );
+
+                const QJsonValue dateTimeFormatValue =
+                    rotationRuleObject.value(
+                        QStringLiteral(
+                            "customDateTimeFormat"
+                            )
+                        );
+
+                if (!regularExpressionValue.isString()
+                    || !captureGroupValue.isDouble()
+                    || !dateTimeFormatValue.isString()) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted source-family rotation rule contains invalid configuration values."
+                            )
+                        );
+                }
+
+                const double captureGroupNumber =
+                    captureGroupValue.toDouble();
+
+                if (captureGroupNumber < 1
+                    || captureGroupNumber >
+                        std::numeric_limits<int>::max()
+                    ||
+                    std::floor(captureGroupNumber)
+                        != captureGroupNumber) {
+                    return failure(
+                        QStringLiteral(
+                            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+                            ),
+                        QStringLiteral(
+                            "The persisted custom rotation capture group must be a positive integer."
+                            )
+                        );
+                }
+
+                RotatedSourceRule &rotationRule =
+                    session
+                        .sourceFamilyConfiguration
+                        .rotationRule;
+
                 session
                     .sourceFamilyConfiguration
-                    .rotationRule;
+                    .includeRotatedSources =
+                    includeRotatedValue.toBool();
 
-            session
-                .sourceFamilyConfiguration
-                .includeRotatedSources =
-                includeRotatedValue.toBool();
+                rotationRule.namingScheme =
+                    *namingScheme;
 
-            rotationRule.namingScheme =
-                *namingScheme;
+                rotationRule.numericOrderDirection =
+                    *numericOrderDirection;
 
-            rotationRule.numericOrderDirection =
-                *numericOrderDirection;
+                rotationRule.customRegularExpression =
+                    regularExpressionValue.toString();
 
-            rotationRule.customRegularExpression =
-                regularExpressionValue.toString();
+                rotationRule.customOrderCaptureGroup =
+                    static_cast<int>(
+                        captureGroupNumber
+                        );
 
-            rotationRule.customOrderCaptureGroup =
-                static_cast<int>(
-                    captureGroupNumber
+                rotationRule.customOrderValueType =
+                    *orderValueType;
+
+                rotationRule.customOrderDirection =
+                    *orderDirection;
+
+                rotationRule.customDateTimeFormat =
+                    dateTimeFormatValue.toString();
+            }
+
+            const QJsonValue profileValue =
+                sessionObject.value(
+                    QStringLiteral("importProfile")
                     );
 
-            rotationRule.customOrderValueType =
-                *orderValueType;
-
-            rotationRule.customOrderDirection =
-                *orderDirection;
-
-            rotationRule.customDateTimeFormat =
-                dateTimeFormatValue.toString();
-        }
-
-        const QJsonValue profileValue =
-            sessionObject.value(
-                QStringLiteral("importProfile")
-                );
-
-        if (!profileValue.isObject()) {
-            return failure(
-                QStringLiteral(
-                    "INVALID_IMPORT_PROFILE"
-                    ),
-                QStringLiteral(
-                    "Each workspace session must contain an importProfile object."
-                    )
-                );
-        }
-
-        const QByteArray profileJson =
-            QJsonDocument(
-                profileValue.toObject()
-                ).toJson(
-                    QJsonDocument::Compact
-                    );
-
-        const ProfileDeserializationResult
-            profileResult =
-            profileSerializer.deserialize(
-                profileJson
-                );
-
-        if (!profileResult.isSuccess()) {
-            return failure(
-                QStringLiteral(
-                    "INVALID_IMPORT_PROFILE"
-                    ),
-                QStringLiteral(
-                    "A workspace session contains an invalid import profile: %1"
-                    ).arg(
-                        profileResult.errorMessage
+            if (!profileValue.isObject()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_IMPORT_PROFILE"
+                        ),
+                    QStringLiteral(
+                        "Each workspace session must contain an importProfile object."
                         )
+                    );
+            }
+
+            const QByteArray profileJson =
+                QJsonDocument(
+                    profileValue.toObject()
+                    ).toJson(
+                        QJsonDocument::Compact
+                        );
+
+            const ProfileDeserializationResult
+                profileResult =
+                profileSerializer.deserialize(
+                    profileJson
+                    );
+
+            if (!profileResult.isSuccess()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_IMPORT_PROFILE"
+                        ),
+                    QStringLiteral(
+                        "A workspace session contains an invalid import profile: %1"
+                        ).arg(
+                            profileResult.errorMessage
+                            )
+                    );
+            }
+
+            session.importProfile =
+                *profileResult.profile;
+
+            /*
+             * Normalize the schema-v1 source-based session
+             * into the schema-v2 backing model.
+             */
+            migrateLegacyBacking(
+                session
+                );
+        } else {
+            const QJsonValue backingValue =
+                sessionObject.value(
+                    QStringLiteral("backing")
+                    );
+
+            if (!backingValue.isObject()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SESSION_BACKING"
+                        ),
+                    QStringLiteral(
+                        "Each schema-v2 workspace session "
+                        "must contain a backing object."
+                        )
+                    );
+            }
+
+            const InvestigationSessionBackingPersistenceDeserializationResult
+                backingResult =
+                backingSerializer.deserialize(
+                    backingValue.toObject()
+                    );
+
+            if (!backingResult.isSuccess()) {
+                return failure(
+                    QStringLiteral(
+                        "INVALID_SESSION_BACKING"
+                        ),
+                    QStringLiteral(
+                        "A workspace session contains "
+                        "invalid backing state: %1"
+                        )
+                        .arg(
+                            backingResult.errorMessage
+                            )
+                    );
+            }
+
+            session.backing =
+                std::move(
+                    *backingResult.backing
+                    );
+
+            /*
+             * Transitional mirrors keep the existing
+             * workspace-open implementation compiling until
+             * it becomes backing-aware in the next step.
+             */
+            populateCompatibilityMirrors(
+                session
                 );
         }
-
-        session.importProfile =
-            *profileResult.profile;
 
         const QJsonValue recordStatesValue =
             sessionObject.value(

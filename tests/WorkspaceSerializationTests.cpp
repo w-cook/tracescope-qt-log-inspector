@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
+#include "../src/importing/ImportProfileSerialization.h"
 #include "../src/workspace/WorkspaceSerialization.h"
 
 class WorkspaceSerializationTests
@@ -29,6 +30,7 @@ private slots:
     void missingDocumentLayoutUsesDefaults();
     void missingMainWindowStateUsesDefaults();
     void missingNumericOrderDirectionUsesDescendingDefault();
+    void schemaOneSessionMigratesToSourceBackedV2();
 };
 
 void WorkspaceSerializationTests::
@@ -340,16 +342,30 @@ void WorkspaceSerializationTests::
     PersistedInvestigationSession session;
 
     session.sessionId =
-        QStringLiteral("source-family-session");
+        QStringLiteral(
+            "source-family-session"
+            );
 
+    /*
+     * Populate the temporary compatibility mirrors.
+     *
+     * WorkspaceSerializer should normalize these into
+     * a schema-v2 SourceBacked backing object.
+     */
     session.sourcePath =
-        QStringLiteral("/logs/current.log");
+        QStringLiteral(
+            "/logs/current.log"
+            );
 
     session.importProfile.name =
-        QStringLiteral("Source Family Profile");
+        QStringLiteral(
+            "Source Family Profile"
+            );
 
     session.importProfile.importerId =
-        QStringLiteral("regex-text");
+        QStringLiteral(
+            "regex-text"
+            );
 
     session
         .sourceFamilyConfiguration
@@ -401,23 +417,34 @@ void WorkspaceSerializationTests::
             workspace
             );
 
-    /*
-     * The workspace persists the logical family
-     * configuration, not the physical members that
-     * happened to exist when it was saved.
-     */
     const QJsonDocument document =
         QJsonDocument::fromJson(
             json
             );
 
-    QVERIFY(document.isObject());
+    QVERIFY(
+        document.isObject()
+        );
+
+    const QJsonObject root =
+        document.object();
+
+    QCOMPARE(
+        root.value(
+                QStringLiteral(
+                    "schemaVersion"
+                    )
+                )
+            .toInt(),
+        WorkspacePersistenceState::
+        CurrentSchemaVersion
+        );
 
     const QJsonArray sessions =
-        document
-            .object()
-            .value(
-                QStringLiteral("sessions")
+        root.value(
+                QStringLiteral(
+                    "sessions"
+                    )
                 )
             .toArray();
 
@@ -431,8 +458,100 @@ void WorkspaceSerializationTests::
             .first()
             .toObject();
 
+    /*
+     * Schema 2 no longer writes the schema-v1 source
+     * fields directly on the session object.
+     */
+    QVERIFY(
+        !sessionObject.contains(
+            QStringLiteral(
+                "sourcePath"
+                )
+            )
+        );
+
+    QVERIFY(
+        !sessionObject.contains(
+            QStringLiteral(
+                "importProfile"
+                )
+            )
+        );
+
+    QVERIFY(
+        !sessionObject.contains(
+            QStringLiteral(
+                "sourceFamilyConfiguration"
+                )
+            )
+        );
+
     QVERIFY(
         sessionObject
+            .value(
+                QStringLiteral(
+                    "backing"
+                    )
+                )
+            .isObject()
+        );
+
+    const QJsonObject backingObject =
+        sessionObject
+            .value(
+                QStringLiteral(
+                    "backing"
+                    )
+                )
+            .toObject();
+
+    QCOMPARE(
+        backingObject
+            .value(
+                QStringLiteral(
+                    "mode"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "sourceBacked"
+            )
+        );
+
+    QVERIFY(
+        backingObject
+            .value(
+                QStringLiteral(
+                    "externalSourceBinding"
+                    )
+                )
+            .isObject()
+        );
+
+    const QJsonObject externalSourceObject =
+        backingObject
+            .value(
+                QStringLiteral(
+                    "externalSourceBinding"
+                    )
+                )
+            .toObject();
+
+    QCOMPARE(
+        externalSourceObject
+            .value(
+                QStringLiteral(
+                    "sourcePath"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "/logs/current.log"
+            )
+        );
+
+    QVERIFY(
+        externalSourceObject
             .value(
                 QStringLiteral(
                     "sourceFamilyConfiguration"
@@ -442,7 +561,7 @@ void WorkspaceSerializationTests::
         );
 
     const QJsonObject sourceFamilyObject =
-        sessionObject
+        externalSourceObject
             .value(
                 QStringLiteral(
                     "sourceFamilyConfiguration"
@@ -460,6 +579,10 @@ void WorkspaceSerializationTests::
             .toBool()
         );
 
+    /*
+     * Physical rotated source members are runtime
+     * discovery results and must never be persisted.
+     */
     QVERIFY(
         !sourceFamilyObject.contains(
             QStringLiteral(
@@ -468,25 +591,206 @@ void WorkspaceSerializationTests::
             )
         );
 
+    QVERIFY(
+        sourceFamilyObject
+            .value(
+                QStringLiteral(
+                    "rotationRule"
+                    )
+                )
+            .isObject()
+        );
+
+    const QJsonObject rotationRuleObject =
+        sourceFamilyObject
+            .value(
+                QStringLiteral(
+                    "rotationRule"
+                    )
+                )
+            .toObject();
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "namingScheme"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "customRegex"
+            )
+        );
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "numericOrderDirection"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "ascending"
+            )
+        );
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "customRegularExpression"
+                    )
+                )
+            .toString(),
+        rotationRule.customRegularExpression
+        );
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "customOrderCaptureGroup"
+                    )
+                )
+            .toInt(),
+        1
+        );
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "customOrderValueType"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "numeric"
+            )
+        );
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "customOrderDirection"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "ascending"
+            )
+        );
+
+    QCOMPARE(
+        rotationRuleObject
+            .value(
+                QStringLiteral(
+                    "customDateTimeFormat"
+                    )
+                )
+            .toString(),
+        QStringLiteral(
+            "yyyy-MM-dd-HH-mm-ss"
+            )
+        );
+
+    /*
+     * Round-trip the schema-v2 document and verify the
+     * normalized backing model.
+     */
     const WorkspaceDeserializationResult
         result =
         serializer.deserialize(
             json
             );
 
-    QVERIFY(result.isSuccess());
-    QVERIFY(result.workspace.has_value());
+    QVERIFY2(
+        result.isSuccess(),
+        qPrintable(
+            result.errorMessage
+            )
+        );
 
-    const PersistedSourceFamilyConfiguration
-        &restored =
+    QVERIFY(
+        result.workspace.has_value()
+        );
+
+    QCOMPARE(
+        result.workspace->schemaVersion,
+        WorkspacePersistenceState::
+        CurrentSchemaVersion
+        );
+
+    QCOMPARE(
+        result.workspace->sessions.size(),
+        1
+        );
+
+    const PersistedInvestigationSession
+        &restoredSession =
         result
             .workspace
             ->sessions
-            .first()
+            .first();
+
+    QVERIFY(
+        restoredSession.backing.mode
+        == PersistedInvestigationSessionBackingMode::
+        SourceBacked
+        );
+
+    QVERIFY(
+        restoredSession
+            .backing
+            .externalSourceBinding
+            .has_value()
+        );
+
+    QVERIFY(
+        restoredSession
+            .backing
+            .sourceImportProfile
+            .has_value()
+        );
+
+    const PersistedInvestigationExternalSourceBinding
+        &restoredExternalSource =
+        *restoredSession
+             .backing
+             .externalSourceBinding;
+
+    QCOMPARE(
+        restoredExternalSource.sourcePath,
+        QStringLiteral(
+            "/logs/current.log"
+            )
+        );
+
+    QCOMPARE(
+        restoredExternalSource.sourceGeneration,
+        quint64(0)
+        );
+
+    QVERIFY(
+        !restoredExternalSource
+             .sourceIdentity
+             .has_value()
+        );
+
+    const SourceFamilyConfiguration
+        &restored =
+        restoredExternalSource
             .sourceFamilyConfiguration;
 
     QVERIFY(
         restored.includeRotatedSources
+        );
+
+    QVERIFY(
+        restored.rotatedSourcePaths.isEmpty()
         );
 
     QVERIFY(
@@ -509,7 +813,8 @@ void WorkspaceSerializationTests::
         restored
             .rotationRule
             .customRegularExpression,
-        rotationRule.customRegularExpression
+        rotationRule
+            .customRegularExpression
         );
 
     QCOMPARE(
@@ -545,70 +850,94 @@ void WorkspaceSerializationTests::
             "yyyy-MM-dd-HH-mm-ss"
             )
         );
+
+    QCOMPARE(
+        restoredSession
+            .backing
+            .sourceImportProfile
+            ->importerId,
+        QStringLiteral(
+            "regex-text"
+            )
+        );
+
+    /*
+     * Transitional compatibility mirrors are also
+     * populated for the current workspace-open path.
+     */
+    QCOMPARE(
+        restoredSession.sourcePath,
+        QStringLiteral(
+            "/logs/current.log"
+            )
+        );
+
+    QCOMPARE(
+        restoredSession.importProfile.importerId,
+        QStringLiteral(
+            "regex-text"
+            )
+        );
+
+    QVERIFY(
+        restoredSession
+            .sourceFamilyConfiguration
+            .includeRotatedSources
+        );
 }
 
 void WorkspaceSerializationTests::
     missingSourceFamilyConfigurationUsesDefaults()
 {
-    WorkspacePersistenceState workspace;
+    ImportProfile profile;
 
-    PersistedInvestigationSession session;
-
-    session.sessionId =
-        QStringLiteral(
-            "legacy-source-family-session"
-            );
-
-    session.sourcePath =
-        QStringLiteral("legacy.jsonl");
-
-    session.importProfile.name =
+    profile.name =
         QStringLiteral("Legacy Profile");
 
-    session.importProfile.importerId =
+    profile.importerId =
         QStringLiteral("json-lines");
 
-    workspace.sessions.append(
-        session
-        );
+    const ImportProfileSerializer
+        profileSerializer;
 
-    const WorkspaceSerializer serializer;
-
-    const QByteArray serialized =
-        serializer.serialize(
-            workspace
-            );
-
-    QJsonDocument document =
+    const QJsonDocument profileDocument =
         QJsonDocument::fromJson(
-            serialized
+            profileSerializer.serialize(
+                profile
+                )
             );
 
-    QJsonObject root =
-        document.object();
+    QJsonObject sessionObject;
 
-    QJsonArray sessions =
-        root.value(
-                QStringLiteral("sessions")
-                )
-            .toArray();
-
-    QJsonObject sessionObject =
-        sessions.first().toObject();
-
-    /*
-     * Simulate a schema-v1 workspace written by a
-     * TraceScope version from before source-family
-     * persistence existed.
-     */
-    sessionObject.remove(
+    sessionObject.insert(
+        QStringLiteral("sessionId"),
         QStringLiteral(
-            "sourceFamilyConfiguration"
+            "legacy-source-family-session"
             )
         );
 
-    sessions[0] =
-        sessionObject;
+    sessionObject.insert(
+        QStringLiteral("sourcePath"),
+        QStringLiteral("legacy.jsonl")
+        );
+
+    sessionObject.insert(
+        QStringLiteral("importProfile"),
+        profileDocument.object()
+        );
+
+    QJsonArray sessions;
+
+    sessions.append(
+        sessionObject
+        );
+
+    QJsonObject root;
+
+    root.insert(
+        QStringLiteral("schemaVersion"),
+        1
+        );
 
     root.insert(
         QStringLiteral("sessions"),
@@ -617,32 +946,102 @@ void WorkspaceSerializationTests::
 
     const WorkspaceDeserializationResult
         result =
-        serializer.deserialize(
+        WorkspaceSerializer().deserialize(
             QJsonDocument(root).toJson(
                 QJsonDocument::Compact
                 )
             );
 
-    QVERIFY(result.isSuccess());
-    QVERIFY(result.workspace.has_value());
+    QVERIFY2(
+        result.isSuccess(),
+        qPrintable(
+            result.errorMessage
+            )
+        );
 
-    const PersistedSourceFamilyConfiguration
+    QVERIFY(
+        result.workspace.has_value()
+        );
+
+    QCOMPARE(
+        result.workspace->schemaVersion,
+        WorkspacePersistenceState::
+        CurrentSchemaVersion
+        );
+
+    const PersistedInvestigationSession
         &restored =
         result
             .workspace
             ->sessions
-            .first()
-            .sourceFamilyConfiguration;
+            .first();
 
     QVERIFY(
-        !restored.includeRotatedSources
+        restored.backing.mode
+        == PersistedInvestigationSessionBackingMode::
+        SourceBacked
         );
 
     QVERIFY(
-        restored.rotationRule.namingScheme
-        ==
-        RotatedSourceNamingScheme::
+        restored
+            .backing
+            .externalSourceBinding
+            .has_value()
+        );
+
+    QCOMPARE(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourceGeneration,
+        quint64(0)
+        );
+
+    QVERIFY(
+        !restored
+             .backing
+             .externalSourceBinding
+             ->sourceIdentity
+             .has_value()
+        );
+
+    QVERIFY(
+        !restored
+             .backing
+             .externalSourceBinding
+             ->sourceFamilyConfiguration
+             .includeRotatedSources
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourceFamilyConfiguration
+            .rotationRule
+            .namingScheme
+        == RotatedSourceNamingScheme::
         Disabled
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .sourceImportProfile
+            .has_value()
+        );
+
+    /*
+     * Compatibility mirrors are populated too.
+     */
+    QCOMPARE(
+        restored.sourcePath,
+        QStringLiteral("legacy.jsonl")
+        );
+
+    QCOMPARE(
+        restored.importProfile.importerId,
+        QStringLiteral("json-lines")
         );
 }
 
@@ -695,8 +1094,24 @@ void WorkspaceSerializationTests::
     QJsonObject sessionObject =
         sessions.first().toObject();
 
-    QJsonObject sourceFamilyObject =
+    QJsonObject backingObject =
         sessionObject
+            .value(
+                QStringLiteral("backing")
+                )
+            .toObject();
+
+    QJsonObject externalSourceObject =
+        backingObject
+            .value(
+                QStringLiteral(
+                    "externalSourceBinding"
+                    )
+                )
+            .toObject();
+
+    QJsonObject sourceFamilyObject =
+        externalSourceObject
             .value(
                 QStringLiteral(
                     "sourceFamilyConfiguration"
@@ -723,11 +1138,23 @@ void WorkspaceSerializationTests::
         rotationRuleObject
         );
 
-    sessionObject.insert(
+    externalSourceObject.insert(
         QStringLiteral(
             "sourceFamilyConfiguration"
             ),
         sourceFamilyObject
+        );
+
+    backingObject.insert(
+        QStringLiteral(
+            "externalSourceBinding"
+            ),
+        externalSourceObject
+        );
+
+    sessionObject.insert(
+        QStringLiteral("backing"),
+        backingObject
         );
 
     sessions[0] =
@@ -751,7 +1178,7 @@ void WorkspaceSerializationTests::
     QCOMPARE(
         result.errorCode,
         QStringLiteral(
-            "INVALID_SOURCE_FAMILY_CONFIGURATION"
+            "INVALID_SESSION_BACKING"
             )
         );
 }
@@ -2235,6 +2662,231 @@ void WorkspaceSerializationTests::
             .numericOrderDirection,
         RotatedSourceOrderDirection::
         Descending
+        );
+}
+
+void WorkspaceSerializationTests::
+    schemaOneSessionMigratesToSourceBackedV2()
+{
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Legacy Profile");
+
+    profile.importerId =
+        QStringLiteral("json-lines");
+
+    const ImportProfileSerializer
+        profileSerializer;
+
+    const QJsonDocument profileDocument =
+        QJsonDocument::fromJson(
+            profileSerializer.serialize(
+                profile
+                )
+            );
+
+    QJsonObject rotationRule;
+
+    rotationRule.insert(
+        QStringLiteral("namingScheme"),
+        QStringLiteral("numericSuffix")
+        );
+
+    rotationRule.insert(
+        QStringLiteral(
+            "numericOrderDirection"
+            ),
+        QStringLiteral("descending")
+        );
+
+    rotationRule.insert(
+        QStringLiteral(
+            "customRegularExpression"
+            ),
+        QString()
+        );
+
+    rotationRule.insert(
+        QStringLiteral(
+            "customOrderCaptureGroup"
+            ),
+        1
+        );
+
+    rotationRule.insert(
+        QStringLiteral(
+            "customOrderValueType"
+            ),
+        QStringLiteral("lexicographic")
+        );
+
+    rotationRule.insert(
+        QStringLiteral(
+            "customOrderDirection"
+            ),
+        QStringLiteral("ascending")
+        );
+
+    rotationRule.insert(
+        QStringLiteral(
+            "customDateTimeFormat"
+            ),
+        QString()
+        );
+
+    QJsonObject sourceFamily;
+
+    sourceFamily.insert(
+        QStringLiteral(
+            "includeRotatedSources"
+            ),
+        true
+        );
+
+    sourceFamily.insert(
+        QStringLiteral("rotationRule"),
+        rotationRule
+        );
+
+    QJsonObject session;
+
+    session.insert(
+        QStringLiteral("sessionId"),
+        QStringLiteral("legacy-session")
+        );
+
+    session.insert(
+        QStringLiteral("sourcePath"),
+        QStringLiteral(
+            "C:/logs/current.jsonl"
+            )
+        );
+
+    session.insert(
+        QStringLiteral(
+            "sourceFamilyConfiguration"
+            ),
+        sourceFamily
+        );
+
+    session.insert(
+        QStringLiteral("importProfile"),
+        profileDocument.object()
+        );
+
+    QJsonArray sessions;
+    sessions.append(session);
+
+    QJsonObject root;
+
+    root.insert(
+        QStringLiteral("schemaVersion"),
+        1
+        );
+
+    root.insert(
+        QStringLiteral("sessions"),
+        sessions
+        );
+
+    const auto result =
+        WorkspaceSerializer().deserialize(
+            QJsonDocument(root).toJson(
+                QJsonDocument::Compact
+                )
+            );
+
+    QVERIFY2(
+        result.isSuccess(),
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        result.workspace->schemaVersion,
+        2
+        );
+
+    const PersistedInvestigationSession
+        &restored =
+        result.workspace
+            ->sessions
+            .first();
+
+    QVERIFY(
+        restored.backing.mode
+        == PersistedInvestigationSessionBackingMode::
+        SourceBacked
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .externalSourceBinding
+            .has_value()
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .sourceImportProfile
+            .has_value()
+        );
+
+    QCOMPARE(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourcePath,
+        QStringLiteral(
+            "C:/logs/current.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourceGeneration,
+        quint64(0)
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourceFamilyConfiguration
+            .includeRotatedSources
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourceFamilyConfiguration
+            .rotationRule
+            .namingScheme
+        == RotatedSourceNamingScheme::
+        NumericSuffix
+        );
+
+    QVERIFY(
+        restored
+            .backing
+            .externalSourceBinding
+            ->sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    QCOMPARE(
+        restored
+            .backing
+            .sourceImportProfile
+            ->importerId,
+        QStringLiteral("json-lines")
         );
 }
 

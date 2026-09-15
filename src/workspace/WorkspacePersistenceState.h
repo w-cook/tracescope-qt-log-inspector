@@ -125,7 +125,7 @@ struct PersistedInvestigationSession
 struct WorkspacePersistenceState
 {
     inline static constexpr int
-        CurrentSchemaVersion = 1;
+        CurrentSchemaVersion = 2;
 
     int schemaVersion =
         CurrentSchemaVersion;
