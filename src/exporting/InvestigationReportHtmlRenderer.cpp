@@ -2286,7 +2286,7 @@ void appendInvestigatorAnnotations(
         << "<th>Note</th>"
         << "<th>Bookmark</th>"
         << "<th>Timestamp</th>"
-        << "<th>Source Record</th>"
+        << "<th title=\"Investigation event number\">#</th>"
         << "</tr></thead>"
         << "<tbody>";
 
@@ -2373,9 +2373,9 @@ void appendInvestigatorAnnotations(
         appendAnnotationLinkCell(
             out,
             targetAnchor,
-            record.source.recordNumber > 0
+            evidence.investigationEventNumber > 0
                 ? QString::number(
-                      record.source.recordNumber
+                      evidence.investigationEventNumber
                       )
                 : QString()
             );
@@ -2521,6 +2521,9 @@ void appendEvidenceRecord(
 
     out
         << "<dl class=\"definition-grid\">"
+        << "<dt>Event #</dt><dd>"
+        << evidence.investigationEventNumber
+        << "</dd>"
         << "<dt>Timestamp</dt><dd>"
         << escaped(
                record.timestamp.has_value()
@@ -2578,8 +2581,8 @@ void appendEvidenceRecord(
     }
 
     /*
-     * Deliberately expose source filename and logical
-     * record number only. Never emit sourcePath here.
+     * Deliberately expose shareable source provenance
+     * without the originating workstation path.
      */
     if (!record.source.sourceName.isEmpty()) {
         out
@@ -2596,6 +2599,11 @@ void appendEvidenceRecord(
             << record.source.recordNumber
             << "</dd>";
     }
+
+    out
+        << "<dt>Source generation</dt><dd>"
+        << record.source.sourceGeneration
+        << "</dd>";
 
     if (!record.recordId.isEmpty()) {
         out

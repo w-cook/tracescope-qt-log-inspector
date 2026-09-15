@@ -37,8 +37,8 @@ private slots:
 
     void completeFilterStateUsesSingleModelReset();
 
-    void verticalHeadersUseSourceRecordNumbers();
-    void bookmarkedVerticalHeadersUseSourceRecordNumbers();
+    void verticalHeadersUseInvestigationEventNumbers();
+    void bookmarkedVerticalHeadersUseInvestigationEventNumbers();
 };
 
 static QVector<InvestigationRecord>
@@ -1423,7 +1423,7 @@ void InvestigationFilterProxyModelTests::
 }
 
 void InvestigationFilterProxyModelTests::
-    verticalHeadersUseSourceRecordNumbers()
+    verticalHeadersUseInvestigationEventNumbers()
 {
     InvestigationTableModel sourceModel;
 
@@ -1443,9 +1443,21 @@ void InvestigationFilterProxyModelTests::
         );
 
     /*
-     * Timestamp order is startup, comms, tracking.
-     * The gutter must follow preserved source
-     * record numbers rather than proxy row numbers.
+     * Source-model order is:
+     *
+     *   1 startup
+     *   2 tracking
+     *   3 comms
+     *
+     * Timestamp sorting displays:
+     *
+     *   1 startup
+     *   3 comms
+     *   2 tracking
+     *
+     * The investigation event number must remain
+     * stable instead of following proxy row position
+     * or source-relative record numbering.
      */
     QCOMPARE(
         proxyModel.headerData(
@@ -1453,7 +1465,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("2")
+        QStringLiteral("1")
         );
 
     QCOMPARE(
@@ -1462,7 +1474,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("11")
+        QStringLiteral("3")
         );
 
     QCOMPARE(
@@ -1471,7 +1483,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("7")
+        QStringLiteral("2")
         );
 
     proxyModel.setSeverityFilter(
@@ -1483,18 +1495,23 @@ void InvestigationFilterProxyModelTests::
         1
         );
 
+    /*
+     * Filtering must not renumber the surviving
+     * event from investigation event 3 to visible
+     * row 1.
+     */
     QCOMPARE(
         proxyModel.headerData(
                       0,
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("11")
+        QStringLiteral("3")
         );
 }
 
 void InvestigationFilterProxyModelTests::
-    bookmarkedVerticalHeadersUseSourceRecordNumbers()
+    bookmarkedVerticalHeadersUseInvestigationEventNumbers()
 {
     InvestigationTableModel sourceModel;
 
@@ -1526,7 +1543,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("★ 11")
+        QStringLiteral("★ 3")
         );
 }
 

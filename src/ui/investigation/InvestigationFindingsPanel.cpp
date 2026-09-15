@@ -456,7 +456,7 @@ InvestigationFindingsPanel::
     m_table
         ->horizontalHeaderItem(1)
         ->setToolTip(
-            tr("Source record number")
+            tr("Investigation event number")
             );
 
     m_table
@@ -638,8 +638,15 @@ void InvestigationFindingsPanel::refresh()
             ->investigationController()
             ->allRecords();
 
-    for (const InvestigationRecord &record
-         : records) {
+    for (qsizetype recordIndex = 0;
+         recordIndex < records.size();
+         ++recordIndex) {
+        const InvestigationRecord &record =
+            records.at(recordIndex);
+
+        const qint64 investigationEventNumber =
+            recordIndex + 1;
+
         if (record.recordId.isEmpty()) {
             continue;
         }
@@ -689,12 +696,10 @@ void InvestigationFindingsPanel::refresh()
                     )
                 );
 
-        auto *sourceRecordItem =
+        auto *eventNumberItem =
             new QTableWidgetItem(
                 QString::number(
-                    record
-                        .source
-                        .recordNumber
+                    investigationEventNumber
                     )
                 );
 
@@ -792,7 +797,7 @@ void InvestigationFindingsPanel::refresh()
             record.recordId
             );
 
-        sourceRecordItem->setData(
+        eventNumberItem->setData(
             Qt::UserRole,
             record.recordId
             );
@@ -829,7 +834,7 @@ void InvestigationFindingsPanel::refresh()
         m_table->setItem(
             row,
             1,
-            sourceRecordItem
+            eventNumberItem
             );
 
         m_table->setItem(

@@ -352,6 +352,35 @@ void InvestigationEventDetailPanel::
         QString()
         );
 
+    lines << QString();
+    lines << QStringLiteral("Source:");
+
+    if (!record.source.sourceName.isEmpty()) {
+        lines << QStringLiteral("Name: %1")
+        .arg(
+            record.source.sourceName
+            );
+    }
+
+    if (!record.source.sourcePath.isEmpty()) {
+        lines << QStringLiteral("Path: %1")
+        .arg(
+            record.source.sourcePath
+            );
+    }
+
+    if (record.source.recordNumber > 0) {
+        lines << QStringLiteral("Source Record: %1")
+        .arg(
+            record.source.recordNumber
+            );
+    }
+
+    lines << QStringLiteral("Source Generation: %1")
+                 .arg(
+                     record.source.sourceGeneration
+                     );
+
     if (!record.customAttributes.isEmpty()) {
         lines << QString();
         lines << QStringLiteral(

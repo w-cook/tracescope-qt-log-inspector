@@ -114,6 +114,9 @@ void
             "Database request timed out"
             );
 
+    finding.record.source.sourceGeneration =
+        3;
+
     InvestigationFindingsCsvExporter
         exporter;
 
@@ -133,7 +136,8 @@ void
             "Bookmarked,Record ID,Timestamp,"
             "Severity,Subsystem,Event Code,"
             "Entity ID,Message,Source Name,"
-            "Source Path,Source Record"
+            "Source Path,Source Record,"
+            "Source Generation"
             )
         );
 
@@ -151,7 +155,8 @@ void
             "Database request timed out,"
             "session.jsonl,"
             "C:/logs/session.jsonl,"
-            "42"
+            "42,"
+            "3"
             )
         );
 }
@@ -408,7 +413,7 @@ void
             "Severity,Subsystem,Event Code,"
             "Entity ID,Message,Source Name,"
             "Source Path,Source Record,"
-            "Raw Source\n"
+            "Source Generation,Raw Source\n"
             )
         );
 }

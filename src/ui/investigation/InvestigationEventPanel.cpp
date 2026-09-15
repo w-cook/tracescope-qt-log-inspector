@@ -795,13 +795,29 @@ void InvestigationEventPanel::
                 );
 
     if (record != nullptr) {
-        positionText +=
-            tr(" • Source record %1")
-                .arg(
-                    record
-                        ->source
-                        .recordNumber
+        InvestigationController *controller =
+            m_session
+                ->investigationController();
+
+        InvestigationFilterProxyModel *proxyModel =
+            controller != nullptr
+                ? controller->proxyModel()
+                : nullptr;
+
+        if (proxyModel != nullptr) {
+            const QModelIndex sourceIndex =
+                proxyModel->mapToSource(
+                    currentIndex
                     );
+
+            if (sourceIndex.isValid()) {
+                positionText +=
+                    tr(" • #%1")
+                        .arg(
+                            sourceIndex.row() + 1
+                            );
+            }
+        }
     }
 
     m_eventPositionLabel->setText(

@@ -656,8 +656,14 @@ InvestigationReportSessionSnapshotBuilder::build(
      * Iterate source records rather than hash/set IDs so
      * evidence remains deterministic in source order.
      */
-    for (const InvestigationRecord &record
-         : controller->allRecords()) {
+    const QVector<InvestigationRecord> &allRecords =
+        controller->allRecords();
+
+    for (qsizetype recordIndex = 0;
+         recordIndex < allRecords.size();
+         ++recordIndex) {
+        const InvestigationRecord &record =
+            allRecords.at(recordIndex);
         const bool hasInvestigatorState =
             stateStore != nullptr
             && stateStore->hasStateForRecord(
@@ -681,6 +687,9 @@ InvestigationReportSessionSnapshotBuilder::build(
         }
 
         InvestigationReportEvidenceRecord evidence;
+
+        evidence.investigationEventNumber =
+            recordIndex + 1;
 
         evidence.record =
             record;
