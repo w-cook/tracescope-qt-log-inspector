@@ -250,6 +250,10 @@ qt_add_executable(TraceScope
     src/persistence/InvestigationSnapshotContainer.cpp
     src/persistence/InvestigationSessionSnapshotFile.h
     src/persistence/InvestigationSessionSnapshotFile.cpp
+    src/workspace/InvestigationSessionBacking.h
+    src/workspace/InvestigationSessionBacking.cpp
+    src/sources/SourcePhysicalIdentity.h
+    src/sources/SourcePhysicalIdentity.cpp
 
 )
 

@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QVector>
 
+#include "InvestigationSessionBacking.h"
 #include "InvestigationStateStore.h"
 
 #include "../analysis/BurstDetectionSettings.h"
@@ -16,6 +17,7 @@
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
 #include "../importing/ImportResult.h"
+#include "../persistence/InvestigationSessionSnapshot.h"
 #include "../sources/SourceFamilyConfiguration.h"
 
 struct InvestigationSessionSourceMetadata
@@ -89,6 +91,10 @@ public:
     const InvestigationSessionSourceMetadata &
     sourceMetadata() const;
 
+    const InvestigationSessionBacking &
+    backing() const;
+
+    QString externalSourcePath() const;
     qint64 initialLiveFollowByteOffset() const;
 
     void setInitialLiveFollowByteOffset(
@@ -216,6 +222,21 @@ public:
         const BurstDetectionSettings &settings
         );
 
+    InvestigationSessionSnapshot
+    captureSnapshot() const;
+
+    static std::unique_ptr<InvestigationSession>
+    createSnapshotBacked(
+        QString sessionId,
+        const QString &snapshotPath,
+        InvestigationSessionSnapshot snapshot
+        );
+
+    void updateExternalSourceRuntimeState(
+        quint64 sourceGeneration,
+        const SourcePhysicalIdentity *sourceIdentity
+        );
+
 private:
     QString m_id;
 
@@ -226,8 +247,8 @@ private:
 
     qint64 m_initialLiveFollowByteOffset = -1;
 
-    SourceFamilyConfiguration
-        m_sourceFamilyConfiguration;
+    InvestigationSessionBacking
+        m_backing;
 
     ImportProfile m_importProfile;
 
@@ -294,6 +315,15 @@ private:
 
     std::unique_ptr<LiveSessionFollowCoordinator>
         m_liveFollowCoordinator;
+
+    InvestigationSession(
+        QString sessionId,
+        InvestigationSessionBacking backing,
+        InvestigationSessionSourceMetadata
+            sourceMetadata,
+        ImportProfile profile,
+        ImportResult result
+        );
 
     void refreshSourceMetadata();
 

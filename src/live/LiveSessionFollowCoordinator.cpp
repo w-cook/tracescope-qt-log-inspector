@@ -111,9 +111,7 @@ LiveSessionFollowCoordinator::
     : QObject(parent),
     m_session(&session),
     m_follower(
-        session
-            .sourceMetadata()
-            .sourcePath,
+        session.externalSourcePath(),
         this
         ),
     m_lineImportAdapter(
@@ -343,6 +341,8 @@ LiveSessionFollowCoordinator::start()
             }
         }
 
+        synchronizeExternalSourceBinding();
+
         m_pollTimer.start();
 
         if (result.sourceGenerationChanged) {
@@ -501,6 +501,8 @@ LiveSessionFollowCoordinator::start()
 
     m_hasInitializedLiveContext = true;
 
+    synchronizeExternalSourceBinding();
+
     m_pollTimer.start();
 
     return result;
@@ -591,6 +593,8 @@ LiveSessionFollowCoordinator::pollOnce(
 
         return result;
     }
+
+    synchronizeExternalSourceBinding();
 
     /*
      * No bytes may mean no growth, pause, missing
@@ -821,4 +825,20 @@ void LiveSessionFollowCoordinator::
     if (result.processedRecordCount > 0) {
         emit sessionUpdated();
     }
+}
+
+void LiveSessionFollowCoordinator::
+    synchronizeExternalSourceBinding()
+{
+    if (!m_session) {
+        return;
+    }
+
+    m_session
+        ->updateExternalSourceRuntimeState(
+            m_follower
+                .state()
+                .sourceGeneration(),
+            m_follower.sourceIdentity()
+            );
 }

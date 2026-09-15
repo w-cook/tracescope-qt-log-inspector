@@ -41,22 +41,51 @@ InvestigationSession::InvestigationSession(
     : m_id(
           std::move(sessionId)
           ),
-    m_sourceFamilyConfiguration(
-        std::move(
-            sourceFamilyConfiguration
+    m_backing(
+        InvestigationSessionBacking::
+        sourceBacked(
+            InvestigationExternalSourceBinding {
+                QFileInfo(
+                    filePath
+                    ).absoluteFilePath(),
+                std::move(
+                    sourceFamilyConfiguration
+                    )
+            }
             )
         ),
     m_importProfile(
         std::move(profile)
         )
 {
-    const QFileInfo fileInfo(filePath);
-
-    m_sourceMetadata.sourcePath =
-        fileInfo.absoluteFilePath();
-
     refreshSourceMetadata();
 
+    installImportResult(
+        std::move(result)
+        );
+}
+
+InvestigationSession::InvestigationSession(
+    QString sessionId,
+    InvestigationSessionBacking backing,
+    InvestigationSessionSourceMetadata
+        sourceMetadata,
+    ImportProfile profile,
+    ImportResult result
+    )
+    : m_id(
+          std::move(sessionId)
+          ),
+    m_sourceMetadata(
+        std::move(sourceMetadata)
+        ),
+    m_backing(
+        std::move(backing)
+        ),
+    m_importProfile(
+        std::move(profile)
+        )
+{
     installImportResult(
         std::move(result)
         );
@@ -91,6 +120,26 @@ InvestigationSession::sourceMetadata() const
     return m_sourceMetadata;
 }
 
+const InvestigationSessionBacking &
+InvestigationSession::backing() const
+{
+    return m_backing;
+}
+
+QString InvestigationSession::
+    externalSourcePath() const
+{
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (!externalSource) {
+        return {};
+    }
+
+    return externalSource->sourcePath;
+}
+
 qint64 InvestigationSession::
     initialLiveFollowByteOffset() const
 {
@@ -113,7 +162,25 @@ const SourceFamilyConfiguration &
     InvestigationSession::
     sourceFamilyConfiguration() const
 {
-    return m_sourceFamilyConfiguration;
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (externalSource) {
+        return externalSource
+            ->sourceFamilyConfiguration;
+    }
+
+    /*
+     * Snapshot-only sessions have no active external
+     * source family. Existing callers can still query
+     * this API safely while we preserve its current
+     * reference-returning contract.
+     */
+    static const SourceFamilyConfiguration
+        emptyConfiguration;
+
+    return emptyConfiguration;
 }
 
 void InvestigationSession::
@@ -121,7 +188,16 @@ void InvestigationSession::
         SourceFamilyConfiguration configuration
         )
 {
-    m_sourceFamilyConfiguration =
+    InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (!externalSource) {
+        return;
+    }
+
+    externalSource
+        ->sourceFamilyConfiguration =
         std::move(configuration);
 }
 
@@ -279,9 +355,10 @@ void InvestigationSession::
 bool InvestigationSession::
     supportsLiveFollowing() const
 {
-    return LiveSessionFollowCoordinator::
-        supportsProfile(
-            m_importProfile
+    return m_backing.hasExternalSource()
+        && LiveSessionFollowCoordinator::
+            supportsProfile(
+                m_importProfile
             );
 }
 
@@ -462,9 +539,26 @@ void InvestigationSession::setSubsystemTrendLimit(
 void InvestigationSession::
     refreshSourceMetadata()
 {
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (!externalSource) {
+        /*
+         * Historical source provenance may still exist
+         * in a Snapshot-backed investigation, but there
+         * is no external file whose current filesystem
+         * metadata should replace it.
+         */
+        return;
+    }
+
     const QFileInfo fileInfo(
-        m_sourceMetadata.sourcePath
+        externalSource->sourcePath
         );
+
+    m_sourceMetadata.sourcePath =
+        fileInfo.absoluteFilePath();
 
     m_sourceMetadata.sourceName =
         fileInfo.fileName();
@@ -859,4 +953,157 @@ void InvestigationSession::
 
     m_burstDetectionSettings =
         settings;
+}
+
+InvestigationSessionSnapshot
+InvestigationSession::captureSnapshot() const
+{
+    InvestigationSessionSnapshot snapshot;
+
+    /*
+     * Phase 15 captures the complete normalized
+     * investigation but does not archive byte-faithful
+     * original source material.
+     *
+     * If this session was itself loaded from a
+     * higher-fidelity future snapshot, preserve that
+     * capability marker.
+     */
+    const InvestigationSnapshotBinding
+        *snapshotBinding =
+        m_backing.snapshot();
+
+    snapshot.sourceFidelity =
+        snapshotBinding
+            ? snapshotBinding->sourceFidelity
+            : InvestigationSnapshotSourceFidelity::
+            NormalizedOnly;
+
+    snapshot.importProfile =
+        m_importProfile;
+
+    snapshot.records =
+        m_investigationController
+            .allRecords();
+
+    snapshot.diagnostics =
+        m_diagnostics;
+
+    snapshot.processedRecordCount =
+        m_processedRecordCount;
+
+    snapshot.sourceTruncated =
+        m_sourceTruncated;
+
+    return snapshot;
+}
+
+std::unique_ptr<InvestigationSession>
+InvestigationSession::createSnapshotBacked(
+    QString sessionId,
+    const QString &snapshotPath,
+    InvestigationSessionSnapshot snapshot
+    )
+{
+    InvestigationSessionSourceMetadata
+        sourceMetadata;
+
+    /*
+     * Recover descriptive provenance from the most
+     * recent saved record that contains source
+     * identity.
+     *
+     * This is deliberately not an external dependency.
+     * The operational backing remains the .tsinv file.
+     */
+    for (
+        auto iterator =
+        snapshot.records.crbegin();
+        iterator != snapshot.records.crend();
+        ++iterator
+        ) {
+        if (iterator->source.sourcePath.isEmpty()
+            && iterator->source.sourceName.isEmpty()) {
+            continue;
+        }
+
+        sourceMetadata.sourcePath =
+            iterator->source.sourcePath;
+
+        sourceMetadata.sourceName =
+            iterator->source.sourceName;
+
+        break;
+    }
+
+    ImportResult result;
+
+    result.records =
+        std::move(snapshot.records);
+
+    result.diagnostics =
+        std::move(snapshot.diagnostics);
+
+    result.processedRecordCount =
+        snapshot.processedRecordCount;
+
+    result.sourceTruncated =
+        snapshot.sourceTruncated;
+
+    InvestigationSnapshotBinding
+        snapshotBinding;
+
+    snapshotBinding.snapshotPath =
+        QFileInfo(
+            snapshotPath
+            ).absoluteFilePath();
+
+    snapshotBinding.sourceFidelity =
+        snapshot.sourceFidelity;
+
+    InvestigationSessionBacking backing =
+        InvestigationSessionBacking::
+        snapshotBacked(
+            std::move(
+                snapshotBinding
+                )
+            );
+
+    return std::unique_ptr<
+        InvestigationSession>(
+        new InvestigationSession(
+            std::move(sessionId),
+            std::move(backing),
+            std::move(sourceMetadata),
+            std::move(
+                snapshot.importProfile
+                ),
+            std::move(result)
+            )
+        );
+}
+
+void InvestigationSession::
+    updateExternalSourceRuntimeState(
+        quint64 sourceGeneration,
+        const SourcePhysicalIdentity *sourceIdentity
+        )
+{
+    InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (!externalSource) {
+        return;
+    }
+
+    externalSource->sourceGeneration =
+        sourceGeneration;
+
+    if (sourceIdentity) {
+        externalSource->sourceIdentity =
+            *sourceIdentity;
+    } else {
+        externalSource->sourceIdentity.reset();
+    }
 }

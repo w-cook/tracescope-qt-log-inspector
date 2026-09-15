@@ -1,6 +1,5 @@
 #include "LiveFileFollower.h"
 
-#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 
@@ -8,12 +7,6 @@
 #include <utility>
 
 #include "../io/SharedReadFile.h"
-
-namespace
-{
-constexpr qint64 SourceFingerprintByteCount =
-    4096;
-}
 
 LiveFileFollower::LiveFileFollower(
     QString sourcePath,
@@ -32,6 +25,16 @@ const QString &
 LiveFileFollower::sourcePath() const
 {
     return m_sourcePath;
+}
+
+const SourcePhysicalIdentity *
+LiveFileFollower::sourceIdentity() const
+{
+    if (!m_hasSourceIdentity) {
+        return nullptr;
+    }
+
+    return &m_sourceIdentity;
 }
 
 const LiveFileFollowState &
@@ -95,8 +98,9 @@ bool LiveFileFollower::start(
         && (
             fileInfo.size()
                 < m_state.readOffset()
-            || sourceIdentityChanged(
-                fileInfo
+            || sourcePhysicalIdentityChanged(
+                m_sourcePath,
+                m_sourceIdentity
                 )
             )) {
         /*
@@ -152,9 +156,18 @@ bool LiveFileFollower::start(
         startOffset
         );
 
-    captureSourceIdentity(
-        fileInfo
-        );
+    const SourcePhysicalIdentityCaptureResult
+        identityResult =
+        captureSourcePhysicalIdentity(
+            m_sourcePath
+            );
+
+    if (identityResult.succeeded) {
+        m_sourceIdentity =
+            identityResult.identity;
+
+        m_hasSourceIdentity = true;
+    }
 
     emit stateChanged();
 
@@ -222,14 +235,24 @@ LiveFileObservation LiveFileFollower::poll()
     const qint64 observedSize =
         fileInfo.size();
 
-    if (sourceIdentityChanged(
-            fileInfo
+    if (sourcePhysicalIdentityChanged(
+            m_sourcePath,
+            m_sourceIdentity
             )) {
         m_state.beginNextSourceGeneration();
 
-        captureSourceIdentity(
-            fileInfo
-            );
+        const SourcePhysicalIdentityCaptureResult
+            identityResult =
+            captureSourcePhysicalIdentity(
+                m_sourcePath
+                );
+
+        if (identityResult.succeeded) {
+            m_sourceIdentity =
+                identityResult.identity;
+
+            m_hasSourceIdentity = true;
+        }
 
         emit stateChanged();
 
@@ -252,9 +275,18 @@ LiveFileObservation LiveFileFollower::poll()
         < m_state.readOffset()) {
         m_state.beginNextSourceGeneration();
 
-        captureSourceIdentity(
-            fileInfo
-            );
+        const SourcePhysicalIdentityCaptureResult
+            identityResult =
+            captureSourcePhysicalIdentity(
+                m_sourcePath
+                );
+
+        if (identityResult.succeeded) {
+            m_sourceIdentity =
+                identityResult.identity;
+
+            m_hasSourceIdentity = true;
+        }
 
         emit stateChanged();
 
@@ -442,125 +474,20 @@ LiveFileFollower::readAvailableBytes(
      * later same-path replacement detection retains
      * its portable fallback.
      */
-    if (m_sourceFingerprintLength == 0) {
-        const QFileInfo fileInfo(
-            m_sourcePath
-            );
-
-        if (fileInfo.exists()
-            && fileInfo.isFile()) {
-            captureSourceIdentity(
-                fileInfo
+    if (m_sourceIdentity.fingerprintLength == 0) {
+        const SourcePhysicalIdentityCaptureResult
+            identityResult =
+            captureSourcePhysicalIdentity(
+                m_sourcePath
                 );
+
+        if (identityResult.succeeded) {
+            m_sourceIdentity =
+                identityResult.identity;
+
+            m_hasSourceIdentity = true;
         }
     }
 
     return result;
-}
-
-QByteArray
-LiveFileFollower::sourcePrefixFingerprint(
-    qint64 byteCount
-    ) const
-{
-    if (byteCount <= 0) {
-        return QByteArray();
-    }
-
-    QFile file;
-
-    const SharedReadFileOpenResult
-        openResult =
-        openSharedReadFile(
-            file,
-            m_sourcePath
-            );
-
-    if (!openResult.succeeded) {
-        return QByteArray();
-    }
-
-    const QByteArray bytes =
-        file.read(
-            byteCount
-            );
-
-    if (bytes.size()
-        != byteCount) {
-        return QByteArray();
-    }
-
-    return QCryptographicHash::hash(
-        bytes,
-        QCryptographicHash::Sha256
-        );
-}
-
-void LiveFileFollower::captureSourceIdentity(
-    const QFileInfo &fileInfo
-    )
-{
-    m_hasSourceIdentity = true;
-
-    m_sourceBirthTime =
-        fileInfo.birthTime();
-
-    m_sourceFingerprintLength =
-        std::min<qint64>(
-            fileInfo.size(),
-            SourceFingerprintByteCount
-            );
-
-    m_sourcePrefixFingerprint =
-        sourcePrefixFingerprint(
-            m_sourceFingerprintLength
-            );
-}
-
-bool LiveFileFollower::sourceIdentityChanged(
-    const QFileInfo &fileInfo
-    ) const
-{
-    if (!m_hasSourceIdentity) {
-        return false;
-    }
-
-    const QDateTime currentBirthTime =
-        fileInfo.birthTime();
-
-    /*
-     * Creation time is a strong replacement signal
-     * when the underlying filesystem exposes it.
-     */
-    if (m_sourceBirthTime.isValid()
-        && currentBirthTime.isValid()
-        && currentBirthTime
-               != m_sourceBirthTime) {
-        return true;
-    }
-
-    /*
-     * Fall back to a bounded fingerprint of bytes
-     * that belonged to the original generation.
-     *
-     * Ordinary appends cannot alter this prefix.
-     */
-    if (m_sourceFingerprintLength <= 0
-        || m_sourcePrefixFingerprint.isEmpty()
-        || fileInfo.size()
-               < m_sourceFingerprintLength) {
-        return false;
-    }
-
-    const QByteArray currentFingerprint =
-        sourcePrefixFingerprint(
-            m_sourceFingerprintLength
-            );
-
-    if (currentFingerprint.isEmpty()) {
-        return false;
-    }
-
-    return currentFingerprint
-           != m_sourcePrefixFingerprint;
 }

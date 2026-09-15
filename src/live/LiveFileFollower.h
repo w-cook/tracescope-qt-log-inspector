@@ -6,6 +6,8 @@
 #include <QObject>
 #include <QString>
 
+#include "../sources/SourcePhysicalIdentity.h"
+
 #include "LiveFileFollowState.h"
 
 enum class LiveFileObservationKind
@@ -48,6 +50,9 @@ public:
 
     const QString &sourcePath() const;
 
+    const SourcePhysicalIdentity *
+    sourceIdentity() const;
+
     const LiveFileFollowState &state() const;
 
     bool start(
@@ -76,23 +81,8 @@ private:
 
     bool m_hasSourceIdentity = false;
 
-    QDateTime m_sourceBirthTime;
-
-    qint64 m_sourceFingerprintLength = 0;
-
-    QByteArray m_sourcePrefixFingerprint;
+    SourcePhysicalIdentity
+        m_sourceIdentity;
 
     LiveFileFollowState m_state;
-
-    void captureSourceIdentity(
-        const QFileInfo &fileInfo
-        );
-
-    bool sourceIdentityChanged(
-        const QFileInfo &fileInfo
-        ) const;
-
-    QByteArray sourcePrefixFingerprint(
-        qint64 byteCount
-        ) const;
 };

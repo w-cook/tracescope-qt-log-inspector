@@ -15,6 +15,7 @@ class LiveFileFollowerTests
 private slots:
     void normalizesSourcePath();
     void startsAtCurrentFileEnd();
+    void startCapturesSourceIdentity();
     void rejectsMissingSource();
     void lifecycleTransitionsEmitStateChanges();
     void startDoesNotReplacePauseOrResume();
@@ -130,6 +131,79 @@ void LiveFileFollowerTests::
     QCOMPARE(
         follower.state().readOffset(),
         qint64(14)
+        );
+}
+
+void LiveFileFollowerTests::
+    startCapturesSourceIdentity()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.log"
+                )
+            );
+
+    const QByteArray content(
+        "existing record one\n"
+        "existing record two\n"
+        );
+
+    QFile file(sourcePath);
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        file.write(content),
+        qint64(content.size())
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    const SourcePhysicalIdentity
+        *identity =
+        follower.sourceIdentity();
+
+    QVERIFY(
+        identity != nullptr
+        );
+
+    if (!identity) {
+        return;
+    }
+
+    QCOMPARE(
+        identity->observedSizeBytes,
+        qint64(content.size())
+        );
+
+    QCOMPARE(
+        identity->fingerprintLength,
+        qint64(content.size())
+        );
+
+    QVERIFY(
+        !identity
+             ->prefixFingerprint
+             .isEmpty()
         );
 }
 

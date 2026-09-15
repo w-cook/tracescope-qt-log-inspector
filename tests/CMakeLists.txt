@@ -66,6 +66,12 @@ set(INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES
     ../src/live/LiveStructuredXmlRecordBatch.h
     ../src/live/LiveStructuredXmlSourceContext.h
     ../src/live/LiveStructuredXmlSourceContext.cpp
+
+    ../src/sources/SourcePhysicalIdentity.h
+    ../src/sources/SourcePhysicalIdentity.cpp
+
+    ../src/workspace/InvestigationSessionBacking.h
+    ../src/workspace/InvestigationSessionBacking.cpp
 )
 
 # ----------------------------------------------------------------------------
@@ -214,6 +220,30 @@ target_link_libraries(
 add_test(
     NAME RotatedSourceDiscoveryServiceTests
     COMMAND RotatedSourceDiscoveryServiceTests
+)
+
+qt_add_executable(
+    SourcePhysicalIdentityTests
+
+    SourcePhysicalIdentityTests.cpp
+
+    ../src/io/SharedReadFile.h
+    ../src/io/SharedReadFile.cpp
+
+    ../src/sources/SourcePhysicalIdentity.h
+    ../src/sources/SourcePhysicalIdentity.cpp
+)
+
+target_link_libraries(
+    SourcePhysicalIdentityTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME SourcePhysicalIdentityTests
+    COMMAND SourcePhysicalIdentityTests
 )
 
 # ----------------------------------------------------------------------------
@@ -1912,6 +1942,40 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationSessionBackingTests
+
+    InvestigationSessionBackingTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
+
+    ../src/persistence/InvestigationSessionSnapshot.h
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/SourceFamilyConfiguration.h
+
+    ../src/workspace/InvestigationSessionBacking.h
+    ../src/workspace/InvestigationSessionBacking.cpp
+)
+
+target_link_libraries(
+    InvestigationSessionBackingTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSessionBackingTests
+    COMMAND InvestigationSessionBackingTests
+)
+
+qt_add_executable(
     InvestigationWorkspaceTests
 
     InvestigationWorkspaceTests.cpp
@@ -2132,13 +2196,13 @@ qt_add_executable(
 
     ${SHARED_READ_FILE_SOURCES}
 
-    ../src/io/SharedReadFile.h
-    ../src/io/SharedReadFile.cpp
-
     ../src/live/LiveFileFollower.h
     ../src/live/LiveFileFollower.cpp
     ../src/live/LiveFileFollowState.h
     ../src/live/LiveFileFollowState.cpp
+
+    ../src/sources/SourcePhysicalIdentity.h
+    ../src/sources/SourcePhysicalIdentity.cpp
 )
 
 target_link_libraries(

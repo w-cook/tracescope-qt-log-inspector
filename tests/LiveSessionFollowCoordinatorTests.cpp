@@ -1,6 +1,7 @@
 #include <QtTest>
 
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 
 #include "../src/importing/JsonLinesImporter.h"
@@ -786,6 +787,69 @@ void LiveSessionFollowCoordinatorTests::
         pollResult.observation.kind,
         LiveFileObservationKind::
         SourceReset
+        );
+
+    /*
+ * The session's external-source binding must track
+ * the same runtime generation and physical identity
+ * established by the live follower.
+ *
+ * This persisted-friendly state is what a future
+ * Hybrid workspace restore will use to distinguish
+ * same-generation replay from source replacement.
+ */
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        session
+            .backing()
+            .externalSource();
+
+    QVERIFY(
+        externalSource != nullptr
+        );
+
+    if (!externalSource) {
+        return;
+    }
+
+    QCOMPARE(
+        externalSource->sourceGeneration,
+        coordinator
+            .state()
+            .sourceGeneration()
+        );
+
+    QCOMPARE(
+        externalSource->sourceGeneration,
+        quint64(1)
+        );
+
+    QVERIFY(
+        externalSource
+            ->sourceIdentity
+            .has_value()
+        );
+
+    if (!externalSource
+             ->sourceIdentity
+             .has_value()) {
+        return;
+    }
+
+    QCOMPARE(
+        externalSource
+            ->sourceIdentity
+            ->observedSizeBytes,
+        QFileInfo(
+            sourcePath
+            ).size()
+        );
+
+    QVERIFY(
+        !externalSource
+             ->sourceIdentity
+             ->prefixFingerprint
+             .isEmpty()
         );
 
     QCOMPARE(

@@ -110,6 +110,8 @@ private:
 
     void pollFromTimer();
 
+    void synchronizeExternalSourceBinding();
+
     InvestigationSession *m_session = nullptr;
 
     LiveFileFollower m_follower;
