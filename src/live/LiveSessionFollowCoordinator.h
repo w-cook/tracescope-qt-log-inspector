@@ -20,6 +20,8 @@ struct LiveSessionFollowStartResult
     QString errorMessage;
 
     qint64 baselineByteCount = 0;
+
+    bool sourceGenerationChanged = false;
 };
 
 struct LiveSessionFollowPollResult
@@ -127,6 +129,8 @@ private:
 
     IngestionKind m_ingestionKind =
         IngestionKind::Unsupported;
+
+    bool m_hasInitializedLiveContext = false;
 
     QTimer m_pollTimer;
 };

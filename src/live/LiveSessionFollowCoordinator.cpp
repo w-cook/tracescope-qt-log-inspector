@@ -105,10 +105,27 @@ LiveSessionFollowCoordinator::start()
     }
 
     /*
-     * Capture the physical source boundary first.
-     * Everything after this byte position belongs
-     * to normal live polling.
+     * Once a live context has been initialized
+     * successfully, Stop does not discard it.
+     *
+     * On a same-generation restart that context is
+     * already the exact parser/framing state that
+     * corresponds to the follower's retained byte
+     * offset.
+     *
+     * If the source changed generation while stopped,
+     * that retained context must instead be reset
+     * before any bytes from the new generation are
+     * interpreted.
      */
+    const bool isRestart =
+        m_hasInitializedLiveContext;
+
+    const quint64 previousSourceGeneration =
+        m_follower
+            .state()
+            .sourceGeneration();
+
     if (!m_follower.start()) {
         result.succeeded = false;
 
@@ -129,13 +146,75 @@ LiveSessionFollowCoordinator::start()
             .state()
             .sourceGeneration();
 
+    result.sourceGenerationChanged =
+        sourceGeneration
+        != previousSourceGeneration;
+
+    /*
+     * Restart after a previously successful live
+     * session.
+     *
+     * Same generation:
+     * Preserve all existing incremental state.
+     *
+     * New generation:
+     * Discard framing/parser state belonging to the
+     * previous physical source and begin fresh at
+     * byte zero.
+     */
+    if (isRestart) {
+        if (result.sourceGenerationChanged) {
+            switch (m_ingestionKind) {
+            case IngestionKind::Line:
+                m_lineSourceContext
+                    .beginSourceGeneration(
+                        sourceGeneration
+                        );
+
+                m_lineImportAdapter
+                    .beginSourceGeneration();
+                break;
+
+            case IngestionKind::StructuredJson:
+                m_structuredJsonSourceContext
+                    .beginSourceGeneration(
+                        sourceGeneration
+                        );
+                break;
+
+            case IngestionKind::StructuredXml:
+                m_structuredXmlSourceContext
+                    .beginSourceGeneration(
+                        sourceGeneration
+                        );
+                break;
+
+            case IngestionKind::Unsupported:
+                break;
+            }
+        }
+
+        m_pollTimer.start();
+
+        if (result.sourceGenerationChanged) {
+            emit sourceGenerationChanged(
+                sourceGeneration
+                );
+        }
+
+        return result;
+    }
+
+    /*
+     * First Start after initial import/reload.
+     *
+     * The follower captured current EOF as the live
+     * boundary. Reconstruct format-specific state
+     * from exactly that existing physical range
+     * without importing those records again.
+     */
     switch (m_ingestionKind) {
     case IngestionKind::Line: {
-        /*
-         * Seed physical line numbering from exactly
-         * the same captured byte range used by the
-         * follower.
-         */
         const LiveLineSourceInitializationResult
             sourceInitialization =
             m_lineSourceContext
@@ -162,6 +241,10 @@ LiveSessionFollowCoordinator::start()
          * line as a record. Do not ambiguously join
          * later bytes to that already-imported
          * evidence.
+         *
+         * This restriction belongs only to initial
+         * live-follow setup. A later Stop -> Start
+         * preserves the live framer itself instead.
          */
         if (result.baselineByteCount > 0
             && !sourceInitialization
@@ -181,11 +264,6 @@ LiveSessionFollowCoordinator::start()
             return result;
         }
 
-        /*
-         * Stateful line importers reconstruct only
-         * parser state belonging to the captured
-         * baseline.
-         */
         const IncrementalImportInitializationResult
             importInitialization =
             m_lineImportAdapter
@@ -209,27 +287,6 @@ LiveSessionFollowCoordinator::start()
     }
 
     case IngestionKind::StructuredJson: {
-        /*
-         * Structured JSON may deliberately have an
-         * open outer container while an application
-         * is still writing records.
-         *
-         * The normal StructuredJsonImporter has
-         * already imported every complete record
-         * available at session-open time.
-         *
-         * Scan the exact captured baseline again
-         * only to reconstruct:
-         *
-         * - record-array framing state
-         * - any incomplete trailing record bytes
-         * - the next logical record number
-         * - the current source generation
-         *
-         * Do NOT append the recovered baseline
-         * records again. They already belong to the
-         * investigation.
-         */
         const
             LiveStructuredJsonSourceInitializationResult
                 sourceInitialization =
@@ -255,21 +312,6 @@ LiveSessionFollowCoordinator::start()
     }
 
     case IngestionKind::StructuredXml: {
-        /*
-         * Static XmlImporter has already imported every
-         * complete record available at the captured
-         * baseline.
-         *
-         * Rescan exactly that same baseline only to
-         * reconstruct:
-         *
-         * - the open outer XML/container state
-         * - any incomplete trailing record
-         * - subsequent logical record numbering
-         * - the active physical source generation
-         *
-         * Never append recovered baseline records again.
-         */
         const
             LiveStructuredXmlSourceInitializationResult
                 sourceInitialization =
@@ -307,6 +349,8 @@ LiveSessionFollowCoordinator::start()
 
         return result;
     }
+
+    m_hasInitializedLiveContext = true;
 
     m_pollTimer.start();
 

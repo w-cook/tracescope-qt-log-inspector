@@ -18,6 +18,8 @@ private slots:
     void rejectsMissingSource();
     void lifecycleTransitionsEmitStateChanges();
     void startDoesNotReplacePauseOrResume();
+    void restartAfterStopPreservesUnreadGrowth();
+    void restartAfterStoppedTruncationBeginsNewGeneration();
     void pollingAtFileEndReportsNoChange();
     void pollingReportsGrowthWithoutConsumingIt();
     void pollingWhilePausedPreservesCatchUpRange();
@@ -337,6 +339,256 @@ void LiveFileFollowerTests::
 
     QVERIFY(
         follower.resume()
+        );
+}
+
+void LiveFileFollowerTests::
+    restartAfterStopPreservesUnreadGrowth()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    const QByteArray existingBytes(
+        "existing\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            existingBytes
+            ),
+        qint64(
+            existingBytes.size()
+            )
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    const qint64 stoppedOffset =
+        follower.state().readOffset();
+
+    const quint64 stoppedGeneration =
+        follower.state().sourceGeneration();
+
+    QVERIFY(
+        follower.stop()
+        );
+
+    const QByteArray stoppedGrowth(
+        "arrived while stopped\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            stoppedGrowth
+            ),
+        qint64(
+            stoppedGrowth.size()
+            )
+        );
+
+    file.close();
+
+    QVERIFY(
+        follower.start()
+        );
+
+    QVERIFY(
+        follower.state().isFollowing()
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        stoppedOffset
+        );
+
+    QCOMPARE(
+        follower.state().sourceGeneration(),
+        stoppedGeneration
+        );
+
+    const LiveFileReadResult readResult =
+        follower.readAvailableBytes();
+
+    QVERIFY2(
+        readResult.succeeded,
+        qPrintable(
+            readResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        readResult.observation.kind,
+        LiveFileObservationKind::Appended
+        );
+
+    QCOMPARE(
+        readResult.bytes,
+        stoppedGrowth
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        stoppedOffset
+            + stoppedGrowth.size()
+        );
+}
+
+void LiveFileFollowerTests::
+    restartAfterStoppedTruncationBeginsNewGeneration()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.log")
+            );
+
+    QFile file(sourcePath);
+
+    const QByteArray originalBytes(
+        "original-record-one\n"
+        "original-record-two\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            originalBytes
+            ),
+        qint64(
+            originalBytes.size()
+            )
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start()
+        );
+
+    QVERIFY(
+        follower.stop()
+        );
+
+    const QByteArray replacementBytes(
+        "new\n"
+        );
+
+    QVERIFY(
+        replacementBytes.size()
+        < originalBytes.size()
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            | QIODevice::Truncate
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            replacementBytes
+            ),
+        qint64(
+            replacementBytes.size()
+            )
+        );
+
+    file.close();
+
+    QVERIFY(
+        follower.start()
+        );
+
+    QVERIFY(
+        follower.state().isFollowing()
+        );
+
+    QCOMPARE(
+        follower.state().sourceGeneration(),
+        quint64(1)
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        qint64(0)
+        );
+
+    /*
+     * The generation transition was detected during
+     * Start. The new source contents are therefore
+     * ordinary unread bytes when polling begins.
+     */
+    const LiveFileReadResult readResult =
+        follower.readAvailableBytes();
+
+    QVERIFY2(
+        readResult.succeeded,
+        qPrintable(
+            readResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        readResult.observation.kind,
+        LiveFileObservationKind::Appended
+        );
+
+    QCOMPARE(
+        readResult.bytes,
+        replacementBytes
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        qint64(
+            replacementBytes.size()
+            )
         );
 }
 

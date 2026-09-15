@@ -45,7 +45,22 @@ bool LiveFileFollower::start()
     /*
      * Start and Resume have intentionally different
      * meanings. A paused follower must use resume()
-     * so that its unread catch-up range is preserved.
+     * so that its unread catch-up range and active
+     * parser state are preserved.
+     *
+     * A stopped follower may be either:
+     *
+     * - starting for the first time after the
+     *   investigation imported its existing source
+     * - restarting after an earlier Stop
+     *
+     * The first Start begins at current EOF because
+     * the investigation already represents the
+     * existing physical contents.
+     *
+     * A later Start resumes from the retained cursor
+     * unless the source changed generation while
+     * following was stopped.
      */
     if (!m_state.isStopped()) {
         return false;
@@ -60,7 +75,16 @@ bool LiveFileFollower::start()
         return false;
     }
 
-    if (m_hasSourceIdentity
+    /*
+     * A captured source identity means this follower
+     * has already established its initial baseline.
+     * The retained read offset is therefore meaningful
+     * and should survive Stop -> Start.
+     */
+    const bool isRestart =
+        m_hasSourceIdentity;
+
+    if (isRestart
         && (
             fileInfo.size()
                 < m_state.readOffset()
@@ -68,17 +92,23 @@ bool LiveFileFollower::start()
                 fileInfo
                 )
             )) {
+        /*
+         * Truncation/replacement occurred while
+         * following was stopped. Unread bytes from
+         * the old generation may no longer be
+         * recoverable, so begin the new physical
+         * generation at byte zero.
+         */
         m_state.beginNextSourceGeneration();
     }
 
-    /*
-     * The investigation has already imported the
-     * current source contents. Begin following at
-     * the current EOF so that only future physical
-     * growth is consumed.
-     */
+    const qint64 startOffset =
+        isRestart
+            ? m_state.readOffset()
+            : fileInfo.size();
+
     m_state.startAtOffset(
-        fileInfo.size()
+        startOffset
         );
 
     captureSourceIdentity(

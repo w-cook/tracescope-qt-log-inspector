@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 
+#include "../src/importing/JsonLinesImporter.h"
 #include "../src/importing/StructuredJsonImporter.h"
 #include "../src/importing/XmlImporter.h"
 #include "../src/live/LiveSessionFollowCoordinator.h"
@@ -10,6 +11,31 @@
 
 namespace
 {
+ImportProfile jsonLinesProfile()
+{
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    profile.canonicalFields.subsystemPath =
+        QStringLiteral(
+            "subsystem"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "message"
+            );
+
+    profile.preserveUnmappedFields =
+        true;
+
+    return profile;
+}
+
 ImportProfile structuredJsonProfile()
 {
     ImportProfile profile;
@@ -166,6 +192,8 @@ private slots:
     void structuredXmlBaselineAndGrowthUseIncrementalSessionPath();
     void windowsEventXmlBaselineAndGrowthUseIncrementalSessionPath();
     void structuredXmlReplacementStartsNewSourceGeneration();
+
+    void stopStartPreservesPartialLineContext();
 };
 
 void LiveSessionFollowCoordinatorTests::
@@ -1552,6 +1580,204 @@ void LiveSessionFollowCoordinatorTests::
                      "old-partial"
                      )
                  )
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
+    stopStartPreservesPartialLineContext()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.jsonl"
+                )
+            );
+
+    const QByteArray baseline(
+        "{\"message\":\"baseline\","
+        "\"subsystem\":\"API\"}\n"
+        );
+
+    writeFile(
+        sourcePath,
+        baseline
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    const LiveSessionFollowStartResult
+        firstStart =
+        coordinator.start();
+
+    QVERIFY2(
+        firstStart.succeeded,
+        qPrintable(
+            firstStart.errorMessage
+            )
+        );
+
+    /*
+     * Consume only the beginning of a new physical
+     * line. The follower cursor advances, but the
+     * line framer deliberately retains the incomplete
+     * record.
+     */
+    const QByteArray partialRecord(
+        "{\"message\":\"arrived "
+        "across stop"
+        );
+
+    appendFile(
+        sourcePath,
+        partialRecord
+        );
+
+    const LiveSessionFollowPollResult
+        partialPoll =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        partialPoll.succeeded,
+        qPrintable(
+            partialPoll.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        partialPoll.processedRecordCount,
+        qint64(0)
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+
+    /*
+     * Complete that same physical line while live
+     * following is stopped.
+     */
+    const QByteArray stoppedGrowth(
+        "\",\"subsystem\":\"API\"}\n"
+        );
+
+    appendFile(
+        sourcePath,
+        stoppedGrowth
+        );
+
+    const LiveSessionFollowStartResult
+        restartResult =
+        coordinator.start();
+
+    QVERIFY2(
+        restartResult.succeeded,
+        qPrintable(
+            restartResult.errorMessage
+            )
+        );
+
+    QVERIFY(
+        !restartResult.sourceGenerationChanged
+        );
+
+    /*
+     * Start must not rescan/reject the retained
+     * partial-line boundary. The existing framer is
+     * still authoritative for this generation.
+     */
+    const LiveSessionFollowPollResult
+        catchUpPoll =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        catchUpPoll.succeeded,
+        qPrintable(
+            catchUpPoll.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        catchUpPoll.processedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        catchUpPoll.importedRecordCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "arrived across stop"
+                )
+            )
+        );
+
+    QCOMPARE(
+        records.at(1)
+            .source
+            .sourceGeneration,
+        quint64(0)
         );
 
     QVERIFY(
