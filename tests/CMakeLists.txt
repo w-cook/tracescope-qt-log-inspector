@@ -1976,6 +1976,97 @@ add_test(
 )
 
 qt_add_executable(
+    HybridInvestigationCandidateBuilderTests
+
+    HybridInvestigationCandidateBuilderTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/ImportProfile.h
+
+    ../src/persistence/InvestigationSessionSnapshot.h
+
+    ../src/workspace/HybridInvestigationCandidateBuilder.h
+    ../src/workspace/HybridInvestigationCandidateBuilder.cpp
+)
+
+target_link_libraries(
+    HybridInvestigationCandidateBuilderTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME HybridInvestigationCandidateBuilderTests
+    COMMAND HybridInvestigationCandidateBuilderTests
+)
+
+qt_add_executable(
+    HybridInvestigationReconstructionServiceTests
+
+    HybridInvestigationReconstructionServiceTests.cpp
+
+    ${SHARED_READ_FILE_SOURCES}
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordIdentity.h
+    ../src/domain/RecordIdentity.cpp
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+    ../src/domain/RecordTimestamp.h
+    ../src/domain/RecordTimestamp.cpp
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ILogImporter.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportExecutionContext.h
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResult.h
+    ../src/importing/ImportResult.cpp
+    ../src/importing/JsonLinesImportConfig.h
+    ../src/importing/JsonLinesImporter.h
+    ../src/importing/JsonLinesImporter.cpp
+    ../src/importing/JsonObjectRecordMapper.h
+    ../src/importing/JsonObjectRecordMapper.cpp
+
+    ../src/persistence/InvestigationSessionSnapshot.h
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/SourceFamilyConfiguration.h
+    ../src/sources/SourcePhysicalIdentity.h
+    ../src/sources/SourcePhysicalIdentity.cpp
+
+    ../src/workspace/InvestigationSessionBacking.h
+    ../src/workspace/HybridInvestigationCandidateBuilder.h
+    ../src/workspace/HybridInvestigationCandidateBuilder.cpp
+    ../src/workspace/HybridInvestigationReconstructionService.h
+    ../src/workspace/HybridInvestigationReconstructionService.cpp
+)
+
+target_link_libraries(
+    HybridInvestigationReconstructionServiceTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME HybridInvestigationReconstructionServiceTests
+    COMMAND HybridInvestigationReconstructionServiceTests
+)
+
+qt_add_executable(
     InvestigationWorkspaceTests
 
     InvestigationWorkspaceTests.cpp
