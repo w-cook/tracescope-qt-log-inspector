@@ -89,6 +89,12 @@ public:
     const InvestigationSessionSourceMetadata &
     sourceMetadata() const;
 
+    qint64 initialLiveFollowByteOffset() const;
+
+    void setInitialLiveFollowByteOffset(
+        qint64 byteOffset
+        );
+
     const SourceFamilyConfiguration &
     sourceFamilyConfiguration() const;
 
@@ -217,6 +223,8 @@ private:
 
     InvestigationSessionSourceMetadata
         m_sourceMetadata;
+
+    qint64 m_initialLiveFollowByteOffset = -1;
 
     SourceFamilyConfiguration
         m_sourceFamilyConfiguration;

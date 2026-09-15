@@ -31,6 +31,7 @@ private slots:
     void pausedFollowerDoesNotConsumeAvailableBytes();
     void sourceResetReadBeginsAtNewGenerationStart();
     void rejectsInvalidReadChunkSize();
+    void firstStartCanUseEarlierImportBoundary();
 };
 
 void LiveFileFollowerTests::
@@ -1655,6 +1656,101 @@ void LiveFileFollowerTests::
     QCOMPARE(
         follower.state().readOffset(),
         startingOffset
+        );
+}
+
+void LiveFileFollowerTests::
+    firstStartCanUseEarlierImportBoundary()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.log"
+                )
+            );
+
+    QFile file(sourcePath);
+
+    const QByteArray importedBytes(
+        "first\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            importedBytes
+            ),
+        qint64(
+            importedBytes.size()
+            )
+        );
+
+    file.close();
+
+    const qint64 importBoundary =
+        importedBytes.size();
+
+    const QByteArray growthBeforeStart(
+        "second\n"
+        );
+
+    QVERIFY(
+        file.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        file.write(
+            growthBeforeStart
+            ),
+        qint64(
+            growthBeforeStart.size()
+            )
+        );
+
+    file.close();
+
+    LiveFileFollower follower(
+        sourcePath
+        );
+
+    QVERIFY(
+        follower.start(
+            importBoundary
+            )
+        );
+
+    QCOMPARE(
+        follower.state().readOffset(),
+        importBoundary
+        );
+
+    const LiveFileReadResult readResult =
+        follower.readAvailableBytes();
+
+    QVERIFY2(
+        readResult.succeeded,
+        qPrintable(
+            readResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        readResult.bytes,
+        growthBeforeStart
         );
 }
 

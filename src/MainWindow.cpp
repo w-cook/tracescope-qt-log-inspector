@@ -1145,6 +1145,13 @@ void MainWindow::loadLogFile(
             activeFilePath
             );
 
+    const qint64 initialLiveFollowByteOffset =
+        LiveSessionFollowCoordinator::
+        captureInitialReadOffset(
+            activeFilePath,
+            profile
+            );
+
     startLogFileImport(
         activeFilePath,
         orderedSourcePaths,
@@ -1154,6 +1161,7 @@ void MainWindow::loadLogFile(
             activeFilePath,
             profile,
             reloadSessionId,
+            initialLiveFollowByteOffset,
             resolved =
             std::move(resolved)
         ](
@@ -1167,6 +1175,7 @@ void MainWindow::loadLogFile(
                 activeFilePath,
                 profile,
                 std::move(resolved),
+                initialLiveFollowByteOffset,
                 std::move(
                     result.value()
                     ),
@@ -1529,6 +1538,7 @@ void MainWindow::completeLogFileImport(
     const ImportProfile &profile,
     SourceFamilyConfiguration
         sourceFamilyConfiguration,
+    qint64 initialLiveFollowByteOffset,
     ImportResult result,
     const QString &reloadSessionId
     )
@@ -1549,6 +1559,10 @@ void MainWindow::completeLogFileImport(
                 std::move(result),
                 sourceFamilyConfiguration
                 );
+
+        session->setInitialLiveFollowByteOffset(
+            initialLiveFollowByteOffset
+            );
 
         workspace->addSession(
             std::move(session)
@@ -1577,6 +1591,12 @@ void MainWindow::completeLogFileImport(
             reloadSessionId,
             std::move(result)
             );
+
+        if (session != nullptr) {
+            session->setInitialLiveFollowByteOffset(
+                initialLiveFollowByteOffset
+                );
+        }
     }
 
     /*
@@ -2893,6 +2913,13 @@ void MainWindow::continueWorkspaceOpen(
                 persistedSession.sourcePath
                 );
 
+    const qint64 initialLiveFollowByteOffset =
+        LiveSessionFollowCoordinator::
+        captureInitialReadOffset(
+            persistedSession.sourcePath,
+            persistedSession.importProfile
+            );
+
     const bool started =
         startLogFileImport(
             persistedSession.sourcePath,
@@ -2902,6 +2929,7 @@ void MainWindow::continueWorkspaceOpen(
                 this,
                 operation,
                 sessionIndex,
+                initialLiveFollowByteOffset,
                 resolvedSourceFamilyConfiguration
             ](
                 std::optional<ImportResult>
@@ -2955,6 +2983,10 @@ void MainWindow::continueWorkspaceOpen(
                             ),
                         resolvedSourceFamilyConfiguration
                         );
+
+                session->setInitialLiveFollowByteOffset(
+                    initialLiveFollowByteOffset
+                    );
 
                 /*
                  * Restore bookmarks, notes, findings,

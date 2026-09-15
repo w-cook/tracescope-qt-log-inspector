@@ -1,8 +1,107 @@
 #include "LiveSessionFollowCoordinator.h"
 
+#include <QFile>
+#include <QFileInfo>
+
+#include <algorithm>
 #include <utility>
 
+#include "../io/SharedReadFile.h"
 #include "../workspace/InvestigationSession.h"
+
+namespace
+{
+constexpr qint64
+    InitialBoundarySearchChunkSizeBytes =
+    64 * 1024;
+
+qint64 lastCompleteLineBoundary(
+    const QString &sourcePath,
+    qint64 observedSize
+    )
+{
+    if (observedSize <= 0) {
+        return 0;
+    }
+
+    QFile file;
+
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            sourcePath
+            );
+
+    /*
+     * Failure to inspect the boundary must favor
+     * correctness over efficiency. Starting at zero
+     * may replay already-imported records, but stable
+     * record identity will remove that overlap.
+     */
+    if (!openResult.succeeded) {
+        return 0;
+    }
+
+    qint64 searchEnd =
+        observedSize;
+
+    while (searchEnd > 0) {
+        const qint64 searchStart =
+            std::max<qint64>(
+                0,
+                searchEnd
+                    - InitialBoundarySearchChunkSizeBytes
+                );
+
+        const qint64 byteCount =
+            searchEnd
+            - searchStart;
+
+        if (!file.seek(
+                searchStart
+                )) {
+            return 0;
+        }
+
+        const QByteArray bytes =
+            file.read(
+                byteCount
+                );
+
+        /*
+         * The producer changed the physical range
+         * while the boundary was being captured.
+         * Falling back to zero remains conservative.
+         */
+        if (bytes.size()
+            != byteCount) {
+            return 0;
+        }
+
+        for (qsizetype index =
+             bytes.size();
+             index > 0;
+             --index) {
+            if (bytes.at(index - 1)
+                == '\n') {
+                return searchStart
+                       + index;
+            }
+        }
+
+        searchEnd =
+            searchStart;
+    }
+
+    /*
+     * The source contains no complete newline yet.
+     * Replay from its beginning when live following
+     * starts.
+     */
+    return 0;
+}
+}
 
 LiveSessionFollowCoordinator::
     LiveSessionFollowCoordinator(
@@ -74,6 +173,48 @@ bool LiveSessionFollowCoordinator::
            != IngestionKind::Unsupported;
 }
 
+qint64 LiveSessionFollowCoordinator::
+    captureInitialReadOffset(
+        const QString &sourcePath,
+        const ImportProfile &profile
+        )
+{
+    const QFileInfo fileInfo(
+        sourcePath
+        );
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        return 0;
+    }
+
+    const qint64 observedSize =
+        std::max<qint64>(
+            0,
+            fileInfo.size()
+            );
+
+    /*
+     * Structured JSON and XML parsers preserve
+     * incomplete object/element state, so any byte
+     * boundary captured before import is safe.
+     *
+     * Line-oriented formats instead require the
+     * handoff to begin at a complete physical line
+     * boundary.
+     */
+    if (!LiveLineImportAdapter(
+             profile
+             ).isSupported()) {
+        return observedSize;
+    }
+
+    return lastCompleteLineBoundary(
+        fileInfo.absoluteFilePath(),
+        observedSize
+        );
+}
+
 bool LiveSessionFollowCoordinator::
     isSupported() const
 {
@@ -126,7 +267,15 @@ LiveSessionFollowCoordinator::start()
             .state()
             .sourceGeneration();
 
-    if (!m_follower.start()) {
+    const qint64 initialReadOffset =
+        isRestart
+            ? -1
+            : m_session
+                  ->initialLiveFollowByteOffset();
+
+    if (!m_follower.start(
+            initialReadOffset
+            )) {
         result.succeeded = false;
 
         result.errorMessage =

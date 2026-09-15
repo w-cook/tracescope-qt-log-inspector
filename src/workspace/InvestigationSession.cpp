@@ -91,6 +91,24 @@ InvestigationSession::sourceMetadata() const
     return m_sourceMetadata;
 }
 
+qint64 InvestigationSession::
+    initialLiveFollowByteOffset() const
+{
+    return m_initialLiveFollowByteOffset;
+}
+
+void InvestigationSession::
+    setInitialLiveFollowByteOffset(
+        qint64 byteOffset
+        )
+{
+    m_initialLiveFollowByteOffset =
+        std::max<qint64>(
+            0,
+            byteOffset
+            );
+}
+
 const SourceFamilyConfiguration &
     InvestigationSession::
     sourceFamilyConfiguration() const

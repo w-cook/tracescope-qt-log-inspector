@@ -40,7 +40,9 @@ LiveFileFollower::state() const
     return m_state;
 }
 
-bool LiveFileFollower::start()
+bool LiveFileFollower::start(
+    qint64 initialReadOffset
+    )
 {
     /*
      * Start and Resume have intentionally different
@@ -54,15 +56,26 @@ bool LiveFileFollower::start()
      *   investigation imported its existing source
      * - restarting after an earlier Stop
      *
-     * The first Start begins at current EOF because
-     * the investigation already represents the
-     * existing physical contents.
+     * For the first Start, callers may provide a
+     * conservative byte boundary captured before the
+     * initial import began. This deliberately permits
+     * overlap between static import and live ingestion
+     * so records written while the import was running,
+     * or before the user presses Start, cannot fall
+     * through an unobserved gap.
      *
-     * A later Start resumes from the retained cursor
-     * unless the source changed generation while
-     * following was stopped.
+     * Replayed generation-zero records retain stable
+     * identities and are deduplicated by the session.
+     *
+     * A later Start always resumes from the retained
+     * cursor unless the source changed generation
+     * while following was stopped.
      */
     if (!m_state.isStopped()) {
+        return false;
+    }
+
+    if (initialReadOffset < -1) {
         return false;
     }
 
@@ -75,12 +88,6 @@ bool LiveFileFollower::start()
         return false;
     }
 
-    /*
-     * A captured source identity means this follower
-     * has already established its initial baseline.
-     * The retained read offset is therefore meaningful
-     * and should survive Stop -> Start.
-     */
     const bool isRestart =
         m_hasSourceIdentity;
 
@@ -102,10 +109,44 @@ bool LiveFileFollower::start()
         m_state.beginNextSourceGeneration();
     }
 
-    const qint64 startOffset =
-        isRestart
-            ? m_state.readOffset()
-            : fileInfo.size();
+    qint64 startOffset = 0;
+
+    if (isRestart) {
+        /*
+         * Once a follower has established an identity,
+         * any caller-supplied initial boundary no
+         * longer applies. Stop -> Start continuity is
+         * governed by the retained cursor.
+         */
+        startOffset =
+            m_state.readOffset();
+    } else if (initialReadOffset >= 0) {
+        /*
+         * The source became shorter than the
+         * conservative pre-import boundary before
+         * live following could begin. Treat that as
+         * evidence that the original physical
+         * generation is no longer available and begin
+         * the current generation from byte zero.
+         */
+        if (fileInfo.size()
+            < initialReadOffset) {
+            m_state.beginNextSourceGeneration();
+
+            startOffset = 0;
+        } else {
+            startOffset =
+                initialReadOffset;
+        }
+    } else {
+        /*
+         * Legacy/default first-start behavior for
+         * callers that do not have an explicit import
+         * handoff boundary.
+         */
+        startOffset =
+            fileInfo.size();
+    }
 
     m_state.startAtOffset(
         startOffset

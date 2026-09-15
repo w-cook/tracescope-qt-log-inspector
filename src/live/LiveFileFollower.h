@@ -50,7 +50,9 @@ public:
 
     const LiveFileFollowState &state() const;
 
-    bool start();
+    bool start(
+        qint64 initialReadOffset = -1
+        );
     bool pause();
     bool resume();
     bool stop();

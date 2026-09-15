@@ -123,6 +123,7 @@ private:
         const ImportProfile &profile,
         SourceFamilyConfiguration
             sourceFamilyConfiguration,
+        qint64 initialLiveFollowByteOffset,
         ImportResult result,
         const QString &reloadSessionId
         );

@@ -192,8 +192,10 @@ private slots:
     void structuredXmlBaselineAndGrowthUseIncrementalSessionPath();
     void windowsEventXmlBaselineAndGrowthUseIncrementalSessionPath();
     void structuredXmlReplacementStartsNewSourceGeneration();
+    void structuredXmlFirstStartConsumesPostImportGrowth();
 
     void stopStartPreservesPartialLineContext();
+    void capturesLineInitialBoundaryAtCompleteLine();
 };
 
 void LiveSessionFollowCoordinatorTests::
@@ -1588,6 +1590,185 @@ void LiveSessionFollowCoordinatorTests::
 }
 
 void LiveSessionFollowCoordinatorTests::
+    structuredXmlFirstStartConsumesPostImportGrowth()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.xml"
+                )
+            );
+
+    const QByteArray initialContent(
+        "<?xml version=\"1.0\"?>\n"
+        "<session>\n"
+        "<events>\n"
+        "<event>"
+        "<metadata>"
+        "<component>Gateway</component>"
+        "</metadata>"
+        "<details>"
+        "<message>first</message>"
+        "</details>"
+        "</event>\n"
+        );
+
+    writeFile(
+        sourcePath,
+        initialContent
+        );
+
+    const ImportProfile profile =
+        structuredXmlProfile();
+
+    /*
+     * Capture the application handoff boundary before
+     * the real import begins.
+     */
+    const qint64 importBoundary =
+        LiveSessionFollowCoordinator::
+        captureInitialReadOffset(
+            sourcePath,
+            profile
+            );
+
+    QCOMPARE(
+        importBoundary,
+        qint64(
+            initialContent.size()
+            )
+        );
+
+    XmlImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    /*
+     * This record arrives after static import has
+     * completed but before the user starts live
+     * following. It must not disappear into the
+     * handoff gap.
+     */
+    const QByteArray growthBeforeStart(
+        "<event>"
+        "<metadata>"
+        "<component>Gateway</component>"
+        "</metadata>"
+        "<details>"
+        "<message>second</message>"
+        "</details>"
+        "</event>\n"
+        );
+
+    appendFile(
+        sourcePath,
+        growthBeforeStart
+        );
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    session.setInitialLiveFollowByteOffset(
+        importBoundary
+        );
+
+    LiveSessionFollowCoordinator coordinator(
+        session
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator.start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        startResult.baselineByteCount,
+        importBoundary
+        );
+
+    /*
+     * Starting itself reconstructs parser state but
+     * does not yet consume the unread overlap/growth.
+     */
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    const LiveSessionFollowPollResult
+        pollResult =
+        coordinator.pollOnce();
+
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    const QVector<InvestigationRecord>
+        records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0).message,
+        std::optional<QString>(
+            QStringLiteral("first")
+            )
+        );
+
+    QCOMPARE(
+        records.at(1).message,
+        std::optional<QString>(
+            QStringLiteral("second")
+            )
+        );
+
+    QVERIFY(
+        coordinator.stop()
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
     stopStartPreservesPartialLineContext()
 {
     QTemporaryDir directory;
@@ -1782,6 +1963,49 @@ void LiveSessionFollowCoordinatorTests::
 
     QVERIFY(
         coordinator.stop()
+        );
+}
+
+void LiveSessionFollowCoordinatorTests::
+    capturesLineInitialBoundaryAtCompleteLine()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "partial.jsonl"
+                )
+            );
+
+    const QByteArray content(
+        "{\"message\":\"first\"}\n"
+        "{\"message\":\"part"
+        );
+
+    writeFile(
+        sourcePath,
+        content
+        );
+
+    const qint64 boundary =
+        LiveSessionFollowCoordinator::
+        captureInitialReadOffset(
+            sourcePath,
+            jsonLinesProfile()
+            );
+
+    QCOMPARE(
+        boundary,
+        qint64(
+            QByteArray(
+                "{\"message\":\"first\"}\n"
+                ).size()
+            )
         );
 }
 

@@ -52,6 +52,11 @@ public:
         const ImportProfile &profile
         );
 
+    static qint64 captureInitialReadOffset(
+        const QString &sourcePath,
+        const ImportProfile &profile
+        );
+
     bool isSupported() const;
 
     const LiveFileFollowState &state() const;
