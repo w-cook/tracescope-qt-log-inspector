@@ -74,6 +74,8 @@ void InvestigationRecordExportFormatterTests::
 
     record.source.recordNumber = 147;
 
+    record.source.sourceGeneration = 3;
+
     record.rawSource =
         QStringLiteral(
             R"({"level":"error","message":"Database request timed out"})"
@@ -170,6 +172,11 @@ void InvestigationRecordExportFormatterTests::
     QCOMPARE(
         source.value("recordNumber").toInteger(),
         147
+        );
+
+    QCOMPARE(
+        source.value("sourceGeneration").toInteger(),
+        3
         );
 
     QCOMPARE(
@@ -391,6 +398,8 @@ void InvestigationRecordExportFormatterTests::
 
     record.source.recordNumber = 21;
 
+    record.source.sourceGeneration = 2;
+
     record.rawSource =
         QStringLiteral(
             R"({"queueDepth":18})"
@@ -455,7 +464,8 @@ void InvestigationRecordExportFormatterTests::
         output.contains(
             "Source:\n"
             "  Name: gateway.jsonl\n"
-            "  Record: 21"
+            "  Source Record: 21\n"
+            "  Source Generation: 2"
             )
         );
 
