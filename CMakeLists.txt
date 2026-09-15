@@ -241,6 +241,15 @@ qt_add_executable(TraceScope
     src/sources/SourceFamilyConfiguration.h
     src/io/SharedReadFile.h
     src/io/SharedReadFile.cpp
+    src/persistence/InvestigationRecordSerialization.h
+    src/persistence/InvestigationRecordSerialization.cpp
+    src/persistence/InvestigationSessionSnapshot.h
+    src/persistence/InvestigationSessionSnapshotSerialization.h
+    src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    src/persistence/InvestigationSnapshotContainer.h
+    src/persistence/InvestigationSnapshotContainer.cpp
+    src/persistence/InvestigationSessionSnapshotFile.h
+    src/persistence/InvestigationSessionSnapshotFile.cpp
 
 )
 

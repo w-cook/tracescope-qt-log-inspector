@@ -2019,6 +2019,108 @@ add_test(
     COMMAND WorkspaceSerializationTests
 )
 
+qt_add_executable(
+    InvestigationRecordSerializationTests
+
+    InvestigationRecordSerializationTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+)
+
+target_link_libraries(
+    InvestigationRecordSerializationTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationRecordSerializationTests
+    COMMAND InvestigationRecordSerializationTests
+)
+
+qt_add_executable(
+    InvestigationSessionSnapshotSerializationTests
+
+    InvestigationSessionSnapshotSerializationTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+)
+
+target_link_libraries(
+    InvestigationSessionSnapshotSerializationTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSessionSnapshotSerializationTests
+    COMMAND InvestigationSessionSnapshotSerializationTests
+)
+
+qt_add_executable(
+    InvestigationSnapshotContainerTests
+
+    InvestigationSnapshotContainerTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    ../src/persistence/InvestigationSnapshotContainer.h
+    ../src/persistence/InvestigationSnapshotContainer.cpp
+    ../src/persistence/InvestigationSessionSnapshotFile.h
+    ../src/persistence/InvestigationSessionSnapshotFile.cpp
+)
+
+target_link_libraries(
+    InvestigationSnapshotContainerTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSnapshotContainerTests
+    COMMAND InvestigationSnapshotContainerTests
+)
+
 # ----------------------------------------------------------------------------
 # Live following
 # ----------------------------------------------------------------------------
