@@ -2067,6 +2067,70 @@ add_test(
 )
 
 qt_add_executable(
+    InvestigationSessionHybridReloadTests
+
+    InvestigationSessionHybridReloadTests.cpp
+
+    ${INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES}
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    ../src/persistence/InvestigationSnapshotContainer.h
+    ../src/persistence/InvestigationSnapshotContainer.cpp
+    ../src/persistence/InvestigationSessionSnapshotFile.h
+    ../src/persistence/InvestigationSessionSnapshotFile.cpp
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/SourceFamilyConfiguration.h
+    ../src/sources/SourcePhysicalIdentity.h
+    ../src/sources/SourcePhysicalIdentity.cpp
+
+    ../src/workspace/HybridInvestigationCandidateBuilder.h
+    ../src/workspace/HybridInvestigationCandidateBuilder.cpp
+    ../src/workspace/HybridInvestigationReconstructionService.h
+    ../src/workspace/HybridInvestigationReconstructionService.cpp
+    ../src/workspace/InvestigationSessionBacking.h
+    ../src/workspace/InvestigationSessionBacking.cpp
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+    ../src/workspace/InvestigationSessionHybrid.cpp
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+)
+
+target_link_libraries(
+    InvestigationSessionHybridReloadTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSessionHybridReloadTests
+    COMMAND InvestigationSessionHybridReloadTests
+)
+
+qt_add_executable(
     InvestigationWorkspaceTests
 
     InvestigationWorkspaceTests.cpp

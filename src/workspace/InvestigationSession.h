@@ -56,7 +56,23 @@ enum class InvestigationBurstTimingMode
     Manual
 };
 
+class ILogImporter;
 class LiveSessionFollowCoordinator;
+
+struct InvestigationSessionHybridReloadResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+
+    bool externalSourceAvailable = false;
+
+    bool sourceGenerationChanged = false;
+
+    qint64 duplicateReplayRecordCount = 0;
+    qint64 appendedReplayRecordCount = 0;
+    qint64 replaySkippedRecordCount = 0;
+};
 
 class InvestigationSession
 {
@@ -230,6 +246,20 @@ public:
         QString sessionId,
         const QString &snapshotPath,
         InvestigationSessionSnapshot snapshot
+        );
+
+    static std::unique_ptr<InvestigationSession>
+    createHybrid(
+        QString sessionId,
+        const QString &snapshotPath,
+        InvestigationSessionSnapshot snapshot,
+        InvestigationExternalSourceBinding
+            externalSourceBinding
+        );
+
+    InvestigationSessionHybridReloadResult
+    reloadHybrid(
+        const ILogImporter &importer
         );
 
     void updateExternalSourceRuntimeState(

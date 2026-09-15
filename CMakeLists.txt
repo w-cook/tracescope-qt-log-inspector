@@ -258,6 +258,7 @@ qt_add_executable(TraceScope
     src/workspace/HybridInvestigationCandidateBuilder.cpp
     src/workspace/HybridInvestigationReconstructionService.h
     src/workspace/HybridInvestigationReconstructionService.cpp
+    src/workspace/InvestigationSessionHybrid.cpp
 
 )
 

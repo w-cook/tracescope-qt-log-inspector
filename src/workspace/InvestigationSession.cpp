@@ -961,23 +961,16 @@ InvestigationSession::captureSnapshot() const
     InvestigationSessionSnapshot snapshot;
 
     /*
-     * Phase 15 captures the complete normalized
-     * investigation but does not archive byte-faithful
-     * original source material.
+     * Phase 15 snapshot capture preserves normalized
+     * investigation evidence only.
      *
-     * If this session was itself loaded from a
-     * higher-fidelity future snapshot, preserve that
-     * capability marker.
+     * Do not claim CompleteSource unless the actual
+     * byte-faithful source material is captured into the
+     * snapshot as well.
      */
-    const InvestigationSnapshotBinding
-        *snapshotBinding =
-        m_backing.snapshot();
-
     snapshot.sourceFidelity =
-        snapshotBinding
-            ? snapshotBinding->sourceFidelity
-            : InvestigationSnapshotSourceFidelity::
-            NormalizedOnly;
+        InvestigationSnapshotSourceFidelity::
+        NormalizedOnly;
 
     snapshot.importProfile =
         m_importProfile;
