@@ -262,6 +262,10 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationSessionBackingPersistence.h
     src/workspace/InvestigationSessionBackingPersistenceSerialization.h
     src/workspace/InvestigationSessionBackingPersistenceSerialization.cpp
+    src/importing/ImportResultSourceGeneration.h
+    src/importing/ImportResultSourceGeneration.cpp
+    src/workspace/InvestigationSessionRestorationService.h
+    src/workspace/InvestigationSessionRestorationService.cpp
 
 )
 

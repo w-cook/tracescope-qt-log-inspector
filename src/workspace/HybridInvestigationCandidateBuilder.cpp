@@ -4,40 +4,7 @@
 
 #include <utility>
 
-#include "../domain/RecordIdentity.h"
-
-namespace
-{
-void rebaseRecordGeneration(
-    InvestigationRecord &record,
-    quint64 sourceGeneration
-    )
-{
-    record.source.sourceGeneration =
-        sourceGeneration;
-
-    record.recordId =
-        createStableRecordIdentity(
-            record.source,
-            record.rawSource
-            );
-}
-
-void rebaseDiagnosticGeneration(
-    ImportDiagnostic &diagnostic,
-    quint64 sourceGeneration
-    )
-{
-    if (!diagnostic.source.has_value()) {
-        return;
-    }
-
-    diagnostic
-        .source
-        ->sourceGeneration =
-        sourceGeneration;
-}
-}
+#include "../importing/ImportResultSourceGeneration.h"
 
 HybridInvestigationCandidateBuildResult
 HybridInvestigationCandidateBuilder::build(
@@ -95,7 +62,7 @@ HybridInvestigationCandidateBuilder::build(
         );
 
     for (const InvestigationRecord &record
-         : result.importResult.records) {
+         : std::as_const(result.importResult.records)) {
         if (!record.recordId.isEmpty()) {
             admittedRecordIds.insert(
                 record.recordId
@@ -109,15 +76,16 @@ HybridInvestigationCandidateBuilder::build(
      *
      * Hybrid reconstruction knows which logical source
      * generation that physical file actually belongs
-     * to, so rebase before comparing stable identities.
+     * to, so rebase records, stable IDs, and replay
+     * diagnostics before comparing identities.
      */
+    rebaseImportResultSourceGeneration(
+        replayResult,
+        replaySourceGeneration
+        );
+
     for (InvestigationRecord &record
          : replayResult.records) {
-        rebaseRecordGeneration(
-            record,
-            replaySourceGeneration
-            );
-
         if (admittedRecordIds.contains(
                 record.recordId
                 )) {
@@ -138,17 +106,8 @@ HybridInvestigationCandidateBuilder::build(
         ++result.appendedReplayRecordCount;
     }
 
-    /*
-     * Replay diagnostics belong to the same logical
-     * source generation as the replayed records.
-     */
     for (ImportDiagnostic &diagnostic
          : replayResult.diagnostics) {
-        rebaseDiagnosticGeneration(
-            diagnostic,
-            replaySourceGeneration
-            );
-
         result.importResult.diagnostics.append(
             std::move(diagnostic)
             );

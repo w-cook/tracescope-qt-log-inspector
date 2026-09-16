@@ -2022,9 +2022,11 @@ qt_add_executable(
 
     ../src/importing/CanonicalFieldMappings.h
     ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportProfile.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
-    ../src/importing/ImportProfile.h
+    ../src/importing/ImportResultSourceGeneration.h
+    ../src/importing/ImportResultSourceGeneration.cpp
 
     ../src/persistence/InvestigationSessionSnapshot.h
 
@@ -2068,6 +2070,8 @@ qt_add_executable(
     ../src/importing/ImportProfile.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
+    ../src/importing/ImportResultSourceGeneration.h
+    ../src/importing/ImportResultSourceGeneration.cpp
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/JsonLinesImporter.h
     ../src/importing/JsonLinesImporter.cpp
@@ -2118,6 +2122,8 @@ qt_add_executable(
 
     ../src/importing/ImportProfileSerialization.h
     ../src/importing/ImportProfileSerialization.cpp
+    ../src/importing/ImportResultSourceGeneration.h
+    ../src/importing/ImportResultSourceGeneration.cpp
 
     ../src/models/InvestigationFilterProxyModel.h
     ../src/models/InvestigationFilterProxyModel.cpp
@@ -2166,6 +2172,86 @@ target_link_libraries(
 add_test(
     NAME InvestigationSessionHybridReloadTests
     COMMAND InvestigationSessionHybridReloadTests
+)
+
+qt_add_executable(
+    InvestigationSessionRestorationServiceTests
+
+    InvestigationSessionRestorationServiceTests.cpp
+
+    ${INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES}
+
+    ../src/controllers/InvestigationController.h
+    ../src/controllers/InvestigationController.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/BuiltInImporterRegistry.h
+    ../src/importing/BuiltInImporterRegistry.cpp
+    ../src/importing/ImporterRegistry.h
+    ../src/importing/ImporterRegistry.cpp
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+    ../src/importing/ImportResultSourceGeneration.h
+    ../src/importing/ImportResultSourceGeneration.cpp
+    ../src/importing/SourceFamilyImportService.h
+    ../src/importing/SourceFamilyImportService.cpp
+    ../src/importing/StructuredJsonImportConfig.h
+    ../src/importing/StructuredJsonImporter.h
+    ../src/importing/StructuredJsonImporter.cpp
+    ../src/importing/XmlImporter.h
+    ../src/importing/XmlImporter.cpp
+
+    ../src/models/InvestigationFilterProxyModel.h
+    ../src/models/InvestigationFilterProxyModel.cpp
+    ../src/models/InvestigationTableModel.h
+    ../src/models/InvestigationTableModel.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    ../src/persistence/InvestigationSnapshotContainer.h
+    ../src/persistence/InvestigationSnapshotContainer.cpp
+    ../src/persistence/InvestigationSessionSnapshotFile.h
+    ../src/persistence/InvestigationSessionSnapshotFile.cpp
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/RotatedSourceDiscoveryService.h
+    ../src/sources/RotatedSourceDiscoveryService.cpp
+    ../src/sources/SourceFamilyConfiguration.h
+
+    ../src/workspace/HybridInvestigationCandidateBuilder.h
+    ../src/workspace/HybridInvestigationCandidateBuilder.cpp
+    ../src/workspace/HybridInvestigationReconstructionService.h
+    ../src/workspace/HybridInvestigationReconstructionService.cpp
+    ../src/workspace/InvestigationSession.h
+    ../src/workspace/InvestigationSession.cpp
+    ../src/workspace/InvestigationSessionHybrid.cpp
+    ../src/workspace/InvestigationSessionPersistence.h
+    ../src/workspace/InvestigationSessionPersistence.cpp
+    ../src/workspace/InvestigationSessionRestorationService.h
+    ../src/workspace/InvestigationSessionRestorationService.cpp
+    ../src/workspace/InvestigationStateStore.h
+    ../src/workspace/InvestigationStateStore.cpp
+    ../src/workspace/WorkspacePersistenceState.h
+)
+
+target_link_libraries(
+    InvestigationSessionRestorationServiceTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSessionRestorationServiceTests
+    COMMAND InvestigationSessionRestorationServiceTests
 )
 
 qt_add_executable(
