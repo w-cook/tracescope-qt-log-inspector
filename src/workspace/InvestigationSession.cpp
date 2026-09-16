@@ -9,6 +9,46 @@
 
 #include "../live/LiveSessionFollowCoordinator.h"
 
+#include "HybridInvestigationReconstructionService.h"
+
+namespace
+{
+InvestigationSessionSourceMetadata
+snapshotSourceMetadata(
+    const InvestigationSessionSnapshot &snapshot
+    )
+{
+    InvestigationSessionSourceMetadata
+        sourceMetadata;
+
+    /*
+     * Snapshot-backed investigations retain descriptive
+     * source provenance without retaining an operational
+     * dependency on the original source file.
+     */
+    for (auto iterator =
+         snapshot.records.crbegin();
+         iterator
+         != snapshot.records.crend();
+         ++iterator) {
+        if (iterator->source.sourcePath.isEmpty()
+            && iterator->source.sourceName.isEmpty()) {
+            continue;
+        }
+
+        sourceMetadata.sourcePath =
+            iterator->source.sourcePath;
+
+        sourceMetadata.sourceName =
+            iterator->source.sourceName;
+
+        break;
+    }
+
+    return sourceMetadata;
+}
+}
+
 InvestigationSession::InvestigationSession(
     const QString &filePath,
     ImportProfile profile,
@@ -1008,9 +1048,6 @@ InvestigationSession::createSnapshotBacked(
     InvestigationSessionSnapshot snapshot
     )
 {
-    InvestigationSessionSourceMetadata
-        sourceMetadata;
-
     /*
      * Recover descriptive provenance from the most
      * recent saved record that contains source
@@ -1019,25 +1056,11 @@ InvestigationSession::createSnapshotBacked(
      * This is deliberately not an external dependency.
      * The operational backing remains the .tsinv file.
      */
-    for (
-        auto iterator =
-        snapshot.records.crbegin();
-        iterator != snapshot.records.crend();
-        ++iterator
-        ) {
-        if (iterator->source.sourcePath.isEmpty()
-            && iterator->source.sourceName.isEmpty()) {
-            continue;
-        }
-
-        sourceMetadata.sourcePath =
-            iterator->source.sourcePath;
-
-        sourceMetadata.sourceName =
-            iterator->source.sourceName;
-
-        break;
-    }
+    InvestigationSessionSourceMetadata
+        sourceMetadata =
+        snapshotSourceMetadata(
+            snapshot
+            );
 
     ImportResult result;
 
@@ -1109,4 +1132,182 @@ void InvestigationSession::
     } else {
         externalSource->sourceIdentity.reset();
     }
+}
+
+bool InvestigationSession::
+    applySnapshotReload(
+        InvestigationSessionSnapshot snapshot
+        )
+{
+    if (m_backing.mode()
+        != InvestigationSessionBackingMode::
+        SnapshotBacked) {
+        return false;
+    }
+
+    /*
+     * Everything required for the replacement has
+     * already been prepared by the caller. From here
+     * on, no I/O or parsing can fail.
+     */
+    InvestigationSessionSourceMetadata
+        sourceMetadata =
+        snapshotSourceMetadata(
+            snapshot
+            );
+
+    ImportProfile profile =
+        snapshot.importProfile;
+
+    ImportResult result;
+
+    result.records =
+        std::move(
+            snapshot.records
+            );
+
+    result.diagnostics =
+        std::move(
+            snapshot.diagnostics
+            );
+
+    result.processedRecordCount =
+        snapshot.processedRecordCount;
+
+    result.sourceTruncated =
+        snapshot.sourceTruncated;
+
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    InvestigationSnapshotBinding
+        *snapshotBinding =
+        m_backing.snapshot();
+
+    if (snapshotBinding == nullptr) {
+        return false;
+    }
+
+    snapshotBinding->sourceFidelity =
+        snapshot.sourceFidelity;
+
+    m_sourceMetadata =
+        std::move(
+            sourceMetadata
+            );
+
+    m_importProfile =
+        std::move(
+            profile
+            );
+
+    m_initialLiveFollowByteOffset =
+        0;
+
+    installImportResult(
+        std::move(result)
+        );
+
+    return true;
+}
+
+InvestigationSessionHybridReloadResult
+InvestigationSession::applyHybridReload(
+    InvestigationSessionSnapshot snapshot,
+    HybridInvestigationReconstructionResult
+        reconstruction
+    )
+{
+    InvestigationSessionHybridReloadResult
+        result;
+
+    if (m_backing.mode()
+        != InvestigationSessionBackingMode::
+        Hybrid) {
+        result.errorMessage =
+            QStringLiteral(
+                "Hybrid reload requires a Hybrid "
+                "investigation session."
+                );
+
+        return result;
+    }
+
+    if (!reconstruction.succeeded) {
+        result.errorMessage =
+            reconstruction.errorMessage.isEmpty()
+                ? QStringLiteral(
+                      "Hybrid investigation "
+                      "reconstruction failed."
+                      )
+                : reconstruction.errorMessage;
+
+        return result;
+    }
+
+    /*
+     * Preparation is complete. This is the mutation
+     * boundary for the currently open session.
+     */
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    result.externalSourceAvailable =
+        reconstruction.externalSourceAvailable;
+
+    result.sourceGenerationChanged =
+        reconstruction.sourceGenerationChanged;
+
+    result.duplicateReplayRecordCount =
+        reconstruction
+            .duplicateReplayRecordCount;
+
+    result.appendedReplayRecordCount =
+        reconstruction
+            .appendedReplayRecordCount;
+
+    result.replaySkippedRecordCount =
+        reconstruction
+            .replaySkippedRecordCount;
+
+    m_backing.connectExternalSource(
+        std::move(
+            reconstruction
+                .externalSourceBinding
+            )
+        );
+
+    InvestigationSnapshotBinding
+        *mutableSnapshotBinding =
+        m_backing.snapshot();
+
+    if (mutableSnapshotBinding != nullptr) {
+        mutableSnapshotBinding
+            ->sourceFidelity =
+            snapshot.sourceFidelity;
+    }
+
+    m_importProfile =
+        std::move(
+            snapshot.importProfile
+            );
+
+    m_initialLiveFollowByteOffset =
+        0;
+
+    refreshSourceMetadata();
+
+    installImportResult(
+        std::move(
+            reconstruction.importResult
+            )
+        );
+
+    result.succeeded = true;
+
+    return result;
 }

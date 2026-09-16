@@ -56,6 +56,8 @@ enum class InvestigationBurstTimingMode
     Manual
 };
 
+struct HybridInvestigationReconstructionResult;
+
 class ILogImporter;
 class LiveSessionFollowCoordinator;
 
@@ -269,6 +271,17 @@ public:
     void updateExternalSourceRuntimeState(
         quint64 sourceGeneration,
         const SourcePhysicalIdentity *sourceIdentity
+        );
+
+    bool applySnapshotReload(
+        InvestigationSessionSnapshot snapshot
+        );
+
+    InvestigationSessionHybridReloadResult
+    applyHybridReload(
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
         );
 
 private:

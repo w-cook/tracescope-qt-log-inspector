@@ -42,6 +42,7 @@
 #include "importing/ILogImporter.h"
 #include "importing/SourceFamilyImportService.h"
 #include "live/LiveSessionFollowCoordinator.h"
+#include "persistence/InvestigationSessionSnapshotFile.h"
 #include "sources/RotatedSourceDiscoveryService.h"
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/InvestigationComparisonDialog.h"
@@ -51,6 +52,7 @@
 #include "ui/workspace/InvestigationSessionView.h"
 #include "ui/workspace/WorkspaceDocument.h"
 #include "ui/workspace/WorkspaceDocumentHost.h"
+#include "workspace/HybridInvestigationReconstructionService.h"
 #include "workspace/InvestigationComparisonPersistence.h"
 #include "workspace/InvestigationComparisonSnapshotBuilder.h"
 #include "workspace/InvestigationSessionPersistence.h"
@@ -439,6 +441,24 @@ QString resolveWorkspaceSnapshotPath(
             )
         );
 }
+
+struct ActiveSessionReloadPreparationResult
+{
+    bool succeeded = false;
+
+    QString sessionId;
+    QString errorMessage;
+
+    InvestigationSessionBackingMode mode =
+        InvestigationSessionBackingMode::
+        SourceBacked;
+
+    InvestigationSessionSnapshot snapshot;
+
+    std::optional<
+        HybridInvestigationReconstructionResult>
+        hybridReconstruction;
+};
 }
 
 struct MainWindow::WorkspaceOpenOperation
@@ -1078,7 +1098,8 @@ void MainWindow::buildLayout()
 void MainWindow::openLogFile(const QString &initialFilePath)
 {
     if (importWatcher != nullptr
-        || workspaceOpenInProgress) {
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
         QMessageBox::information(
             this,
             tr("File Operation In Progress"),
@@ -1228,7 +1249,8 @@ bool MainWindow::startLogFileImport(
     )
 {
     if (importWatcher != nullptr
-        || workspaceOpenInProgress) {
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
         return false;
     }
 
@@ -1670,7 +1692,8 @@ void MainWindow::completeLogFileImport(
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
     if (importWatcher != nullptr
-        || workspaceOpenInProgress) {
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
         return;
     }
 
@@ -1692,7 +1715,8 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 void MainWindow::dropEvent(QDropEvent *event)
 {
     if (importWatcher != nullptr
-        || workspaceOpenInProgress) {
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
         return;
     }
 
@@ -1735,6 +1759,13 @@ void MainWindow::closeEvent(
 
 void MainWindow::reloadActiveSession()
 {
+    if (workspace == nullptr
+        || importWatcher != nullptr
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
+        return;
+    }
+
     InvestigationSession *session =
         workspace->activeSession();
 
@@ -1742,14 +1773,496 @@ void MainWindow::reloadActiveSession()
         return;
     }
 
-    loadLogFile(
-        session
-            ->sourceMetadata()
-            .sourcePath,
-        session->importProfile(),
-        session->id(),
-        session
-            ->sourceFamilyConfiguration()
+    const InvestigationSessionBackingMode mode =
+        session->backing().mode();
+
+    /*
+     * SourceBacked retains the existing import path.
+     * The external source remains authoritative.
+     */
+    if (mode
+        == InvestigationSessionBackingMode::
+        SourceBacked) {
+        loadLogFile(
+            session->externalSourcePath(),
+            session->importProfile(),
+            session->id(),
+            session->sourceFamilyConfiguration()
+            );
+
+        return;
+    }
+
+    const InvestigationSnapshotBinding
+        *snapshotBinding =
+        session->backing().snapshot();
+
+    if (snapshotBinding == nullptr
+        || snapshotBinding
+               ->snapshotPath
+               .trimmed()
+               .isEmpty()) {
+        QMessageBox::warning(
+            this,
+            tr("Reload Investigation Failed"),
+            tr(
+                "This investigation does not have "
+                "a valid durable snapshot backing."
+                )
+            );
+
+        return;
+    }
+
+    const QString sessionId =
+        session->id();
+
+    const QString snapshotPath =
+        snapshotBinding->snapshotPath;
+
+    std::optional<
+        InvestigationExternalSourceBinding>
+        externalSourceBinding;
+
+    if (mode
+        == InvestigationSessionBackingMode::
+        Hybrid) {
+        const InvestigationExternalSourceBinding
+            *externalSource =
+            session->backing().externalSource();
+
+        if (externalSource == nullptr) {
+            QMessageBox::warning(
+                this,
+                tr("Reload Investigation Failed"),
+                tr(
+                    "The Hybrid investigation does "
+                    "not contain its external source "
+                    "binding."
+                    )
+                );
+
+            return;
+        }
+
+        externalSourceBinding =
+            *externalSource;
+    }
+
+    auto *watcher =
+        new QFutureWatcher<
+            ActiveSessionReloadPreparationResult>(
+            this
+            );
+
+    auto *progressDialog =
+        new QProgressDialog(
+            tr(
+                "Reloading investigation...\n"
+                "Preparing durable evidence..."
+                ),
+            tr("Cancel"),
+            0,
+            0,
+            this
+            );
+
+    progressDialog->setWindowTitle(
+        tr("Reload Investigation")
+        );
+
+    progressDialog->setWindowModality(
+        Qt::WindowModal
+        );
+
+    progressDialog->setMinimumDuration(
+        250
+        );
+
+    progressDialog->setAutoClose(
+        false
+        );
+
+    progressDialog->setAutoReset(
+        false
+        );
+
+    setSessionReloadInProgress(
+        true
+        );
+
+    connect(
+        progressDialog,
+        &QProgressDialog::canceled,
+        watcher,
+        &QFutureWatcher<
+            ActiveSessionReloadPreparationResult>::
+        cancel
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            ActiveSessionReloadPreparationResult>::
+        finished,
+        this,
+        [
+            this,
+            watcher,
+            progressDialog
+        ]() mutable {
+            const bool cancelled =
+                watcher->isCanceled();
+
+            progressDialog->hide();
+            progressDialog->deleteLater();
+
+            setSessionReloadInProgress(
+                false
+                );
+
+            if (cancelled) {
+                watcher->deleteLater();
+                return;
+            }
+
+            ActiveSessionReloadPreparationResult
+                preparation =
+                watcher->result();
+
+            watcher->deleteLater();
+
+            if (!preparation.succeeded) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Reload Investigation Failed"
+                        ),
+                    preparation
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "TraceScope could not "
+                              "prepare the investigation "
+                              "for reload."
+                              )
+                        : preparation.errorMessage
+                    );
+
+                return;
+            }
+
+            if (preparation.mode
+                == InvestigationSessionBackingMode::
+                SnapshotBacked) {
+                if (!workspace
+                         ->applySnapshotReload(
+                             preparation.sessionId,
+                             std::move(
+                                 preparation.snapshot
+                                 )
+                             )) {
+                    QMessageBox::warning(
+                        this,
+                        tr(
+                            "Reload Investigation Failed"
+                            ),
+                        tr(
+                            "The prepared snapshot "
+                            "could not be applied to "
+                            "the open investigation."
+                            )
+                        );
+                }
+
+                return;
+            }
+
+            if (preparation.mode
+                    != InvestigationSessionBackingMode::
+                    Hybrid
+                || !preparation
+                        .hybridReconstruction
+                        .has_value()) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Reload Investigation Failed"
+                        ),
+                    tr(
+                        "Hybrid reload preparation "
+                        "did not produce a complete "
+                        "reconstruction."
+                        )
+                    );
+
+                return;
+            }
+
+            InvestigationSessionHybridReloadResult
+                result =
+                workspace->applyHybridReload(
+                    preparation.sessionId,
+                    std::move(
+                        preparation.snapshot
+                        ),
+                    std::move(
+                        *preparation
+                             .hybridReconstruction
+                        )
+                    );
+
+            if (!result.succeeded) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Reload Investigation Failed"
+                        ),
+                    result.errorMessage.isEmpty()
+                        ? tr(
+                              "The prepared Hybrid "
+                              "reload could not be "
+                              "applied."
+                              )
+                        : result.errorMessage
+                    );
+            }
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [
+                sessionId,
+                snapshotPath,
+                mode,
+                externalSourceBinding
+            ](
+                QPromise<
+                    ActiveSessionReloadPreparationResult>
+                    &promise
+                ) {
+                ActiveSessionReloadPreparationResult
+                    preparation;
+
+                preparation.sessionId =
+                    sessionId;
+
+                preparation.mode =
+                    mode;
+
+                InvestigationSessionSnapshotLoadResult
+                    loadResult =
+                    InvestigationSessionSnapshotFile()
+                        .load(
+                            snapshotPath
+                            );
+
+                if (!loadResult.isSuccess()) {
+                    preparation.errorMessage =
+                        loadResult
+                                .errorMessage
+                                .isEmpty()
+                            ? QStringLiteral(
+                                  "The durable "
+                                  "investigation "
+                                  "snapshot could not "
+                                  "be loaded."
+                                  )
+                            : loadResult.errorMessage;
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                preparation.snapshot =
+                    std::move(
+                        *loadResult.snapshot
+                        );
+
+                if (mode
+                    == InvestigationSessionBackingMode::
+                    SnapshotBacked) {
+                    preparation.succeeded =
+                        true;
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                if (mode
+                        != InvestigationSessionBackingMode::
+                        Hybrid
+                    || !externalSourceBinding
+                            .has_value()) {
+                    preparation.errorMessage =
+                        QStringLiteral(
+                            "Hybrid reload preparation "
+                            "is missing its external "
+                            "source binding."
+                            );
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                HybridInvestigationReconstructionResult
+                    reconstruction;
+
+                const QFileInfo sourceInfo(
+                    externalSourceBinding
+                        ->sourcePath
+                    );
+
+                /*
+                 * Missing source is not a Hybrid
+                 * failure. The snapshot remains the
+                 * durable evidence floor.
+                 */
+                if (!sourceInfo.exists()
+                    || !sourceInfo.isFile()) {
+                    reconstruction.succeeded =
+                        true;
+
+                    reconstruction
+                        .externalSourceAvailable =
+                        false;
+
+                    reconstruction
+                        .externalSourceBinding =
+                        *externalSourceBinding;
+
+                    reconstruction
+                        .importResult
+                        .records =
+                        preparation
+                            .snapshot
+                            .records;
+
+                    reconstruction
+                        .importResult
+                        .diagnostics =
+                        preparation
+                            .snapshot
+                            .diagnostics;
+
+                    reconstruction
+                        .importResult
+                        .processedRecordCount =
+                        preparation
+                            .snapshot
+                            .processedRecordCount;
+
+                    reconstruction
+                        .importResult
+                        .sourceTruncated =
+                        preparation
+                            .snapshot
+                            .sourceTruncated;
+                } else {
+                    ImporterRegistry registry =
+                        createBuiltInImporterRegistry(
+                            preparation
+                                .snapshot
+                                .importProfile
+                            );
+
+                    const std::shared_ptr<
+                        ILogImporter>
+                        importer =
+                        registry.importerById(
+                            preparation
+                                .snapshot
+                                .importProfile
+                                .importerId
+                            );
+
+                    if (!importer) {
+                        preparation.errorMessage =
+                            QStringLiteral(
+                                "No importer is "
+                                "available for the "
+                                "Hybrid investigation's "
+                                "snapshot profile."
+                                );
+
+                        promise.addResult(
+                            std::move(preparation)
+                            );
+
+                        return;
+                    }
+
+                    ImportExecutionContext
+                        executionContext;
+
+                    executionContext
+                        .isCancellationRequested =
+                        [&promise]() {
+                            return
+                                promise.isCanceled();
+                        };
+
+                    reconstruction =
+                        HybridInvestigationReconstructionService()
+                            .reconstruct(
+                                preparation.snapshot,
+                                *externalSourceBinding,
+                                *importer,
+                                executionContext
+                                );
+                }
+
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                if (!reconstruction.succeeded) {
+                    preparation.errorMessage =
+                        reconstruction
+                                .errorMessage
+                                .isEmpty()
+                            ? QStringLiteral(
+                                  "The Hybrid "
+                                  "investigation could "
+                                  "not be reconstructed."
+                                  )
+                            : reconstruction
+                                  .errorMessage;
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                preparation.hybridReconstruction =
+                    std::move(
+                        reconstruction
+                        );
+
+                preparation.succeeded =
+                    true;
+
+                promise.addResult(
+                    std::move(preparation)
+                    );
+            }
+            )
         );
 }
 
@@ -1900,6 +2413,38 @@ void MainWindow::setWorkspaceOpenInProgress(
 
     const bool fileOperationAvailable =
         !workspaceOpenInProgress
+        && !sessionReloadInProgress
+        && importWatcher == nullptr;
+
+    if (openAction != nullptr) {
+        openAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    if (openWorkspaceAction != nullptr) {
+        openWorkspaceAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    setAcceptDrops(
+        fileOperationAvailable
+        );
+
+    updateReloadActionState();
+}
+
+void MainWindow::setSessionReloadInProgress(
+    bool inProgress
+    )
+{
+    sessionReloadInProgress =
+        inProgress;
+
+    const bool fileOperationAvailable =
+        !workspaceOpenInProgress
+        && !sessionReloadInProgress
         && importWatcher == nullptr;
 
     if (openAction != nullptr) {
@@ -1953,6 +2498,7 @@ void MainWindow::
         session != nullptr
         && importWatcher == nullptr
         && !workspaceOpenInProgress
+        && !sessionReloadInProgress
         && !liveFollowActive
         );
 }
@@ -2893,7 +3439,8 @@ MainWindow::resolveWorkspaceSessionRecovery(
 void MainWindow::openWorkspace(const QString &initialFilePath)
 {
     if (importWatcher != nullptr
-        || workspaceOpenInProgress) {
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
         QMessageBox::information(
             this,
             tr("File Operation In Progress"),

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "HybridInvestigationReconstructionService.h"
+
 InvestigationWorkspace::InvestigationWorkspace(
     QObject *parent
     )
@@ -210,4 +212,90 @@ bool InvestigationWorkspace::reloadSession(
     emit sessionReloaded(index);
 
     return true;
+}
+
+bool InvestigationWorkspace::
+    applySnapshotReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        return false;
+    }
+
+    InvestigationSession *session =
+        sessionAt(index);
+
+    if (session == nullptr
+        || !session->applySnapshotReload(
+            std::move(snapshot)
+            )) {
+        return false;
+    }
+
+    emit sessionReloaded(index);
+
+    return true;
+}
+
+InvestigationSessionHybridReloadResult
+    InvestigationWorkspace::
+    applyHybridReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(index);
+
+    if (session == nullptr) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionHybridReloadResult result =
+        session->applyHybridReload(
+            std::move(snapshot),
+            std::move(reconstruction)
+            );
+
+    if (result.succeeded) {
+        emit sessionReloaded(index);
+    }
+
+    return result;
 }

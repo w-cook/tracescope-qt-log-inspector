@@ -99,6 +99,7 @@ private:
         nullptr;
 
     bool workspaceOpenInProgress = false;
+    bool sessionReloadInProgress = false;
 
     void buildLayout();
     void createMenus();
@@ -153,6 +154,10 @@ private:
         );
 
     void setWorkspaceOpenInProgress(
+        bool inProgress
+        );
+
+    void setSessionReloadInProgress(
         bool inProgress
         );
 

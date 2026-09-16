@@ -33,6 +33,8 @@ private slots:
     void pausePreservesAutomaticPollingBacklog();
     void stopPreventsAutomaticPolling();
     void followsReplacementAfterPausedObservation();
+    void appliesSnapshotReloadWithoutChangingBackingMode();
+    void rejectsSnapshotReloadForSourceBackedSession();
 };
 
 void InvestigationSessionTests::
@@ -3058,6 +3060,172 @@ void InvestigationSessionTests::
     QVERIFY(
         records.at(0).recordId
         != records.at(1).recordId
+        );
+}
+
+void InvestigationSessionTests::
+    appliesSnapshotReloadWithoutChangingBackingMode()
+{
+    InvestigationSessionSnapshot initialSnapshot;
+
+    initialSnapshot.importProfile.name =
+        QStringLiteral("Initial Profile");
+
+    InvestigationRecord retainedRecord;
+
+    retainedRecord.recordId =
+        QStringLiteral("retained");
+
+    retainedRecord.message =
+        QStringLiteral("old retained value");
+
+    InvestigationRecord removedRecord;
+
+    removedRecord.recordId =
+        QStringLiteral("removed");
+
+    initialSnapshot.records = {
+        retainedRecord,
+        removedRecord
+    };
+
+    initialSnapshot.processedRecordCount =
+        2;
+
+    auto session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral("snapshot-session"),
+            QStringLiteral("snapshot.tsinv"),
+            std::move(initialSnapshot)
+            );
+
+    QVERIFY(session != nullptr);
+
+    session
+        ->investigationStateStore()
+        ->setBookmarked(
+            QStringLiteral("retained"),
+            true
+            );
+
+    session
+        ->investigationStateStore()
+        ->setNote(
+            QStringLiteral("retained"),
+            QStringLiteral("keep me")
+            );
+
+    session
+        ->investigationStateStore()
+        ->setBookmarked(
+            QStringLiteral("removed"),
+            true
+            );
+
+    InvestigationSessionSnapshot replacement;
+
+    replacement.importProfile.name =
+        QStringLiteral("Replacement Profile");
+
+    InvestigationRecord updatedRetained;
+
+    updatedRetained.recordId =
+        QStringLiteral("retained");
+
+    updatedRetained.message =
+        QStringLiteral("new retained value");
+
+    InvestigationRecord newRecord;
+
+    newRecord.recordId =
+        QStringLiteral("new");
+
+    newRecord.message =
+        QStringLiteral("new evidence");
+
+    replacement.records = {
+        updatedRetained,
+        newRecord
+    };
+
+    replacement.processedRecordCount =
+        2;
+
+    QVERIFY(
+        session->applySnapshotReload(
+            std::move(replacement)
+            )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QCOMPARE(
+        session->importedRecordCount(),
+        2
+        );
+
+    QCOMPARE(
+        session->importProfile().name,
+        QStringLiteral(
+            "Replacement Profile"
+            )
+        );
+
+    const InvestigationRecordState
+        retainedState =
+        session
+            ->investigationStateStore()
+            ->stateForRecord(
+                QStringLiteral("retained")
+                );
+
+    QVERIFY(
+        retainedState.bookmarked
+        );
+
+    QCOMPARE(
+        retainedState.note,
+        QStringLiteral("keep me")
+        );
+
+    QVERIFY(
+        !session
+             ->investigationStateStore()
+             ->hasStateForRecord(
+                 QStringLiteral("removed")
+                 )
+        );
+}
+
+void InvestigationSessionTests::
+    rejectsSnapshotReloadForSourceBackedSession()
+{
+    ImportProfile profile;
+    ImportResult result;
+
+    InvestigationSession session(
+        QStringLiteral("source.jsonl"),
+        profile,
+        std::move(result)
+        );
+
+    InvestigationSessionSnapshot snapshot;
+
+    QVERIFY(
+        !session.applySnapshotReload(
+            std::move(snapshot)
+            )
+        );
+
+    QCOMPARE(
+        session.backing().mode(),
+        InvestigationSessionBackingMode::
+        SourceBacked
         );
 }
 

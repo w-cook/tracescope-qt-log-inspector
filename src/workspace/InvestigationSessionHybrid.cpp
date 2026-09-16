@@ -192,9 +192,10 @@ InvestigationSession::reloadHybrid(
         return result;
     }
 
-    const InvestigationSessionSnapshot
-        &snapshot =
-        *loadResult.snapshot;
+    InvestigationSessionSnapshot snapshot =
+        std::move(
+            *loadResult.snapshot
+            );
 
     HybridInvestigationReconstructionService
         reconstructionService;
@@ -220,78 +221,8 @@ InvestigationSession::reloadHybrid(
      * From this point forward we commit the candidate
      * to the live session as one replacement.
      */
-    if (m_liveFollowCoordinator) {
-        m_liveFollowCoordinator->stop();
-        m_liveFollowCoordinator.reset();
-    }
-
-    result.externalSourceAvailable =
-        reconstruction.externalSourceAvailable;
-
-    result.sourceGenerationChanged =
-        reconstruction.sourceGenerationChanged;
-
-    result.duplicateReplayRecordCount =
-        reconstruction
-            .duplicateReplayRecordCount;
-
-    result.appendedReplayRecordCount =
-        reconstruction
-            .appendedReplayRecordCount;
-
-    result.replaySkippedRecordCount =
-        reconstruction
-            .replaySkippedRecordCount;
-
-    m_backing.connectExternalSource(
-        std::move(
-            reconstruction
-                .externalSourceBinding
-            )
+    return applyHybridReload(
+        std::move(snapshot),
+        std::move(reconstruction)
         );
-
-    InvestigationSnapshotBinding
-        *mutableSnapshotBinding =
-        m_backing.snapshot();
-
-    if (mutableSnapshotBinding) {
-        mutableSnapshotBinding
-            ->sourceFidelity =
-            snapshot.sourceFidelity;
-    }
-
-    /*
-     * The saved snapshot owns the interpretation used
-     * to produce its normalized evidence.
-     */
-    m_importProfile =
-        snapshot.importProfile;
-
-    /*
-     * Phase 15 does not persist incremental
-     * parser/framer state. Any later live-follow start
-     * therefore conservatively replays the active file
-     * from zero and lets stable record identity remove
-     * overlap.
-     */
-    m_initialLiveFollowByteOffset =
-        0;
-
-    refreshSourceMetadata();
-
-    /*
-     * The reconstruction result already contains the
-     * full snapshot baseline plus any newly admitted
-     * replay records. installImportResult() therefore
-     * sees the complete candidate exactly once.
-     */
-    installImportResult(
-        std::move(
-            reconstruction.importResult
-            )
-        );
-
-    result.succeeded = true;
-
-    return result;
 }

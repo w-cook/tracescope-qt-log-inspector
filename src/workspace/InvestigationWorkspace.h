@@ -43,6 +43,19 @@ public:
         ImportResult result
         );
 
+    bool applySnapshotReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot
+        );
+
+    InvestigationSessionHybridReloadResult
+    applyHybridReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
 signals:
     void sessionAdded(int index);
     void activeSessionChanged(int index);
