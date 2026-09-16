@@ -2,24 +2,25 @@
 
 #include <algorithm>
 
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QLabel>
-#include <QPlainTextEdit>
-#include <QPushButton>
-#include <QSplitter>
-#include <QTextOption>
-#include <QVBoxLayout>
-#include <QResizeEvent>
-#include <QSizePolicy>
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
-#include <QTimer>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QMessageBox>
-#include <QAction>
+#include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QResizeEvent>
+#include <QSizePolicy>
+#include <QSplitter>
+#include <QStringList>
+#include <QTextOption>
+#include <QTimer>
+#include <QVBoxLayout>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -612,6 +613,248 @@ InvestigationSessionView::session() const
     return m_session;
 }
 
+QString InvestigationSessionView::
+    tabToolTip() const
+{
+    if (m_session == nullptr) {
+        return {};
+    }
+
+    QStringList lines;
+
+    const InvestigationSessionBacking
+        &backing =
+        m_session->backing();
+
+    switch (backing.mode()) {
+    case InvestigationSessionBackingMode::
+        SourceBacked: {
+        lines.append(
+            tr("Backing: SourceBacked")
+            );
+
+        lines.append(
+            tr(
+                "The external source is authoritative."
+                )
+            );
+
+        const InvestigationExternalSourceBinding
+            *source =
+            backing.externalSource();
+
+        if (source != nullptr
+            && !source
+                    ->sourcePath
+                    .trimmed()
+                    .isEmpty()) {
+            const QFileInfo sourceInfo(
+                source->sourcePath
+                );
+
+            lines.append(QString());
+
+            lines.append(
+                tr("Source:")
+                );
+
+            lines.append(
+                source->sourcePath
+                );
+
+            lines.append(
+                tr("Status: %1")
+                    .arg(
+                        sourceInfo.exists()
+                                && sourceInfo.isFile()
+                            ? tr("Available")
+                            : tr("Unavailable")
+                        )
+                );
+        }
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        SnapshotBacked: {
+        lines.append(
+            tr("Backing: SnapshotBacked")
+            );
+
+        lines.append(
+            tr(
+                "Saved TraceScope evidence is "
+                "authoritative."
+                )
+            );
+
+        const InvestigationSnapshotBinding
+            *snapshot =
+            backing.snapshot();
+
+        if (snapshot != nullptr
+            && !snapshot
+                    ->snapshotPath
+                    .trimmed()
+                    .isEmpty()) {
+            lines.append(QString());
+
+            lines.append(
+                tr("Snapshot:")
+                );
+
+            lines.append(
+                snapshot->snapshotPath
+                );
+        }
+
+        const QString originalSourcePath =
+            m_session
+                ->sourceMetadata()
+                .sourcePath;
+
+        if (!originalSourcePath
+                 .trimmed()
+                 .isEmpty()) {
+            lines.append(QString());
+
+            lines.append(
+                tr("Original source:")
+                );
+
+            lines.append(
+                originalSourcePath
+                );
+        }
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        Hybrid: {
+        lines.append(
+            tr("Backing: Hybrid")
+            );
+
+        lines.append(
+            tr(
+                "Saved evidence is preserved while "
+                "the external source can contribute "
+                "continuation records."
+                )
+            );
+
+        const InvestigationSnapshotBinding
+            *snapshot =
+            backing.snapshot();
+
+        if (snapshot != nullptr
+            && !snapshot
+                    ->snapshotPath
+                    .trimmed()
+                    .isEmpty()) {
+            lines.append(QString());
+
+            lines.append(
+                tr("Snapshot:")
+                );
+
+            lines.append(
+                snapshot->snapshotPath
+                );
+        }
+
+        const InvestigationExternalSourceBinding
+            *source =
+            backing.externalSource();
+
+        if (source != nullptr
+            && !source
+                    ->sourcePath
+                    .trimmed()
+                    .isEmpty()) {
+            const QFileInfo sourceInfo(
+                source->sourcePath
+                );
+
+            lines.append(QString());
+
+            lines.append(
+                tr("External source:")
+                );
+
+            lines.append(
+                source->sourcePath
+                );
+
+            lines.append(
+                tr("Status: %1")
+                    .arg(
+                        sourceInfo.exists()
+                                && sourceInfo.isFile()
+                            ? tr("Available")
+                            : tr("Unavailable")
+                        )
+                );
+        }
+
+        break;
+    }
+    }
+
+    return lines.join(
+        QLatin1Char('\n')
+        );
+}
+
+QColor InvestigationSessionView::
+    tabTint() const
+{
+    if (m_session == nullptr) {
+        return {};
+    }
+
+    switch (
+        m_session->backing().mode()
+        ) {
+    case InvestigationSessionBackingMode::
+        SourceBacked:
+        /*
+         * Blue.
+         */
+        return QColor(
+            47,
+            128,
+            237
+            );
+
+    case InvestigationSessionBackingMode::
+        SnapshotBacked:
+        /*
+         * Berry.
+         */
+        return QColor(
+            214,
+            70,
+            160
+            );
+
+    case InvestigationSessionBackingMode::
+        Hybrid:
+        /*
+         * Teal.
+         */
+        return QColor(
+            0,
+            155,
+            175
+            );
+    }
+
+    return {};
+}
+
 InvestigationSessionSummaryPanel *
 InvestigationSessionView::summaryPanel() const
 {
@@ -665,6 +908,8 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
+
+    emit documentTabPresentationChanged();
 }
 
 InvestigationSessionPresentationState

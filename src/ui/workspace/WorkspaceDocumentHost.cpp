@@ -577,6 +577,21 @@ WorkspaceDocument *
         updateDocumentTitle
         );
 
+    disconnect(
+        document,
+        &WorkspaceDocument::
+        documentTabPresentationChanged,
+        this,
+        &WorkspaceDocumentHost::
+        updateDocumentTabPresentation
+        );
+
+    m_tabs
+        ->workspaceTabBar()
+        ->clearDocumentTint(
+            documentId
+            );
+
     m_tabs->removeTab(
         index
         );
@@ -673,8 +688,15 @@ bool WorkspaceDocumentHost::
 
     m_tabs->setTabToolTip(
         insertedIndex,
-        document->toolTip()
+        document->tabToolTip()
         );
+
+    m_tabs
+        ->workspaceTabBar()
+        ->setDocumentTint(
+            document->documentId(),
+            document->tabTint()
+            );
 
     QWidget *tabAccessory =
         document
@@ -699,6 +721,16 @@ bool WorkspaceDocumentHost::
         this,
         &WorkspaceDocumentHost::
         updateDocumentTitle,
+        Qt::UniqueConnection
+        );
+
+    connect(
+        document,
+        &WorkspaceDocument::
+        documentTabPresentationChanged,
+        this,
+        &WorkspaceDocumentHost::
+        updateDocumentTabPresentation,
         Qt::UniqueConnection
         );
 
@@ -1655,6 +1687,40 @@ void WorkspaceDocumentHost::updateDocumentTitle(
         index,
         title
         );
+}
+
+void WorkspaceDocumentHost::
+    updateDocumentTabPresentation()
+{
+    auto *document =
+        qobject_cast<WorkspaceDocument *>(
+            sender()
+            );
+
+    if (document == nullptr) {
+        return;
+    }
+
+    const int index =
+        m_tabs->indexOf(
+            document
+            );
+
+    if (index < 0) {
+        return;
+    }
+
+    m_tabs->setTabToolTip(
+        index,
+        document->tabToolTip()
+        );
+
+    m_tabs
+        ->workspaceTabBar()
+        ->setDocumentTint(
+            document->documentId(),
+            document->tabTint()
+            );
 }
 
 void WorkspaceDocumentHost::

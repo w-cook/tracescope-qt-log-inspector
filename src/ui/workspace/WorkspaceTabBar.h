@@ -1,17 +1,20 @@
 #pragma once
 
+#include <QColor>
+#include <QHash>
 #include <QPoint>
-#include <QTabBar>
 #include <QPointer>
+#include <QTabBar>
 #include <QVector>
 
+class QDrag;
 class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QMouseEvent;
+class QPainter;
 class QPaintEvent;
-class QDrag;
 
 class WorkspaceTabBar
     : public QTabBar
@@ -25,6 +28,15 @@ public:
 
     void refreshTabAccessoryLayout(
         QWidget *accessory
+        );
+
+    void setDocumentTint(
+        const QString &documentId,
+        const QColor &color
+        );
+
+    void clearDocumentTint(
+        const QString &documentId
         );
 
 signals:
@@ -117,6 +129,12 @@ private:
         int sourceIndex
         );
 
+    void paintDocumentTint(
+        QPainter &painter,
+        int index,
+        const QRect &rectangle
+        ) const;
+
     QString m_pressedDocumentId;
 
     QPoint m_pressGlobalPosition;
@@ -143,4 +161,7 @@ private:
 
     bool m_workspaceDragOver =
         false;
+
+    QHash<QString, QColor>
+        m_documentTints;
 };

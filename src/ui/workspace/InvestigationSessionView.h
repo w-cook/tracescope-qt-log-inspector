@@ -40,6 +40,10 @@ public:
 
     InvestigationSession *session() const;
 
+    QString tabToolTip() const override;
+
+    QColor tabTint() const override;
+
     InvestigationSessionSummaryPanel *
     summaryPanel() const;
 

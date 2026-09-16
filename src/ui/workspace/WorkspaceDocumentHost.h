@@ -218,6 +218,8 @@ private:
         int targetIndex
         );
 
+    void updateDocumentTabPresentation();
+
     WorkspaceDocumentHost *m_rootHost =
         nullptr;
 
