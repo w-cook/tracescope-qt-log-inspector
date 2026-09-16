@@ -54,6 +54,7 @@
 #include "workspace/InvestigationComparisonPersistence.h"
 #include "workspace/InvestigationComparisonSnapshotBuilder.h"
 #include "workspace/InvestigationSessionPersistence.h"
+#include "workspace/InvestigationSessionRestorationService.h"
 #include "workspace/WorkspaceSerialization.h"
 
 namespace
@@ -1044,14 +1045,16 @@ void MainWindow::buildLayout()
 
 void MainWindow::openLogFile(const QString &initialFilePath)
 {
-    if (importWatcher != nullptr) {
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress) {
         QMessageBox::information(
             this,
-            tr("Import In Progress"),
+            tr("File Operation In Progress"),
             tr(
-                "A log file is already being imported. "
-                "Wait for the current import to finish "
-                "before starting another import."
+                "TraceScope is already importing a log file "
+                "or opening a workspace. Wait for the current "
+                "operation to finish before opening another "
+                "file."
                 )
             );
 
@@ -1192,7 +1195,8 @@ bool MainWindow::startLogFileImport(
     ImportCompletionHandler completion
     )
 {
-    if (importWatcher != nullptr) {
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress) {
         return false;
     }
 
@@ -1633,7 +1637,8 @@ void MainWindow::completeLogFileImport(
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (importWatcher != nullptr) {
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress) {
         return;
     }
 
@@ -1654,7 +1659,8 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
-    if (importWatcher != nullptr) {
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress) {
         return;
     }
 
@@ -1853,6 +1859,36 @@ void MainWindow::
         );
 }
 
+void MainWindow::setWorkspaceOpenInProgress(
+    bool inProgress
+    )
+{
+    workspaceOpenInProgress =
+        inProgress;
+
+    const bool fileOperationAvailable =
+        !workspaceOpenInProgress
+        && importWatcher == nullptr;
+
+    if (openAction != nullptr) {
+        openAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    if (openWorkspaceAction != nullptr) {
+        openWorkspaceAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    setAcceptDrops(
+        fileOperationAvailable
+        );
+
+    updateReloadActionState();
+}
+
 void MainWindow::
     updateReloadActionState()
 {
@@ -1884,6 +1920,7 @@ void MainWindow::
     reloadAction->setEnabled(
         session != nullptr
         && importWatcher == nullptr
+        && !workspaceOpenInProgress
         && !liveFollowActive
         );
 }
@@ -2281,218 +2318,229 @@ void MainWindow::saveWorkspaceAs()
         );
 }
 
-bool MainWindow::resolveWorkspaceSourcePaths(
-    WorkspacePersistenceState &state
+MainWindow::WorkspaceSessionRecoveryOutcome
+MainWindow::resolveWorkspaceSessionRecovery(
+    PersistedInvestigationSession
+        &persistedSession
     )
 {
-    QVector<PersistedInvestigationSession>
-        recoverableSessions;
+    /*
+     * Snapshot-backed sessions have no external source
+     * dependency.
+     *
+     * Hybrid sessions may also restore successfully
+     * when their external continuation source is
+     * unavailable because the durable snapshot remains
+     * the evidence floor.
+     *
+     * Only SourceBacked sessions require source-file
+     * recovery before restoration preparation begins.
+     */
+    if (persistedSession.backing.mode
+        != PersistedInvestigationSessionBackingMode::
+        SourceBacked) {
+        return
+            WorkspaceSessionRecoveryOutcome::
+            Ready;
+    }
 
-    recoverableSessions.reserve(
-        state.sessions.size()
-        );
+    if (!persistedSession
+             .backing
+             .externalSourceBinding
+             .has_value()) {
+        /*
+         * This is malformed persistence rather than a
+         * normal missing-file recovery case.
+         *
+         * Let InvestigationSessionRestorationService
+         * produce the authoritative validation error.
+         */
+        return
+            WorkspaceSessionRecoveryOutcome::
+            Ready;
+    }
 
-    for (PersistedInvestigationSession
-             persistedSession
-         : std::as_const(state.sessions)) {
+    PersistedInvestigationExternalSourceBinding
+        &binding =
+        *persistedSession
+             .backing
+             .externalSourceBinding;
+
+    bool sourceAvailable =
+        !binding.sourcePath
+             .trimmed()
+             .isEmpty();
+
+    if (sourceAvailable) {
         const QFileInfo sourceInfo(
-            persistedSession.sourcePath
+            binding.sourcePath
             );
 
-        if (sourceInfo.exists()
-            && sourceInfo.isFile()) {
-            recoverableSessions.append(
-                std::move(
-                    persistedSession
+        sourceAvailable =
+            sourceInfo.exists()
+            && sourceInfo.isFile();
+    }
+
+    while (!sourceAvailable) {
+        QMessageBox prompt(this);
+
+        prompt.setIcon(
+            QMessageBox::Warning
+            );
+
+        prompt.setWindowTitle(
+            tr(
+                "Workspace Source File Missing"
+                )
+            );
+
+        prompt.setText(
+            tr(
+                "A Source-backed investigation "
+                "depends on an external source file "
+                "that could not be found."
+                )
+            );
+
+        prompt.setInformativeText(
+            tr(
+                "Saved location:\n%1\n\n"
+                "Locate the source file to restore "
+                "this session, skip the session, or "
+                "cancel opening the workspace."
+                )
+                .arg(
+                    binding.sourcePath
+                            .isEmpty()
+                        ? tr("(no saved path)")
+                        : binding.sourcePath
+                    )
+            );
+
+        QPushButton *locateButton =
+            prompt.addButton(
+                tr("Locate File..."),
+                QMessageBox::AcceptRole
+                );
+
+        QPushButton *skipButton =
+            prompt.addButton(
+                tr("Skip Session"),
+                QMessageBox::ActionRole
+                );
+
+        QPushButton *cancelButton =
+            prompt.addButton(
+                QMessageBox::Cancel
+                );
+
+        prompt.setDefaultButton(
+            locateButton
+            );
+
+        prompt.exec();
+
+        if (prompt.clickedButton()
+            == cancelButton) {
+            return
+                WorkspaceSessionRecoveryOutcome::
+                Abort;
+        }
+
+        if (prompt.clickedButton()
+            == skipButton) {
+            return
+                WorkspaceSessionRecoveryOutcome::
+                SkipSession;
+        }
+
+        if (prompt.clickedButton()
+            != locateButton) {
+            continue;
+        }
+
+        const QFileInfo missingInfo(
+            binding.sourcePath
+            );
+
+        const QString replacementPath =
+            QFileDialog::getOpenFileName(
+                this,
+                tr(
+                    "Locate Workspace Source File"
+                    ),
+                missingInfo.absolutePath(),
+                tr("All Files (*)")
+                );
+
+        /*
+         * Cancelling the file picker returns to the
+         * recovery prompt rather than silently skipping
+         * the investigation.
+         */
+        if (replacementPath.isEmpty()) {
+            continue;
+        }
+
+        const QFileInfo replacementInfo(
+            replacementPath
+            );
+
+        if (!replacementInfo.exists()
+            || !replacementInfo.isFile()) {
+            QMessageBox::warning(
+                this,
+                tr("Source File Not Found"),
+                tr(
+                    "The selected source file could "
+                    "not be opened. Choose another "
+                    "file, skip this session, or "
+                    "cancel workspace opening."
                     )
                 );
 
             continue;
         }
 
-        bool resolved =
-            false;
+        binding.sourcePath =
+            replacementInfo
+                .absoluteFilePath();
 
-        bool skipped =
-            false;
+        /*
+         * Keep the temporary schema-v1 compatibility
+         * mirror synchronized until the legacy open
+         * path is removed completely.
+         */
+        persistedSession.sourcePath =
+            binding.sourcePath;
 
-        while (!resolved
-               && !skipped) {
-            QMessageBox prompt(
-                this
-                );
-
-            prompt.setIcon(
-                QMessageBox::Warning
-                );
-
-            prompt.setWindowTitle(
-                tr(
-                    "Workspace Source File Missing"
-                    )
-                );
-
-            prompt.setText(
-                tr(
-                    "A source file used by this "
-                    "workspace could not be found."
-                    )
-                );
-
-            prompt.setInformativeText(
-                tr(
-                    "Saved location:\n%1\n\n"
-                    "Locate the file to restore this "
-                    "session, or skip the session and "
-                    "continue opening the rest of the "
-                    "workspace."
-                    )
-                    .arg(
-                        persistedSession
-                            .sourcePath
-                        )
-                );
-
-            QPushButton *locateButton =
-                prompt.addButton(
-                    tr("Locate File..."),
-                    QMessageBox::AcceptRole
-                    );
-
-            QPushButton *skipButton =
-                prompt.addButton(
-                    tr("Skip Session"),
-                    QMessageBox::ActionRole
-                    );
-
-            QPushButton *cancelButton =
-                prompt.addButton(
-                    QMessageBox::Cancel
-                    );
-
-            prompt.setDefaultButton(
-                locateButton
-                );
-
-            prompt.exec();
-
-            if (prompt.clickedButton()
-                == cancelButton) {
-                return false;
-            }
-
-            if (prompt.clickedButton()
-                == skipButton) {
-                skipped =
-                    true;
-
-                continue;
-            }
-
-            if (prompt.clickedButton()
-                != locateButton) {
-                continue;
-            }
-
-            const QFileInfo missingInfo(
-                persistedSession.sourcePath
-                );
-
-            const QString replacementPath =
-                QFileDialog::getOpenFileName(
-                    this,
-                    tr(
-                        "Locate Workspace Source File"
-                        ),
-                    missingInfo.absolutePath(),
-                    tr("All Files (*)")
-                    );
-
-            /*
-             * Cancelling the picker returns to the
-             * recovery prompt instead of silently
-             * treating the source as skipped.
-             */
-            if (replacementPath.isEmpty()) {
-                continue;
-            }
-
-            const QFileInfo replacementInfo(
-                replacementPath
-                );
-
-            if (!replacementInfo.exists()
-                || !replacementInfo.isFile()) {
-                QMessageBox::warning(
-                    this,
-                    tr(
-                        "Source File Not Found"
-                        ),
-                    tr(
-                        "The selected source file "
-                        "could not be opened. Choose "
-                        "another file or skip this "
-                        "session."
-                        )
-                    );
-
-                continue;
-            }
-
-            persistedSession.sourcePath =
-                replacementInfo
-                    .absoluteFilePath();
-
-            recoverableSessions.append(
-                std::move(
-                    persistedSession
-                    )
-                );
-
-            resolved =
-                true;
-        }
+        sourceAvailable = true;
     }
 
-    state.sessions =
-        std::move(
-            recoverableSessions
-            );
+    /*
+     * Source-family persistence contains only the
+     * logical rotation rule. Restoration itself will
+     * rediscover physical rotated members.
+     *
+     * We perform this lightweight discovery here only
+     * so the existing user-facing Active Source Only /
+     * Skip / Cancel recovery choice is preserved.
+     */
+    SourceFamilyConfiguration
+        &familyConfiguration =
+        binding.sourceFamilyConfiguration;
 
-    return true;
-}
-
-MainWindow::WorkspaceSourceFamilyResolutionOutcome
-MainWindow::resolveWorkspaceSourceFamilyConfiguration(
-    PersistedInvestigationSession &persistedSession,
-    SourceFamilyConfiguration &resolvedConfiguration
-    )
-{
-    resolvedConfiguration = {};
-
-    resolvedConfiguration
-        .includeRotatedSources =
-        persistedSession
-            .sourceFamilyConfiguration
-            .includeRotatedSources;
-
-    resolvedConfiguration
-        .rotationRule =
-        persistedSession
-            .sourceFamilyConfiguration
-            .rotationRule;
-
-    if (!resolvedConfiguration
+    if (!familyConfiguration
              .includeRotatedSources) {
         return
-            WorkspaceSourceFamilyResolutionOutcome::
-            Resolved;
+            WorkspaceSessionRecoveryOutcome::
+            Ready;
     }
 
     const RotatedSourceDiscoveryResult discovery =
         RotatedSourceDiscoveryService::discover(
-            persistedSession.sourcePath,
-            resolvedConfiguration.rotationRule
+            binding.sourcePath,
+            familyConfiguration.rotationRule
             );
 
     if (!discovery.succeeded) {
@@ -2500,9 +2548,9 @@ MainWindow::resolveWorkspaceSourceFamilyConfiguration(
             this,
             tr("Source Family Discovery Failed"),
             tr(
-                "TraceScope could not discover the "
-                "rotated files configured for this "
-                "workspace session.\n\n%1"
+                "TraceScope could not rediscover the "
+                "rotated source family configured for "
+                "this workspace session.\n\n%1"
                 )
                 .arg(
                     discovery.errorMessage
@@ -2510,26 +2558,14 @@ MainWindow::resolveWorkspaceSourceFamilyConfiguration(
             );
 
         return
-            WorkspaceSourceFamilyResolutionOutcome::
+            WorkspaceSessionRecoveryOutcome::
             Abort;
     }
 
     if (!discovery.rotatedSources.isEmpty()) {
-        for (const RotatedSourceMatch &match
-             : discovery.rotatedSources) {
-            resolvedConfiguration
-                .rotatedSourcePaths
-                .append(
-                    QFileInfo(
-                        match.filePath
-                        )
-                        .absoluteFilePath()
-                    );
-        }
-
         return
-            WorkspaceSourceFamilyResolutionOutcome::
-            Resolved;
+            WorkspaceSessionRecoveryOutcome::
+            Ready;
     }
 
     QMessageBox prompt(this);
@@ -2546,23 +2582,22 @@ MainWindow::resolveWorkspaceSourceFamilyConfiguration(
 
     prompt.setText(
         tr(
-            "The active source file exists, but "
-            "none of the rotated files saved for "
-            "this workspace session can currently "
-            "be rediscovered."
+            "The active source file exists, but none "
+            "of the configured rotated source files "
+            "can currently be rediscovered."
             )
         );
 
     prompt.setInformativeText(
         tr(
             "Active source:\n%1\n\n"
-            "You can restore this session using "
-            "only the active source, skip the "
-            "session, or cancel opening the "
-            "workspace."
+            "You can restore this Source-backed "
+            "investigation using only the active "
+            "source, skip the session, or cancel "
+            "opening the workspace."
             )
             .arg(
-                persistedSession.sourcePath
+                binding.sourcePath
                 )
         );
 
@@ -2592,58 +2627,65 @@ MainWindow::resolveWorkspaceSourceFamilyConfiguration(
     if (prompt.clickedButton()
         == cancelButton) {
         return
-            WorkspaceSourceFamilyResolutionOutcome::
+            WorkspaceSessionRecoveryOutcome::
             Abort;
     }
 
     if (prompt.clickedButton()
         == skipButton) {
         return
-            WorkspaceSourceFamilyResolutionOutcome::
+            WorkspaceSessionRecoveryOutcome::
             SkipSession;
     }
 
     if (prompt.clickedButton()
         != activeOnlyButton) {
         return
-            WorkspaceSourceFamilyResolutionOutcome::
+            WorkspaceSessionRecoveryOutcome::
             Abort;
     }
 
     /*
-     * The session is intentionally being restored as
-     * active-only. Update the staged persistence state
-     * as well so Reload and a subsequent workspace Save
-     * do not immediately expect the unavailable family.
+     * The user deliberately changed this restored
+     * SourceBacked session to active-only.
+     *
+     * Persist that logical choice in the staged state
+     * so Reload and a later Save do not immediately
+     * expect the unavailable rotations again.
+     */
+    familyConfiguration.includeRotatedSources =
+        false;
+
+    familyConfiguration
+        .rotatedSourcePaths
+        .clear();
+
+    /*
+     * Temporary compatibility mirror. This disappears
+     * with the legacy open code in the next step.
      */
     persistedSession
         .sourceFamilyConfiguration
         .includeRotatedSources =
         false;
 
-    resolvedConfiguration
-        .includeRotatedSources =
-        false;
-
-    resolvedConfiguration
-        .rotatedSourcePaths
-        .clear();
-
     return
-        WorkspaceSourceFamilyResolutionOutcome::
-        Resolved;
+        WorkspaceSessionRecoveryOutcome::
+        Ready;
 }
 
 void MainWindow::openWorkspace(const QString &initialFilePath)
 {
-    if (importWatcher != nullptr) {
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress) {
         QMessageBox::information(
             this,
-            tr("Import In Progress"),
+            tr("File Operation In Progress"),
             tr(
-                "A log file is already being imported. "
-                "Wait for the current import to finish "
-                "before opening a workspace."
+                "TraceScope is already importing a log file "
+                "or opening a workspace. Wait for the current "
+                "operation to finish before opening another "
+                "workspace."
                 )
             );
 
@@ -2761,18 +2803,49 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
         }
     }
 
-    const int originalSessionCount =
-        state.sessions.size();
+    int skippedSessionCount = 0;
 
     /*
-     * Missing paths are resolved before any import
-     * begins. Cancelling recovery leaves the current
+     * Resolve all user-facing recovery choices before any
+     * asynchronous preparation begins.
+     *
+     * Cancelling here leaves the currently installed
      * workspace completely untouched.
      */
-    if (!resolveWorkspaceSourcePaths(
-            state
-            )) {
-        return;
+    for (int index = 0;
+         index < state.sessions.size();) {
+        PersistedInvestigationSession
+            &persistedSession =
+            state.sessions[index];
+
+        const WorkspaceSessionRecoveryOutcome
+            recoveryOutcome =
+            resolveWorkspaceSessionRecovery(
+                persistedSession
+                );
+
+        if (recoveryOutcome
+            == WorkspaceSessionRecoveryOutcome::
+            Abort) {
+            return;
+        }
+
+        if (recoveryOutcome
+            == WorkspaceSessionRecoveryOutcome::
+            SkipSession) {
+            state.sessions.removeAt(
+                index
+                );
+
+            ++skippedSessionCount;
+
+            /*
+             * The next session now occupies this index.
+             */
+            continue;
+        }
+
+        ++index;
     }
 
     auto operation =
@@ -2785,8 +2858,7 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
             .absoluteFilePath();
 
     operation->skippedSessionCount =
-        originalSessionCount
-        - state.sessions.size();
+        skippedSessionCount;
 
     operation->state =
         std::move(
@@ -2801,6 +2873,10 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
             )
         );
 
+    setWorkspaceOpenInProgress(
+        true
+        );
+
     continueWorkspaceOpen(
         operation
         );
@@ -2813,13 +2889,19 @@ void MainWindow::continueWorkspaceOpen(
     )
 {
     if (operation == nullptr) {
+        setWorkspaceOpenInProgress(
+            false
+            );
+
         return;
     }
 
     /*
-     * All persisted sessions have been imported and
-     * staged successfully. The current live workspace
-     * can now be replaced safely.
+     * Every recoverable investigation has now been
+     * prepared and materialized successfully.
+     *
+     * This remains the first point where the currently
+     * installed workspace is allowed to change.
      */
     if (operation->nextSessionIndex
         >= operation->state
@@ -2829,211 +2911,458 @@ void MainWindow::continueWorkspaceOpen(
             operation
             );
 
+        setWorkspaceOpenInProgress(
+            false
+            );
+
         return;
     }
 
     const int sessionIndex =
         operation->nextSessionIndex;
 
-    PersistedInvestigationSession
-        &persistedSession =
+    /*
+     * Copy persistence data into the worker boundary.
+     *
+     * The worker must not retain references into the
+     * mutable WorkspaceOpenOperation state.
+     */
+    const PersistedInvestigationSession
+        persistedSession =
         operation->state
-            .sessions[
+            .sessions
+            .at(
                 sessionIndex
-            ];
-
-    /*
-     * Workspaces persist the logical source-family
-     * configuration, not the physical rotated files
-     * that existed when the workspace was saved.
-     *
-     * Reconstruct that logical configuration first.
-     */
-    SourceFamilyConfiguration
-        resolvedSourceFamilyConfiguration;
-
-    const WorkspaceSourceFamilyResolutionOutcome
-        familyResolution =
-        resolveWorkspaceSourceFamilyConfiguration(
-            persistedSession,
-            resolvedSourceFamilyConfiguration
-            );
-
-    if (familyResolution
-        == WorkspaceSourceFamilyResolutionOutcome::
-        Abort) {
-        /*
-         * No installed workspace has been changed yet.
-         * Cancelling family recovery therefore leaves
-         * the current workspace untouched.
-         */
-        return;
-    }
-
-    if (familyResolution
-        == WorkspaceSourceFamilyResolutionOutcome::
-        SkipSession) {
-        ++operation->skippedSessionCount;
-
-        /*
-         * Remove the skipped persisted session so the
-         * remaining persistence entries continue to line
-         * up one-for-one with stagedSessions during final
-         * installation.
-         *
-         * Do not advance nextSessionIndex: after removal,
-         * the next session occupies this same index.
-         */
-        operation->state.sessions.removeAt(
-            sessionIndex
-            );
-
-        continueWorkspaceOpen(
-            operation
-            );
-
-        return;
-    }
-
-    /*
-     * For a normal legacy/single-file session this is:
-     *
-     *     active.log
-     *
-     * For a source-family session this becomes:
-     *
-     *     oldest rotation
-     *     ...
-     *     newest rotation
-     *     active file
-     */
-    const QStringList orderedSourcePaths =
-        resolvedSourceFamilyConfiguration
-            .orderedSourcePaths(
-                persistedSession.sourcePath
                 );
 
-    const qint64 initialLiveFollowByteOffset =
-        LiveSessionFollowCoordinator::
-        captureInitialReadOffset(
-            persistedSession.sourcePath,
-            persistedSession.importProfile
+    const int totalSessionCount =
+        operation->state
+            .sessions
+            .size();
+
+    auto *watcher =
+        new QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>(
+            this
             );
 
-    const bool started =
-        startLogFileImport(
-            persistedSession.sourcePath,
-            orderedSourcePaths,
-            persistedSession.importProfile,
-            [
-                this,
-                operation,
-                sessionIndex,
-                initialLiveFollowByteOffset,
-                resolvedSourceFamilyConfiguration
-            ](
-                std::optional<ImportResult>
-                    result
-                ) {
-                /*
-                 * Cancelling any staged import aborts
-                 * the entire workspace-open operation.
-                 * The currently installed workspace is
-                 * still untouched at this point.
-                 */
-                if (!result.has_value()
-                    || result->cancelled) {
-                    return;
-                }
+    auto *progressDialog =
+        new QProgressDialog(
+            tr(
+                "Restoring workspace session "
+                "%1 of %2...\n"
+                "Preparing investigation..."
+                )
+                .arg(
+                    sessionIndex + 1
+                    )
+                .arg(
+                    totalSessionCount
+                    ),
+            tr("Cancel"),
+            0,
+            0,
+            this
+            );
 
-                const PersistedInvestigationSession
-                    &persistedSession =
+    progressDialog->setWindowTitle(
+        tr("Open Workspace")
+        );
+
+    progressDialog->setWindowModality(
+        Qt::NonModal
+        );
+
+    progressDialog->setMinimumDuration(
+        500
+        );
+
+    progressDialog->setAutoClose(
+        false
+        );
+
+    progressDialog->setAutoReset(
+        false
+        );
+
+    connect(
+        progressDialog,
+        &QProgressDialog::canceled,
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        cancel
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        progressRangeChanged,
+        progressDialog,
+        &QProgressDialog::setRange
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        progressValueChanged,
+        progressDialog,
+        &QProgressDialog::setValue
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        progressTextChanged,
+        this,
+        [
+            progressDialog,
+            sessionIndex,
+            totalSessionCount
+        ](
+            const QString &progressText
+            ) {
+            QString label =
+                tr(
+                    "Restoring workspace session "
+                    "%1 of %2..."
+                    )
+                    .arg(
+                        sessionIndex + 1
+                        )
+                    .arg(
+                        totalSessionCount
+                        );
+
+            if (!progressText.isEmpty()) {
+                label +=
+                    QStringLiteral("\n")
+                    + progressText;
+            }
+
+            progressDialog->setLabelText(
+                label
+                );
+        }
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        finished,
+        this,
+        [
+            this,
+            watcher,
+            progressDialog,
+            operation,
+            sessionIndex
+        ]() mutable {
+            const bool cancelled =
+                watcher->isCanceled();
+
+            progressDialog->hide();
+            progressDialog->deleteLater();
+
+            /*
+             * A cancelled staged restoration aborts the
+             * entire workspace-open operation.
+             *
+             * Nothing has been installed yet, so the
+             * current workspace remains untouched.
+             */
+            if (cancelled) {
+                watcher->deleteLater();
+
+                setWorkspaceOpenInProgress(
+                    false
+                    );
+
+                return;
+            }
+
+            if (watcher
+                    ->future()
+                    .resultCount()
+                <= 0) {
+                watcher->deleteLater();
+
+                QMessageBox::warning(
+                    this,
+                    tr("Open Workspace Failed"),
+                    tr(
+                        "TraceScope did not receive a "
+                        "restoration result for one of "
+                        "the workspace sessions."
+                        )
+                    );
+
+                setWorkspaceOpenInProgress(
+                    false
+                    );
+
+                return;
+            }
+
+            InvestigationSessionRestorationPreparationResult
+                preparation =
+                watcher->result();
+
+            watcher->deleteLater();
+
+            if (!preparation.succeeded) {
+                const QString reason =
+                    preparation
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "The investigation could "
+                              "not be prepared."
+                              )
+                        : preparation.errorMessage;
+
+                QMessageBox::warning(
+                    this,
+                    tr("Open Workspace Failed"),
+                    tr(
+                        "TraceScope was unable to "
+                        "restore one of the workspace "
+                        "investigations.\n\n"
+                        "Reason:\n%1"
+                        )
+                        .arg(
+                            reason
+                            )
+                    );
+
+                setWorkspaceOpenInProgress(
+                    false
+                    );
+
+                return;
+            }
+
+            /*
+             * We are now back on MainWindow's thread.
+             *
+             * InvestigationSession, InvestigationController,
+             * and the Qt models are deliberately created
+             * here rather than on the worker thread.
+             */
+            InvestigationSessionRestorationService
+                restorationService;
+
+            InvestigationSessionRestorationResult
+                restoration =
+                restorationService.materialize(
                     operation->state
                         .sessions
                         .at(
                             sessionIndex
-                            );
+                            ),
+                    std::move(
+                        preparation
+                        )
+                    );
 
-                if (result->records.isEmpty()) {
-                    ++operation
-                          ->emptySessionCount;
+            if (!restoration.succeeded
+                || restoration.session
+                       == nullptr) {
+                const QString reason =
+                    restoration
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "The prepared investigation "
+                              "could not be materialized."
+                              )
+                        : restoration.errorMessage;
+
+                QMessageBox::warning(
+                    this,
+                    tr("Open Workspace Failed"),
+                    tr(
+                        "TraceScope was unable to "
+                        "materialize one of the "
+                        "workspace investigations.\n\n"
+                        "Reason:\n%1"
+                        )
+                        .arg(
+                            reason
+                            )
+                    );
+
+                setWorkspaceOpenInProgress(
+                    false
+                    );
+
+                return;
+            }
+
+            if (restoration
+                    .session
+                    ->importedRecordCount()
+                == 0) {
+                ++operation
+                      ->emptySessionCount;
+            }
+
+            /*
+             * Stage the fully constructed session, but
+             * do not install it yet.
+             *
+             * If a later session fails, destruction of
+             * WorkspaceOpenOperation discards every
+             * staged session and the user's existing
+             * workspace remains intact.
+             */
+            operation
+                ->stagedSessions
+                .push_back(
+                    std::move(
+                        restoration.session
+                        )
+                    );
+
+            ++operation
+                  ->nextSessionIndex;
+
+            continueWorkspaceOpen(
+                operation
+                );
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [
+                persistedSession,
+                workspacePath =
+                operation->workspacePath
+    ](
+                QPromise<
+                    InvestigationSessionRestorationPreparationResult>
+                    &promise
+                ) {
+                /*
+                 * Snapshot-only restoration has no
+                 * byte-progress stream, so begin in
+                 * indeterminate mode.
+                 */
+                promise.setProgressRange(
+                    0,
+                    0
+                    );
+
+                bool determinateProgress =
+                    false;
+
+                ImportExecutionContext
+                    executionContext;
+
+                executionContext
+                    .isCancellationRequested =
+                    [&promise]() {
+                        return promise.isCanceled();
+                    };
+
+                executionContext.reportProgress =
+                    [
+                        &promise,
+                        &determinateProgress
+                    ](
+                        const ImportProgress &progress
+                        ) {
+                        if (progress.totalBytes
+                            <= 0) {
+                            return;
+                        }
+
+                        if (!determinateProgress) {
+                            promise.setProgressRange(
+                                0,
+                                100
+                                );
+
+                            determinateProgress =
+                                true;
+                        }
+
+                        const double percentageValue =
+                            100.0
+                            * static_cast<double>(
+                                progress.bytesProcessed
+                                )
+                            / static_cast<double>(
+                                progress.totalBytes
+                                );
+
+                        const int percentage =
+                            std::clamp(
+                                static_cast<int>(
+                                    percentageValue
+                                    ),
+                                0,
+                                100
+                                );
+
+                        const QString progressText =
+                            QStringLiteral(
+                                "%1 records processed"
+                                )
+                                .arg(
+                                    progress
+                                        .processedRecordCount
+                                    );
+
+                        promise
+                            .setProgressValueAndText(
+                                percentage,
+                                progressText
+                                );
+                    };
+
+                InvestigationSessionRestorationService
+                    restorationService;
+
+                InvestigationSessionRestorationPreparationResult
+                    preparation =
+                    restorationService.prepare(
+                        persistedSession,
+                        workspacePath,
+                        executionContext
+                        );
+
+                /*
+                 * A cancelled future intentionally
+                 * publishes no partial preparation.
+                 */
+                if (promise.isCanceled()) {
+                    return;
                 }
 
-                /*
-                 * Build the restored session with the
-                 * freshly resolved physical family.
-                 *
-                 * The active source path remains the
-                 * session's primary source metadata
-                 * path. Rotated members remain part of
-                 * SourceFamilyConfiguration.
-                 */
-                auto session =
-                    std::make_unique<
-                        InvestigationSession
-                        >(
-                        persistedSession
-                            .sessionId,
-                        persistedSession
-                            .sourcePath,
-                        persistedSession
-                            .importProfile,
-                        std::move(
-                            result.value()
-                            ),
-                        resolvedSourceFamilyConfiguration
-                        );
+                if (determinateProgress) {
+                    promise
+                        .setProgressValueAndText(
+                            100,
+                            QStringLiteral(
+                                "Investigation prepared"
+                                )
+                            );
+                }
 
-                session->setInitialLiveFollowByteOffset(
-                    initialLiveFollowByteOffset
-                    );
-
-                /*
-                 * Restore bookmarks, notes, findings,
-                 * filters, selected record, and other
-                 * persisted investigation state before
-                 * the session enters the live
-                 * workspace.
-                 */
-                InvestigationSessionPersistence::
-                    restoreState(
-                        persistedSession,
-                        *session
-                        );
-
-                operation->stagedSessions
-                    .push_back(
-                        std::move(
-                            session
-                            )
-                        );
-
-                ++operation
-                      ->nextSessionIndex;
-
-                /*
-                 * Restore the next persisted session.
-                 * Installation of the complete staged
-                 * workspace occurs only after every
-                 * session finishes successfully.
-                 */
-                continueWorkspaceOpen(
-                    operation
+                promise.addResult(
+                    std::move(
+                        preparation
+                        )
                     );
             }
-            );
-
-    /*
-     * Unsupported importers or other failures that
-     * prevent the import from starting abort workspace
-     * restoration.
-     *
-     * startLogFileImport() already presents its own
-     * error message.
-     */
-    if (!started) {
-        return;
-    }
+            )
+        );
 }
 
 void MainWindow::clearCurrentWorkspace()
@@ -3288,7 +3617,7 @@ void MainWindow::installOpenedWorkspace(
         if (operation->skippedSessionCount > 0) {
             messages.append(
                 tr(
-                    "%1 unavailable source session(s) "
+                    "%1 unavailable investigation session(s) "
                     "were skipped."
                     )
                     .arg(
@@ -3301,7 +3630,7 @@ void MainWindow::installOpenedWorkspace(
         if (operation->emptySessionCount > 0) {
             messages.append(
                 tr(
-                    "%1 restored source session(s) "
+                    "%1 restored investigation session(s) "
                     "loaded no events."
                     )
                     .arg(

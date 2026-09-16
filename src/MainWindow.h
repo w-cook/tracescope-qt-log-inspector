@@ -98,6 +98,8 @@ private:
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
 
+    bool workspaceOpenInProgress = false;
+
     void buildLayout();
     void createMenus();
     void openLogFile(
@@ -150,6 +152,23 @@ private:
         const QString &filePath
         );
 
+    void setWorkspaceOpenInProgress(
+        bool inProgress
+        );
+
+    enum class WorkspaceSessionRecoveryOutcome
+    {
+        Ready,
+        SkipSession,
+        Abort
+    };
+
+    WorkspaceSessionRecoveryOutcome
+    resolveWorkspaceSessionRecovery(
+        PersistedInvestigationSession
+            &persistedSession
+        );
+
     WorkspacePersistenceState
     captureWorkspaceState() const;
 
@@ -159,23 +178,6 @@ private:
 
     void saveWorkspace();
     void saveWorkspaceAs();
-
-    bool resolveWorkspaceSourcePaths(
-        WorkspacePersistenceState &state
-        );
-
-    enum class WorkspaceSourceFamilyResolutionOutcome
-    {
-        Resolved,
-        SkipSession,
-        Abort
-    };
-
-    WorkspaceSourceFamilyResolutionOutcome
-    resolveWorkspaceSourceFamilyConfiguration(
-        PersistedInvestigationSession &persistedSession,
-        SourceFamilyConfiguration &resolvedConfiguration
-        );
 
     struct WorkspaceOpenOperation;
 
