@@ -166,7 +166,8 @@ private:
     WorkspaceSessionRecoveryOutcome
     resolveWorkspaceSessionRecovery(
         PersistedInvestigationSession
-            &persistedSession
+            &persistedSession,
+        const QString &workspaceFilePath
         );
 
     WorkspacePersistenceState

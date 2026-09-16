@@ -2369,6 +2369,70 @@ add_test(
 )
 
 qt_add_executable(
+    WorkspaceSavePackageServiceTests
+
+    WorkspaceSavePackageServiceTests.cpp
+
+    ../src/analysis/BurstDetectionSettings.h
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/InvestigationRecordState.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    ../src/persistence/InvestigationSnapshotContainer.h
+    ../src/persistence/InvestigationSnapshotContainer.cpp
+    ../src/persistence/InvestigationSessionSnapshotFile.h
+    ../src/persistence/InvestigationSessionSnapshotFile.cpp
+
+    ../src/sources/RotatedSourceRule.h
+    ../src/sources/SourceFamilyConfiguration.h
+    ../src/sources/SourcePhysicalIdentity.h
+
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.h
+    ../src/workspace/InvestigationComparisonPersistenceSerialization.cpp
+    ../src/workspace/InvestigationPresentationState.h
+    ../src/workspace/InvestigationPresentationStateSerialization.h
+    ../src/workspace/InvestigationPresentationStateSerialization.cpp
+    ../src/workspace/InvestigationSessionBackingPersistence.h
+    ../src/workspace/InvestigationSessionBackingPersistenceSerialization.h
+    ../src/workspace/InvestigationSessionBackingPersistenceSerialization.cpp
+    ../src/workspace/WorkspaceDocumentLayoutSerialization.h
+    ../src/workspace/WorkspaceDocumentLayoutSerialization.cpp
+    ../src/workspace/WorkspaceDocumentLayoutState.h
+    ../src/workspace/WorkspacePersistenceState.h
+    ../src/workspace/WorkspaceSerialization.h
+    ../src/workspace/WorkspaceSerialization.cpp
+    ../src/workspace/WorkspaceSavePackageService.h
+    ../src/workspace/WorkspaceSavePackageService.cpp
+)
+
+target_link_libraries(
+    WorkspaceSavePackageServiceTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME WorkspaceSavePackageServiceTests
+    COMMAND WorkspaceSavePackageServiceTests
+)
+
+qt_add_executable(
     InvestigationRecordSerializationTests
 
     InvestigationRecordSerializationTests.cpp

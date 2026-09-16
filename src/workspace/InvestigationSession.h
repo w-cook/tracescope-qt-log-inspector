@@ -110,6 +110,10 @@ public:
     const InvestigationSessionBacking &
     backing() const;
 
+    bool updateSnapshotBackingPath(
+        const QString &snapshotPath
+        );
+
     QString externalSourcePath() const;
     qint64 initialLiveFollowByteOffset() const;
 

@@ -89,6 +89,17 @@ public:
     snapshot();
 
     /*
+     * Replace the durable path of an already attached
+     * snapshot without changing backing mode.
+     *
+     * SourceBacked sessions have no runtime snapshot
+     * binding, so this returns false for them.
+     */
+    bool updateSnapshotPath(
+        QString snapshotPath
+        );
+
+    /*
      * Attaching/replacing a snapshot changes:
      *
      * SourceBacked -> Hybrid

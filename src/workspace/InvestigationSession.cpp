@@ -126,6 +126,16 @@ InvestigationSession::backing() const
     return m_backing;
 }
 
+bool InvestigationSession::
+    updateSnapshotBackingPath(
+        const QString &snapshotPath
+        )
+{
+    return m_backing.updateSnapshotPath(
+        snapshotPath
+        );
+}
+
 QString InvestigationSession::
     externalSourcePath() const
 {

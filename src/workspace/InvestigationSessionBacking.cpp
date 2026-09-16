@@ -122,6 +122,22 @@ InvestigationSessionBacking::snapshot()
     return &*m_snapshot;
 }
 
+bool InvestigationSessionBacking::
+    updateSnapshotPath(
+        QString snapshotPath
+        )
+{
+    if (!m_snapshot.has_value()
+        || snapshotPath.trimmed().isEmpty()) {
+        return false;
+    }
+
+    m_snapshot->snapshotPath =
+        std::move(snapshotPath);
+
+    return true;
+}
+
 void InvestigationSessionBacking::
     attachSnapshot(
         InvestigationSnapshotBinding snapshot

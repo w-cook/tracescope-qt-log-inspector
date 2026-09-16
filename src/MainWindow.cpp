@@ -1,34 +1,34 @@
 #include "MainWindow.h"
 
 #include <QAction>
-#include <QFileDialog>
-#include <QLabel>
-#include <QMenuBar>
-#include <QMessageBox>
-#include <QVBoxLayout>
-#include <QWidget>
-#include <QPlainTextEdit>
-#include <QStringList>
-#include <QDragEnterEvent>
-#include <QDropEvent>
-#include <QMimeData>
-#include <QUrl>
-#include <QtConcurrentRun>
-#include <QFileInfo>
-#include <QProgressDialog>
-#include <QPromise>
-#include <QSignalBlocker>
-#include <QVariant>
-#include <QDialog>
 #include <QApplication>
 #include <QClipboard>
-#include <QMenu>
-#include <QPainter>
-#include <QStyledItemDelegate>
-#include <QSaveFile>
-#include <QPushButton>
-#include <QFile>
 #include <QCloseEvent>
+#include <QDialog>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QLabel>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QPainter>
+#include <QPlainTextEdit>
+#include <QPromise>
+#include <QProgressDialog>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QStringList>
+#include <QStyledItemDelegate>
+#include <QtConcurrentRun>
+#include <QUrl>
+#include <QVariant>
+#include <QVBoxLayout>
+#include <QWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -55,6 +55,7 @@
 #include "workspace/InvestigationComparisonSnapshotBuilder.h"
 #include "workspace/InvestigationSessionPersistence.h"
 #include "workspace/InvestigationSessionRestorationService.h"
+#include "workspace/WorkspaceSavePackageService.h"
 #include "workspace/WorkspaceSerialization.h"
 
 namespace
@@ -406,6 +407,37 @@ QString investigationReportOutputPath(
            + QStringLiteral(
                ".html"
                );
+}
+
+QString resolveWorkspaceSnapshotPath(
+    const QString &workspaceFilePath,
+    const QString &snapshotReference
+    )
+{
+    const QFileInfo referenceInfo(
+        snapshotReference
+        );
+
+    if (referenceInfo.isAbsolute()) {
+        return QDir::cleanPath(
+            referenceInfo.absoluteFilePath()
+            );
+    }
+
+    if (workspaceFilePath.trimmed().isEmpty()) {
+        return {};
+    }
+
+    const QDir workspaceDirectory(
+        QFileInfo(workspaceFilePath)
+            .absolutePath()
+        );
+
+    return QDir::cleanPath(
+        workspaceDirectory.absoluteFilePath(
+            snapshotReference
+            )
+        );
 }
 }
 
@@ -2215,50 +2247,141 @@ bool MainWindow::saveWorkspaceToFile(
     const QString &filePath
     )
 {
-    const WorkspacePersistenceState state =
+    WorkspacePersistenceState state =
         captureWorkspaceState();
 
-    const WorkspaceSerializer serializer;
+    QVector<WorkspaceSessionSnapshotSaveItem>
+        sessionSnapshots;
 
-    const QByteArray json =
-        serializer.serialize(
-            state
+    if (workspace != nullptr) {
+        sessionSnapshots.reserve(
+            workspace->sessionCount()
             );
 
-    QSaveFile file(
-        filePath
-        );
+        /*
+         * Capture immutable normalized evidence on the
+         * UI thread before any package files are written.
+         *
+         * This gives every .tsinv a stable save-time
+         * record set even if live following continues
+         * after this method returns.
+         */
+        for (int index = 0;
+             index < workspace->sessionCount();
+             ++index) {
+            const InvestigationSession *session =
+                workspace->sessionAt(
+                    index
+                    );
 
-    if (!file.open(
-            QIODevice::WriteOnly
-            )) {
+            if (session == nullptr) {
+                continue;
+            }
+
+            WorkspaceSessionSnapshotSaveItem item;
+
+            item.sessionId =
+                session->id();
+
+            item.snapshot =
+                session->captureSnapshot();
+
+            sessionSnapshots.append(
+                std::move(item)
+                );
+        }
+    }
+
+    if (state.sessions.size()
+        != sessionSnapshots.size()) {
         QMessageBox::warning(
             this,
             tr("Save Workspace Failed"),
             tr(
-                "TraceScope could not open the "
-                "selected workspace file for writing."
+                "TraceScope could not capture a "
+                "consistent snapshot for every open "
+                "investigation."
                 )
             );
 
         return false;
     }
 
-    if (file.write(json)
-            != json.size()
-        || !file.commit()) {
-        file.cancelWriting();
+    WorkspaceSavePackageResult saveResult =
+        WorkspaceSavePackageService()
+            .save(
+                filePath,
+                std::move(state),
+                std::move(sessionSnapshots)
+                );
+
+    if (!saveResult.succeeded) {
+        const QString reason =
+            saveResult.errorMessage.isEmpty()
+                ? tr(
+                      "The workspace package could "
+                      "not be saved successfully."
+                      )
+                : saveResult.errorMessage;
 
         QMessageBox::warning(
             this,
             tr("Save Workspace Failed"),
             tr(
                 "TraceScope could not save the "
-                "workspace successfully."
+                "workspace.\n\n"
+                "Reason:\n%1"
                 )
+                .arg(reason)
             );
 
         return false;
+    }
+
+    /*
+     * The manifest is now committed successfully.
+     *
+     * SnapshotBacked and Hybrid runtime sessions must
+     * follow the newly committed durable snapshot path
+     * so future Hybrid reloads use exactly the snapshot
+     * referenced by the saved workspace.
+     *
+     * SourceBacked sessions intentionally reject this
+     * update because their newly written .tsinv is a
+     * save-time recovery fallback, not a runtime mode
+     * transition.
+     */
+    if (workspace != nullptr) {
+        for (int index = 0;
+             index < workspace->sessionCount();
+             ++index) {
+            InvestigationSession *session =
+                workspace->sessionAt(
+                    index
+                    );
+
+            if (session == nullptr) {
+                continue;
+            }
+
+            const auto snapshotPathIterator =
+                saveResult
+                    .snapshotPathsBySessionId
+                    .constFind(
+                        session->id()
+                        );
+
+            if (snapshotPathIterator
+                == saveResult
+                       .snapshotPathsBySessionId
+                       .constEnd()) {
+                continue;
+            }
+
+            session->updateSnapshotBackingPath(
+                snapshotPathIterator.value()
+                );
+        }
     }
 
     currentWorkspacePath =
@@ -2294,7 +2417,7 @@ void MainWindow::saveWorkspaceAs()
     if (initialPath.isEmpty()) {
         initialPath =
             QStringLiteral(
-                "tracescope-workspace.json"
+                "tracescope-workspace.tsw"
                 );
     }
 
@@ -2304,7 +2427,8 @@ void MainWindow::saveWorkspaceAs()
             tr("Save TraceScope Workspace"),
             initialPath,
             tr(
-                "TraceScope Workspace (*.json);;"
+                "TraceScope Workspace (*.tsw);;"
+                "Legacy TraceScope Workspace (*.json);;"
                 "All Files (*)"
                 )
             );
@@ -2321,7 +2445,8 @@ void MainWindow::saveWorkspaceAs()
 MainWindow::WorkspaceSessionRecoveryOutcome
 MainWindow::resolveWorkspaceSessionRecovery(
     PersistedInvestigationSession
-        &persistedSession
+        &persistedSession,
+    const QString &workspaceFilePath
     )
 {
     /*
@@ -2366,6 +2491,33 @@ MainWindow::resolveWorkspaceSessionRecovery(
              .backing
              .externalSourceBinding;
 
+    bool snapshotFallbackAvailable =
+        persistedSession
+            .backing
+            .snapshotReference
+            .has_value();
+
+    QString snapshotFallbackPath;
+
+    if (snapshotFallbackAvailable) {
+        snapshotFallbackPath =
+            resolveWorkspaceSnapshotPath(
+                workspaceFilePath,
+                *persistedSession
+                     .backing
+                     .snapshotReference
+                );
+
+        const QFileInfo snapshotInfo(
+            snapshotFallbackPath
+            );
+
+        snapshotFallbackAvailable =
+            !snapshotFallbackPath.isEmpty()
+            && snapshotInfo.exists()
+            && snapshotInfo.isFile();
+    }
+
     bool sourceAvailable =
         !binding.sourcePath
              .trimmed()
@@ -2402,25 +2554,56 @@ MainWindow::resolveWorkspaceSessionRecovery(
                 )
             );
 
-        prompt.setInformativeText(
-            tr(
-                "Saved location:\n%1\n\n"
-                "Locate the source file to restore "
-                "this session, skip the session, or "
-                "cancel opening the workspace."
-                )
-                .arg(
-                    binding.sourcePath
-                            .isEmpty()
-                        ? tr("(no saved path)")
-                        : binding.sourcePath
+        if (snapshotFallbackAvailable) {
+            prompt.setInformativeText(
+                tr(
+                    "Saved source location:\n%1\n\n"
+                    "This workspace also contains a durable "
+                    "snapshot of the investigation as it "
+                    "existed when the workspace was saved.\n\n"
+                    "Open the saved snapshot to recover that "
+                    "evidence without the original source, "
+                    "locate the source file, skip the session, "
+                    "or cancel opening the workspace."
                     )
-            );
+                    .arg(
+                        binding.sourcePath
+                        )
+                );
+        } else {
+            prompt.setInformativeText(
+                tr(
+                    "Saved location:\n%1\n\n"
+                    "Locate the source file to restore this "
+                    "session, skip the session, or cancel "
+                    "opening the workspace."
+                    )
+                    .arg(
+                        binding.sourcePath
+                                .isEmpty()
+                            ? tr("(no saved path)")
+                            : binding.sourcePath
+                        )
+                );
+        }
+
+        QPushButton *snapshotButton =
+            nullptr;
+
+        if (snapshotFallbackAvailable) {
+            snapshotButton =
+                prompt.addButton(
+                    tr("Open Saved Snapshot"),
+                    QMessageBox::AcceptRole
+                    );
+        }
 
         QPushButton *locateButton =
             prompt.addButton(
                 tr("Locate File..."),
-                QMessageBox::AcceptRole
+                snapshotFallbackAvailable
+                    ? QMessageBox::ActionRole
+                    : QMessageBox::AcceptRole
                 );
 
         QPushButton *skipButton =
@@ -2435,7 +2618,9 @@ MainWindow::resolveWorkspaceSessionRecovery(
                 );
 
         prompt.setDefaultButton(
-            locateButton
+            snapshotFallbackAvailable
+                ? snapshotButton
+                : locateButton
             );
 
         prompt.exec();
@@ -2445,6 +2630,37 @@ MainWindow::resolveWorkspaceSessionRecovery(
             return
                 WorkspaceSessionRecoveryOutcome::
                 Abort;
+        }
+
+        if (snapshotButton != nullptr
+            && prompt.clickedButton()
+                   == snapshotButton) {
+            /*
+             * This is an explicit recovery decision.
+             *
+             * The persisted SourceBacked session becomes
+             * SnapshotBacked for this restoration. The saved
+             * normalized evidence is now authoritative, and
+             * the unavailable external source is no longer a
+             * runtime dependency.
+             */
+            persistedSession.backing.mode =
+                PersistedInvestigationSessionBackingMode::
+                SnapshotBacked;
+
+            persistedSession
+                .backing
+                .externalSourceBinding
+                .reset();
+
+            persistedSession
+                .backing
+                .sourceImportProfile
+                .reset();
+
+            return
+                WorkspaceSessionRecoveryOutcome::
+                Ready;
         }
 
         if (prompt.clickedButton()
@@ -2702,7 +2918,7 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
                 tr("Open TraceScope Workspace"),
                 currentWorkspacePath,
                 tr(
-                    "TraceScope Workspace (*.json);;"
+                    "TraceScope Workspace (*.tsw *.json);;"
                     "All Files (*)"
                     )
                 );
@@ -2821,7 +3037,8 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
         const WorkspaceSessionRecoveryOutcome
             recoveryOutcome =
             resolveWorkspaceSessionRecovery(
-                persistedSession
+                persistedSession,
+                filePath
                 );
 
         if (recoveryOutcome

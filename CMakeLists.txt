@@ -266,6 +266,8 @@ qt_add_executable(TraceScope
     src/importing/ImportResultSourceGeneration.cpp
     src/workspace/InvestigationSessionRestorationService.h
     src/workspace/InvestigationSessionRestorationService.cpp
+    src/workspace/WorkspaceSavePackageService.h
+    src/workspace/WorkspaceSavePackageService.cpp
 
 )
 
