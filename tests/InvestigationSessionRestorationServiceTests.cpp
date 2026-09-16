@@ -1,11 +1,14 @@
 #include <QtTest>
 
+#include <future>
 #include <optional>
+#include <thread>
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
+#include <QThread>
 
 #include "../src/domain/RecordIdentity.h"
 #include "../src/importing/ImportResultSourceGeneration.h"
@@ -42,6 +45,24 @@ bool writeFile(
     if (!file.open(
             QIODevice::WriteOnly
             | QIODevice::Truncate
+            )) {
+        return false;
+    }
+
+    return file.write(content)
+           == content.size();
+}
+
+bool appendFile(
+    const QString &filePath,
+    const QByteArray &content
+    )
+{
+    QFile file(filePath);
+
+    if (!file.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
             )) {
         return false;
     }
@@ -168,6 +189,10 @@ private slots:
     void snapshotBackedRestoresRelativeSnapshotWithoutSource();
 
     void hybridRestoresSnapshotWhenExternalSourceIsMissing();
+
+    void preparationCanRunOffThreadAndMaterializesOnCallingThread();
+
+    void hybridMaterializationDoesNotReplaySourceAgain();
 };
 
 void InvestigationSessionRestorationServiceTests::
@@ -981,6 +1006,382 @@ void InvestigationSessionRestorationServiceTests::
         result.session
             ->initialLiveFollowByteOffset(),
         qint64(0)
+        );
+}
+
+void InvestigationSessionRestorationServiceTests::
+    preparationCanRunOffThreadAndMaterializesOnCallingThread()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("threaded.jsonl")
+            );
+
+    QVERIFY(
+        writeFile(
+            sourcePath,
+            QByteArrayLiteral(
+                "{\"message\":\"prepared\"}\n"
+                )
+            )
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    PersistedInvestigationSession persisted =
+        makeSourceBackedPersistence(
+            QStringLiteral("threaded-session"),
+            sourcePath,
+            profile,
+            2
+            );
+
+    const std::optional<SourcePhysicalIdentity>
+        identity =
+        captureIdentity(
+            sourcePath
+            );
+
+    QVERIFY(identity.has_value());
+
+    persisted
+        .backing
+        .externalSourceBinding
+        ->sourceIdentity =
+        *identity;
+
+    InvestigationSessionRestorationService
+        service;
+
+    const std::thread::id callingThreadId =
+        std::this_thread::get_id();
+
+    std::thread::id preparationThreadId;
+
+    /*
+     * This mirrors the intended MainWindow integration:
+     * expensive restoration preparation occurs on a
+     * worker thread.
+     */
+    auto future =
+        std::async(
+            std::launch::async,
+            [&]() {
+                preparationThreadId =
+                    std::this_thread::get_id();
+
+                return service.prepare(
+                    persisted,
+                    directory.filePath(
+                        QStringLiteral(
+                            "workspace.tsw"
+                            )
+                        )
+                    );
+            }
+            );
+
+    InvestigationSessionRestorationPreparationResult
+        preparation =
+        future.get();
+
+    QVERIFY2(
+        preparation.succeeded,
+        qPrintable(
+            preparation.errorMessage
+            )
+        );
+
+    QVERIFY(
+        preparation.preparedData.has_value()
+        );
+
+    /*
+     * Confirm the preparation work actually ran away
+     * from the test/UI thread.
+     */
+    QVERIFY(
+        preparationThreadId
+        != callingThreadId
+        );
+
+    QVERIFY(
+        std::holds_alternative<
+            PreparedSourceBackedInvestigationSession>(
+            *preparation.preparedData
+            )
+        );
+
+    /*
+     * No InvestigationSession has existed yet.
+     *
+     * Materialization now occurs on the calling thread.
+     */
+    InvestigationSessionRestorationResult result =
+        service.materialize(
+            persisted,
+            std::move(preparation)
+            );
+
+    QVERIFY2(
+        result.succeeded,
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QVERIFY(result.session != nullptr);
+
+    QCOMPARE(
+        result.session->importedRecordCount(),
+        qint64(1)
+        );
+
+    /*
+     * InvestigationController is a QObject and owns the
+     * table/proxy models. Its Qt thread affinity proves
+     * the object graph was constructed on this thread,
+     * not on the preparation worker.
+     */
+    QCOMPARE(
+        result.session
+            ->investigationController()
+            ->thread(),
+        QThread::currentThread()
+        );
+}
+
+void InvestigationSessionRestorationServiceTests::
+    hybridMaterializationDoesNotReplaySourceAgain()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("hybrid-live.jsonl")
+            );
+
+    QVERIFY(
+        writeFile(
+            sourcePath,
+            QByteArrayLiteral(
+                "{\"message\":\"baseline\"}\n"
+                )
+            )
+        );
+
+    constexpr quint64
+        SavedGeneration = 4;
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    const InvestigationSessionSnapshot snapshot =
+        makeSnapshot(
+            sourcePath,
+            profile,
+            SavedGeneration
+            );
+
+    QCOMPARE(
+        snapshot.records.size(),
+        1
+        );
+
+    const std::optional<SourcePhysicalIdentity>
+        identity =
+        captureIdentity(
+            sourcePath
+            );
+
+    QVERIFY(identity.has_value());
+
+    const QString sessionsDirectory =
+        directory.filePath(
+            QStringLiteral("sessions")
+            );
+
+    QVERIFY(
+        QDir().mkpath(
+            sessionsDirectory
+            )
+        );
+
+    const QString snapshotPath =
+        QDir(sessionsDirectory)
+            .filePath(
+                QStringLiteral(
+                    "hybrid-once.tsinv"
+                    )
+                );
+
+    InvestigationSessionSnapshotFile
+        snapshotFile;
+
+    const InvestigationSessionSnapshotSaveResult
+        saveResult =
+        snapshotFile.save(
+            snapshotPath,
+            snapshot
+            );
+
+    QVERIFY2(
+        saveResult.isSuccess(),
+        qPrintable(
+            saveResult.errorMessage
+            )
+        );
+
+    PersistedInvestigationSession persisted;
+
+    persisted.sessionId =
+        QStringLiteral(
+            "hybrid-once"
+            );
+
+    persisted.backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        Hybrid;
+
+    persisted.backing.snapshotReference =
+        QStringLiteral(
+            "sessions/hybrid-once.tsinv"
+            );
+
+    PersistedInvestigationExternalSourceBinding
+        binding;
+
+    binding.sourcePath =
+        sourcePath;
+
+    binding.sourceGeneration =
+        SavedGeneration;
+
+    binding.sourceIdentity =
+        *identity;
+
+    persisted.backing.externalSourceBinding =
+        binding;
+
+    InvestigationSessionRestorationService
+        service;
+
+    /*
+     * Preparation performs the complete external-source
+     * replay and produces the candidate that should
+     * later be materialized.
+     */
+    InvestigationSessionRestorationPreparationResult
+        preparation =
+        service.prepare(
+            persisted,
+            directory.filePath(
+                QStringLiteral("workspace.tsw")
+                )
+            );
+
+    QVERIFY2(
+        preparation.succeeded,
+        qPrintable(
+            preparation.errorMessage
+            )
+        );
+
+    QVERIFY(
+        preparation.preparedData.has_value()
+        );
+
+    auto *preparedHybrid =
+        std::get_if<
+            PreparedHybridInvestigationSession>(
+            &*preparation.preparedData
+            );
+
+    QVERIFY(preparedHybrid != nullptr);
+
+    QVERIFY(
+        preparedHybrid
+            ->reconstructedImportResult
+            .has_value()
+        );
+
+    QCOMPARE(
+        preparedHybrid
+            ->reconstructedImportResult
+            ->records
+            .size(),
+        1
+        );
+
+    /*
+     * Mutate the physical source after preparation.
+     *
+     * If materialize() incorrectly calls reloadHybrid()
+     * or otherwise re-reads the file, this second
+     * record will appear in the session.
+     */
+    QVERIFY(
+        appendFile(
+            sourcePath,
+            QByteArrayLiteral(
+                "{\"message\":\"after-prepare\"}\n"
+                )
+            )
+        );
+
+    InvestigationSessionRestorationResult result =
+        service.materialize(
+            persisted,
+            std::move(preparation)
+            );
+
+    QVERIFY2(
+        result.succeeded,
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QVERIFY(result.session != nullptr);
+
+    QCOMPARE(
+        result.session->backing().mode(),
+        InvestigationSessionBackingMode::
+        Hybrid
+        );
+
+    /*
+     * Materialization must consume the already-prepared
+     * candidate exactly as it existed at the preparation
+     * boundary. It must not perform a second replay.
+     */
+    QCOMPARE(
+        result.session->importedRecordCount(),
+        qint64(1)
+        );
+
+    const QVector<InvestigationRecord> records =
+        result.session
+            ->investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        1
+        );
+
+    QCOMPARE(
+        records.first().message,
+        std::optional<QString>(
+            QStringLiteral("baseline")
+            )
         );
 }
 

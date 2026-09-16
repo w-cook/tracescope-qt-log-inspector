@@ -57,7 +57,9 @@ HybridInvestigationReconstructionResult
         const InvestigationSessionSnapshot &snapshot,
         const InvestigationExternalSourceBinding
             &externalSourceBinding,
-        const ILogImporter &importer
+        const ILogImporter &importer,
+        const ImportExecutionContext
+            &executionContext
         ) const
 {
     if (externalSourceBinding
@@ -206,7 +208,9 @@ HybridInvestigationReconstructionResult
 
     ImportResult replayResult =
         importer.importFile(
-            externalSourceBinding.sourcePath
+            externalSourceBinding.sourcePath,
+            ILogImporter::UnlimitedRecordLimit,
+            executionContext
             );
 
     /*

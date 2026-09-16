@@ -3,6 +3,7 @@
 #include <QString>
 
 #include "../importing/ILogImporter.h"
+#include "../importing/ImportExecutionContext.h"
 #include "../persistence/InvestigationSessionSnapshot.h"
 #include "InvestigationSessionBacking.h"
 
@@ -40,6 +41,8 @@ public:
         const InvestigationSessionSnapshot &snapshot,
         const InvestigationExternalSourceBinding
             &externalSourceBinding,
-        const ILogImporter &importer
+        const ILogImporter &importer,
+        const ImportExecutionContext
+            &executionContext = {}
         ) const;
 };

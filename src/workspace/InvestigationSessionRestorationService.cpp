@@ -17,11 +17,44 @@
 #include "../persistence/InvestigationSessionSnapshotFile.h"
 #include "../sources/RotatedSourceDiscoveryService.h"
 #include "../sources/SourcePhysicalIdentity.h"
+#include "HybridInvestigationReconstructionService.h"
 #include "InvestigationSessionPersistence.h"
 
 namespace
 {
-InvestigationSessionRestorationResult failure(
+InvestigationSessionRestorationPreparationResult
+preparationFailure(
+    const QString &errorMessage
+    )
+{
+    InvestigationSessionRestorationPreparationResult
+        result;
+
+    result.succeeded = false;
+    result.errorMessage = errorMessage;
+
+    return result;
+}
+
+InvestigationSessionRestorationPreparationResult
+preparationSuccess(
+    InvestigationSessionRestorationPreparedData
+        preparedData
+    )
+{
+    InvestigationSessionRestorationPreparationResult
+        result;
+
+    result.succeeded = true;
+
+    result.preparedData =
+        std::move(preparedData);
+
+    return result;
+}
+
+InvestigationSessionRestorationResult
+restorationFailure(
     const QString &errorMessage
     )
 {
@@ -33,7 +66,8 @@ InvestigationSessionRestorationResult failure(
     return result;
 }
 
-InvestigationSessionRestorationResult success(
+InvestigationSessionRestorationResult
+restorationSuccess(
     std::unique_ptr<InvestigationSession> session
     )
 {
@@ -103,11 +137,12 @@ bool prepareSourceFamilyConfiguration(
         persistedConfiguration;
 
     /*
-     * Persisted source-family state deliberately keeps
-     * only the logical rotation rule. Physical rotated
-     * paths must be rediscovered on restoration.
+     * Physical rotated paths are runtime discovery
+     * results, not durable source-family configuration.
      */
-    runtimeConfiguration.rotatedSourcePaths.clear();
+    runtimeConfiguration
+        .rotatedSourcePaths
+        .clear();
 
     if (!runtimeConfiguration
              .includeRotatedSources) {
@@ -165,8 +200,8 @@ runtimeExternalSourceBinding(
         persistedBinding.sourceFamilyConfiguration;
 
     /*
-     * Physical rotated paths are runtime discovery
-     * state, not persisted identity.
+     * Physical rotated members must be rediscovered
+     * rather than treated as persisted identity.
      */
     binding
         .sourceFamilyConfiguration
@@ -182,10 +217,12 @@ runtimeExternalSourceBinding(
     return binding;
 }
 
-InvestigationSessionRestorationResult
-restoreSourceBackedSession(
+InvestigationSessionRestorationPreparationResult
+prepareSourceBackedSession(
     const PersistedInvestigationSession
-        &persistedSession
+        &persistedSession,
+    const ImportExecutionContext
+        &executionContext
     )
 {
     const PersistedInvestigationSessionBacking
@@ -195,7 +232,7 @@ restoreSourceBackedSession(
     if (!backing
              .externalSourceBinding
              .has_value()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Source-backed investigation "
                 "does not contain an external source "
@@ -207,7 +244,7 @@ restoreSourceBackedSession(
     if (!backing
              .sourceImportProfile
              .has_value()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Source-backed investigation "
                 "does not contain an import profile."
@@ -226,7 +263,7 @@ restoreSourceBackedSession(
             .sourcePath
             .trimmed()
             .isEmpty()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Source-backed investigation "
                 "does not contain a source path."
@@ -244,16 +281,15 @@ restoreSourceBackedSession(
         );
 
     /*
-     * Source-backed means exactly that: the external
-     * source remains authoritative.
+     * SourceBacked means the external source remains
+     * authoritative.
      *
-     * An optional snapshot reference attached by a
-     * workspace save policy does not silently change
-     * the runtime backing mode.
+     * A workspace-save fallback snapshot does not
+     * silently change that runtime backing mode.
      */
     if (!sourceInfo.exists()
         || !sourceInfo.isFile()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The external source file for the "
                 "Source-backed investigation is not "
@@ -269,7 +305,7 @@ restoreSourceBackedSession(
             );
 
     if (!importer) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "No importer is available for the "
                 "persisted Source-backed import "
@@ -279,11 +315,10 @@ restoreSourceBackedSession(
     }
 
     /*
-     * Capture the handoff point before static import.
+     * Capture the live-follow handoff before import.
      *
-     * If the producer appends while restoration is in
-     * progress, later live following may conservatively
-     * replay overlap rather than skip unseen bytes.
+     * Producer growth during preparation therefore
+     * causes overlap rather than a gap.
      */
     const qint64 initialLiveFollowByteOffset =
         LiveSessionFollowCoordinator::
@@ -305,7 +340,7 @@ restoreSourceBackedSession(
         if (sourceGeneration
             == std::numeric_limits<
                 quint64>::max()) {
-            return failure(
+            return preparationFailure(
                 QStringLiteral(
                     "The external source appears to "
                     "have been replaced, but the "
@@ -318,11 +353,6 @@ restoreSourceBackedSession(
         ++sourceGeneration;
     }
 
-    /*
-     * Establish a physical identity immediately before
-     * import so truncation/replacement during the
-     * restoration itself can be rejected.
-     */
     const SourcePhysicalIdentityCaptureResult
         identityBeforeImport =
         captureSourcePhysicalIdentity(
@@ -330,7 +360,7 @@ restoreSourceBackedSession(
             );
 
     if (!identityBeforeImport.succeeded) {
-        return failure(
+        return preparationFailure(
             identityBeforeImport.errorMessage
                     .isEmpty()
                 ? QStringLiteral(
@@ -354,7 +384,7 @@ restoreSourceBackedSession(
             sourceFamilyConfiguration,
             sourceFamilyError
             )) {
-        return failure(
+        return preparationFailure(
             sourceFamilyError.isEmpty()
                 ? QStringLiteral(
                       "Could not rediscover the "
@@ -364,20 +394,30 @@ restoreSourceBackedSession(
             );
     }
 
-    SourceFamilyImportService
-        importService;
+    SourceFamilyImportOptions
+        importOptions;
+
+    importOptions.maxProcessedRecords =
+        ILogImporter::UnlimitedRecordLimit;
+
+    importOptions.recordLimitMode =
+        SourceFamilyRecordLimitMode::
+        Sequential;
 
     ImportResult importResult =
-        importService.importFiles(
-            sourceFamilyConfiguration
-                .orderedSourcePaths(
-                    activeSourcePath
-                    ),
-            *importer
-            );
+        SourceFamilyImportService()
+            .importFiles(
+                sourceFamilyConfiguration
+                    .orderedSourcePaths(
+                        activeSourcePath
+                        ),
+                *importer,
+                importOptions,
+                executionContext
+                );
 
     if (importResult.cancelled) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "Source-backed restoration was "
                 "cancelled before import completed."
@@ -392,7 +432,7 @@ restoreSourceBackedSession(
             );
 
     if (!identityAfterImport.succeeded) {
-        return failure(
+        return preparationFailure(
             identityAfterImport.errorMessage
                     .isEmpty()
                 ? QStringLiteral(
@@ -405,18 +445,15 @@ restoreSourceBackedSession(
     }
 
     /*
-     * Reject a reconstruction whose active physical
-     * source was truncated or replaced while the
-     * candidate was being prepared.
-     *
-     * Ordinary append-only growth is intentionally not
-     * considered replacement.
+     * Append-only growth is allowed. Replacement or
+     * truncation during preparation invalidates the
+     * candidate.
      */
     if (sourcePhysicalIdentityChanged(
             activeSourcePath,
             identityBeforeImport.identity
             )) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The external source changed while "
                 "the investigation was being "
@@ -427,12 +464,11 @@ restoreSourceBackedSession(
     }
 
     /*
-     * Static importers describe their input as
-     * generation zero.
+     * Static importers produce generation zero.
      *
-     * Only the active source belongs to the persisted
-     * same-path generation sequence. Rotated physical
-     * files remain independently identified sources.
+     * Only the current active path participates in
+     * same-path generation tracking. Rotated physical
+     * files retain their own independent identity.
      */
     rebaseImportResultSourceGenerationForPath(
         importResult,
@@ -440,46 +476,41 @@ restoreSourceBackedSession(
         sourceGeneration
         );
 
-    auto session =
-        std::make_unique<
-            InvestigationSession>(
-            persistedSession.sessionId,
-            activeSourcePath,
-            profile,
-            std::move(importResult),
-            std::move(
-                sourceFamilyConfiguration
-                )
+    PreparedSourceBackedInvestigationSession
+        prepared;
+
+    prepared.sourcePath =
+        activeSourcePath;
+
+    prepared.importProfile =
+        profile;
+
+    prepared.importResult =
+        std::move(importResult);
+
+    prepared.sourceFamilyConfiguration =
+        std::move(
+            sourceFamilyConfiguration
             );
 
-    session->updateExternalSourceRuntimeState(
-        sourceGeneration,
-        &identityAfterImport.identity
-        );
+    prepared.sourceGeneration =
+        sourceGeneration;
 
-    session->setInitialLiveFollowByteOffset(
-        initialLiveFollowByteOffset
-        );
+    prepared.sourceIdentity =
+        identityAfterImport.identity;
 
-    /*
-     * Record/filter/presentation state is restored only
-     * after the normalized record set has been
-     * established. That lets record-ID validation occur
-     * against the reconstructed evidence.
-     */
-    InvestigationSessionPersistence::
-        restoreState(
-            persistedSession,
-            *session
-            );
+    prepared.initialLiveFollowByteOffset =
+        initialLiveFollowByteOffset;
 
-    return success(
-        std::move(session)
+    return preparationSuccess(
+        InvestigationSessionRestorationPreparedData(
+            std::move(prepared)
+            )
         );
 }
 
-InvestigationSessionRestorationResult
-restoreSnapshotBackedSession(
+InvestigationSessionRestorationPreparationResult
+prepareSnapshotBackedSession(
     const PersistedInvestigationSession
         &persistedSession,
     const QString &workspaceFilePath
@@ -494,7 +525,7 @@ restoreSnapshotBackedSession(
                .snapshotReference
                ->trimmed()
                .isEmpty()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Snapshot-backed investigation "
                 "does not contain a snapshot "
@@ -510,7 +541,7 @@ restoreSnapshotBackedSession(
             );
 
     if (snapshotPath.isEmpty()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The relative investigation snapshot "
                 "could not be resolved because the "
@@ -519,17 +550,15 @@ restoreSnapshotBackedSession(
             );
     }
 
-    InvestigationSessionSnapshotFile
-        snapshotFile;
-
     InvestigationSessionSnapshotLoadResult
         loadResult =
-        snapshotFile.load(
-            snapshotPath
-            );
+        InvestigationSessionSnapshotFile()
+            .load(
+                snapshotPath
+                );
 
     if (!loadResult.isSuccess()) {
-        return failure(
+        return preparationFailure(
             loadResult.errorMessage.isEmpty()
                 ? QStringLiteral(
                       "The investigation snapshot "
@@ -539,32 +568,31 @@ restoreSnapshotBackedSession(
             );
     }
 
-    auto session =
-        InvestigationSession::
-        createSnapshotBacked(
-            persistedSession.sessionId,
-            snapshotPath,
-            std::move(
-                *loadResult.snapshot
-                )
+    PreparedSnapshotBackedInvestigationSession
+        prepared;
+
+    prepared.snapshotPath =
+        snapshotPath;
+
+    prepared.snapshot =
+        std::move(
+            *loadResult.snapshot
             );
 
-    InvestigationSessionPersistence::
-        restoreState(
-            persistedSession,
-            *session
-            );
-
-    return success(
-        std::move(session)
+    return preparationSuccess(
+        InvestigationSessionRestorationPreparedData(
+            std::move(prepared)
+            )
         );
 }
 
-InvestigationSessionRestorationResult
-restoreHybridSession(
+InvestigationSessionRestorationPreparationResult
+prepareHybridSession(
     const PersistedInvestigationSession
         &persistedSession,
-    const QString &workspaceFilePath
+    const QString &workspaceFilePath,
+    const ImportExecutionContext
+        &executionContext
     )
 {
     const PersistedInvestigationSessionBacking
@@ -576,7 +604,7 @@ restoreHybridSession(
                .snapshotReference
                ->trimmed()
                .isEmpty()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Hybrid investigation does not "
                 "contain a snapshot reference."
@@ -587,7 +615,7 @@ restoreHybridSession(
     if (!backing
              .externalSourceBinding
              .has_value()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Hybrid investigation does not "
                 "contain an external source binding."
@@ -603,7 +631,7 @@ restoreHybridSession(
             .sourcePath
             .trimmed()
             .isEmpty()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The Hybrid investigation does not "
                 "contain an external source path."
@@ -618,7 +646,7 @@ restoreHybridSession(
             );
 
     if (snapshotPath.isEmpty()) {
-        return failure(
+        return preparationFailure(
             QStringLiteral(
                 "The relative Hybrid snapshot could "
                 "not be resolved because the "
@@ -627,17 +655,15 @@ restoreHybridSession(
             );
     }
 
-    InvestigationSessionSnapshotFile
-        snapshotFile;
-
     InvestigationSessionSnapshotLoadResult
         loadResult =
-        snapshotFile.load(
-            snapshotPath
-            );
+        InvestigationSessionSnapshotFile()
+            .load(
+                snapshotPath
+                );
 
     if (!loadResult.isSuccess()) {
-        return failure(
+        return preparationFailure(
             loadResult.errorMessage.isEmpty()
                 ? QStringLiteral(
                       "The Hybrid investigation "
@@ -647,8 +673,10 @@ restoreHybridSession(
             );
     }
 
-    const ImportProfile snapshotProfile =
-        loadResult.snapshot->importProfile;
+    InvestigationSessionSnapshot snapshot =
+        std::move(
+            *loadResult.snapshot
+            );
 
     InvestigationExternalSourceBinding
         externalSourceBinding =
@@ -656,41 +684,29 @@ restoreHybridSession(
             persistedBinding
             );
 
-    auto session =
-        InvestigationSession::createHybrid(
-            persistedSession.sessionId,
-            snapshotPath,
-            std::move(
-                *loadResult.snapshot
-                ),
-            std::move(
-                externalSourceBinding
-                )
-            );
+    std::optional<ImportResult>
+        reconstructedImportResult;
 
-    /*
-     * A missing current source is a valid Hybrid
-     * recovery case. createHybrid() has already
-     * installed the durable snapshot evidence and
-     * preserved the external binding for a future
-     * continuation.
-     *
-     * Avoid requiring an importer merely to recover
-     * that snapshot-only state.
-     */
     const QFileInfo externalSourceInfo(
-        session->externalSourcePath()
+        externalSourceBinding.sourcePath
         );
 
-    if (externalSourceInfo.exists()) {
+    /*
+     * Missing external source is a valid Hybrid
+     * restoration case. The snapshot remains the
+     * durable evidence floor, and the binding is kept
+     * for a later continuation attempt.
+     */
+    if (externalSourceInfo.exists()
+        && externalSourceInfo.isFile()) {
         const std::shared_ptr<ILogImporter>
             importer =
             createImporter(
-                snapshotProfile
+                snapshot.importProfile
                 );
 
         if (!importer) {
-            return failure(
+            return preparationFailure(
                 QStringLiteral(
                     "No importer is available for the "
                     "Hybrid investigation's persisted "
@@ -699,69 +715,339 @@ restoreHybridSession(
                 );
         }
 
-        const InvestigationSessionHybridReloadResult
-            reloadResult =
-            session->reloadHybrid(
-                *importer
-                );
+        HybridInvestigationReconstructionResult
+            reconstruction =
+            HybridInvestigationReconstructionService()
+                .reconstruct(
+                    snapshot,
+                    externalSourceBinding,
+                    *importer,
+                    executionContext
+                    );
 
-        if (!reloadResult.succeeded) {
-            return failure(
-                reloadResult.errorMessage.isEmpty()
+        if (!reconstruction.succeeded) {
+            return preparationFailure(
+                reconstruction.errorMessage.isEmpty()
                     ? QStringLiteral(
                           "The Hybrid investigation "
                           "could not be reconstructed."
                           )
-                    : reloadResult.errorMessage
+                    : reconstruction.errorMessage
                 );
         }
+
+        externalSourceBinding =
+            std::move(
+                reconstruction
+                    .externalSourceBinding
+                );
+
+        reconstructedImportResult =
+            std::move(
+                reconstruction.importResult
+                );
     }
 
-    InvestigationSessionPersistence::
-        restoreState(
-            persistedSession,
-            *session
+    PreparedHybridInvestigationSession
+        prepared;
+
+    prepared.snapshotPath =
+        snapshotPath;
+
+    prepared.snapshot =
+        std::move(snapshot);
+
+    prepared.externalSourceBinding =
+        std::move(
+            externalSourceBinding
             );
 
-    return success(
-        std::move(session)
+    prepared.reconstructedImportResult =
+        std::move(
+            reconstructedImportResult
+            );
+
+    return preparationSuccess(
+        InvestigationSessionRestorationPreparedData(
+            std::move(prepared)
+            )
         );
 }
 }
 
-InvestigationSessionRestorationResult
-InvestigationSessionRestorationService::restore(
+InvestigationSessionRestorationPreparationResult
+InvestigationSessionRestorationService::prepare(
     const PersistedInvestigationSession
         &persistedSession,
-    const QString &workspaceFilePath
+    const QString &workspaceFilePath,
+    const ImportExecutionContext
+        &executionContext
     ) const
 {
     switch (persistedSession.backing.mode) {
     case PersistedInvestigationSessionBackingMode::
         SourceBacked:
-        return restoreSourceBackedSession(
-            persistedSession
+        return prepareSourceBackedSession(
+            persistedSession,
+            executionContext
             );
 
     case PersistedInvestigationSessionBackingMode::
         SnapshotBacked:
-        return restoreSnapshotBackedSession(
+        return prepareSnapshotBackedSession(
             persistedSession,
             workspaceFilePath
             );
 
     case PersistedInvestigationSessionBackingMode::
         Hybrid:
-        return restoreHybridSession(
+        return prepareHybridSession(
             persistedSession,
-            workspaceFilePath
+            workspaceFilePath,
+            executionContext
             );
     }
 
-    return failure(
+    return preparationFailure(
         QStringLiteral(
             "The persisted investigation uses an "
             "unsupported backing mode."
             )
+        );
+}
+
+InvestigationSessionRestorationResult
+InvestigationSessionRestorationService::materialize(
+    const PersistedInvestigationSession
+        &persistedSession,
+    InvestigationSessionRestorationPreparationResult
+        preparation
+    ) const
+{
+    if (!preparation.succeeded) {
+        return restorationFailure(
+            preparation.errorMessage.isEmpty()
+                ? QStringLiteral(
+                      "Investigation restoration "
+                      "preparation failed."
+                      )
+                : preparation.errorMessage
+            );
+    }
+
+    if (!preparation.preparedData.has_value()) {
+        return restorationFailure(
+            QStringLiteral(
+                "Investigation restoration preparation "
+                "did not produce materialization data."
+                )
+            );
+    }
+
+    InvestigationSessionRestorationPreparedData
+        preparedData =
+        std::move(
+            *preparation.preparedData
+            );
+
+    if (std::holds_alternative<
+            PreparedSourceBackedInvestigationSession>(
+            preparedData
+            )) {
+        PreparedSourceBackedInvestigationSession
+            prepared =
+            std::get<
+                PreparedSourceBackedInvestigationSession>(
+                std::move(preparedData)
+                );
+
+        auto session =
+            std::make_unique<
+                InvestigationSession>(
+                persistedSession.sessionId,
+                prepared.sourcePath,
+                std::move(
+                    prepared.importProfile
+                    ),
+                std::move(
+                    prepared.importResult
+                    ),
+                std::move(
+                    prepared
+                        .sourceFamilyConfiguration
+                    )
+                );
+
+        session->updateExternalSourceRuntimeState(
+            prepared.sourceGeneration,
+            &prepared.sourceIdentity
+            );
+
+        session->setInitialLiveFollowByteOffset(
+            prepared
+                .initialLiveFollowByteOffset
+            );
+
+        InvestigationSessionPersistence::
+            restoreState(
+                persistedSession,
+                *session
+                );
+
+        return restorationSuccess(
+            std::move(session)
+            );
+    }
+
+    if (std::holds_alternative<
+            PreparedSnapshotBackedInvestigationSession>(
+            preparedData
+            )) {
+        PreparedSnapshotBackedInvestigationSession
+            prepared =
+            std::get<
+                PreparedSnapshotBackedInvestigationSession>(
+                std::move(preparedData)
+                );
+
+        auto session =
+            InvestigationSession::
+            createSnapshotBacked(
+                persistedSession.sessionId,
+                prepared.snapshotPath,
+                std::move(
+                    prepared.snapshot
+                    )
+                );
+
+        if (!session) {
+            return restorationFailure(
+                QStringLiteral(
+                    "The Snapshot-backed investigation "
+                    "could not be materialized."
+                    )
+                );
+        }
+
+        InvestigationSessionPersistence::
+            restoreState(
+                persistedSession,
+                *session
+                );
+
+        return restorationSuccess(
+            std::move(session)
+            );
+    }
+
+    if (std::holds_alternative<
+            PreparedHybridInvestigationSession>(
+            preparedData
+            )) {
+        PreparedHybridInvestigationSession
+            prepared =
+            std::get<
+                PreparedHybridInvestigationSession>(
+                std::move(preparedData)
+                );
+
+        /*
+         * When preparation replayed the current source,
+         * place that complete candidate into the
+         * in-memory snapshot used for construction.
+         *
+         * This does not modify the durable .tsinv file.
+         * The backing still references the original
+         * durable evidence floor, exactly as the old
+         * createHybrid() + reloadHybrid() path did.
+         */
+        if (prepared
+                .reconstructedImportResult
+                .has_value()) {
+            ImportResult candidate =
+                std::move(
+                    *prepared
+                         .reconstructedImportResult
+                    );
+
+            prepared.snapshot.records =
+                std::move(
+                    candidate.records
+                    );
+
+            prepared.snapshot.diagnostics =
+                std::move(
+                    candidate.diagnostics
+                    );
+
+            prepared.snapshot.processedRecordCount =
+                candidate.processedRecordCount;
+
+            prepared.snapshot.sourceTruncated =
+                candidate.sourceTruncated;
+        }
+
+        auto session =
+            InvestigationSession::
+            createHybrid(
+                persistedSession.sessionId,
+                prepared.snapshotPath,
+                std::move(
+                    prepared.snapshot
+                    ),
+                std::move(
+                    prepared
+                        .externalSourceBinding
+                    )
+                );
+
+        if (!session) {
+            return restorationFailure(
+                QStringLiteral(
+                    "The Hybrid investigation could "
+                    "not be materialized."
+                    )
+                );
+        }
+
+        InvestigationSessionPersistence::
+            restoreState(
+                persistedSession,
+                *session
+                );
+
+        return restorationSuccess(
+            std::move(session)
+            );
+    }
+
+    return restorationFailure(
+        QStringLiteral(
+            "Investigation restoration preparation "
+            "contains an unsupported prepared type."
+            )
+        );
+}
+
+InvestigationSessionRestorationResult
+InvestigationSessionRestorationService::restore(
+    const PersistedInvestigationSession
+        &persistedSession,
+    const QString &workspaceFilePath,
+    const ImportExecutionContext
+        &executionContext
+    ) const
+{
+    InvestigationSessionRestorationPreparationResult
+        preparation =
+        prepare(
+            persistedSession,
+            workspaceFilePath,
+            executionContext
+            );
+
+    return materialize(
+        persistedSession,
+        std::move(preparation)
         );
 }
