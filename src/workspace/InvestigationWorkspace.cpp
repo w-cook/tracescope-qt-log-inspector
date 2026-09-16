@@ -359,3 +359,44 @@ InvestigationSessionHybridReloadResult
 
     return result;
 }
+
+bool InvestigationWorkspace::
+    applySnapshotOnlyTransition(
+        const QString &sessionId,
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        return false;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        return false;
+    }
+
+    if (!session
+             ->applySnapshotOnlyTransition(
+                 snapshotPath,
+                 sourceFidelity
+                 )) {
+        return false;
+    }
+
+    emit sessionReloaded(
+        index
+        );
+
+    return true;
+}

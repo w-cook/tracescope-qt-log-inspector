@@ -213,7 +213,7 @@ class WorkspaceSavePackageServiceTests
 
 private slots:
     void savesSelfContainedWorkspacePackage();
-    void repeatedSaveUsesNewImmutableSnapshots();
+    void repeatedSaveReplacesSupersededSnapshots();
     void invalidSnapshotSetWritesNothing();
 };
 
@@ -528,11 +528,13 @@ void WorkspaceSavePackageServiceTests::
 }
 
 void WorkspaceSavePackageServiceTests::
-    repeatedSaveUsesNewImmutableSnapshots()
+    repeatedSaveReplacesSupersededSnapshots()
 {
     QTemporaryDir directory;
 
-    QVERIFY(directory.isValid());
+    QVERIFY(
+        directory.isValid()
+        );
 
     const QString workspacePath =
         directory.filePath(
@@ -547,7 +549,9 @@ void WorkspaceSavePackageServiceTests::
         makeSourceBackedSession(
             QStringLiteral("session"),
             directory.filePath(
-                QStringLiteral("source.jsonl")
+                QStringLiteral(
+                    "source.jsonl"
+                    )
                 )
             )
         );
@@ -598,6 +602,16 @@ void WorkspaceSavePackageServiceTests::
             )
         );
 
+    QVERIFY(
+        firstResult
+            .savedState
+            .sessions
+            .first()
+            .backing
+            .snapshotReference
+            .has_value()
+        );
+
     const QString firstReference =
         *firstResult
              .savedState
@@ -606,6 +620,10 @@ void WorkspaceSavePackageServiceTests::
              .backing
              .snapshotReference;
 
+    /*
+     * Perform a second successful save with newer
+     * investigation evidence.
+     */
     WorkspacePersistenceState secondState =
         firstState;
 
@@ -649,25 +667,41 @@ void WorkspaceSavePackageServiceTests::
         !secondSnapshotPath.isEmpty()
         );
 
+    /*
+     * Snapshot replacement remains immutable:
+     * the second save writes a new path rather than
+     * modifying the first snapshot in place.
+     */
     QVERIFY(
         firstSnapshotPath
         != secondSnapshotPath
-        );
-
-    /*
-     * The previous durable target is intentionally not
-     * overwritten or removed by the next save.
-     */
-    QVERIFY(
-        QFileInfo::exists(
-            firstSnapshotPath
-            )
         );
 
     QVERIFY(
         QFileInfo::exists(
             secondSnapshotPath
             )
+        );
+
+    /*
+     * Once the new snapshot and workspace manifest
+     * commit successfully, the superseded snapshot is
+     * no longer authoritative and should be removed.
+     */
+    QVERIFY(
+        !QFileInfo::exists(
+            firstSnapshotPath
+            )
+        );
+
+    QVERIFY(
+        secondResult
+            .savedState
+            .sessions
+            .first()
+            .backing
+            .snapshotReference
+            .has_value()
         );
 
     const QString secondReference =
@@ -683,29 +717,41 @@ void WorkspaceSavePackageServiceTests::
         != secondReference
         );
 
+    /*
+     * The remaining snapshot must contain the evidence
+     * captured by the second save.
+     */
     InvestigationSessionSnapshotFile
         snapshotFile;
 
-    const auto firstLoad =
-        snapshotFile.load(
-            firstSnapshotPath
-            );
-
-    const auto secondLoad =
+    const InvestigationSessionSnapshotLoadResult
+        secondLoad =
         snapshotFile.load(
             secondSnapshotPath
             );
 
-    QVERIFY(firstLoad.isSuccess());
-    QVERIFY(secondLoad.isSuccess());
+    QVERIFY2(
+        secondLoad.isSuccess(),
+        qPrintable(
+            secondLoad.errorMessage
+            )
+        );
 
     QCOMPARE(
-        *firstLoad
-             .snapshot
-             ->records
-             .first()
-             .message,
-        QStringLiteral("first save")
+        secondLoad
+            .snapshot
+            ->records
+            .size(),
+        1
+        );
+
+    QVERIFY(
+        secondLoad
+            .snapshot
+            ->records
+            .first()
+            .message
+            .has_value()
         );
 
     QCOMPARE(
@@ -714,13 +760,15 @@ void WorkspaceSavePackageServiceTests::
              ->records
              .first()
              .message,
-        QStringLiteral("second save")
+        QStringLiteral(
+            "second save"
+            )
         );
 
     /*
-     * The workspace manifest committed by the second
-     * save must reference only the second immutable
-     * snapshot target.
+     * The committed workspace manifest must reference
+     * the new snapshot, never the deleted superseded
+     * one.
      */
     const WorkspacePersistenceState
         loadedState =
@@ -749,6 +797,31 @@ void WorkspaceSavePackageServiceTests::
              .backing
              .snapshotReference,
         secondReference
+        );
+
+    const QString manifestSnapshotPath =
+        resolveReference(
+            workspacePath,
+            *loadedState
+                 .sessions
+                 .first()
+                 .backing
+                 .snapshotReference
+            );
+
+    QCOMPARE(
+        QFileInfo(
+            manifestSnapshotPath
+            ).absoluteFilePath(),
+        QFileInfo(
+            secondSnapshotPath
+            ).absoluteFilePath()
+        );
+
+    QVERIFY(
+        QFileInfo::exists(
+            manifestSnapshotPath
+            )
         );
 }
 

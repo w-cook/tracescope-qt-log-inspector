@@ -192,7 +192,11 @@ private:
     captureWorkspaceState() const;
 
     bool saveWorkspaceToFile(
-        const QString &filePath
+        const QString &filePath,
+        const QString &snapshotOnlySessionId =
+        QString(),
+        QString *snapshotOnlyPath =
+        nullptr
         );
 
     void saveWorkspace();
@@ -227,5 +231,9 @@ private:
     resolveSourceFamilyConfiguration(
         const QString &activeFilePath,
         SourceFamilyConfiguration configuration
+        );
+
+    void preserveSessionAsSnapshotOnly(
+        const QString &sessionId
         );
 };

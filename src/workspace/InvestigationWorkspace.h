@@ -64,6 +64,13 @@ public:
             reconstruction
         );
 
+    bool applySnapshotOnlyTransition(
+        const QString &sessionId,
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        );
+
 signals:
     void sessionAdded(int index);
     void activeSessionChanged(int index);

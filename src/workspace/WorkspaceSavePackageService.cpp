@@ -92,6 +92,60 @@ QString relativeWorkspaceReference(
             )
         );
 }
+
+void removeSupersededSnapshots(
+    const QDir &snapshotDirectory,
+    const QHash<QString, QString>
+        &currentSnapshotPaths
+    )
+{
+    QSet<QString> retainedPaths;
+
+    retainedPaths.reserve(
+        currentSnapshotPaths.size()
+        );
+
+    for (const QString &path
+         : currentSnapshotPaths) {
+        retainedPaths.insert(
+            QFileInfo(path)
+                .absoluteFilePath()
+            );
+    }
+
+    const QFileInfoList existingSnapshots =
+        snapshotDirectory.entryInfoList(
+            {
+                QStringLiteral("*.tsinv")
+            },
+            QDir::Files
+                | QDir::NoSymLinks
+            );
+
+    for (const QFileInfo &snapshotInfo
+         : existingSnapshots) {
+        const QString absolutePath =
+            snapshotInfo.absoluteFilePath();
+
+        if (retainedPaths.contains(
+                absolutePath
+                )) {
+            continue;
+        }
+
+        /*
+         * Cleanup happens only after the new manifest
+         * commits successfully.
+         *
+         * A failed deletion leaves a harmless orphan;
+         * it must never invalidate the newly committed
+         * workspace package.
+         */
+        QFile::remove(
+            absolutePath
+            );
+    }
+}
 }
 
 WorkspaceSavePackageResult
@@ -442,6 +496,21 @@ WorkspaceSavePackageService::save(
                 )
             );
     }
+
+    /*
+     * The manifest now references only the newly written
+     * immutable snapshots. Older .tsinv files in this
+     * workspace's dedicated sidecar directory are no
+     * longer authoritative and can safely be removed.
+     *
+     * If TraceScope crashes before this cleanup, the old
+     * files are merely orphans. A later successful save
+     * will remove them.
+     */
+    removeSupersededSnapshots(
+        snapshotDirectory,
+        writtenSnapshotPaths
+        );
 
     WorkspaceSavePackageResult result;
 

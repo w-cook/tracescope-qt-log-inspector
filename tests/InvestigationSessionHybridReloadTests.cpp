@@ -140,6 +140,9 @@ private slots:
 
     void reconnectsSnapshotBackedSessionAsHybrid();
     void failedReconnectLeavesSnapshotBackedSessionUntouched();
+
+    void sourceBackedTransitionsToFreshSnapshotBacking();
+    void hybridTransitionsToFreshSnapshotBacking();
 };
 
 void InvestigationSessionHybridReloadTests::
@@ -1503,6 +1506,432 @@ void InvestigationSessionHybridReloadTests::
                 QStringLiteral("record-1")
                 )
             .bookmarked
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    sourceBackedTransitionsToFreshSnapshotBacking()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "source.jsonl"
+                )
+            );
+
+    const QString newSnapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "fresh-snapshot.tsinv"
+                )
+            );
+
+    writeFile(
+        sourcePath,
+        QByteArray(
+            "{\"message\":\"one\"}\n"
+            "{\"message\":\"two\"}\n"
+            )
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult importResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        importResult.records.size(),
+        2
+        );
+
+    const QString retainedRecordId =
+        importResult.records
+            .first()
+            .recordId;
+
+    InvestigationSession session(
+        QStringLiteral(
+            "source-session"
+            ),
+        sourcePath,
+        profile,
+        std::move(
+            importResult
+            )
+        );
+
+    constexpr quint64
+        SourceGeneration = 4;
+
+    const SourcePhysicalIdentityCaptureResult
+        identityResult =
+        captureSourcePhysicalIdentity(
+            sourcePath
+            );
+
+    QVERIFY2(
+        identityResult.succeeded,
+        qPrintable(
+            identityResult.errorMessage
+            )
+        );
+
+    session.updateExternalSourceRuntimeState(
+        SourceGeneration,
+        &identityResult.identity
+        );
+
+    session
+        .investigationStateStore()
+        ->setBookmarked(
+            retainedRecordId,
+            true
+            );
+
+    session
+        .investigationStateStore()
+        ->setNote(
+            retainedRecordId,
+            QStringLiteral(
+                "keep this state"
+                )
+            );
+
+    session.setSelectedRecordId(
+        retainedRecordId
+        );
+
+    QVERIFY(
+        session.applySnapshotOnlyTransition(
+            newSnapshotPath,
+            InvestigationSnapshotSourceFidelity::
+            NormalizedOnly
+            )
+        );
+
+    QCOMPARE(
+        session.backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        session.backing().hasSnapshot()
+        );
+
+    QVERIFY(
+        !session.backing()
+             .hasExternalSource()
+        );
+
+    QCOMPARE(
+        session.backing()
+            .snapshot()
+            ->snapshotPath,
+        QFileInfo(
+            newSnapshotPath
+            ).absoluteFilePath()
+        );
+
+    QVERIFY(
+        !session.supportsLiveFollowing()
+        );
+
+    /*
+     * The removed operational binding becomes dormant
+     * reconnect metadata.
+     */
+    const InvestigationExternalSourceBinding
+        *reconnectHint =
+        session.reconnectSourceHint();
+
+    QVERIFY(
+        reconnectHint != nullptr
+        );
+
+    QCOMPARE(
+        reconnectHint->sourcePath,
+        QFileInfo(
+            sourcePath
+            ).absoluteFilePath()
+        );
+
+    QCOMPARE(
+        reconnectHint->sourceGeneration,
+        SourceGeneration
+        );
+
+    QVERIFY(
+        reconnectHint
+            ->sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        reconnectHint
+            ->sourceIdentity
+            ->prefixFingerprint,
+        identityResult
+            .identity
+            .prefixFingerprint
+        );
+
+    /*
+     * Runtime investigation evidence/state is not
+     * rebuilt by the backing transition.
+     */
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    QCOMPARE(
+        session.selectedRecordId(),
+        retainedRecordId
+        );
+
+    const InvestigationRecordState
+        retainedState =
+        session
+            .investigationStateStore()
+            ->stateForRecord(
+                retainedRecordId
+                );
+
+    QVERIFY(
+        retainedState.bookmarked
+        );
+
+    QCOMPARE(
+        retainedState.note,
+        QStringLiteral(
+            "keep this state"
+            )
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    hybridTransitionsToFreshSnapshotBacking()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "live.jsonl"
+                )
+            );
+
+    const QString oldSnapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "old-snapshot.tsinv"
+                )
+            );
+
+    const QString newSnapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "new-snapshot.tsinv"
+                )
+            );
+
+    writeFile(
+        sourcePath,
+        QByteArray(
+            "{\"message\":\"saved\"}\n"
+            )
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            sourcePath
+            );
+
+    constexpr quint64
+        SourceGeneration = 6;
+
+    rebaseRecords(
+        initialResult.records,
+        SourceGeneration
+        );
+
+    InvestigationSessionSnapshot
+        snapshot;
+
+    snapshot.importProfile =
+        profile;
+
+    snapshot.records =
+        initialResult.records;
+
+    snapshot.diagnostics =
+        initialResult.diagnostics;
+
+    snapshot.processedRecordCount =
+        initialResult.processedRecordCount;
+
+    snapshot.sourceTruncated =
+        initialResult.sourceTruncated;
+
+    const QString retainedRecordId =
+        snapshot.records
+            .first()
+            .recordId;
+
+    InvestigationExternalSourceBinding
+        binding =
+        makeExternalBinding(
+            sourcePath,
+            SourceGeneration
+            );
+
+    QVERIFY(
+        binding.sourceIdentity.has_value()
+        );
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createHybrid(
+            QStringLiteral(
+                "hybrid-session"
+                ),
+            oldSnapshotPath,
+            snapshot,
+            binding
+            );
+
+    QVERIFY(
+        session != nullptr
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        Hybrid
+        );
+
+    session
+        ->investigationStateStore()
+        ->setBookmarked(
+            retainedRecordId,
+            true
+            );
+
+    QVERIFY(
+        session
+            ->applySnapshotOnlyTransition(
+                newSnapshotPath,
+                InvestigationSnapshotSourceFidelity::
+                NormalizedOnly
+                )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        session->backing().hasSnapshot()
+        );
+
+    QVERIFY(
+        !session->backing()
+             .hasExternalSource()
+        );
+
+    /*
+     * The previous Hybrid evidence floor is replaced by
+     * the freshly captured snapshot path supplied by
+     * the persistence transaction.
+     */
+    QCOMPARE(
+        session->backing()
+            .snapshot()
+            ->snapshotPath,
+        QFileInfo(
+            newSnapshotPath
+            ).absoluteFilePath()
+        );
+
+    QVERIFY(
+        session->backing()
+            .snapshot()
+            ->snapshotPath
+        != QFileInfo(
+               oldSnapshotPath
+               ).absoluteFilePath()
+        );
+
+    const InvestigationExternalSourceBinding
+        *reconnectHint =
+        session->reconnectSourceHint();
+
+    QVERIFY(
+        reconnectHint != nullptr
+        );
+
+    QCOMPARE(
+        reconnectHint->sourceGeneration,
+        SourceGeneration
+        );
+
+    QCOMPARE(
+        reconnectHint->sourcePath,
+        QFileInfo(
+            sourcePath
+            ).absoluteFilePath()
+        );
+
+    QVERIFY(
+        reconnectHint
+            ->sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        session->importedRecordCount(),
+        qint64(1)
+        );
+
+    QVERIFY(
+        session
+            ->investigationStateStore()
+            ->stateForRecord(
+                retainedRecordId
+                )
+            .bookmarked
+        );
+
+    QVERIFY(
+        !session->supportsLiveFollowing()
         );
 }
 

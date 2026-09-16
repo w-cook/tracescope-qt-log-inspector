@@ -297,6 +297,12 @@ public:
             reconstruction
         );
 
+    bool applySnapshotOnlyTransition(
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        );
+
 private:
     QString m_id;
 

@@ -1496,3 +1496,115 @@ InvestigationSession::applyHybridReconnect(
 
     return result;
 }
+
+bool InvestigationSession::
+    applySnapshotOnlyTransition(
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        )
+{
+    if (snapshotPath.trimmed().isEmpty()) {
+        return false;
+    }
+
+    const InvestigationSessionBackingMode mode =
+        m_backing.mode();
+
+    if (mode
+            != InvestigationSessionBackingMode::
+            SourceBacked
+        && mode
+               != InvestigationSessionBackingMode::
+               Hybrid) {
+        return false;
+    }
+
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (externalSource == nullptr) {
+        return false;
+    }
+
+    /*
+     * Preserve the complete last-known external
+     * binding before removing it from operational
+     * backing.
+     *
+     * SnapshotBacked does not depend on this source,
+     * but retaining the binding lets an explicit
+     * future Reconnect Source restore continuity.
+     */
+    InvestigationExternalSourceBinding
+        reconnectHint =
+        *externalSource;
+
+    InvestigationSnapshotBinding
+        snapshotBinding;
+
+    snapshotBinding.snapshotPath =
+        QFileInfo(
+            snapshotPath
+            ).absoluteFilePath();
+
+    snapshotBinding.sourceFidelity =
+        sourceFidelity;
+
+    /*
+     * Everything required to make the transition has
+     * already been persisted successfully by the
+     * caller.
+     *
+     * From here onward there is no I/O or parsing that
+     * can fail.
+     */
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    m_reconnectSourceHint =
+        std::move(
+            reconnectHint
+            );
+
+    /*
+     * Replace either:
+     *
+     * SourceBacked -> SnapshotBacked
+     *
+     * or:
+     *
+     * Hybrid -> SnapshotBacked
+     *
+     * in one value assignment. In the Hybrid case the
+     * previous snapshot binding is intentionally
+     * superseded by the newly captured snapshot.
+     */
+    m_backing =
+        InvestigationSessionBacking::
+        snapshotBacked(
+            std::move(
+                snapshotBinding
+                )
+            );
+
+    /*
+     * Live parser/framer state is no longer meaningful
+     * while the investigation is SnapshotBacked.
+     */
+    m_initialLiveFollowByteOffset =
+        0;
+
+    /*
+     * Deliberately leave the normalized records,
+     * diagnostics, investigation state, selection,
+     * filters, and presentation state untouched.
+     *
+     * The fresh snapshot persisted by the caller was
+     * captured from this exact in-memory state.
+     */
+    return true;
+}
