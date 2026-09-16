@@ -50,6 +50,10 @@ struct PreparedSnapshotBackedInvestigationSession
     QString snapshotPath;
 
     InvestigationSessionSnapshot snapshot;
+
+    std::optional<
+        InvestigationExternalSourceBinding>
+        reconnectSourceHint;
 };
 
 /*

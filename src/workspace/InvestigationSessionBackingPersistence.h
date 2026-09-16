@@ -45,6 +45,14 @@ struct PersistedInvestigationSessionBacking
     std::optional<QString>
         snapshotReference;
 
+    /*
+     * SourceBacked/Hybrid use this as the active external
+     * source binding.
+     *
+     * SnapshotBacked may retain it as a dormant reconnect
+     * hint containing the last known path, generation,
+     * source-family configuration, and physical identity.
+     */
     std::optional<
         PersistedInvestigationExternalSourceBinding>
         externalSourceBinding;

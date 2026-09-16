@@ -470,8 +470,13 @@ bool hasCompleteBacking(
 
     case PersistedInvestigationSessionBackingMode::
         SnapshotBacked:
+        /*
+         * SnapshotBacked may retain a dormant external
+         * binding as a reconnect hint. It is provenance
+         * and continuity metadata, not an active runtime
+         * dependency.
+         */
         return hasSnapshot
-               && !hasExternal
                && !hasSourceProfile;
 
     case PersistedInvestigationSessionBackingMode::

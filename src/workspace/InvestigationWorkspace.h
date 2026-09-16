@@ -56,6 +56,14 @@ public:
             reconstruction
         );
 
+    InvestigationSessionHybridReloadResult
+    applyHybridReconnect(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
 signals:
     void sessionAdded(int index);
     void activeSessionChanged(int index);

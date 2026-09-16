@@ -7,6 +7,7 @@
 #include "../src/importing/JsonLinesImporter.h"
 #include "../src/persistence/InvestigationSessionSnapshotFile.h"
 #include "../src/sources/SourcePhysicalIdentity.h"
+#include "../src/workspace/HybridInvestigationReconstructionService.h"
 #include "../src/workspace/InvestigationSession.h"
 #include "../src/workspace/InvestigationSessionPersistence.h"
 
@@ -136,6 +137,9 @@ private slots:
     void capturesSourceBackedPersistence();
     void capturesSnapshotBackedPersistence();
     void capturesHybridPersistence();
+
+    void reconnectsSnapshotBackedSessionAsHybrid();
+    void failedReconnectLeavesSnapshotBackedSessionUntouched();
 };
 
 void InvestigationSessionHybridReloadTests::
@@ -1160,6 +1164,345 @@ void InvestigationSessionHybridReloadTests::
     QCOMPARE(
         persisted.importProfile.importerId,
         profile.importerId
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    reconnectsSnapshotBackedSessionAsHybrid()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("live.jsonl")
+            );
+
+    const QString snapshotPath =
+        directory.filePath(
+            QStringLiteral("session.tsinv")
+            );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    /*
+     * First create the evidence that will become the
+     * durable Snapshot-backed investigation.
+     */
+    writeFile(
+        sourcePath,
+        QByteArray(
+            "{\"message\":\"one\"}\n"
+            "{\"message\":\"two\"}\n"
+            )
+        );
+
+    ImportResult snapshotImport =
+        importer.importFile(
+            sourcePath
+            );
+
+    QCOMPARE(
+        snapshotImport.records.size(),
+        2
+        );
+
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile =
+        profile;
+
+    snapshot.records =
+        snapshotImport.records;
+
+    snapshot.diagnostics =
+        snapshotImport.diagnostics;
+
+    snapshot.processedRecordCount =
+        snapshotImport.processedRecordCount;
+
+    snapshot.sourceTruncated =
+        snapshotImport.sourceTruncated;
+
+    const QString retainedRecordId =
+        snapshot.records
+            .first()
+            .recordId;
+
+    const InvestigationSessionSnapshotSaveResult
+        saveResult =
+        InvestigationSessionSnapshotFile()
+            .save(
+                snapshotPath,
+                snapshot
+                );
+
+    QVERIFY2(
+        saveResult.isSuccess(),
+        qPrintable(
+            saveResult.errorMessage
+            )
+        );
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            snapshotPath,
+            snapshot
+            );
+
+    QVERIFY(
+        session != nullptr
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    /*
+     * User-created investigation state must survive
+     * the reconnect candidate replacement.
+     */
+    session
+        ->investigationStateStore()
+        ->setBookmarked(
+            retainedRecordId,
+            true
+            );
+
+    session
+        ->investigationStateStore()
+        ->setNote(
+            retainedRecordId,
+            QStringLiteral(
+                "preserve this note"
+                )
+            );
+
+    /*
+     * The source continues while TraceScope is
+     * Snapshot-backed.
+     */
+    appendFile(
+        sourcePath,
+        QByteArray(
+            "{\"message\":\"three\"}\n"
+            )
+        );
+
+    InvestigationExternalSourceBinding
+        binding;
+
+    binding.sourcePath =
+        sourcePath;
+
+    HybridInvestigationReconstructionResult
+        reconstruction =
+        HybridInvestigationReconstructionService()
+            .reconstruct(
+                snapshot,
+                binding,
+                importer
+                );
+
+    QVERIFY2(
+        reconstruction.succeeded,
+        qPrintable(
+            reconstruction.errorMessage
+            )
+        );
+
+    QVERIFY(
+        reconstruction
+            .externalSourceAvailable
+        );
+
+    QCOMPARE(
+        reconstruction
+            .duplicateReplayRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        reconstruction
+            .appendedReplayRecordCount,
+        qint64(1)
+        );
+
+    InvestigationSessionHybridReloadResult
+        reconnectResult =
+        session->applyHybridReconnect(
+            snapshot,
+            std::move(
+                reconstruction
+                )
+            );
+
+    QVERIFY2(
+        reconnectResult.succeeded,
+        qPrintable(
+            reconnectResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        Hybrid
+        );
+
+    QVERIFY(
+        session->backing()
+            .hasSnapshot()
+        );
+
+    QVERIFY(
+        session->backing()
+            .hasExternalSource()
+        );
+
+    QCOMPARE(
+        session->externalSourcePath(),
+        QFileInfo(
+            sourcePath
+            ).absoluteFilePath()
+        );
+
+    QCOMPARE(
+        session->importedRecordCount(),
+        3
+        );
+
+    const InvestigationRecordState
+        retainedState =
+        session
+            ->investigationStateStore()
+            ->stateForRecord(
+                retainedRecordId
+                );
+
+    QVERIFY(
+        retainedState.bookmarked
+        );
+
+    QCOMPARE(
+        retainedState.note,
+        QStringLiteral(
+            "preserve this note"
+            )
+        );
+}
+
+void InvestigationSessionHybridReloadTests::
+    failedReconnectLeavesSnapshotBackedSessionUntouched()
+{
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile =
+        jsonLinesProfile();
+
+    InvestigationRecord record;
+
+    record.recordId =
+        QStringLiteral("record-1");
+
+    record.message =
+        QStringLiteral("saved evidence");
+
+    snapshot.records.append(
+        record
+        );
+
+    snapshot.processedRecordCount =
+        1;
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            QStringLiteral(
+                "session.tsinv"
+                ),
+            snapshot
+            );
+
+    QVERIFY(
+        session != nullptr
+        );
+
+    session
+        ->investigationStateStore()
+        ->setBookmarked(
+            QStringLiteral("record-1"),
+            true
+            );
+
+    HybridInvestigationReconstructionResult
+        failedReconstruction;
+
+    failedReconstruction.succeeded =
+        false;
+
+    failedReconstruction.errorMessage =
+        QStringLiteral(
+            "prepared reconnect failed"
+            );
+
+    InvestigationSessionHybridReloadResult
+        reconnectResult =
+        session->applyHybridReconnect(
+            snapshot,
+            std::move(
+                failedReconstruction
+                )
+            );
+
+    QVERIFY(
+        !reconnectResult.succeeded
+        );
+
+    QCOMPARE(
+        reconnectResult.errorMessage,
+        QStringLiteral(
+            "prepared reconnect failed"
+            )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QCOMPARE(
+        session->importedRecordCount(),
+        1
+        );
+
+    QVERIFY(
+        session
+            ->investigationStateStore()
+            ->stateForRecord(
+                QStringLiteral("record-1")
+                )
+            .bookmarked
         );
 }
 

@@ -166,6 +166,14 @@ InvestigationSession::backing() const
     return m_backing;
 }
 
+const InvestigationExternalSourceBinding *
+InvestigationSession::reconnectSourceHint() const
+{
+    return m_reconnectSourceHint.has_value()
+    ? &*m_reconnectSourceHint
+    : nullptr;
+}
+
 bool InvestigationSession::
     updateSnapshotBackingPath(
         const QString &snapshotPath
@@ -1045,7 +1053,10 @@ std::unique_ptr<InvestigationSession>
 InvestigationSession::createSnapshotBacked(
     QString sessionId,
     const QString &snapshotPath,
-    InvestigationSessionSnapshot snapshot
+    InvestigationSessionSnapshot snapshot,
+    std::optional<
+        InvestigationExternalSourceBinding>
+        reconnectSourceHint
     )
 {
     /*
@@ -1095,18 +1106,25 @@ InvestigationSession::createSnapshotBacked(
                 )
             );
 
-    return std::unique_ptr<
-        InvestigationSession>(
-        new InvestigationSession(
-            std::move(sessionId),
-            std::move(backing),
-            std::move(sourceMetadata),
-            std::move(
-                snapshot.importProfile
-                ),
-            std::move(result)
-            )
-        );
+    auto session =
+        std::unique_ptr<InvestigationSession>(
+            new InvestigationSession(
+                std::move(sessionId),
+                std::move(backing),
+                std::move(sourceMetadata),
+                std::move(
+                    snapshot.importProfile
+                    ),
+                std::move(result)
+                )
+            );
+
+    session->m_reconnectSourceHint =
+        std::move(
+            reconnectSourceHint
+            );
+
+    return session;
 }
 
 void InvestigationSession::
@@ -1296,6 +1314,173 @@ InvestigationSession::applyHybridReload(
             snapshot.importProfile
             );
 
+    m_initialLiveFollowByteOffset =
+        0;
+
+    refreshSourceMetadata();
+
+    installImportResult(
+        std::move(
+            reconstruction.importResult
+            )
+        );
+
+    result.succeeded = true;
+
+    return result;
+}
+
+InvestigationSessionHybridReloadResult
+InvestigationSession::applyHybridReconnect(
+    InvestigationSessionSnapshot snapshot,
+    HybridInvestigationReconstructionResult
+        reconstruction
+    )
+{
+    InvestigationSessionHybridReloadResult
+        result;
+
+    /*
+     * Reconnect is specifically the
+     * SnapshotBacked -> Hybrid transition.
+     */
+    if (m_backing.mode()
+        != InvestigationSessionBackingMode::
+        SnapshotBacked) {
+        result.errorMessage =
+            QStringLiteral(
+                "Reconnect requires a Snapshot-backed "
+                "investigation session."
+                );
+
+        return result;
+    }
+
+    InvestigationSnapshotBinding
+        *snapshotBinding =
+        m_backing.snapshot();
+
+    if (snapshotBinding == nullptr) {
+        result.errorMessage =
+            QStringLiteral(
+                "The Snapshot-backed investigation "
+                "does not contain a durable snapshot "
+                "binding."
+                );
+
+        return result;
+    }
+
+    if (!reconstruction.succeeded) {
+        result.errorMessage =
+            reconstruction.errorMessage.isEmpty()
+                ? QStringLiteral(
+                      "The external source could not "
+                      "be reconstructed against the "
+                      "saved investigation."
+                      )
+                : reconstruction.errorMessage;
+
+        return result;
+    }
+
+    /*
+     * Reconnect is different from ordinary Hybrid
+     * reload.
+     *
+     * Hybrid reload may legitimately succeed with a
+     * temporarily missing source because the snapshot
+     * remains its evidence floor.
+     *
+     * Reconnect, however, is explicitly establishing
+     * a new external connection. If the selected
+     * source disappeared during preparation, do not
+     * create a Hybrid session that is immediately
+     * disconnected.
+     */
+    if (!reconstruction.externalSourceAvailable) {
+        result.errorMessage =
+            QStringLiteral(
+                "The selected external source is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    if (reconstruction
+            .externalSourceBinding
+            .sourcePath
+            .trimmed()
+            .isEmpty()) {
+        result.errorMessage =
+            QStringLiteral(
+                "The reconstructed external source "
+                "does not contain a valid path."
+                );
+
+        return result;
+    }
+
+    /*
+     * Everything that can fail has completed.
+     *
+     * From this point onward we commit the prepared
+     * candidate atomically to the live session.
+     */
+    result.externalSourceAvailable =
+        reconstruction.externalSourceAvailable;
+
+    result.sourceGenerationChanged =
+        reconstruction.sourceGenerationChanged;
+
+    result.duplicateReplayRecordCount =
+        reconstruction
+            .duplicateReplayRecordCount;
+
+    result.appendedReplayRecordCount =
+        reconstruction
+            .appendedReplayRecordCount;
+
+    result.replaySkippedRecordCount =
+        reconstruction
+            .replaySkippedRecordCount;
+
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    snapshotBinding->sourceFidelity =
+        snapshot.sourceFidelity;
+
+    /*
+     * InvestigationSessionBacking owns the actual
+     * state transition:
+     *
+     * SnapshotBacked -> Hybrid
+     */
+    m_backing.connectExternalSource(
+        std::move(
+            reconstruction
+                .externalSourceBinding
+            )
+        );
+
+    m_reconnectSourceHint.reset();
+
+    m_importProfile =
+        std::move(
+            snapshot.importProfile
+            );
+
+    /*
+     * We do not persist live parser/framer state.
+     * A newly reconnected Hybrid source therefore
+     * starts future live following conservatively
+     * from byte zero and relies on stable identity
+     * deduplication.
+     */
     m_initialLiveFollowByteOffset =
         0;
 

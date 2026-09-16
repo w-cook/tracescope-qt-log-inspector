@@ -299,3 +299,63 @@ InvestigationSessionHybridReloadResult
 
     return result;
 }
+
+InvestigationSessionHybridReloadResult
+    InvestigationWorkspace::
+    applyHybridReconnect(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionHybridReloadResult result =
+        session->applyHybridReconnect(
+            std::move(snapshot),
+            std::move(reconstruction)
+            );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}

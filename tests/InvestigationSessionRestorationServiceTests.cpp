@@ -15,6 +15,7 @@
 #include "../src/importing/JsonLinesImporter.h"
 #include "../src/persistence/InvestigationSessionSnapshotFile.h"
 #include "../src/sources/SourcePhysicalIdentity.h"
+#include "../src/workspace/InvestigationSessionPersistence.h"
 #include "../src/workspace/InvestigationSessionRestorationService.h"
 
 namespace
@@ -193,6 +194,8 @@ private slots:
     void preparationCanRunOffThreadAndMaterializesOnCallingThread();
 
     void hybridMaterializationDoesNotReplaySourceAgain();
+
+    void snapshotBackedReconnectHintRoundTripsThroughPersistence();
 };
 
 void InvestigationSessionRestorationServiceTests::
@@ -1382,6 +1385,407 @@ void InvestigationSessionRestorationServiceTests::
         std::optional<QString>(
             QStringLiteral("baseline")
             )
+        );
+}
+
+void InvestigationSessionRestorationServiceTests::
+    snapshotBackedReconnectHintRoundTripsThroughPersistence()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(
+        directory.isValid()
+        );
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "original.jsonl"
+                )
+            );
+
+    QVERIFY(
+        writeFile(
+            sourcePath,
+            QByteArrayLiteral(
+                "{\"message\":\"one\"}\n"
+                "{\"message\":\"two\"}\n"
+                )
+            )
+        );
+
+    const ImportProfile profile =
+        jsonLinesProfile();
+
+    constexpr quint64
+        ReconnectGeneration = 4;
+
+    /*
+     * The durable snapshot represents evidence that
+     * had already reached logical source generation 4.
+     */
+    const InvestigationSessionSnapshot snapshot =
+        makeSnapshot(
+            sourcePath,
+            profile,
+            ReconnectGeneration
+            );
+
+    QCOMPARE(
+        snapshot.records.size(),
+        2
+        );
+
+    const QString snapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "snapshot-session.tsinv"
+                )
+            );
+
+    InvestigationSessionSnapshotFile
+        snapshotFile;
+
+    const InvestigationSessionSnapshotSaveResult
+        saveResult =
+        snapshotFile.save(
+            snapshotPath,
+            snapshot
+            );
+
+    QVERIFY2(
+        saveResult.isSuccess(),
+        qPrintable(
+            saveResult.errorMessage
+            )
+        );
+
+    /*
+     * Capture the physical source identity that was
+     * last known while the source was still actively
+     * connected.
+     */
+    const std::optional<SourcePhysicalIdentity>
+        sourceIdentity =
+        captureIdentity(
+            sourcePath
+            );
+
+    QVERIFY(
+        sourceIdentity.has_value()
+        );
+
+    InvestigationExternalSourceBinding
+        reconnectHint;
+
+    reconnectHint.sourcePath =
+        sourcePath;
+
+    reconnectHint.sourceGeneration =
+        ReconnectGeneration;
+
+    reconnectHint.sourceIdentity =
+        *sourceIdentity;
+
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration;
+
+    sourceFamilyConfiguration.includeRotatedSources =
+        true;
+
+    sourceFamilyConfiguration
+        .rotationRule
+        .namingScheme =
+        RotatedSourceNamingScheme::
+        NumericSuffix;
+
+    reconnectHint.sourceFamilyConfiguration =
+        sourceFamilyConfiguration;
+
+    /*
+     * Runtime backing remains SnapshotBacked.
+     *
+     * The external binding supplied here is only a
+     * dormant reconnect hint and must not become an
+     * active source dependency.
+     */
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            snapshotPath,
+            snapshot,
+            reconnectHint
+            );
+
+    QVERIFY(
+        session != nullptr
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        !session
+             ->backing()
+             .hasExternalSource()
+        );
+
+    const InvestigationExternalSourceBinding
+        *initialHint =
+        session->reconnectSourceHint();
+
+    QVERIFY(
+        initialHint != nullptr
+        );
+
+    QCOMPARE(
+        initialHint->sourceGeneration,
+        ReconnectGeneration
+        );
+
+    /*
+     * Capture the runtime session into the persisted
+     * workspace representation.
+     */
+    const PersistedInvestigationSession persisted =
+        InvestigationSessionPersistence::capture(
+            *session,
+            InvestigationSessionPresentationState()
+            );
+
+    QCOMPARE(
+        persisted.backing.mode,
+        PersistedInvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .snapshotReference
+            .has_value()
+        );
+
+    QVERIFY(
+        persisted
+            .backing
+            .externalSourceBinding
+            .has_value()
+        );
+
+    const PersistedInvestigationExternalSourceBinding
+        &persistedHint =
+        *persisted
+             .backing
+             .externalSourceBinding;
+
+    QCOMPARE(
+        absolutePath(
+            persistedHint.sourcePath
+            ),
+        absolutePath(
+            sourcePath
+            )
+        );
+
+    QCOMPARE(
+        persistedHint.sourceGeneration,
+        ReconnectGeneration
+        );
+
+    QVERIFY(
+        persistedHint
+            .sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        persistedHint
+            .sourceFamilyConfiguration
+            .includeRotatedSources,
+        true
+        );
+
+    QCOMPARE(
+        persistedHint
+            .sourceFamilyConfiguration
+            .rotationRule
+            .namingScheme,
+        RotatedSourceNamingScheme::
+        NumericSuffix
+        );
+
+    /*
+     * Physical rotated members are runtime discovery
+     * results and must not be persisted in the hint.
+     */
+    QVERIFY(
+        persistedHint
+            .sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    const SourcePhysicalIdentity
+        &persistedIdentity =
+        *persistedHint.sourceIdentity;
+
+    QCOMPARE(
+        persistedIdentity.birthTime,
+        sourceIdentity->birthTime
+        );
+
+    QCOMPARE(
+        persistedIdentity.fingerprintLength,
+        sourceIdentity->fingerprintLength
+        );
+
+    QCOMPARE(
+        persistedIdentity.prefixFingerprint,
+        sourceIdentity->prefixFingerprint
+        );
+
+    QCOMPARE(
+        persistedIdentity.observedSizeBytes,
+        sourceIdentity->observedSizeBytes
+        );
+
+    /*
+     * Restore/materialize from the persisted
+     * representation.
+     */
+    InvestigationSessionRestorationService
+        service;
+
+    InvestigationSessionRestorationResult
+        restoration =
+        service.restore(
+            persisted,
+            directory.filePath(
+                QStringLiteral(
+                    "workspace.tsw"
+                    )
+                )
+            );
+
+    QVERIFY2(
+        restoration.succeeded,
+        qPrintable(
+            restoration.errorMessage
+            )
+        );
+
+    QVERIFY(
+        restoration.session != nullptr
+        );
+
+    /*
+     * This is the critical invariant:
+     *
+     * SnapshotBacked means the external source is not
+     * an operational dependency even though continuity
+     * metadata is retained for an explicit reconnect.
+     */
+    QCOMPARE(
+        restoration.session
+            ->backing()
+            .mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        restoration.session
+            ->backing()
+            .hasSnapshot()
+        );
+
+    QVERIFY(
+        !restoration.session
+             ->backing()
+             .hasExternalSource()
+        );
+
+    const InvestigationExternalSourceBinding
+        *restoredHint =
+        restoration.session
+            ->reconnectSourceHint();
+
+    QVERIFY(
+        restoredHint != nullptr
+        );
+
+    QCOMPARE(
+        absolutePath(
+            restoredHint->sourcePath
+            ),
+        absolutePath(
+            sourcePath
+            )
+        );
+
+    QCOMPARE(
+        restoredHint->sourceGeneration,
+        ReconnectGeneration
+        );
+
+    QVERIFY(
+        restoredHint
+            ->sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        restoredHint
+            ->sourceFamilyConfiguration
+            .includeRotatedSources,
+        true
+        );
+
+    QCOMPARE(
+        restoredHint
+            ->sourceFamilyConfiguration
+            .rotationRule
+            .namingScheme,
+        RotatedSourceNamingScheme::
+        NumericSuffix
+        );
+
+    const SourcePhysicalIdentity
+        &restoredIdentity =
+        *restoredHint->sourceIdentity;
+
+    QCOMPARE(
+        restoredIdentity.birthTime,
+        sourceIdentity->birthTime
+        );
+
+    QCOMPARE(
+        restoredIdentity.fingerprintLength,
+        sourceIdentity->fingerprintLength
+        );
+
+    QCOMPARE(
+        restoredIdentity.prefixFingerprint,
+        sourceIdentity->prefixFingerprint
+        );
+
+    QCOMPARE(
+        restoredIdentity.observedSizeBytes,
+        sourceIdentity->observedSizeBytes
+        );
+
+    QCOMPARE(
+        restoration.session
+            ->importedRecordCount(),
+        qint64(2)
         );
 }
 

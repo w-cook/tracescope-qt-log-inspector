@@ -133,6 +133,19 @@ private:
 
     void reloadActiveSession();
 
+    void reconnectSnapshotBackedSession(
+        const QString &sessionId
+        );
+
+    void populateSessionSourceMenu(
+        const QString &sessionId,
+        QMenu *menu
+        );
+
+    void openSourceLocation(
+        const QString &sourcePath
+        );
+
     void createSessionComparison(
         const QString &preferredBaselineSessionId =
         QString()

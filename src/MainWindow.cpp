@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -459,6 +460,20 @@ struct ActiveSessionReloadPreparationResult
         HybridInvestigationReconstructionResult>
         hybridReconstruction;
 };
+
+struct SnapshotReconnectPreparationResult
+{
+    bool succeeded = false;
+
+    QString sessionId;
+    QString errorMessage;
+
+    InvestigationSessionSnapshot snapshot;
+
+    std::optional<
+        HybridInvestigationReconstructionResult>
+        reconstruction;
+};
 }
 
 struct MainWindow::WorkspaceOpenOperation
@@ -753,12 +768,31 @@ MainWindow::MainWindow(QWidget *parent)
             ) {
             if (menu == nullptr
                 || workspace == nullptr
-                || workspace->sessionCount()
-                       < 2
                 || workspace->indexOfSession(
-                       documentId
-                       )
-                       < 0) {
+                    documentId
+                    )
+                    < 0) {
+                return;
+            }
+
+            /*
+             * Session-specific source lifecycle actions are
+             * available even when this is the only
+             * investigation in the workspace.
+             */
+            menu->addSeparator();
+
+            populateSessionSourceMenu(
+                documentId,
+                menu
+                );
+
+            /*
+             * Comparison requires at least two investigation
+             * sessions.
+             */
+            if (workspace->sessionCount()
+                < 2) {
                 return;
             }
 
@@ -785,15 +819,15 @@ MainWindow::MainWindow(QWidget *parent)
 
                     if (activeSession != nullptr
                         && activeSession->id()
-                               != documentId) {
+                            != documentId) {
                         /*
-                     * The user is examining the
-                     * active session and explicitly
-                     * clicked another session:
-                     *
-                     * clicked  -> Baseline
-                     * active   -> Comparison
-                     */
+                         * The user is examining the active
+                         * session and explicitly clicked
+                         * another session:
+                         *
+                         * clicked -> Baseline
+                         * active  -> Comparison
+                         */
                         preferredBaselineId =
                             documentId;
                     }
@@ -2267,6 +2301,724 @@ void MainWindow::reloadActiveSession()
 }
 
 void MainWindow::
+    reconnectSnapshotBackedSession(
+        const QString &sessionId
+        )
+{
+    if (workspace == nullptr
+        || importWatcher != nullptr
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
+        return;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            sessionId
+            );
+
+    if (sessionIndex < 0) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->sessionAt(
+            sessionIndex
+            );
+
+    if (session == nullptr
+        || session->backing().mode()
+               != InvestigationSessionBackingMode::
+               SnapshotBacked) {
+        return;
+    }
+
+    const InvestigationSnapshotBinding
+        *snapshotBinding =
+        session->backing().snapshot();
+
+    const InvestigationExternalSourceBinding
+        *reconnectHint =
+        session->reconnectSourceHint();
+
+    if (snapshotBinding == nullptr
+        || snapshotBinding
+               ->snapshotPath
+               .trimmed()
+               .isEmpty()) {
+        QMessageBox::warning(
+            this,
+            tr("Reconnect Source Failed"),
+            tr(
+                "This investigation does not have "
+                "a valid durable snapshot backing."
+                )
+            );
+
+        return;
+    }
+
+    if (reconnectHint == nullptr
+        || reconnectHint
+               ->sourcePath
+               .trimmed()
+               .isEmpty()) {
+        QMessageBox::information(
+            this,
+            tr("Reconnect Source"),
+            tr(
+                "This Snapshot-backed investigation "
+                "does not retain enough source "
+                "continuity information to reconnect "
+                "safely."
+                )
+            );
+
+        return;
+    }
+
+    const QString sourcePath =
+        QFileInfo(
+            reconnectHint->sourcePath
+            ).absoluteFilePath();
+
+    const QFileInfo sourceInfo(
+        sourcePath
+        );
+
+    if (!sourceInfo.exists()
+        || !sourceInfo.isFile()) {
+        QMessageBox::information(
+            this,
+            tr("Source Not Available"),
+            tr(
+                "The recorded source is not currently "
+                "available:\n\n%1\n\n"
+                "Restore the source at its original "
+                "path and try reconnecting again."
+                )
+                .arg(sourcePath)
+            );
+
+        return;
+    }
+
+    const QString snapshotPath =
+        snapshotBinding->snapshotPath;
+
+    const InvestigationExternalSourceBinding
+        externalSourceBinding =
+        *reconnectHint;
+
+    auto *watcher =
+        new QFutureWatcher<
+            SnapshotReconnectPreparationResult>(
+            this
+            );
+
+    auto *progressDialog =
+        new QProgressDialog(
+            tr(
+                "Reconnecting source...\n"
+                "Loading saved evidence and "
+                "replaying the external source..."
+                ),
+            tr("Cancel"),
+            0,
+            0,
+            this
+            );
+
+    progressDialog->setWindowTitle(
+        tr("Reconnect Source")
+        );
+
+    progressDialog->setWindowModality(
+        Qt::WindowModal
+        );
+
+    progressDialog->setMinimumDuration(
+        250
+        );
+
+    progressDialog->setAutoClose(
+        false
+        );
+
+    progressDialog->setAutoReset(
+        false
+        );
+
+    setSessionReloadInProgress(
+        true
+        );
+
+    connect(
+        progressDialog,
+        &QProgressDialog::canceled,
+        watcher,
+        &QFutureWatcher<
+            SnapshotReconnectPreparationResult>::
+        cancel
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            SnapshotReconnectPreparationResult>::
+        finished,
+        this,
+        [
+            this,
+            watcher,
+            progressDialog
+        ]() mutable {
+            const bool cancelled =
+                watcher->isCanceled();
+
+            progressDialog->hide();
+            progressDialog->deleteLater();
+
+            setSessionReloadInProgress(
+                false
+                );
+
+            if (cancelled) {
+                watcher->deleteLater();
+                return;
+            }
+
+            SnapshotReconnectPreparationResult
+                preparation =
+                watcher->result();
+
+            watcher->deleteLater();
+
+            if (!preparation.succeeded
+                || !preparation
+                        .reconstruction
+                        .has_value()) {
+                QMessageBox::warning(
+                    this,
+                    tr("Reconnect Source Failed"),
+                    preparation
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "TraceScope could not "
+                              "prepare the source "
+                              "reconnection."
+                              )
+                        : preparation.errorMessage
+                    );
+
+                return;
+            }
+
+            InvestigationSessionHybridReloadResult
+                result =
+                workspace->applyHybridReconnect(
+                    preparation.sessionId,
+                    std::move(
+                        preparation.snapshot
+                        ),
+                    std::move(
+                        *preparation
+                             .reconstruction
+                        )
+                    );
+
+            if (!result.succeeded) {
+                QMessageBox::warning(
+                    this,
+                    tr("Reconnect Source Failed"),
+                    result.errorMessage.isEmpty()
+                        ? tr(
+                              "The prepared source "
+                              "reconnection could not "
+                              "be applied."
+                              )
+                        : result.errorMessage
+                    );
+
+                return;
+            }
+
+            /*
+             * A successful reconnect is now Hybrid.
+             * sessionReloaded has already refreshed
+             * the document presentation and tab
+             * accessory.
+             */
+            updateReloadActionState();
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [
+                sessionId,
+                snapshotPath,
+                externalSourceBinding
+            ](
+                QPromise<
+                    SnapshotReconnectPreparationResult>
+                    &promise
+                ) {
+                SnapshotReconnectPreparationResult
+                    preparation;
+
+                preparation.sessionId =
+                    sessionId;
+
+                InvestigationSessionSnapshotLoadResult
+                    loadResult =
+                    InvestigationSessionSnapshotFile()
+                        .load(
+                            snapshotPath
+                            );
+
+                if (!loadResult.isSuccess()) {
+                    preparation.errorMessage =
+                        loadResult
+                                .errorMessage
+                                .isEmpty()
+                            ? QStringLiteral(
+                                  "The durable "
+                                  "investigation snapshot "
+                                  "could not be loaded."
+                                  )
+                            : loadResult.errorMessage;
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                preparation.snapshot =
+                    std::move(
+                        *loadResult.snapshot
+                        );
+
+                ImporterRegistry registry =
+                    createBuiltInImporterRegistry(
+                        preparation
+                            .snapshot
+                            .importProfile
+                        );
+
+                const std::shared_ptr<
+                    ILogImporter>
+                    importer =
+                    registry.importerById(
+                        preparation
+                            .snapshot
+                            .importProfile
+                            .importerId
+                        );
+
+                if (!importer) {
+                    preparation.errorMessage =
+                        QStringLiteral(
+                            "No importer is available "
+                            "for the saved investigation "
+                            "profile."
+                            );
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                ImportExecutionContext
+                    executionContext;
+
+                executionContext
+                    .isCancellationRequested =
+                    [&promise]() {
+                        return promise.isCanceled();
+                    };
+
+                HybridInvestigationReconstructionResult
+                    reconstruction =
+                    HybridInvestigationReconstructionService()
+                        .reconstruct(
+                            preparation.snapshot,
+                            externalSourceBinding,
+                            *importer,
+                            executionContext
+                            );
+
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                if (!reconstruction.succeeded) {
+                    preparation.errorMessage =
+                        reconstruction
+                                .errorMessage
+                                .isEmpty()
+                            ? QStringLiteral(
+                                  "The recorded source "
+                                  "could not be replayed "
+                                  "against the saved "
+                                  "investigation."
+                                  )
+                            : reconstruction
+                                  .errorMessage;
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                if (!reconstruction
+                         .externalSourceAvailable) {
+                    preparation.errorMessage =
+                        QStringLiteral(
+                            "The recorded source became "
+                            "unavailable while "
+                            "reconnection was being "
+                            "prepared."
+                            );
+
+                    promise.addResult(
+                        std::move(preparation)
+                        );
+
+                    return;
+                }
+
+                preparation.reconstruction =
+                    std::move(
+                        reconstruction
+                        );
+
+                preparation.succeeded =
+                    true;
+
+                promise.addResult(
+                    std::move(preparation)
+                    );
+            }
+            )
+        );
+}
+
+void MainWindow::openSourceLocation(
+    const QString &sourcePath
+    )
+{
+    if (sourcePath.trimmed().isEmpty()) {
+        return;
+    }
+
+    const QFileInfo sourceInfo(
+        sourcePath
+        );
+
+    if (!sourceInfo.exists()) {
+        QMessageBox::information(
+            this,
+            tr("Source Not Available"),
+            tr(
+                "The source file is no longer "
+                "available at:\n\n%1"
+                )
+                .arg(sourcePath)
+            );
+
+        return;
+    }
+
+    const QString directoryPath =
+        sourceInfo.absolutePath();
+
+    if (!QDesktopServices::openUrl(
+            QUrl::fromLocalFile(
+                directoryPath
+                )
+            )) {
+        QMessageBox::warning(
+            this,
+            tr("Open Source Location Failed"),
+            tr(
+                "TraceScope could not open the "
+                "source directory:\n\n%1"
+                )
+                .arg(directoryPath)
+            );
+    }
+}
+
+void MainWindow::populateSessionSourceMenu(
+    const QString &sessionId,
+    QMenu *menu
+    )
+{
+    if (workspace == nullptr
+        || menu == nullptr) {
+        return;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            sessionId
+            );
+
+    if (sessionIndex < 0) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->sessionAt(
+            sessionIndex
+            );
+
+    if (session == nullptr) {
+        return;
+    }
+
+    QMenu *sourceMenu =
+        menu->addMenu(
+            tr("Source")
+            );
+
+    sourceMenu->setToolTipsVisible(
+        true
+        );
+
+    const InvestigationSessionBacking
+        &backing =
+        session->backing();
+
+    switch (backing.mode()) {
+    case InvestigationSessionBackingMode::
+        SourceBacked: {
+        const InvestigationExternalSourceBinding
+            *source =
+            backing.externalSource();
+
+        if (source == nullptr
+            || source->sourcePath
+                   .trimmed()
+                   .isEmpty()) {
+            sourceMenu->setEnabled(
+                false
+                );
+
+            return;
+        }
+
+        QAction *openAction =
+            sourceMenu->addAction(
+                tr("Open Source Location")
+                );
+
+        openAction->setToolTip(
+            tr(
+                "Open the directory containing the "
+                "authoritative external source"
+                )
+            );
+
+        const QString sourcePath =
+            source->sourcePath;
+
+        connect(
+            openAction,
+            &QAction::triggered,
+            sourceMenu,
+            [this, sourcePath]() {
+                openSourceLocation(
+                    sourcePath
+                    );
+            }
+            );
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        SnapshotBacked: {
+        const InvestigationExternalSourceBinding
+            *reconnectHint =
+            session->reconnectSourceHint();
+
+        QAction *reconnectAction =
+            sourceMenu->addAction(
+                tr("Reconnect Source")
+                );
+
+        const bool canReconnect =
+            reconnectHint != nullptr
+            && !reconnectHint
+                    ->sourcePath
+                    .trimmed()
+                    .isEmpty();
+
+        reconnectAction->setEnabled(
+            canReconnect
+            );
+
+        if (canReconnect) {
+            const QString reconnectPath =
+                reconnectHint->sourcePath;
+
+            reconnectAction->setToolTip(
+                tr(
+                    "Reconnect the investigation to its "
+                    "previously recorded external source:\n%1"
+                    )
+                    .arg(
+                        reconnectPath
+                        )
+                );
+
+            connect(
+                reconnectAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
+                    sessionId
+                ]() {
+                    reconnectSnapshotBackedSession(
+                        sessionId
+                        );
+                }
+                );
+        } else {
+            reconnectAction->setToolTip(
+                tr(
+                    "This investigation does not retain "
+                    "source continuity metadata required "
+                    "for safe reconnection."
+                    )
+                );
+        }
+
+        /*
+         * Original source provenance is informational.
+         * Only expose the location action while that file
+         * currently exists.
+         */
+        const QString originalSourcePath =
+            session
+                ->sourceMetadata()
+                .sourcePath;
+
+        const QFileInfo sourceInfo(
+            originalSourcePath
+            );
+
+        if (!originalSourcePath
+                 .trimmed()
+                 .isEmpty()
+            && sourceInfo.exists()
+            && sourceInfo.isFile()) {
+            sourceMenu->addSeparator();
+
+            QAction *openAction =
+                sourceMenu->addAction(
+                    tr(
+                        "Open Original Source Location"
+                        )
+                    );
+
+            connect(
+                openAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
+                    originalSourcePath
+                ]() {
+                    openSourceLocation(
+                        originalSourcePath
+                        );
+                }
+                );
+        }
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        Hybrid: {
+        const InvestigationExternalSourceBinding
+            *source =
+            backing.externalSource();
+
+        if (source == nullptr
+            || source->sourcePath
+                   .trimmed()
+                   .isEmpty()) {
+            sourceMenu->setEnabled(
+                false
+                );
+
+            return;
+        }
+
+        const QString sourcePath =
+            source->sourcePath;
+
+        const QFileInfo sourceInfo(
+            sourcePath
+            );
+
+        if (!sourceInfo.exists()
+            || !sourceInfo.isFile()) {
+            sourceMenu->setEnabled(
+                false
+                );
+
+            return;
+        }
+
+        QAction *openAction =
+            sourceMenu->addAction(
+                tr(
+                    "Open Connected Source Location"
+                    )
+                );
+
+        openAction->setToolTip(
+            tr(
+                "Open the directory containing the "
+                "Hybrid investigation's connected "
+                "external source"
+                )
+            );
+
+        connect(
+            openAction,
+            &QAction::triggered,
+            sourceMenu,
+            [this, sourcePath]() {
+                openSourceLocation(
+                    sourcePath
+                    );
+            }
+            );
+
+        break;
+    }
+    }
+}
+
+void MainWindow::
     createSessionComparison(
         const QString &preferredBaselineSessionId
         )
@@ -3193,11 +3945,6 @@ MainWindow::resolveWorkspaceSessionRecovery(
             persistedSession.backing.mode =
                 PersistedInvestigationSessionBackingMode::
                 SnapshotBacked;
-
-            persistedSession
-                .backing
-                .externalSourceBinding
-                .reset();
 
             persistedSession
                 .backing

@@ -220,6 +220,11 @@ private:
 
     void updateDocumentTabPresentation();
 
+    void refreshDocumentTabAccessory(
+        WorkspaceDocument *document,
+        int index
+        );
+
     WorkspaceDocumentHost *m_rootHost =
         nullptr;
 

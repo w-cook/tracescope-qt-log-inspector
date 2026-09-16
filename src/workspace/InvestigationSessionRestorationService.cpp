@@ -579,6 +579,15 @@ prepareSnapshotBackedSession(
             *loadResult.snapshot
             );
 
+    if (backing
+            .externalSourceBinding
+            .has_value()) {
+        prepared.reconnectSourceHint =
+            runtimeExternalSourceBinding(
+                *backing.externalSourceBinding
+                );
+    }
+
     return preparationSuccess(
         InvestigationSessionRestorationPreparedData(
             std::move(prepared)
@@ -917,6 +926,9 @@ InvestigationSessionRestorationService::materialize(
                 prepared.snapshotPath,
                 std::move(
                     prepared.snapshot
+                    ),
+                std::move(
+                    prepared.reconnectSourceHint
                     )
                 );
 

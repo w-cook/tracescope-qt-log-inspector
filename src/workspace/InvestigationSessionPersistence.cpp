@@ -102,7 +102,7 @@ InvestigationSessionPersistence::capture(
         break;
 
     case InvestigationSessionBackingMode::
-        SnapshotBacked:
+        SnapshotBacked: {
         persisted.backing.mode =
             PersistedInvestigationSessionBackingMode::
             SnapshotBacked;
@@ -111,7 +111,22 @@ InvestigationSessionPersistence::capture(
             persisted.backing.snapshotReference =
                 snapshot->snapshotPath;
         }
+
+        const InvestigationExternalSourceBinding
+            *reconnectSource =
+            session.reconnectSourceHint();
+
+        if (reconnectSource != nullptr) {
+            persisted
+                .backing
+                .externalSourceBinding =
+                captureExternalSourceBinding(
+                    *reconnectSource
+                    );
+        }
+
         break;
+    }
 
     case InvestigationSessionBackingMode::
         Hybrid:

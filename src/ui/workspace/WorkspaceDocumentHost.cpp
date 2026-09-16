@@ -698,21 +698,10 @@ bool WorkspaceDocumentHost::
             document->tabTint()
             );
 
-    QWidget *tabAccessory =
-        document
-            ->createTabAccessoryWidget(
-                m_tabs->workspaceTabBar()
-                );
-
-    if (tabAccessory != nullptr) {
-        m_tabs
-            ->workspaceTabBar()
-            ->setTabButton(
-                insertedIndex,
-                QTabBar::LeftSide,
-                tabAccessory
-                );
-    }
+    refreshDocumentTabAccessory(
+        document,
+        insertedIndex
+        );
 
     connect(
         document,
@@ -1721,6 +1710,73 @@ void WorkspaceDocumentHost::
             document->documentId(),
             document->tabTint()
             );
+
+    refreshDocumentTabAccessory(
+        document,
+        index
+        );
+}
+
+void WorkspaceDocumentHost::
+    refreshDocumentTabAccessory(
+        WorkspaceDocument *document,
+        int index
+        )
+{
+    if (document == nullptr
+        || index < 0
+        || index >= m_tabs->count()) {
+        return;
+    }
+
+    WorkspaceTabBar *tabBar =
+        m_tabs->workspaceTabBar();
+
+    QWidget *existingAccessory =
+        tabBar->tabButton(
+            index,
+            QTabBar::LeftSide
+            );
+
+    QWidget *newAccessory =
+        document
+            ->createTabAccessoryWidget(
+                tabBar
+                );
+
+    /*
+     * Nothing changed for documents that neither had
+     * nor now require an accessory.
+     */
+    if (existingAccessory == nullptr
+        && newAccessory == nullptr) {
+        return;
+    }
+
+    /*
+     * Remove the previous accessory explicitly before
+     * installing the newly derived presentation.
+     *
+     * Investigation backing transitions can change
+     * whether live-follow controls are supported.
+     */
+    if (existingAccessory != nullptr) {
+        tabBar->setTabButton(
+            index,
+            QTabBar::LeftSide,
+            nullptr
+            );
+
+        existingAccessory->deleteLater();
+    }
+
+    if (newAccessory != nullptr) {
+        tabBar->setTabButton(
+            index,
+            QTabBar::LeftSide,
+            newAccessory
+            );
+    }
 }
 
 void WorkspaceDocumentHost::

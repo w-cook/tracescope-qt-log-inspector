@@ -112,6 +112,9 @@ public:
     const InvestigationSessionBacking &
     backing() const;
 
+    const InvestigationExternalSourceBinding *
+    reconnectSourceHint() const;
+
     bool updateSnapshotBackingPath(
         const QString &snapshotPath
         );
@@ -251,7 +254,10 @@ public:
     createSnapshotBacked(
         QString sessionId,
         const QString &snapshotPath,
-        InvestigationSessionSnapshot snapshot
+        InvestigationSessionSnapshot snapshot,
+        std::optional<
+            InvestigationExternalSourceBinding>
+            reconnectSourceHint = std::nullopt
         );
 
     static std::unique_ptr<InvestigationSession>
@@ -284,6 +290,13 @@ public:
             reconstruction
         );
 
+    InvestigationSessionHybridReloadResult
+    applyHybridReconnect(
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
 private:
     QString m_id;
 
@@ -296,6 +309,10 @@ private:
 
     InvestigationSessionBacking
         m_backing;
+
+    std::optional<
+        InvestigationExternalSourceBinding>
+        m_reconnectSourceHint;
 
     ImportProfile m_importProfile;
 

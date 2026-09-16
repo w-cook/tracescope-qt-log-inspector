@@ -843,12 +843,12 @@ QColor InvestigationSessionView::
     case InvestigationSessionBackingMode::
         Hybrid:
         /*
-         * Teal.
+         * Green.
          */
         return QColor(
-            0,
-            155,
-            175
+            45,
+            200,
+            25
             );
     }
 
