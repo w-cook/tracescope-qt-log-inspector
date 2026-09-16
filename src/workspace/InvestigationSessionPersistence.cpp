@@ -15,6 +15,9 @@ captureExternalSourceBinding(
     persisted.sourcePath =
         source.sourcePath;
 
+    persisted.logicalSourceKey =
+        source.logicalSourceKey;
+
     persisted.sourceFamilyConfiguration =
         source.sourceFamilyConfiguration;
 

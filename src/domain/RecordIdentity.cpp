@@ -11,10 +11,17 @@ QString createStableRecordIdentity(
     const QString &rawSource
     )
 {
-    QString sourceKey = source.sourcePath.trimmed();
+    QString sourceKey =
+        source.logicalSourceKey.trimmed();
 
     if (sourceKey.isEmpty()) {
-        sourceKey = source.sourceName.trimmed();
+        sourceKey =
+            source.sourcePath.trimmed();
+    }
+
+    if (sourceKey.isEmpty()) {
+        sourceKey =
+            source.sourceName.trimmed();
     }
 
     sourceKey.replace('\\', '/');

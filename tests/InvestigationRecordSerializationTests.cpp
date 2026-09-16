@@ -97,6 +97,11 @@ void InvestigationRecordSerializationTests::
             "C:/logs/gateway.jsonl"
             );
 
+    original.source.logicalSourceKey =
+        QStringLiteral(
+            "C:/original/gateway.jsonl"
+            );
+
     original.source.sourceName =
         QStringLiteral(
             "gateway.jsonl"
@@ -167,6 +172,11 @@ void InvestigationRecordSerializationTests::
     QCOMPARE(
         restored.source.sourcePath,
         original.source.sourcePath
+        );
+
+    QCOMPARE(
+        restored.source.logicalSourceKey,
+        original.source.logicalSourceKey
         );
 
     QCOMPARE(
@@ -246,12 +256,32 @@ void InvestigationRecordSerializationTests::
 
     InvestigationRecordSerializer serializer;
 
+    QJsonObject json =
+        serializer.serialize(
+            original
+            );
+
+    QJsonObject source =
+        json.value(
+                QStringLiteral("source")
+                )
+            .toObject();
+
+    source.remove(
+        QStringLiteral(
+            "logicalSourceKey"
+            )
+        );
+
+    json.insert(
+        QStringLiteral("source"),
+        source
+        );
+
     const InvestigationRecordDeserializationResult
         result =
         serializer.deserialize(
-            serializer.serialize(
-                original
-                )
+            json
             );
 
     QVERIFY(result.isSuccess());
@@ -273,6 +303,11 @@ void InvestigationRecordSerializationTests::
     QCOMPARE(
         restored.source.sourceGeneration,
         quint64(0)
+        );
+
+    QCOMPARE(
+        restored.source.logicalSourceKey,
+        restored.source.sourceName
         );
 }
 

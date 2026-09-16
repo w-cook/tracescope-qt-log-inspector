@@ -5,6 +5,7 @@
 
 #include <QFileInfo>
 
+#include "../importing/ImportResultSourceGeneration.h"
 #include "../sources/SourcePhysicalIdentity.h"
 #include "HybridInvestigationCandidateBuilder.h"
 
@@ -212,6 +213,20 @@ HybridInvestigationReconstructionResult
             ILogImporter::UnlimitedRecordLimit,
             executionContext
             );
+
+    const QString logicalSourceKey =
+        externalSourceBinding
+                .logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? externalSourceBinding.sourcePath
+            : externalSourceBinding.logicalSourceKey;
+
+    rebaseImportResultLogicalSourceKeyForPath(
+        replayResult,
+        externalSourceBinding.sourcePath,
+        logicalSourceKey
+        );
 
     /*
      * The candidate builder rejects cancellation, but

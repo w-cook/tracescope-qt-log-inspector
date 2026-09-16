@@ -196,6 +196,14 @@ runtimeExternalSourceBinding(
             persistedBinding.sourcePath
             ).absoluteFilePath();
 
+    binding.logicalSourceKey =
+        persistedBinding
+                .logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? binding.sourcePath
+            : persistedBinding.logicalSourceKey;
+
     binding.sourceFamilyConfiguration =
         persistedBinding.sourceFamilyConfiguration;
 
@@ -275,6 +283,14 @@ prepareSourceBackedSession(
         QFileInfo(
             persistedBinding.sourcePath
             ).absoluteFilePath();
+
+    const QString logicalSourceKey =
+        persistedBinding
+                .logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? activeSourcePath
+            : persistedBinding.logicalSourceKey;
 
     const QFileInfo sourceInfo(
         activeSourcePath
@@ -463,6 +479,12 @@ prepareSourceBackedSession(
             );
     }
 
+    rebaseImportResultLogicalSourceKeyForPath(
+        importResult,
+        activeSourcePath,
+        logicalSourceKey
+        );
+
     /*
      * Static importers produce generation zero.
      *
@@ -481,6 +503,9 @@ prepareSourceBackedSession(
 
     prepared.sourcePath =
         activeSourcePath;
+
+    prepared.logicalSourceKey =
+        logicalSourceKey;
 
     prepared.importProfile =
         profile;
@@ -886,6 +911,18 @@ InvestigationSessionRestorationService::materialize(
                         .sourceFamilyConfiguration
                     )
                 );
+
+        if (!session->updateExternalSourceLogicalKey(
+                prepared.logicalSourceKey
+                )) {
+            return restorationFailure(
+                QStringLiteral(
+                    "The Source-backed investigation's "
+                    "logical source identity could not be "
+                    "restored."
+                    )
+                );
+        }
 
         session->updateExternalSourceRuntimeState(
             prepared.sourceGeneration,

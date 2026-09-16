@@ -659,6 +659,16 @@ QJsonObject externalSourceToJson(
         binding.sourcePath
         );
 
+    const QString logicalSourceKey =
+        binding.logicalSourceKey.trimmed().isEmpty()
+            ? binding.sourcePath
+            : binding.logicalSourceKey;
+
+    object.insert(
+        QStringLiteral("logicalSourceKey"),
+        logicalSourceKey
+        );
+
     /*
      * Keep quint64 exact instead of relying on the
      * limited integer precision of a JSON double.
@@ -748,6 +758,35 @@ bool externalSourceFromJson(
 
     binding.sourcePath =
         sourcePathValue.toString();
+
+    const QJsonValue logicalSourceKeyValue =
+        object.value(
+            QStringLiteral(
+                "logicalSourceKey"
+                )
+            );
+
+    if (logicalSourceKeyValue.isUndefined()
+        || logicalSourceKeyValue.isNull()) {
+        /*
+         * Backward compatibility for existing persisted
+         * bindings created before logical/physical source
+         * identity were separated.
+         */
+        binding.logicalSourceKey =
+            binding.sourcePath;
+    } else {
+        if (!logicalSourceKeyValue.isString()
+            || logicalSourceKeyValue
+                   .toString()
+                   .trimmed()
+                   .isEmpty()) {
+            return false;
+        }
+
+        binding.logicalSourceKey =
+            logicalSourceKeyValue.toString();
+    }
 
     binding.sourceGeneration =
         generation;

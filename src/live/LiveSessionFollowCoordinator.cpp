@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "../importing/ImportResultSourceGeneration.h"
 #include "../io/SharedReadFile.h"
 #include "../workspace/InvestigationSession.h"
 
@@ -532,6 +533,18 @@ LiveSessionFollowCoordinator::pollOnce(
 {
     LiveSessionFollowPollResult result;
 
+    if (m_session == nullptr) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "Live following has no investigation "
+                "session to update."
+                );
+
+        return result;
+    }
+
     LiveFileReadResult readResult =
         m_follower.readAvailableBytes(
             maxByteCount
@@ -724,6 +737,27 @@ LiveSessionFollowCoordinator::pollOnce(
 
         return result;
     }
+
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        m_session
+            ->backing()
+            .externalSource();
+
+    const QString logicalSourceKey =
+        externalSource != nullptr
+                && !externalSource
+                        ->logicalSourceKey
+                        .trimmed()
+                        .isEmpty()
+            ? externalSource->logicalSourceKey
+            : m_follower.sourcePath();
+
+    rebaseImportResultLogicalSourceKeyForPath(
+        importResult,
+        m_follower.sourcePath(),
+        logicalSourceKey
+        );
 
     result.processedRecordCount =
         importResult.processedRecordCount;

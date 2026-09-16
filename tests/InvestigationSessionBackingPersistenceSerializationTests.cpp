@@ -33,6 +33,11 @@ externalBinding()
             "C:/logs/live.jsonl"
             );
 
+    binding.logicalSourceKey =
+        QStringLiteral(
+            "C:/logs/live.jsonl"
+            );
+
     binding.sourceGeneration = 7;
 
     binding
@@ -106,6 +111,7 @@ private slots:
     void hybridRoundTrips();
     void invalidBackingCombinationIsRejected();
     void invalidSourceIdentityIsRejected();
+    void missingLogicalSourceKeyFallsBackToSourcePath();
 };
 
 void
@@ -164,6 +170,18 @@ void
     QCOMPARE(
         external.value(
                     QStringLiteral(
+                        "logicalSourceKey"
+                        )
+                    )
+            .toString(),
+        QStringLiteral(
+            "C:/logs/live.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        external.value(
+                    QStringLiteral(
                         "sourceGeneration"
                         )
                     )
@@ -216,6 +234,15 @@ void
         *restored.snapshotReference,
         QStringLiteral(
             "sessions/session-1.tsinv"
+            )
+        );
+
+    QCOMPARE(
+        restored
+            .externalSourceBinding
+            ->logicalSourceKey,
+        QStringLiteral(
+            "C:/logs/live.jsonl"
             )
         );
 
@@ -534,6 +561,86 @@ void
         result.errorCode,
         QStringLiteral(
             "INVALID_EXTERNAL_SOURCE_BINDING"
+            )
+        );
+}
+
+void
+    InvestigationSessionBackingPersistenceSerializationTests::
+    missingLogicalSourceKeyFallsBackToSourcePath()
+{
+    PersistedInvestigationSessionBacking
+        backing;
+
+    backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        SourceBacked;
+
+    backing.externalSourceBinding =
+        externalBinding();
+
+    backing.sourceImportProfile =
+        jsonLinesProfile();
+
+    InvestigationSessionBackingPersistenceSerializer
+        serializer;
+
+    QJsonObject json =
+        serializer.serialize(
+            backing
+            );
+
+    QJsonObject external =
+        json.value(
+                QStringLiteral(
+                    "externalSourceBinding"
+                    )
+                )
+            .toObject();
+
+    /*
+     * Simulate a workspace written before logical
+     * source identity was persisted explicitly.
+     */
+    external.remove(
+        QStringLiteral(
+            "logicalSourceKey"
+            )
+        );
+
+    json.insert(
+        QStringLiteral(
+            "externalSourceBinding"
+            ),
+        external
+        );
+
+    const auto result =
+        serializer.deserialize(
+            json
+            );
+
+    QVERIFY2(
+        result.isSuccess(),
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QVERIFY(
+        result
+            .backing
+            ->externalSourceBinding
+            .has_value()
+        );
+
+    QCOMPARE(
+        result
+            .backing
+            ->externalSourceBinding
+            ->logicalSourceKey,
+        QStringLiteral(
+            "C:/logs/live.jsonl"
             )
         );
 }

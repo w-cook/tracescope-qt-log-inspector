@@ -279,6 +279,10 @@ public:
         const SourcePhysicalIdentity *sourceIdentity
         );
 
+    bool updateExternalSourceLogicalKey(
+        const QString &logicalSourceKey
+        );
+
     bool applySnapshotReload(
         InvestigationSessionSnapshot snapshot
         );

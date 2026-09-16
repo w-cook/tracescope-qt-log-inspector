@@ -19,6 +19,15 @@ struct PersistedInvestigationExternalSourceBinding
 {
     QString sourcePath;
 
+    /*
+     * Stable source identity used across verified
+     * physical-path relocation.
+     *
+     * Older persisted bindings may not contain this;
+     * restoration then falls back to sourcePath.
+     */
+    QString logicalSourceKey;
+
     SourceFamilyConfiguration
         sourceFamilyConfiguration;
 

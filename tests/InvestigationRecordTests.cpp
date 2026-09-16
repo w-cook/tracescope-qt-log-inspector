@@ -18,6 +18,8 @@ private slots:
     void stableIdentityNormalizesPathSeparators();
     void stableIdentityChangesWhenRecordChanges();
     void stableIdentityChangesAcrossSourceGenerations();
+    void stableIdentitySurvivesPhysicalSourceRelocation();
+    void stableIdentityStillFallsBackToPhysicalPath();
 };
 
 void InvestigationRecordTests::defaultRecordHasNoCanonicalValues()
@@ -272,6 +274,86 @@ void InvestigationRecordTests::
             rawSource
             ),
         originalIdentity
+        );
+}
+
+void InvestigationRecordTests::
+    stableIdentitySurvivesPhysicalSourceRelocation()
+{
+    RecordSourceMetadata original;
+
+    original.sourcePath =
+        QStringLiteral(
+            "C:/logs/service.log"
+            );
+
+    original.logicalSourceKey =
+        QStringLiteral(
+            "C:/logs/service.log"
+            );
+
+    original.recordNumber = 12;
+
+    RecordSourceMetadata relocated =
+        original;
+
+    relocated.sourcePath =
+        QStringLiteral(
+            "D:/archive/service-renamed.log"
+            );
+
+    const QString rawSource =
+        QStringLiteral(
+            "request completed"
+            );
+
+    QCOMPARE(
+        createStableRecordIdentity(
+            original,
+            rawSource
+            ),
+        createStableRecordIdentity(
+            relocated,
+            rawSource
+            )
+        );
+}
+
+void InvestigationRecordTests::
+    stableIdentityStillFallsBackToPhysicalPath()
+{
+    RecordSourceMetadata first;
+
+    first.sourcePath =
+        QStringLiteral(
+            "C:/logs/service.log"
+            );
+
+    first.recordNumber = 12;
+
+    RecordSourceMetadata second =
+        first;
+
+    second.sourcePath =
+        QStringLiteral(
+            "D:/logs/service.log"
+            );
+
+    const QString rawSource =
+        QStringLiteral(
+            "request completed"
+            );
+
+    QVERIFY(
+        createStableRecordIdentity(
+            first,
+            rawSource
+            )
+        !=
+        createStableRecordIdentity(
+            second,
+            rawSource
+            )
         );
 }
 

@@ -47,6 +47,35 @@ snapshotSourceMetadata(
 
     return sourceMetadata;
 }
+
+InvestigationExternalSourceBinding
+initialExternalSourceBinding(
+    const QString &filePath,
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration
+    )
+{
+    const QString absolutePath =
+        QFileInfo(
+            filePath
+            ).absoluteFilePath();
+
+    InvestigationExternalSourceBinding
+        binding;
+
+    binding.sourcePath =
+        absolutePath;
+
+    binding.logicalSourceKey =
+        absolutePath;
+
+    binding.sourceFamilyConfiguration =
+        std::move(
+            sourceFamilyConfiguration
+            );
+
+    return binding;
+}
 }
 
 InvestigationSession::InvestigationSession(
@@ -84,14 +113,12 @@ InvestigationSession::InvestigationSession(
     m_backing(
         InvestigationSessionBacking::
         sourceBacked(
-            InvestigationExternalSourceBinding {
-                QFileInfo(
-                    filePath
-                    ).absoluteFilePath(),
+            initialExternalSourceBinding(
+                filePath,
                 std::move(
                     sourceFamilyConfiguration
                     )
-            }
+                )
             )
         ),
     m_importProfile(
@@ -1150,6 +1177,29 @@ void InvestigationSession::
     } else {
         externalSource->sourceIdentity.reset();
     }
+}
+
+bool InvestigationSession::
+    updateExternalSourceLogicalKey(
+        const QString &logicalSourceKey
+        )
+{
+    if (logicalSourceKey.trimmed().isEmpty()) {
+        return false;
+    }
+
+    InvestigationExternalSourceBinding
+        *externalSource =
+        m_backing.externalSource();
+
+    if (externalSource == nullptr) {
+        return false;
+    }
+
+    externalSource->logicalSourceKey =
+        logicalSourceKey;
+
+    return true;
 }
 
 bool InvestigationSession::

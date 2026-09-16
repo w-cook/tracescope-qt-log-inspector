@@ -68,6 +68,36 @@ void rebaseDiagnosticGeneration(
         ->sourceGeneration =
         sourceGeneration;
 }
+
+void rebaseRecordLogicalSourceKey(
+    InvestigationRecord &record,
+    const QString &logicalSourceKey
+    )
+{
+    record.source.logicalSourceKey =
+        logicalSourceKey;
+
+    record.recordId =
+        createStableRecordIdentity(
+            record.source,
+            record.rawSource
+            );
+}
+
+void rebaseDiagnosticLogicalSourceKey(
+    ImportDiagnostic &diagnostic,
+    const QString &logicalSourceKey
+    )
+{
+    if (!diagnostic.source.has_value()) {
+        return;
+    }
+
+    diagnostic
+        .source
+        ->logicalSourceKey =
+        logicalSourceKey;
+}
 }
 
 void rebaseImportResultSourceGeneration(
@@ -128,6 +158,51 @@ void rebaseImportResultSourceGenerationForPath(
         rebaseDiagnosticGeneration(
             diagnostic,
             sourceGeneration
+            );
+    }
+}
+
+void rebaseImportResultLogicalSourceKeyForPath(
+    ImportResult &result,
+    const QString &sourcePath,
+    const QString &logicalSourceKey
+    )
+{
+    const QString effectiveLogicalSourceKey =
+        logicalSourceKey.trimmed().isEmpty()
+            ? sourcePath
+            : logicalSourceKey;
+
+    for (InvestigationRecord &record
+         : result.records) {
+        if (!sourcePathsMatch(
+                record.source.sourcePath,
+                sourcePath
+                )) {
+            continue;
+        }
+
+        rebaseRecordLogicalSourceKey(
+            record,
+            effectiveLogicalSourceKey
+            );
+    }
+
+    for (ImportDiagnostic &diagnostic
+         : result.diagnostics) {
+        if (!diagnostic.source.has_value()
+            || !sourcePathsMatch(
+                diagnostic
+                    .source
+                    ->sourcePath,
+                sourcePath
+                )) {
+            continue;
+        }
+
+        rebaseDiagnosticLogicalSourceKey(
+            diagnostic,
+            effectiveLogicalSourceKey
             );
     }
 }

@@ -27,6 +27,8 @@ struct PreparedSourceBackedInvestigationSession
 {
     QString sourcePath;
 
+    QString logicalSourceKey;
+
     ImportProfile importProfile;
 
     ImportResult importResult;

@@ -247,6 +247,26 @@ QJsonObject InvestigationRecordSerializer::serialize(
         record.source.sourcePath
         );
 
+    const QString logicalSourceKey =
+        record.source
+                .logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? (
+                  record.source
+                          .sourcePath
+                          .trimmed()
+                          .isEmpty()
+                      ? record.source.sourceName
+                      : record.source.sourcePath
+                  )
+            : record.source.logicalSourceKey;
+
+    source.insert(
+        QStringLiteral("logicalSourceKey"),
+        logicalSourceKey
+        );
+
     source.insert(
         QStringLiteral("sourceName"),
         record.source.sourceName
@@ -513,6 +533,43 @@ InvestigationRecordSerializer::deserialize(
 
     record.source.sourceName =
         sourceNameValue.toString();
+
+    const QJsonValue logicalSourceKeyValue =
+        source.value(
+            QStringLiteral(
+                "logicalSourceKey"
+                )
+            );
+
+    if (logicalSourceKeyValue.isUndefined()
+        || logicalSourceKeyValue.isNull()) {
+        /*
+         * Backward compatibility for snapshots written
+         * before logical source identity was explicit.
+         */
+        record.source.logicalSourceKey =
+            record.source
+                    .sourcePath
+                    .trimmed()
+                    .isEmpty()
+                ? record.source.sourceName
+                : record.source.sourcePath;
+    } else {
+        if (!logicalSourceKeyValue.isString()) {
+            return failure(
+                QStringLiteral(
+                    "INVALID_LOGICAL_SOURCE_KEY"
+                    ),
+                QStringLiteral(
+                    "The investigation record logical "
+                    "source key must be a string."
+                    )
+                );
+        }
+
+        record.source.logicalSourceKey =
+            logicalSourceKeyValue.toString();
+    }
 
     if (!readSignedInteger(
             source.value(

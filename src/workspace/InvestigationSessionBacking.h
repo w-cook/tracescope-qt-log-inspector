@@ -17,7 +17,24 @@ enum class InvestigationSessionBackingMode
 
 struct InvestigationExternalSourceBinding
 {
+    /*
+     * Current physical location from which TraceScope
+     * reads the external source.
+     *
+     * This may change after a verified relocation.
+     */
     QString sourcePath;
+
+    /*
+     * Stable logical identity of this source.
+     *
+     * For ordinary sessions this begins as the same
+     * normalized absolute path as sourcePath.
+     *
+     * A verified rename/move may change sourcePath,
+     * but must never change logicalSourceKey.
+     */
+    QString logicalSourceKey;
 
     SourceFamilyConfiguration
         sourceFamilyConfiguration;

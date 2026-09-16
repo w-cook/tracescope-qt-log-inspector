@@ -27,6 +27,8 @@ set(INVESTIGATION_SESSION_LIVE_FOLLOW_SOURCES
     ../src/importing/ImportProfile.h
     ../src/importing/ImportResult.h
     ../src/importing/ImportResult.cpp
+    ../src/importing/ImportResultSourceGeneration.h
+    ../src/importing/ImportResultSourceGeneration.cpp
     ../src/importing/IncrementalImportInitializationResult.h
     ../src/importing/JsonLinesImportConfig.h
     ../src/importing/JsonLinesImporter.h

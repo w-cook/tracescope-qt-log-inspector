@@ -31,3 +31,18 @@ void rebaseImportResultSourceGenerationForPath(
     const QString &sourcePath,
     quint64 sourceGeneration
     );
+
+/*
+ * Assign a stable logical source identity to records
+ * and diagnostics produced from one physical path.
+ *
+ * Record IDs are regenerated because logical source
+ * identity participates in stable record identity.
+ *
+ * The physical sourcePath is deliberately retained.
+ */
+void rebaseImportResultLogicalSourceKeyForPath(
+    ImportResult &result,
+    const QString &sourcePath,
+    const QString &logicalSourceKey
+    );

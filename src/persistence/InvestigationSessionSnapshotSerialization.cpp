@@ -164,6 +164,24 @@ QJsonObject sourceMetadataToJson(
         source.sourcePath
         );
 
+    const QString logicalSourceKey =
+        source.logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? (
+                  source.sourcePath
+                          .trimmed()
+                          .isEmpty()
+                      ? source.sourceName
+                      : source.sourcePath
+                  )
+            : source.logicalSourceKey;
+
+    object.insert(
+        QStringLiteral("logicalSourceKey"),
+        logicalSourceKey
+        );
+
     object.insert(
         QStringLiteral("sourceName"),
         source.sourceName
@@ -198,6 +216,30 @@ bool sourceMetadataFromJson(
         object.value(
             QStringLiteral("sourceName")
             );
+
+    const QJsonValue logicalSourceKey =
+        object.value(
+            QStringLiteral(
+                "logicalSourceKey"
+                )
+            );
+
+    if (logicalSourceKey.isUndefined()
+        || logicalSourceKey.isNull()) {
+        source.logicalSourceKey =
+            source.sourcePath
+                    .trimmed()
+                    .isEmpty()
+                ? source.sourceName
+                : source.sourcePath;
+    } else {
+        if (!logicalSourceKey.isString()) {
+            return false;
+        }
+
+        source.logicalSourceKey =
+            logicalSourceKey.toString();
+    }
 
     if (!sourcePath.isString()
         || !sourceName.isString()) {
