@@ -149,6 +149,10 @@ private:
         const QString &sessionId
         );
 
+    void useSourceAsAuthoritative(
+        const QString &sessionId
+        );
+
     void populateSessionSourceMenu(
         const QString &sessionId,
         QMenu *menu

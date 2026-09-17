@@ -1592,6 +1592,100 @@ InvestigationSession::redefineSourcePath(
     return result;
 }
 
+InvestigationSessionSourceReloadResult
+    InvestigationSession::
+    applyPreparedSourceBackedReload(
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        )
+{
+    InvestigationSessionSourceReloadResult
+        result;
+
+    if (m_backing.mode()
+        != InvestigationSessionBackingMode::
+        SourceBacked) {
+        result.errorMessage =
+            QStringLiteral(
+                "Prepared source reload requires a "
+                "Source-backed investigation session."
+                );
+
+        return result;
+    }
+
+    if (externalSourceBinding
+            .sourcePath
+            .trimmed()
+            .isEmpty()) {
+        result.errorMessage =
+            QStringLiteral(
+                "The prepared external source does "
+                "not contain a valid source path."
+                );
+
+        return result;
+    }
+
+    if (externalSourceBinding
+            .logicalSourceKey
+            .trimmed()
+            .isEmpty()) {
+        externalSourceBinding.logicalSourceKey =
+            externalSourceBinding.sourcePath;
+    }
+
+    /*
+     * All source I/O, identity verification,
+     * generation handling, and import work has already
+     * completed before this mutation boundary.
+     */
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    m_backing =
+        InvestigationSessionBacking::
+        sourceBacked(
+            std::move(
+                externalSourceBinding
+                )
+            );
+
+    m_reconnectSourceHint.reset();
+
+    m_importProfile =
+        std::move(
+            importProfile
+            );
+
+    m_initialLiveFollowByteOffset =
+        std::max<qint64>(
+            0,
+            initialLiveFollowByteOffset
+            );
+
+    refreshSourceMetadata();
+
+    /*
+     * State survives automatically for stable record
+     * IDs and disappears for records no longer present.
+     */
+    installImportResult(
+        std::move(
+            importResult
+            )
+        );
+
+    result.succeeded = true;
+
+    return result;
+}
+
 bool InvestigationSession::
     applySnapshotReload(
         InvestigationSessionSnapshot snapshot
@@ -1929,6 +2023,119 @@ InvestigationSession::applyHybridReconnect(
     installImportResult(
         std::move(
             reconstruction.importResult
+            )
+        );
+
+    result.succeeded = true;
+
+    return result;
+}
+
+InvestigationSessionSourceAuthoritativeResult
+    InvestigationSession::
+    applySourceAuthoritativeTransition(
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        )
+{
+    InvestigationSessionSourceAuthoritativeResult
+        result;
+
+    /*
+     * "Use Source as Authoritative" is specifically
+     * the Hybrid -> SourceBacked lifecycle transition.
+     */
+    if (m_backing.mode()
+        != InvestigationSessionBackingMode::
+        Hybrid) {
+        result.errorMessage =
+            QStringLiteral(
+                "Using the external source as "
+                "authoritative requires a Hybrid "
+                "investigation session."
+                );
+
+        return result;
+    }
+
+    if (externalSourceBinding
+            .sourcePath
+            .trimmed()
+            .isEmpty()) {
+        result.errorMessage =
+            QStringLiteral(
+                "The prepared external source does "
+                "not contain a valid source path."
+                );
+
+        return result;
+    }
+
+    if (externalSourceBinding
+            .logicalSourceKey
+            .trimmed()
+            .isEmpty()) {
+        externalSourceBinding.logicalSourceKey =
+            externalSourceBinding.sourcePath;
+    }
+
+    /*
+     * Everything that can fail has already completed.
+     *
+     * From this point onward we commit the prepared
+     * SourceBacked candidate to the existing session.
+     */
+    if (m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    /*
+     * Replace the entire Hybrid backing rather than
+     * merely detaching the old snapshot.
+     *
+     * The prepared external binding may contain a
+     * newer physical identity, generation, discovered
+     * source-family members, or relocated source path.
+     */
+    m_backing =
+        InvestigationSessionBacking::
+        sourceBacked(
+            std::move(
+                externalSourceBinding
+                )
+            );
+
+    m_reconnectSourceHint.reset();
+
+    m_importProfile =
+        std::move(
+            importProfile
+            );
+
+    m_initialLiveFollowByteOffset =
+        std::max<qint64>(
+            0,
+            initialLiveFollowByteOffset
+            );
+
+    refreshSourceMetadata();
+
+    /*
+     * Replacing the normalized result deliberately
+     * removes snapshot-only evidence.
+     *
+     * installImportResult() retains investigation
+     * state for record IDs that survive the source
+     * reconstruction and removes state attached only
+     * to records that disappear.
+     */
+    installImportResult(
+        std::move(
+            importResult
             )
         );
 

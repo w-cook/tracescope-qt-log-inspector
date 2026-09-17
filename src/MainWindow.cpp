@@ -36,6 +36,7 @@
 #include <cmath>
 #include <memory>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "exporting/InvestigationReportHtmlExporter.h"
@@ -2388,11 +2389,472 @@ void MainWindow::reloadActiveSession()
     if (mode
         == InvestigationSessionBackingMode::
         SourceBacked) {
-        loadLogFile(
-            session->externalSourcePath(),
-            session->importProfile(),
-            session->id(),
-            session->sourceFamilyConfiguration()
+        const QString sessionId =
+            session->id();
+
+        /*
+         * Capture all SourceBacked continuity state on the
+         * UI thread before preparation begins.
+         *
+         * This includes logical source identity, generation,
+         * physical identity, source-family configuration,
+         * and the active import profile.
+         */
+        PersistedInvestigationSession
+            persistedSession =
+            InvestigationSessionPersistence::capture(
+                *session
+                );
+
+        auto *watcher =
+            new QFutureWatcher<
+                InvestigationSessionRestorationPreparationResult>(
+                this
+                );
+
+        auto *progressDialog =
+            new QProgressDialog(
+                tr(
+                    "Reloading Source-backed "
+                    "investigation...\n"
+                    "Preparing source evidence..."
+                    ),
+                tr("Cancel"),
+                0,
+                0,
+                this
+                );
+
+        progressDialog->setWindowTitle(
+            tr(
+                "Reload Investigation"
+                )
+            );
+
+        progressDialog->setWindowModality(
+            Qt::WindowModal
+            );
+
+        progressDialog->setMinimumDuration(
+            250
+            );
+
+        progressDialog->setAutoClose(
+            false
+            );
+
+        progressDialog->setAutoReset(
+            false
+            );
+
+        setSessionReloadInProgress(
+            true
+            );
+
+        connect(
+            progressDialog,
+            &QProgressDialog::canceled,
+            watcher,
+            &QFutureWatcher<
+                InvestigationSessionRestorationPreparationResult>::
+            cancel
+            );
+
+        connect(
+            watcher,
+            &QFutureWatcher<
+                InvestigationSessionRestorationPreparationResult>::
+            progressRangeChanged,
+            progressDialog,
+            &QProgressDialog::setRange
+            );
+
+        connect(
+            watcher,
+            &QFutureWatcher<
+                InvestigationSessionRestorationPreparationResult>::
+            progressValueChanged,
+            progressDialog,
+            &QProgressDialog::setValue
+            );
+
+        connect(
+            watcher,
+            &QFutureWatcher<
+                InvestigationSessionRestorationPreparationResult>::
+            progressTextChanged,
+            this,
+            [
+                progressDialog
+            ](
+                const QString &progressText
+                ) {
+                QString label =
+                    QObject::tr(
+                        "Reloading Source-backed "
+                        "investigation..."
+                        );
+
+                if (!progressText.isEmpty()) {
+                    label +=
+                        QStringLiteral("\n")
+                        + progressText;
+                }
+
+                progressDialog->setLabelText(
+                    label
+                    );
+            }
+            );
+
+        connect(
+            watcher,
+            &QFutureWatcher<
+                InvestigationSessionRestorationPreparationResult>::
+            finished,
+            this,
+            [
+                this,
+                watcher,
+                progressDialog,
+                sessionId
+            ]() mutable {
+                const bool cancelled =
+                    watcher->isCanceled();
+
+                progressDialog->hide();
+                progressDialog->deleteLater();
+
+                setSessionReloadInProgress(
+                    false
+                    );
+
+                if (cancelled) {
+                    watcher->deleteLater();
+                    return;
+                }
+
+                if (watcher
+                        ->future()
+                        .resultCount()
+                    <= 0) {
+                    watcher->deleteLater();
+
+                    QMessageBox::warning(
+                        this,
+                        tr(
+                            "Reload Investigation Failed"
+                            ),
+                        tr(
+                            "TraceScope did not receive a "
+                            "source preparation result. "
+                            "The open investigation was "
+                            "not changed."
+                            )
+                        );
+
+                    return;
+                }
+
+                InvestigationSessionRestorationPreparationResult
+                    preparation =
+                    watcher->result();
+
+                watcher->deleteLater();
+
+                if (!preparation.succeeded
+                    || !preparation
+                            .preparedData
+                            .has_value()) {
+                    QMessageBox::warning(
+                        this,
+                        tr(
+                            "Reload Investigation Failed"
+                            ),
+                        preparation
+                                .errorMessage
+                                .isEmpty()
+                            ? tr(
+                                  "TraceScope could not "
+                                  "prepare the Source-backed "
+                                  "investigation for reload."
+                                  )
+                            : preparation.errorMessage
+                        );
+
+                    return;
+                }
+
+                PreparedSourceBackedInvestigationSession
+                    *prepared =
+                    std::get_if<
+                        PreparedSourceBackedInvestigationSession>(
+                        &*preparation.preparedData
+                        );
+
+                if (prepared == nullptr) {
+                    QMessageBox::warning(
+                        this,
+                        tr(
+                            "Reload Investigation Failed"
+                            ),
+                        tr(
+                            "Source preparation did not "
+                            "produce a Source-backed "
+                            "candidate."
+                            )
+                        );
+
+                    return;
+                }
+
+                InvestigationExternalSourceBinding
+                    preparedBinding;
+
+                preparedBinding.sourcePath =
+                    std::move(
+                        prepared->sourcePath
+                        );
+
+                preparedBinding.logicalSourceKey =
+                    std::move(
+                        prepared->logicalSourceKey
+                        );
+
+                preparedBinding
+                    .sourceFamilyConfiguration =
+                    std::move(
+                        prepared
+                            ->sourceFamilyConfiguration
+                        );
+
+                preparedBinding.sourceGeneration =
+                    prepared->sourceGeneration;
+
+                preparedBinding.sourceIdentity =
+                    std::move(
+                        prepared->sourceIdentity
+                        );
+
+                const bool noRecordsLoaded =
+                    prepared
+                        ->importResult
+                        .records
+                        .isEmpty();
+
+                const QString sourcePath =
+                    preparedBinding.sourcePath;
+
+                const SourceFamilyConfiguration
+                    sourceFamilyConfiguration =
+                    preparedBinding
+                        .sourceFamilyConfiguration;
+
+                const InvestigationSessionSourceReloadResult
+                    result =
+                    workspace
+                        ->applyPreparedSourceBackedReload(
+                            sessionId,
+                            std::move(
+                                preparedBinding
+                                ),
+                            std::move(
+                                prepared->importProfile
+                                ),
+                            std::move(
+                                prepared->importResult
+                                ),
+                            prepared
+                                ->initialLiveFollowByteOffset
+                            );
+
+                if (!result.succeeded) {
+                    QMessageBox::warning(
+                        this,
+                        tr(
+                            "Reload Investigation Failed"
+                            ),
+                        result
+                                .errorMessage
+                                .isEmpty()
+                            ? tr(
+                                  "The prepared source "
+                                  "reload could not be "
+                                  "applied."
+                                  )
+                            : result.errorMessage
+                        );
+
+                    return;
+                }
+
+                /*
+                 * Preserve the same recent-source and
+                 * rotation-setting behavior as the old
+                 * loadLogFile() reload path.
+                 */
+                rotatedSourceSettingsStore
+                    .rememberSourceConfiguration(
+                        {
+                            sourcePath,
+                            sourceFamilyConfiguration
+                                .rotationRule,
+                            sourceFamilyConfiguration
+                                .includeRotatedSources
+                        }
+                        );
+
+                recentItemsStore.addRecentFile(
+                    sourcePath
+                    );
+
+                refreshRecentFilesMenu();
+
+                if (noRecordsLoaded) {
+                    QMessageBox::warning(
+                        this,
+                        tr(
+                            "No Events Loaded"
+                            ),
+                        tr(
+                            "No telemetry events were "
+                            "loaded from the authoritative "
+                            "source."
+                            )
+                        );
+                }
+            }
+            );
+
+        watcher->setFuture(
+            QtConcurrent::run(
+                [
+                    persistedSession =
+                    std::move(
+                        persistedSession
+                        )
+                ](
+                    QPromise<
+                        InvestigationSessionRestorationPreparationResult>
+                        &promise
+                    ) mutable {
+                    promise.setProgressRange(
+                        0,
+                        0
+                        );
+
+                    bool determinateProgress =
+                        false;
+
+                    ImportExecutionContext
+                        executionContext;
+
+                    executionContext
+                        .isCancellationRequested =
+                        [&promise]() {
+                            return promise.isCanceled();
+                        };
+
+                    executionContext.reportProgress =
+                        [
+                            &promise,
+                            &determinateProgress
+                        ](
+                            const ImportProgress &progress
+                            ) {
+                            if (progress.totalBytes
+                                <= 0) {
+                                return;
+                            }
+
+                            if (!determinateProgress) {
+                                promise.setProgressRange(
+                                    0,
+                                    100
+                                    );
+
+                                determinateProgress =
+                                    true;
+                            }
+
+                            const double
+                                importFraction =
+                                static_cast<double>(
+                                    progress
+                                        .bytesProcessed
+                                    )
+                                / static_cast<double>(
+                                    progress
+                                        .totalBytes
+                                    );
+
+                            /*
+                             * As with Use Source as
+                             * Authoritative, reserve the
+                             * final five percent for
+                             * identity verification and
+                             * candidate finalization.
+                             */
+                            const int percentage =
+                                std::clamp(
+                                    static_cast<int>(
+                                        95.0
+                                        * importFraction
+                                        ),
+                                    0,
+                                    95
+                                    );
+
+                            const QString progressText =
+                                percentage >= 95
+                                    ? QStringLiteral(
+                                          "%1 records "
+                                          "processed; "
+                                          "finalizing source "
+                                          "verification..."
+                                          )
+                                          .arg(
+                                              progress
+                                                  .processedRecordCount
+                                              )
+                                    : QStringLiteral(
+                                          "%1 records "
+                                          "processed"
+                                          )
+                                          .arg(
+                                              progress
+                                                  .processedRecordCount
+                                              );
+
+                            promise
+                                .setProgressValueAndText(
+                                    percentage,
+                                    progressText
+                                    );
+                        };
+
+                    InvestigationSessionRestorationService
+                        restorationService;
+
+                    InvestigationSessionRestorationPreparationResult
+                        preparation =
+                        restorationService.prepare(
+                            persistedSession,
+                            QString(),
+                            executionContext
+                            );
+
+                    if (promise.isCanceled()) {
+                        return;
+                    }
+
+                    promise.addResult(
+                        std::move(
+                            preparation
+                            )
+                        );
+                }
+                )
             );
 
         return;
@@ -3407,6 +3869,627 @@ void MainWindow::redefineSessionSourcePath(
         );
 }
 
+void MainWindow::useSourceAsAuthoritative(
+    const QString &sessionId
+    )
+{
+    if (workspace == nullptr
+        || importWatcher != nullptr
+        || workspaceOpenInProgress
+        || sessionReloadInProgress
+        || snapshotOpenInProgress) {
+        return;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            sessionId
+            );
+
+    if (sessionIndex < 0) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->sessionAt(
+            sessionIndex
+            );
+
+    if (session == nullptr
+        || session->backing().mode()
+               != InvestigationSessionBackingMode::
+               Hybrid) {
+        return;
+    }
+
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        session
+            ->backing()
+            .externalSource();
+
+    if (externalSource == nullptr
+        || externalSource
+               ->sourcePath
+               .trimmed()
+               .isEmpty()) {
+        QMessageBox::warning(
+            this,
+            tr(
+                "Use Source as Authoritative Failed"
+                ),
+            tr(
+                "This Hybrid investigation does not "
+                "have a valid connected external "
+                "source."
+                )
+            );
+
+        return;
+    }
+
+    /*
+     * This is intentionally destructive with respect
+     * to the open investigation's evidence set.
+     *
+     * Snapshot-only evidence will no longer be part of
+     * the investigation once the external source becomes
+     * authoritative.
+     */
+    const QMessageBox::StandardButton choice =
+        QMessageBox::warning(
+            this,
+            tr(
+                "Use Source as Authoritative"
+                ),
+            tr(
+                "TraceScope will rebuild this "
+                "investigation entirely from the "
+                "connected external source.\n\n"
+                "Evidence that exists only in the "
+                "durable snapshot will be removed from "
+                "the open investigation. Bookmarks, "
+                "notes, findings, and selection tied "
+                "only to removed records will also no "
+                "longer apply.\n\n"
+                "The snapshot file itself will NOT be "
+                "deleted.\n\n"
+                "Continue?"
+                ),
+            QMessageBox::Yes
+                | QMessageBox::Cancel,
+            QMessageBox::Cancel
+            );
+
+    if (choice != QMessageBox::Yes) {
+        return;
+    }
+
+    /*
+     * Capture the current Hybrid persistence model,
+     * then transform only this detached candidate into
+     * a SourceBacked descriptor.
+     *
+     * The live InvestigationSession remains completely
+     * untouched during preparation.
+     */
+    PersistedInvestigationSession persistedSession =
+        InvestigationSessionPersistence::capture(
+            *session
+            );
+
+    if (!persistedSession
+             .backing
+             .externalSourceBinding
+             .has_value()) {
+        QMessageBox::warning(
+            this,
+            tr(
+                "Use Source as Authoritative Failed"
+                ),
+            tr(
+                "TraceScope could not capture the "
+                "Hybrid investigation's external "
+                "source binding."
+                )
+            );
+
+        return;
+    }
+
+    persistedSession.backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        SourceBacked;
+
+    /*
+     * This candidate must represent the external source
+     * independently. The current snapshot must not
+     * participate in source preparation.
+     */
+    persistedSession
+        .backing
+        .snapshotReference
+        .reset();
+
+    /*
+     * Hybrid normally gets its authoritative import
+     * profile from the snapshot. SourceBacked
+     * restoration expects that profile directly on
+     * the backing descriptor.
+     */
+    persistedSession
+        .backing
+        .sourceImportProfile =
+        session->importProfile();
+
+    /*
+     * Keep the temporary compatibility mirror coherent
+     * even though schema-v2 preparation reads the
+     * normalized backing model.
+     */
+    persistedSession.importProfile =
+        session->importProfile();
+
+    auto *watcher =
+        new QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>(
+            this
+            );
+
+    auto *progressDialog =
+        new QProgressDialog(
+            tr(
+                "Rebuilding investigation from "
+                "the authoritative source...\n"
+                "Preparing source evidence..."
+                ),
+            tr("Cancel"),
+            0,
+            0,
+            this
+            );
+
+    progressDialog->setWindowTitle(
+        tr(
+            "Use Source as Authoritative"
+            )
+        );
+
+    progressDialog->setWindowModality(
+        Qt::WindowModal
+        );
+
+    progressDialog->setMinimumDuration(
+        250
+        );
+
+    progressDialog->setAutoClose(
+        false
+        );
+
+    progressDialog->setAutoReset(
+        false
+        );
+
+    setSessionReloadInProgress(
+        true
+        );
+
+    connect(
+        progressDialog,
+        &QProgressDialog::canceled,
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        cancel
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        progressRangeChanged,
+        progressDialog,
+        &QProgressDialog::setRange
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        progressValueChanged,
+        progressDialog,
+        &QProgressDialog::setValue
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        progressTextChanged,
+        this,
+        [
+            progressDialog
+        ](
+            const QString &progressText
+            ) {
+            QString label =
+                QObject::tr(
+                    "Rebuilding investigation from "
+                    "the authoritative source..."
+                    );
+
+            if (!progressText.isEmpty()) {
+                label +=
+                    QStringLiteral("\n")
+                    + progressText;
+            }
+
+            progressDialog->setLabelText(
+                label
+                );
+        }
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        finished,
+        this,
+        [
+            this,
+            watcher,
+            progressDialog,
+            sessionId
+        ]() mutable {
+            const bool cancelled =
+                watcher->isCanceled();
+
+            /*
+             * Destroy the progress dialog before opening any
+             * modal completion/error dialog.
+             *
+             * deleteLater() is not sufficient here because the
+             * following QMessageBox starts its own nested event
+             * loop. The progress dialog can remain alive and
+             * visible in front of that message box until the
+             * user explicitly dismisses it.
+             */
+            progressDialog->close();
+            delete progressDialog;
+
+            setSessionReloadInProgress(
+                false
+                );
+
+            if (cancelled) {
+                watcher->deleteLater();
+                return;
+            }
+
+            if (watcher
+                    ->future()
+                    .resultCount()
+                <= 0) {
+                watcher->deleteLater();
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Use Source as Authoritative "
+                        "Failed"
+                        ),
+                    tr(
+                        "TraceScope did not receive a "
+                        "source preparation result. The "
+                        "current Hybrid investigation "
+                        "was not changed."
+                        )
+                    );
+
+                return;
+            }
+
+            InvestigationSessionRestorationPreparationResult
+                preparation =
+                watcher->result();
+
+            watcher->deleteLater();
+
+            if (!preparation.succeeded
+                || !preparation
+                        .preparedData
+                        .has_value()) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Use Source as Authoritative "
+                        "Failed"
+                        ),
+                    preparation
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "TraceScope could not "
+                              "prepare a complete "
+                              "Source-backed "
+                              "investigation. The "
+                              "current Hybrid "
+                              "investigation was not "
+                              "changed."
+                              )
+                        : preparation.errorMessage
+                    );
+
+                return;
+            }
+
+            PreparedSourceBackedInvestigationSession
+                *prepared =
+                std::get_if<
+                    PreparedSourceBackedInvestigationSession>(
+                    &*preparation.preparedData
+                    );
+
+            if (prepared == nullptr) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Use Source as Authoritative "
+                        "Failed"
+                        ),
+                    tr(
+                        "Source preparation completed "
+                        "without producing a complete "
+                        "Source-backed candidate. The "
+                        "current Hybrid investigation "
+                        "was not changed."
+                        )
+                    );
+
+                return;
+            }
+
+            InvestigationExternalSourceBinding
+                preparedBinding;
+
+            preparedBinding.sourcePath =
+                std::move(
+                    prepared->sourcePath
+                    );
+
+            preparedBinding.logicalSourceKey =
+                std::move(
+                    prepared->logicalSourceKey
+                    );
+
+            preparedBinding
+                .sourceFamilyConfiguration =
+                std::move(
+                    prepared
+                        ->sourceFamilyConfiguration
+                    );
+
+            preparedBinding.sourceGeneration =
+                prepared->sourceGeneration;
+
+            preparedBinding.sourceIdentity =
+                std::move(
+                    prepared->sourceIdentity
+                    );
+
+            const bool noRecordsLoaded =
+                prepared
+                    ->importResult
+                    .records
+                    .isEmpty();
+
+            const InvestigationSessionSourceAuthoritativeResult
+                result =
+                workspace
+                    ->applySourceAuthoritativeTransition(
+                        sessionId,
+                        std::move(
+                            preparedBinding
+                            ),
+                        std::move(
+                            prepared->importProfile
+                            ),
+                        std::move(
+                            prepared->importResult
+                            ),
+                        prepared
+                            ->initialLiveFollowByteOffset
+                        );
+
+            if (!result.succeeded) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Use Source as Authoritative "
+                        "Failed"
+                        ),
+                    result
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "The prepared source "
+                              "could not be committed "
+                              "to the open "
+                              "investigation."
+                              )
+                        : result.errorMessage
+                    );
+
+                return;
+            }
+
+            if (noRecordsLoaded) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Source is Now Authoritative"
+                        ),
+                    tr(
+                        "The investigation is now "
+                        "Source-backed, but the "
+                        "authoritative source produced "
+                        "no investigation records.\n\n"
+                        "The previous snapshot file was "
+                        "not deleted."
+                        )
+                    );
+
+                return;
+            }
+
+            QMessageBox::information(
+                this,
+                tr(
+                    "Source is Now Authoritative"
+                    ),
+                tr(
+                    "The investigation was rebuilt "
+                    "from the connected external source "
+                    "and is now Source-backed.\n\n"
+                    "The previous snapshot file was "
+                    "not deleted."
+                    )
+                );
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [
+                persistedSession =
+                std::move(
+                    persistedSession
+                    )
+            ](
+                QPromise<
+                    InvestigationSessionRestorationPreparationResult>
+                    &promise
+                ) mutable {
+                promise.setProgressRange(
+                    0,
+                    0
+                    );
+
+                bool determinateProgress = false;
+
+                ImportExecutionContext
+                    executionContext;
+
+                executionContext
+                    .isCancellationRequested =
+                    [&promise]() {
+                        return promise.isCanceled();
+                    };
+
+                executionContext.reportProgress =
+                    [
+                        &promise,
+                        &determinateProgress
+                ](
+                        const ImportProgress &progress
+                        ) {
+                        if (progress.totalBytes
+                            <= 0) {
+                            return;
+                        }
+
+                        if (!determinateProgress) {
+                            promise.setProgressRange(
+                                0,
+                                100
+                                );
+
+                            determinateProgress =
+                                true;
+                        }
+
+                        /*
+                         * Source import is only part of the preparation
+                         * operation. Leave the final five percent for source
+                         * identity verification, rebasing, and candidate
+                         * finalization so the dialog never claims completion
+                         * while preparation is still running.
+                         */
+                        const double importFraction =
+                            static_cast<double>(
+                                progress.bytesProcessed
+                                )
+                            / static_cast<double>(
+                                progress.totalBytes
+                                );
+
+                        const int percentage =
+                            std::clamp(
+                                static_cast<int>(
+                                    95.0 * importFraction
+                                    ),
+                                0,
+                                95
+                                );
+
+                        const QString progressText =
+                            percentage >= 95
+                                ? QStringLiteral(
+                                      "%1 records processed; "
+                                      "finalizing source verification..."
+                                      )
+                                      .arg(
+                                          progress
+                                              .processedRecordCount
+                                          )
+                                : QStringLiteral(
+                                      "%1 records processed"
+                                      )
+                                      .arg(
+                                          progress
+                                              .processedRecordCount
+                                          );
+
+                        promise
+                            .setProgressValueAndText(
+                                percentage,
+                                progressText
+                                );
+                    };
+
+                InvestigationSessionRestorationService
+                    restorationService;
+
+                /*
+                 * SourceBacked preparation needs no
+                 * workspace-relative path resolution.
+                 * The external source binding already
+                 * contains its absolute physical path.
+                 */
+                InvestigationSessionRestorationPreparationResult
+                    preparation =
+                    restorationService.prepare(
+                        persistedSession,
+                        QString(),
+                        executionContext
+                        );
+
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                promise.addResult(
+                    std::move(
+                        preparation
+                        )
+                    );
+            }
+            )
+        );
+}
+
 void MainWindow::openSourceLocation(
     const QString &sourcePath
     )
@@ -3831,6 +4914,35 @@ void MainWindow::populateSessionSourceMenu(
         }
 
         sourceMenu->addSeparator();
+
+        QAction *sourceAuthoritativeAction =
+            sourceMenu->addAction(
+                tr(
+                    "Use Source as Authoritative..."
+                    )
+                );
+
+        sourceAuthoritativeAction->setToolTip(
+            tr(
+                "Rebuild the investigation entirely from "
+                "the connected external source and stop "
+                "using the durable snapshot as backing"
+                )
+            );
+
+        connect(
+            sourceAuthoritativeAction,
+            &QAction::triggered,
+            sourceMenu,
+            [
+                this,
+                sessionId
+            ]() {
+                useSourceAsAuthoritative(
+                    sessionId
+                    );
+            }
+            );
 
         QAction *snapshotOnlyAction =
             sourceMenu->addAction(

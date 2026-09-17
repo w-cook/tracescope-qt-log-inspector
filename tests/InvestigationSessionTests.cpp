@@ -8,6 +8,7 @@
 
 #include "../src/importing/JsonLinesImporter.h"
 #include "../src/live/LiveSessionFollowCoordinator.h"
+#include "../src/workspace/HybridInvestigationReconstructionService.h"
 #include "../src/workspace/InvestigationSession.h"
 #include "../src/workspace/InvestigationSessionPersistence.h"
 
@@ -45,6 +46,10 @@ private slots:
     void sourceRelocationSynchronizesPendingGenerationReset();
     void snapshotBackedSessionDerivesReconnectHintFromSnapshot();
     void snapshotBackedSessionWithoutContinuityHasNoReconnectHint();
+    void appliesSourceAuthoritativeTransition();
+    void rejectsSourceAuthoritativeTransitionForNonHybrid();
+    void appliesPreparedSourceBackedReload();
+    void rejectsPreparedSourceBackedReloadForNonSourceBacked();
 };
 
 void InvestigationSessionTests::
@@ -4814,6 +4819,851 @@ void InvestigationSessionTests::
     QVERIFY(
         session->reconnectSourceHint()
         == nullptr
+        );
+}
+
+void InvestigationSessionTests::
+    appliesSourceAuthoritativeTransition()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral(
+                "authoritative-source.jsonl"
+                )
+            );
+
+    QFile sourceFile(sourcePath);
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    const QByteArray sourceBytes(
+        "{\"message\":\"source\"}\n"
+        );
+
+    QCOMPARE(
+        sourceFile.write(sourceBytes),
+        qint64(sourceBytes.size())
+        );
+
+    sourceFile.close();
+
+    const SourcePhysicalIdentityCaptureResult
+        identityResult =
+        captureSourcePhysicalIdentity(
+            sourcePath
+            );
+
+    QVERIFY(identityResult.succeeded);
+
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile.name =
+        QStringLiteral(
+            "Original Hybrid Profile"
+            );
+
+    snapshot.importProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    InvestigationRecord sharedRecord;
+
+    sharedRecord.recordId =
+        QStringLiteral(
+            "shared-record"
+            );
+
+    sharedRecord.message =
+        QStringLiteral(
+            "Shared evidence"
+            );
+
+    InvestigationRecord snapshotOnlyRecord;
+
+    snapshotOnlyRecord.recordId =
+        QStringLiteral(
+            "snapshot-only"
+            );
+
+    snapshotOnlyRecord.message =
+        QStringLiteral(
+            "Snapshot-only evidence"
+            );
+
+    snapshot.records = {
+        sharedRecord,
+        snapshotOnlyRecord
+    };
+
+    snapshot.processedRecordCount = 2;
+
+    InvestigationExternalSourceBinding
+        hybridBinding;
+
+    hybridBinding.sourcePath =
+        QFileInfo(sourcePath)
+            .absoluteFilePath();
+
+    hybridBinding.logicalSourceKey =
+        QStringLiteral(
+            "stable-logical-source"
+            );
+
+    hybridBinding.sourceGeneration = 4;
+
+    hybridBinding.sourceIdentity =
+        identityResult.identity;
+
+    const QString snapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "hybrid-floor.tsinv"
+                )
+            );
+
+    /*
+ * Construct the durable SnapshotBacked floor using
+ * the factory already exercised by this test target.
+ */
+    auto session =
+        InvestigationSession::createSnapshotBacked(
+            QStringLiteral(
+                "hybrid-session"
+                ),
+            snapshotPath,
+            snapshot
+            );
+
+    QVERIFY(session != nullptr);
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    /*
+     * Build a prepared reconnect candidate entirely from
+     * value data. No file I/O is required here; the purpose
+     * of this test is the Source-authoritative mutation
+     * boundary, not Hybrid reconstruction itself.
+     */
+    HybridInvestigationReconstructionResult
+        reconnectCandidate;
+
+    reconnectCandidate.succeeded = true;
+    reconnectCandidate.externalSourceAvailable =
+        true;
+
+    reconnectCandidate.externalSourceBinding =
+        hybridBinding;
+
+    reconnectCandidate.importResult.records = {
+        sharedRecord,
+        snapshotOnlyRecord
+    };
+
+    reconnectCandidate
+        .importResult
+        .processedRecordCount = 2;
+
+    const InvestigationSessionHybridReloadResult
+        reconnectResult =
+        session->applyHybridReconnect(
+            snapshot,
+            std::move(
+                reconnectCandidate
+                )
+            );
+
+    QVERIFY2(
+        reconnectResult.succeeded,
+        qPrintable(
+            reconnectResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        Hybrid
+        );
+
+    InvestigationStateStore *stateStore =
+        session->investigationStateStore();
+
+    stateStore->setBookmarked(
+        QStringLiteral(
+            "shared-record"
+            ),
+        true
+        );
+
+    stateStore->setNote(
+        QStringLiteral(
+            "shared-record"
+            ),
+        QStringLiteral(
+            "Keep this annotation"
+            )
+        );
+
+    stateStore->setBookmarked(
+        QStringLiteral(
+            "snapshot-only"
+            ),
+        true
+        );
+
+    session->setSelectedRecordId(
+        QStringLiteral(
+            "snapshot-only"
+            )
+        );
+
+    /*
+     * This represents the complete candidate prepared
+     * independently from the authoritative source.
+     */
+    ImportResult sourceResult;
+
+    InvestigationRecord survivingRecord;
+
+    survivingRecord.recordId =
+        QStringLiteral(
+            "shared-record"
+            );
+
+    survivingRecord.message =
+        QStringLiteral(
+            "Shared evidence from source"
+            );
+
+    InvestigationRecord sourceOnlyRecord;
+
+    sourceOnlyRecord.recordId =
+        QStringLiteral(
+            "source-only"
+            );
+
+    sourceOnlyRecord.message =
+        QStringLiteral(
+            "Current source evidence"
+            );
+
+    sourceResult.records = {
+        survivingRecord,
+        sourceOnlyRecord
+    };
+
+    sourceResult.processedRecordCount = 2;
+
+    InvestigationExternalSourceBinding
+        preparedBinding =
+        hybridBinding;
+
+    preparedBinding.sourceGeneration = 5;
+
+    ImportProfile preparedProfile;
+
+    preparedProfile.name =
+        QStringLiteral(
+            "Authoritative Source Profile"
+            );
+
+    preparedProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    const InvestigationSessionSourceAuthoritativeResult
+        transition =
+        session->applySourceAuthoritativeTransition(
+            preparedBinding,
+            preparedProfile,
+            std::move(sourceResult),
+            123
+            );
+
+    QVERIFY2(
+        transition.succeeded,
+        qPrintable(
+            transition.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SourceBacked
+        );
+
+    QVERIFY(
+        session
+            ->backing()
+            .snapshot()
+        == nullptr
+        );
+
+    const InvestigationExternalSourceBinding
+        *sourceBinding =
+        session
+            ->backing()
+            .externalSource();
+
+    if (sourceBinding == nullptr) {
+        QFAIL(
+            "Expected SourceBacked external binding."
+            );
+
+        return;
+    }
+
+    QCOMPARE(
+        sourceBinding->sourcePath,
+        QFileInfo(sourcePath)
+            .absoluteFilePath()
+        );
+
+    QCOMPARE(
+        sourceBinding->logicalSourceKey,
+        QStringLiteral(
+            "stable-logical-source"
+            )
+        );
+
+    QCOMPARE(
+        sourceBinding->sourceGeneration,
+        quint64(5)
+        );
+
+    QVERIFY(
+        session->reconnectSourceHint()
+        == nullptr
+        );
+
+    QCOMPARE(
+        session->initialLiveFollowByteOffset(),
+        qint64(123)
+        );
+
+    QCOMPARE(
+        session->importProfile().name,
+        QStringLiteral(
+            "Authoritative Source Profile"
+            )
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            ->investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.at(0).recordId,
+        QStringLiteral(
+            "shared-record"
+            )
+        );
+
+    QCOMPARE(
+        records.at(1).recordId,
+        QStringLiteral(
+            "source-only"
+            )
+        );
+
+    /*
+     * Stable-ID state attached to surviving source
+     * evidence remains.
+     */
+    QVERIFY(
+        stateStore
+            ->stateForRecord(
+                QStringLiteral(
+                    "shared-record"
+                    )
+                )
+            .bookmarked
+        );
+
+    QCOMPARE(
+        stateStore
+            ->stateForRecord(
+                QStringLiteral(
+                    "shared-record"
+                    )
+                )
+            .note,
+        QStringLiteral(
+            "Keep this annotation"
+            )
+        );
+
+    /*
+     * Snapshot-only evidence and state disappear.
+     */
+    QVERIFY(
+        !stateStore
+             ->statefulRecordIds()
+             .contains(
+                 QStringLiteral(
+                     "snapshot-only"
+                     )
+                 )
+        );
+
+    QVERIFY(
+        session
+            ->selectedRecordId()
+            .isEmpty()
+        );
+}
+
+void InvestigationSessionTests::
+    rejectsSourceAuthoritativeTransitionForNonHybrid()
+{
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    ImportResult initialResult;
+
+    InvestigationRecord existingRecord;
+
+    existingRecord.recordId =
+        QStringLiteral(
+            "existing"
+            );
+
+    initialResult.records.append(
+        existingRecord
+        );
+
+    initialResult.processedRecordCount = 1;
+
+    InvestigationSession session(
+        QStringLiteral(
+            "source.jsonl"
+            ),
+        profile,
+        std::move(initialResult)
+        );
+
+    InvestigationExternalSourceBinding
+        candidateBinding;
+
+    candidateBinding.sourcePath =
+        QStringLiteral(
+            "replacement.jsonl"
+            );
+
+    ImportResult candidateResult;
+
+    InvestigationRecord replacementRecord;
+
+    replacementRecord.recordId =
+        QStringLiteral(
+            "replacement"
+            );
+
+    candidateResult.records.append(
+        replacementRecord
+        );
+
+    candidateResult.processedRecordCount = 1;
+
+    const InvestigationSessionSourceAuthoritativeResult
+        transition =
+        session.applySourceAuthoritativeTransition(
+            std::move(
+                candidateBinding
+                ),
+            profile,
+            std::move(
+                candidateResult
+                ),
+            50
+            );
+
+    QVERIFY(
+        !transition.succeeded
+        );
+
+    QCOMPARE(
+        session.backing().mode(),
+        InvestigationSessionBackingMode::
+        SourceBacked
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(1)
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .first()
+            .recordId,
+        QStringLiteral(
+            "existing"
+            )
+        );
+}
+
+void InvestigationSessionTests::
+    appliesPreparedSourceBackedReload()
+{
+    ImportProfile initialProfile;
+
+    initialProfile.name =
+        QStringLiteral(
+            "Initial Profile"
+            );
+
+    initialProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    ImportResult initialResult;
+
+    InvestigationRecord retainedRecord;
+
+    retainedRecord.recordId =
+        QStringLiteral(
+            "stable-record"
+            );
+
+    retainedRecord.message =
+        QStringLiteral(
+            "Original evidence"
+            );
+
+    InvestigationRecord removedRecord;
+
+    removedRecord.recordId =
+        QStringLiteral(
+            "removed-record"
+            );
+
+    initialResult.records = {
+        retainedRecord,
+        removedRecord
+    };
+
+    initialResult.processedRecordCount = 2;
+
+    InvestigationSession session(
+        QStringLiteral(
+            "source.jsonl"
+            ),
+        initialProfile,
+        std::move(
+            initialResult
+            )
+        );
+
+    QVERIFY(
+        session.updateExternalSourceLogicalKey(
+            QStringLiteral(
+                "stable-logical-source"
+                )
+            )
+        );
+
+    session.updateExternalSourceRuntimeState(
+        4,
+        nullptr
+        );
+
+    InvestigationStateStore *stateStore =
+        session.investigationStateStore();
+
+    stateStore->setBookmarked(
+        QStringLiteral(
+            "stable-record"
+            ),
+        true
+        );
+
+    stateStore->setNote(
+        QStringLiteral(
+            "stable-record"
+            ),
+        QStringLiteral(
+            "Preserve this"
+            )
+        );
+
+    stateStore->setBookmarked(
+        QStringLiteral(
+            "removed-record"
+            ),
+        true
+        );
+
+    session.setSelectedRecordId(
+        QStringLiteral(
+            "stable-record"
+            )
+        );
+
+    InvestigationExternalSourceBinding
+        preparedBinding;
+
+    preparedBinding.sourcePath =
+        QStringLiteral(
+            "source.jsonl"
+            );
+
+    preparedBinding.logicalSourceKey =
+        QStringLiteral(
+            "stable-logical-source"
+            );
+
+    preparedBinding.sourceGeneration = 4;
+
+    preparedBinding
+        .sourceFamilyConfiguration
+        .includeRotatedSources = true;
+
+    ImportProfile preparedProfile;
+
+    preparedProfile.name =
+        QStringLiteral(
+            "Prepared Profile"
+            );
+
+    preparedProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    ImportResult preparedResult;
+
+    InvestigationRecord retainedReloadedRecord;
+
+    retainedReloadedRecord.recordId =
+        QStringLiteral(
+            "stable-record"
+            );
+
+    retainedReloadedRecord.message =
+        QStringLiteral(
+            "Reloaded evidence"
+            );
+
+    InvestigationRecord newRecord;
+
+    newRecord.recordId =
+        QStringLiteral(
+            "new-record"
+            );
+
+    preparedResult.records = {
+        retainedReloadedRecord,
+        newRecord
+    };
+
+    preparedResult.processedRecordCount = 2;
+
+    const InvestigationSessionSourceReloadResult
+        reloadResult =
+        session.applyPreparedSourceBackedReload(
+            preparedBinding,
+            preparedProfile,
+            std::move(
+                preparedResult
+                ),
+            321
+            );
+
+    QVERIFY2(
+        reloadResult.succeeded,
+        qPrintable(
+            reloadResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session.backing().mode(),
+        InvestigationSessionBackingMode::
+        SourceBacked
+        );
+
+    const InvestigationExternalSourceBinding
+        *updatedBinding =
+        session
+            .backing()
+            .externalSource();
+
+    QVERIFY(updatedBinding != nullptr);
+
+    QCOMPARE(
+        updatedBinding->logicalSourceKey,
+        QStringLiteral(
+            "stable-logical-source"
+            )
+        );
+
+    QCOMPARE(
+        updatedBinding->sourceGeneration,
+        quint64(4)
+        );
+
+    QCOMPARE(
+        updatedBinding
+            ->sourceFamilyConfiguration
+            .includeRotatedSources,
+        true
+        );
+
+    QCOMPARE(
+        session.initialLiveFollowByteOffset(),
+        qint64(321)
+        );
+
+    QCOMPARE(
+        session.importProfile().name,
+        QStringLiteral(
+            "Prepared Profile"
+            )
+        );
+
+    QVERIFY(
+        stateStore
+            ->stateForRecord(
+                QStringLiteral(
+                    "stable-record"
+                    )
+                )
+            .bookmarked
+        );
+
+    QCOMPARE(
+        stateStore
+            ->stateForRecord(
+                QStringLiteral(
+                    "stable-record"
+                    )
+                )
+            .note,
+        QStringLiteral(
+            "Preserve this"
+            )
+        );
+
+    QVERIFY(
+        !stateStore->hasStateForRecord(
+            QStringLiteral(
+                "removed-record"
+                )
+            )
+        );
+
+    QCOMPARE(
+        session.selectedRecordId(),
+        QStringLiteral(
+            "stable-record"
+            )
+        );
+
+    QCOMPARE(
+        session
+            .investigationController()
+            ->allRecords()
+            .size(),
+        2
+        );
+}
+
+void InvestigationSessionTests::
+    rejectsPreparedSourceBackedReloadForNonSourceBacked()
+{
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    auto session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            QStringLiteral(
+                "snapshot.tsinv"
+                ),
+            std::move(
+                snapshot
+                )
+            );
+
+    QVERIFY(session != nullptr);
+
+    InvestigationExternalSourceBinding
+        preparedBinding;
+
+    preparedBinding.sourcePath =
+        QStringLiteral(
+            "source.jsonl"
+            );
+
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    ImportResult result;
+
+    const InvestigationSessionSourceReloadResult
+        reloadResult =
+        session
+            ->applyPreparedSourceBackedReload(
+                std::move(
+                    preparedBinding
+                    ),
+                std::move(
+                    profile
+                    ),
+                std::move(
+                    result
+                    ),
+                100
+                );
+
+    QVERIFY(
+        !reloadResult.succeeded
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
         );
 }
 

@@ -417,6 +417,150 @@ InvestigationWorkspace::redefineSourcePath(
     return result;
 }
 
+InvestigationSessionSourceAuthoritativeResult
+    InvestigationWorkspace::
+    applySourceAuthoritativeTransition(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionSourceAuthoritativeResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionSourceAuthoritativeResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionSourceAuthoritativeResult
+        result =
+        session
+            ->applySourceAuthoritativeTransition(
+                std::move(
+                    externalSourceBinding
+                    ),
+                std::move(
+                    importProfile
+                    ),
+                std::move(
+                    importResult
+                    ),
+                initialLiveFollowByteOffset
+                );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
+InvestigationSessionSourceReloadResult
+    InvestigationWorkspace::
+    applyPreparedSourceBackedReload(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionSourceReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionSourceReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionSourceReloadResult
+        result =
+        session
+            ->applyPreparedSourceBackedReload(
+                std::move(
+                    externalSourceBinding
+                    ),
+                std::move(
+                    importProfile
+                    ),
+                std::move(
+                    importResult
+                    ),
+                initialLiveFollowByteOffset
+                );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
 bool InvestigationWorkspace::
     applySnapshotOnlyTransition(
         const QString &sessionId,

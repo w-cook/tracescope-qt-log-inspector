@@ -70,6 +70,26 @@ public:
         const QString &candidatePath
         );
 
+    InvestigationSessionSourceAuthoritativeResult
+    applySourceAuthoritativeTransition(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
+    InvestigationSessionSourceReloadResult
+    applyPreparedSourceBackedReload(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
     bool applySnapshotOnlyTransition(
         const QString &sessionId,
         const QString &snapshotPath,

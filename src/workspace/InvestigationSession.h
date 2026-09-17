@@ -83,6 +83,20 @@ struct InvestigationSessionSourceRelocationResult
     QString errorMessage;
 };
 
+struct InvestigationSessionSourceAuthoritativeResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+};
+
+struct InvestigationSessionSourceReloadResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+};
+
 class InvestigationSession
 {
 public:
@@ -295,6 +309,15 @@ public:
         const QString &candidatePath
         );
 
+    InvestigationSessionSourceReloadResult
+    applyPreparedSourceBackedReload(
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
     bool applySnapshotReload(
         InvestigationSessionSnapshot snapshot
         );
@@ -311,6 +334,15 @@ public:
         InvestigationSessionSnapshot snapshot,
         HybridInvestigationReconstructionResult
             reconstruction
+        );
+
+    InvestigationSessionSourceAuthoritativeResult
+    applySourceAuthoritativeTransition(
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
         );
 
     bool applySnapshotOnlyTransition(
