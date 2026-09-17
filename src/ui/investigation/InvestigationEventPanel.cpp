@@ -205,6 +205,60 @@ InvestigationEventPanel::
         m_table
         );
 
+    QScrollBar *verticalScrollBar =
+        m_table->verticalScrollBar();
+
+    connect(
+        verticalScrollBar,
+        &QScrollBar::rangeChanged,
+        this,
+        [
+            this,
+            verticalScrollBar
+        ](
+            int,
+            int maximum
+            ) {
+            if (!m_followNewest) {
+                return;
+            }
+
+            verticalScrollBar->setValue(
+                maximum
+                );
+        }
+        );
+
+    connect(
+        verticalScrollBar,
+        &QScrollBar::valueChanged,
+        this,
+        [
+            this,
+            verticalScrollBar
+        ](
+            int value
+            ) {
+            if (!m_followNewest
+                || value
+                       == verticalScrollBar
+                              ->maximum()) {
+                return;
+            }
+
+            /*
+             * While Follow Newest is enabled, the
+             * scrollbar is genuinely anchored. The user
+             * must turn the toggle off before browsing
+             * older records.
+             */
+            verticalScrollBar->setValue(
+                verticalScrollBar
+                    ->maximum()
+                );
+        }
+        );
+
     /*
      * ---------------------------------------------------------
      * Navigation actions
@@ -835,6 +889,29 @@ void InvestigationEventPanel::
 void InvestigationEventPanel::focusTable()
 {
     m_table->setFocus();
+}
+
+void InvestigationEventPanel::
+    setFollowNewestEnabled(
+        bool enabled
+        )
+{
+    m_followNewest =
+        enabled;
+
+    if (!m_followNewest
+        || m_table == nullptr
+        || m_table->verticalScrollBar()
+               == nullptr) {
+        return;
+    }
+
+    QScrollBar *scrollBar =
+        m_table->verticalScrollBar();
+
+    scrollBar->setValue(
+        scrollBar->maximum()
+        );
 }
 
 InvestigationEventTablePresentationState

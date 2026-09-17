@@ -1240,6 +1240,41 @@ QWidget *InvestigationSessionView::
             parent
             );
 
+    /*
+     * Restore the document-owned Follow Newest state
+     * whenever the tab accessory is created again.
+     */
+    control->setFollowNewestEnabled(
+        m_followNewest
+        );
+
+    if (m_eventPanel != nullptr) {
+        m_eventPanel
+            ->setFollowNewestEnabled(
+                m_followNewest
+                );
+    }
+
+    connect(
+        control,
+        &LiveFollowTabControl::
+        followNewestChanged,
+        this,
+        [this](
+            bool enabled
+            ) {
+            m_followNewest =
+                enabled;
+
+            if (m_eventPanel != nullptr) {
+                m_eventPanel
+                    ->setFollowNewestEnabled(
+                        enabled
+                        );
+            }
+        }
+        );
+
     connect(
         control,
         &LiveFollowTabControl::
@@ -2421,5 +2456,5 @@ void InvestigationSessionView::
     }
 
     m_eventPanel
-        ->refreshNavigationState();
+        ->refreshPresentation();
 }

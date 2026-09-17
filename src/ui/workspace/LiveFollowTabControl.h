@@ -19,10 +19,18 @@ public:
         QWidget *parent = nullptr
         );
 
+    void setFollowNewestEnabled(
+        bool enabled
+        );
+
 signals:
     void liveFollowStateChanged();
 
     void liveSessionUpdated();
+
+    void followNewestChanged(
+        bool enabled
+        );
 
 private:
     void attachCoordinator(
@@ -55,6 +63,9 @@ private:
         nullptr;
 
     QToolButton *m_stopButton =
+        nullptr;
+
+    QToolButton *m_followNewestButton =
         nullptr;
 
     QString m_errorMessage;

@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QPainter>
 #include <QPixmap>
+#include <QSignalBlocker>
 #include <QToolButton>
 
 #include "../../live/LiveSessionFollowCoordinator.h"
@@ -25,7 +26,8 @@ enum class ControlIconKind
 {
     Play,
     Pause,
-    Stop
+    Stop,
+    FollowNewest
 };
 
 struct LiveControlColors
@@ -173,6 +175,44 @@ QIcon controlIcon(
             0.8
             );
         break;
+
+    case ControlIconKind::FollowNewest:
+        painter.setPen(
+            QPen(
+                color,
+                1.8,
+                Qt::SolidLine,
+                Qt::RoundCap,
+                Qt::RoundJoin
+                )
+            );
+
+        /*
+         * Downward arrow.
+         */
+        painter.drawLine(
+            QPointF(8.0, 3.0),
+            QPointF(8.0, 10.0)
+            );
+
+        painter.drawLine(
+            QPointF(4.5, 7.0),
+            QPointF(8.0, 10.5)
+            );
+
+        painter.drawLine(
+            QPointF(11.5, 7.0),
+            QPointF(8.0, 10.5)
+            );
+
+        /*
+         * Bottom anchor.
+         */
+        painter.drawLine(
+            QPointF(4.0, 13.0),
+            QPointF(12.0, 13.0)
+            );
+        break;
     }
 
     return QIcon(
@@ -213,6 +253,9 @@ LiveFollowTabControl::
         new QToolButton(this)
         ),
     m_stopButton(
+        new QToolButton(this)
+        ),
+    m_followNewestButton(
         new QToolButton(this)
         )
 {
@@ -277,7 +320,8 @@ LiveFollowTabControl::
     for (QToolButton *button
          : {
              m_primaryButton,
-             m_stopButton
+             m_stopButton,
+             m_followNewestButton
          }) {
         button->setFixedSize(
             ControlButtonSize,
@@ -313,6 +357,16 @@ LiveFollowTabControl::
             )
         );
 
+    m_followNewestButton->setObjectName(
+        QStringLiteral(
+            "liveFollowNewestButton"
+            )
+        );
+
+    m_followNewestButton->setCheckable(
+        true
+        );
+
     layout->addWidget(
         m_statusBadge
         );
@@ -323,6 +377,10 @@ LiveFollowTabControl::
 
     layout->addWidget(
         m_stopButton
+        );
+
+    layout->addWidget(
+        m_followNewestButton
         );
 
     layout->setAlignment(
@@ -344,6 +402,21 @@ LiveFollowTabControl::
         this,
         &LiveFollowTabControl::
         handleStop
+        );
+
+    connect(
+        m_followNewestButton,
+        &QToolButton::toggled,
+        this,
+        [this](
+            bool enabled
+            ) {
+            refreshPresentation();
+
+            emit followNewestChanged(
+                enabled
+                );
+        }
         );
 
     /*
@@ -543,6 +616,28 @@ void LiveFollowTabControl::
 }
 
 void LiveFollowTabControl::
+    setFollowNewestEnabled(
+        bool enabled
+        )
+{
+    if (m_followNewestButton == nullptr) {
+        return;
+    }
+
+    {
+        const QSignalBlocker blocker(
+            m_followNewestButton
+            );
+
+        m_followNewestButton->setChecked(
+            enabled
+            );
+    }
+
+    refreshPresentation();
+}
+
+void LiveFollowTabControl::
     setError(
         const QString &errorMessage
         )
@@ -592,6 +687,35 @@ void LiveFollowTabControl::
         status
             == LiveFileFollowStatus::Following
         && !hasError;
+
+    bool followNewestWasCleared =
+        false;
+
+    if (!activelyFollowing
+        && m_followNewestButton->isChecked()) {
+        {
+            const QSignalBlocker blocker(
+                m_followNewestButton
+                );
+
+            m_followNewestButton->setChecked(
+                false
+                );
+        }
+
+        followNewestWasCleared =
+            true;
+    }
+
+    m_followNewestButton->setEnabled(
+        activelyFollowing
+        );
+
+    if (followNewestWasCleared) {
+        emit followNewestChanged(
+            false
+            );
+    }
 
     /*
      * Following receives the strongest visual
@@ -771,6 +895,76 @@ void LiveFollowTabControl::
         tr(
             "Stop live following"
             )
+        );
+
+    const bool followNewest =
+        m_followNewestButton->isChecked();
+
+    const QColor followNewestColor =
+        followNewest
+            ? colors.following
+            : colors.stopped;
+
+    m_followNewestButton->setIcon(
+        controlIcon(
+            ControlIconKind::FollowNewest,
+            followNewestColor
+            )
+        );
+
+    m_followNewestButton->setToolTip(
+        followNewest
+            ? tr(
+                  "Stop following newest events"
+                  )
+            : tr(
+                  "Follow newest events"
+                  )
+        );
+
+    m_followNewestButton->setAccessibleName(
+        followNewest
+            ? tr(
+                  "Stop following newest events"
+                  )
+            : tr(
+                  "Follow newest events"
+                  )
+        );
+
+    if (followNewest) {
+        m_followNewestButton->setStyleSheet(
+            QStringLiteral(
+                "QToolButton {"
+                " border: 1px solid %1;"
+                " border-radius: 3px;"
+                " background-color: %2;"
+                " padding: 0px;"
+                " margin: 0px;"
+                "}"
+                )
+                .arg(
+                    colors.following.name(),
+                    rgbaStyleValue(
+                        colors.following,
+                        40
+                        )
+                    )
+            );
+    } else {
+        m_followNewestButton->setStyleSheet(
+            QStringLiteral(
+                "QToolButton {"
+                " border: 1px solid transparent;"
+                " padding: 0px;"
+                " margin: 0px;"
+                "}"
+                )
+            );
+    }
+
+    m_followNewestButton->setVisible(
+        true
         );
 
     m_primaryButton->setVisible(

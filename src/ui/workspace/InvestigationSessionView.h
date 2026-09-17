@@ -188,4 +188,7 @@ private:
 
     QTimer *m_liveRefreshTimer =
         nullptr;
+
+    bool m_followNewest =
+        false;
 };

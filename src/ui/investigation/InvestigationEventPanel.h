@@ -47,6 +47,10 @@ public:
 
     void focusTable();
 
+    void setFollowNewestEnabled(
+        bool enabled
+        );
+
     InvestigationEventTablePresentationState
     capturePresentationState() const;
 
@@ -100,4 +104,7 @@ private:
 
     QMetaObject::Connection
         m_selectionConnection;
+
+    bool m_followNewest =
+        false;
 };
