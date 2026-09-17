@@ -1,12 +1,15 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
-#include <QStringList>
 #include <QDateTime>
+#include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
+#include "InvestigationSessionBacking.h"
 #include "InvestigationStateStore.h"
 
 #include "../analysis/BurstDetectionSettings.h"
@@ -14,6 +17,8 @@
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
 #include "../importing/ImportResult.h"
+#include "../persistence/InvestigationSessionSnapshot.h"
+#include "../sources/SourceFamilyConfiguration.h"
 
 struct InvestigationSessionSourceMetadata
 {
@@ -51,21 +56,68 @@ enum class InvestigationBurstTimingMode
     Manual
 };
 
+struct HybridInvestigationReconstructionResult;
+
+class ILogImporter;
+class LiveSessionFollowCoordinator;
+
+struct InvestigationSessionHybridReloadResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+
+    bool externalSourceAvailable = false;
+
+    bool sourceGenerationChanged = false;
+
+    qint64 duplicateReplayRecordCount = 0;
+    qint64 appendedReplayRecordCount = 0;
+    qint64 replaySkippedRecordCount = 0;
+};
+
+struct InvestigationSessionSourceRelocationResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+};
+
+struct InvestigationSessionSourceAuthoritativeResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+};
+
+struct InvestigationSessionSourceReloadResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+};
+
 class InvestigationSession
 {
 public:
     InvestigationSession(
         const QString &filePath,
         ImportProfile profile,
-        ImportResult result
+        ImportResult result,
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration = {}
         );
 
     InvestigationSession(
         QString sessionId,
         const QString &filePath,
         ImportProfile profile,
-        ImportResult result
+        ImportResult result,
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration = {}
         );
+
+    ~InvestigationSession();
 
     const QString &id() const;
 
@@ -77,6 +129,30 @@ public:
 
     const InvestigationSessionSourceMetadata &
     sourceMetadata() const;
+
+    const InvestigationSessionBacking &
+    backing() const;
+
+    const InvestigationExternalSourceBinding *
+    reconnectSourceHint() const;
+
+    bool updateSnapshotBackingPath(
+        const QString &snapshotPath
+        );
+
+    QString externalSourcePath() const;
+    qint64 initialLiveFollowByteOffset() const;
+
+    void setInitialLiveFollowByteOffset(
+        qint64 byteOffset
+        );
+
+    const SourceFamilyConfiguration &
+    sourceFamilyConfiguration() const;
+
+    void setSourceFamilyConfiguration(
+        SourceFamilyConfiguration configuration
+        );
 
     const ImportProfile &importProfile() const;
 
@@ -104,6 +180,21 @@ public:
     void reload(
         ImportResult result
         );
+
+    void appendLiveImportResult(
+        ImportResult result
+        );
+
+    bool supportsLiveFollowing() const;
+
+    LiveSessionFollowCoordinator *
+    ensureLiveFollowCoordinator();
+
+    LiveSessionFollowCoordinator *
+    liveFollowCoordinator();
+
+    const LiveSessionFollowCoordinator *
+    liveFollowCoordinator() const;
 
     bool hasSeverityData() const;
     bool hasSubsystemData() const;
@@ -177,6 +268,89 @@ public:
         const BurstDetectionSettings &settings
         );
 
+    InvestigationSessionSnapshot
+    captureSnapshot() const;
+
+    static std::unique_ptr<InvestigationSession>
+    createSnapshotBacked(
+        QString sessionId,
+        const QString &snapshotPath,
+        InvestigationSessionSnapshot snapshot,
+        std::optional<
+            InvestigationExternalSourceBinding>
+            reconnectSourceHint = std::nullopt
+        );
+
+    static std::unique_ptr<InvestigationSession>
+    createHybrid(
+        QString sessionId,
+        const QString &snapshotPath,
+        InvestigationSessionSnapshot snapshot,
+        InvestigationExternalSourceBinding
+            externalSourceBinding
+        );
+
+    InvestigationSessionHybridReloadResult
+    reloadHybrid(
+        const ILogImporter &importer
+        );
+
+    void updateExternalSourceRuntimeState(
+        quint64 sourceGeneration,
+        const SourcePhysicalIdentity *sourceIdentity
+        );
+
+    bool updateExternalSourceLogicalKey(
+        const QString &logicalSourceKey
+        );
+
+    InvestigationSessionSourceRelocationResult
+    redefineSourcePath(
+        const QString &candidatePath
+        );
+
+    InvestigationSessionSourceReloadResult
+    applyPreparedSourceBackedReload(
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
+    bool applySnapshotReload(
+        InvestigationSessionSnapshot snapshot
+        );
+
+    InvestigationSessionHybridReloadResult
+    applyHybridReload(
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
+    InvestigationSessionHybridReloadResult
+    applyHybridReconnect(
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
+    InvestigationSessionSourceAuthoritativeResult
+    applySourceAuthoritativeTransition(
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
+    bool applySnapshotOnlyTransition(
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        );
+
 private:
     QString m_id;
 
@@ -184,6 +358,15 @@ private:
 
     InvestigationSessionSourceMetadata
         m_sourceMetadata;
+
+    qint64 m_initialLiveFollowByteOffset = -1;
+
+    InvestigationSessionBacking
+        m_backing;
+
+    std::optional<
+        InvestigationExternalSourceBinding>
+        m_reconnectSourceHint;
 
     ImportProfile m_importProfile;
 
@@ -215,6 +398,12 @@ private:
     QStringList m_availableEventCodes;
     QStringList m_availableEntities;
 
+    QSet<QString> m_recordIds;
+    QSet<QString> m_knownSubsystems;
+    QSet<QString> m_knownEventCodes;
+    QSet<QString> m_knownEntities;
+    QSet<QString> m_knownCustomFields;
+
     std::optional<QDateTime>
         m_firstTimestamp;
 
@@ -242,6 +431,18 @@ private:
     BurstDetectionSettings
         m_burstDetectionSettings;
 
+    std::unique_ptr<LiveSessionFollowCoordinator>
+        m_liveFollowCoordinator;
+
+    InvestigationSession(
+        QString sessionId,
+        InvestigationSessionBacking backing,
+        InvestigationSessionSourceMetadata
+            sourceMetadata,
+        ImportProfile profile,
+        ImportResult result
+        );
+
     void refreshSourceMetadata();
 
     void installImportResult(
@@ -249,6 +450,10 @@ private:
         );
 
     void rebuildDerivedData(
+        const QVector<InvestigationRecord> &records
+        );
+
+    void updateDerivedDataForAppendedRecords(
         const QVector<InvestigationRecord> &records
         );
 };

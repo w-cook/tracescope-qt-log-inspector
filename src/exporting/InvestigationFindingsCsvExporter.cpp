@@ -61,7 +61,8 @@ bool InvestigationFindingsCsvExporter::exportToFile(
         QStringLiteral("Message"),
         QStringLiteral("Source Name"),
         QStringLiteral("Source Path"),
-        QStringLiteral("Source Record")
+        QStringLiteral("Source Record"),
+        QStringLiteral("Source Generation")
     };
 
     headers.append(customKeys);
@@ -178,6 +179,12 @@ bool InvestigationFindingsCsvExporter::exportToFile(
                       record.source.recordNumber
                       )
                 : QString()
+            );
+
+        fields.append(
+            QString::number(
+                record.source.sourceGeneration
+                )
             );
 
         for (

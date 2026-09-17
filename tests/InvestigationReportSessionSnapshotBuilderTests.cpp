@@ -763,6 +763,16 @@ void InvestigationReportSessionSnapshotBuilderTests::
         evidence != nullptr
         );
 
+    /*
+     * Investigation event numbering is derived from
+     * the complete underlying record order rather than
+     * source-relative record numbering.
+     */
+    QCOMPARE(
+        evidence->investigationEventNumber,
+        1
+        );
+
     QVERIFY(
         evidence->state.bookmarked
         );
@@ -784,19 +794,31 @@ void InvestigationReportSessionSnapshotBuilderTests::
         );
 
     /*
-     * Evidence remains in deterministic source order.
+     * Evidence remains in deterministic source order,
+     * and its investigation-facing event numbers
+     * correspond to that complete investigation order.
      */
     for (int index = 0;
          index < snapshot.evidenceRecords.size();
          ++index) {
-        QCOMPARE(
+        const InvestigationReportEvidenceRecord
+            &capturedEvidence =
             snapshot
                 .evidenceRecords
-                .at(index)
+                .at(index);
+
+        QCOMPARE(
+            capturedEvidence
                 .record
                 .recordId,
             QStringLiteral("evidence-%1")
                 .arg(index)
+            );
+
+        QCOMPARE(
+            capturedEvidence
+                .investigationEventNumber,
+            index + 1
             );
     }
 }

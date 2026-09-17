@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QDialog>
-#include <QString>
-#include <QSet>
 #include <QFutureWatcher>
+#include <QSet>
+#include <QString>
+#include <QStringList>
+#include <QVector>
 
 #include "../importing/ImportFormatSuggestionService.h"
 #include "../importing/ImportPreviewService.h"
@@ -11,30 +13,33 @@
 #include "../importing/ImportProfileSerialization.h"
 #include "../importing/ImportProfileValidator.h"
 #include "../preferences/RecentItemsStore.h"
+#include "../sources/RotatedSourceDiscoveryService.h"
+#include "../sources/RotatedSourceRule.h"
 
+class QCheckBox;
+class QComboBox;
 class QDialogButtonBox;
 class QDragEnterEvent;
 class QDropEvent;
 class QLabel;
 class QLineEdit;
-class QPushButton;
-class QCheckBox;
-class QTableWidget;
-class QComboBox;
-class QPlainTextEdit;
-class QTimer;
 class QMenu;
+class QPlainTextEdit;
+class QPushButton;
+class QTableWidget;
+class QTimer;
 
-class ImportConfigurationDialog final
-    : public QDialog
+class RotatedSourceSettingsStore;
+
+class ImportConfigurationDialog final : public QDialog
 {
     Q_OBJECT
 
 public:
     explicit ImportConfigurationDialog(
         QWidget *parent = nullptr,
-        RecentItemsStore *recentItemsStore =
-        nullptr
+        RecentItemsStore *recentItemsStore = nullptr,
+        RotatedSourceSettingsStore *rotatedSourceSettingsStore = nullptr
         );
 
     QString selectedFilePath() const;
@@ -44,6 +49,14 @@ public:
         );
 
     ImportProfile configuredProfile() const;
+
+    bool includeRotatedSources() const;
+
+    const RotatedSourceRule &
+    rotatedSourceRule() const;
+
+    const QVector<RotatedSourceMatch> &
+    rotatedSources() const;
 
 protected:
     void dragEnterEvent(
@@ -55,17 +68,18 @@ protected:
         ) override;
 
 private:
-    RecentItemsStore *recentItemsStore =
-        nullptr;
+    RecentItemsStore *recentItemsStore = nullptr;
+    RotatedSourceSettingsStore *rotatedSourceSettingsStore = nullptr;
 
     QLineEdit *filePathEdit;
     QPushButton *browseButton;
     QLabel *formatSuggestionLabel;
+    QCheckBox *includeRotatedSourcesCheckBox;
+    QPushButton *reviewRotatedSourcesButton;
 
     QLabel *previewSummaryLabel;
     QTableWidget *previewTable;
     QPlainTextEdit *rawSourcePreview;
-
     QPushButton *refreshPreviewButton;
 
     QFutureWatcher<ImportPreviewResult>
@@ -109,36 +123,43 @@ private:
     QDialogButtonBox *buttonBox;
     QPushButton *importButton;
 
-    ImportFormatSuggestionService
-        formatSuggestionService;
-
-    ImportPreviewService
-        previewService;
-
-    ImportProfileSerializer
-        profileSerializer;
-
-    ImportProfileValidator
-        profileValidator;
+    ImportFormatSuggestionService formatSuggestionService;
+    ImportPreviewService previewService;
+    ImportProfileSerializer profileSerializer;
+    ImportProfileValidator profileValidator;
 
     ImportProfile workingProfile;
     bool profileIsUserConfigured = false;
-    QString previewSourcePath;
-    QString customFieldDetectionSourcePath;
+
+    QString rotationConfigurationSourcePath;
+    RotatedSourceRule rotatedSourceRuleState;
+    QVector<RotatedSourceMatch> rotatedSourceMatches;
+    bool rotatedSourceRuleWasAutomaticallySuggested =
+        false;
+
+    QString previewSourceKey;
+    QString customFieldDetectionSourceKey;
     QSet<QString> autoDetectedCustomFieldKeys;
 
     void buildLayout();
     void browseForFile();
 
+    void updateRotatedSourceState();
+    void updateRotatedSourceControls();
+    void reviewRotatedSources();
+    void refineSuggestedNumericRotationDirectionFromTimestamps();
+
+    bool previewIncludesRotations() const;
+    QStringList previewSourcePaths() const;
+    QString previewSelectionKey() const;
+
     void detectCustomFieldMappings();
 
     void populateProfileControls();
-
     void populateImporterOptions();
     void updateFormatSpecificControls();
 
     void populateCustomFieldMappings();
-
     void addCustomFieldMapping();
     void removeSelectedCustomFieldMapping();
     void updateCustomFieldMappings();
@@ -164,9 +185,11 @@ private:
     void updateWorkingProfile();
     void updateSourceState();
     void updateFormatSuggestion();
+
     void updateValidationState(
         bool refreshPreview = true
         );
+
     void updateImportAvailability();
     void updatePreview();
 
@@ -180,6 +203,7 @@ private:
 
     void saveProfile();
     void loadProfile();
+
     void loadProfileFromPath(
         const QString &filePath
         );
@@ -190,8 +214,10 @@ private:
     void cancelManualPreview();
 
     void displayPreviewResult(
-        const QString &filePath,
-        const ImportPreviewResult &preview
+        const QString &sourceKey,
+        const ImportPreviewResult &preview,
+        bool showSourceColumn,
+        int physicalSourceCount
         );
 
     void applyDetectedCustomFieldMappings(

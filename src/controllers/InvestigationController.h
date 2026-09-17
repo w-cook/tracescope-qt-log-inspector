@@ -30,6 +30,10 @@ public:
         const QVector<InvestigationRecord> &records
         );
 
+    void appendRecords(
+        QVector<InvestigationRecord> records
+        );
+
     void setFilterState(
         const QStringList &severities,
         const QStringList &subsystems,

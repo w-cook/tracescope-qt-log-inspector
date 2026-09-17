@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.15.0 LANGUAGES CXX)
+project(TraceScope VERSION 0.16.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -198,6 +198,76 @@ qt_add_executable(TraceScope
     src/exporting/InvestigationReportHtmlRenderer.cpp
     src/exporting/InvestigationReportHtmlExporter.h
     src/exporting/InvestigationReportHtmlExporter.cpp
+    src/live/LiveFileFollowState.h
+    src/live/LiveFileFollowState.cpp
+    src/live/LiveFileFollower.h
+    src/live/LiveFileFollower.cpp
+    src/live/LiveLineRecordFramer.h
+    src/live/LiveLineRecordFramer.cpp
+    src/live/LiveLineSourceContext.h
+    src/live/LiveLineSourceContext.cpp
+    src/importing/IncrementalImportInitializationResult.h
+    src/live/LiveLineImportAdapter.h
+    src/live/LiveLineImportAdapter.cpp
+    src/live/LiveSessionFollowCoordinator.h
+    src/live/LiveSessionFollowCoordinator.cpp
+    src/ui/workspace/LiveFollowTabControl.h
+    src/ui/workspace/LiveFollowTabControl.cpp
+
+
+    src/live/LiveStructuredJsonImportAdapter.h
+    src/live/LiveStructuredJsonImportAdapter.cpp
+    src/live/LiveStructuredJsonRecordBatch.h
+    src/live/LiveStructuredJsonSourceContext.h
+    src/live/LiveStructuredJsonSourceContext.cpp
+    src/importing/StructuredJsonRecordStreamFramer.h
+    src/importing/StructuredJsonRecordStreamFramer.cpp
+    src/importing/StructuredXmlRecordStreamParser.h
+    src/importing/StructuredXmlRecordStreamParser.cpp
+    src/live/LiveStructuredXmlRecordBatch.h
+    src/live/LiveStructuredXmlSourceContext.h
+    src/live/LiveStructuredXmlSourceContext.cpp
+    src/live/LiveStructuredXmlImportAdapter.h
+    src/live/LiveStructuredXmlImportAdapter.cpp
+    src/sources/RotatedSourceRule.h
+    src/sources/RotatedSourceDiscoveryService.h
+    src/sources/RotatedSourceDiscoveryService.cpp
+    src/ui/RotatedSourceConfigurationDialog.h
+    src/ui/RotatedSourceConfigurationDialog.cpp
+    src/preferences/RotatedSourceSettingsStore.h
+    src/preferences/RotatedSourceSettingsStore.cpp
+    src/importing/SourceFamilyImportService.h
+    src/importing/SourceFamilyImportService.cpp
+    src/sources/SourceFamilyConfiguration.h
+    src/io/SharedReadFile.h
+    src/io/SharedReadFile.cpp
+    src/persistence/InvestigationRecordSerialization.h
+    src/persistence/InvestigationRecordSerialization.cpp
+    src/persistence/InvestigationSessionSnapshot.h
+    src/persistence/InvestigationSessionSnapshotSerialization.h
+    src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    src/persistence/InvestigationSnapshotContainer.h
+    src/persistence/InvestigationSnapshotContainer.cpp
+    src/persistence/InvestigationSessionSnapshotFile.h
+    src/persistence/InvestigationSessionSnapshotFile.cpp
+    src/workspace/InvestigationSessionBacking.h
+    src/workspace/InvestigationSessionBacking.cpp
+    src/sources/SourcePhysicalIdentity.h
+    src/sources/SourcePhysicalIdentity.cpp
+    src/workspace/HybridInvestigationCandidateBuilder.h
+    src/workspace/HybridInvestigationCandidateBuilder.cpp
+    src/workspace/HybridInvestigationReconstructionService.h
+    src/workspace/HybridInvestigationReconstructionService.cpp
+    src/workspace/InvestigationSessionHybrid.cpp
+    src/workspace/InvestigationSessionBackingPersistence.h
+    src/workspace/InvestigationSessionBackingPersistenceSerialization.h
+    src/workspace/InvestigationSessionBackingPersistenceSerialization.cpp
+    src/importing/ImportResultSourceGeneration.h
+    src/importing/ImportResultSourceGeneration.cpp
+    src/workspace/InvestigationSessionRestorationService.h
+    src/workspace/InvestigationSessionRestorationService.cpp
+    src/workspace/WorkspaceSavePackageService.h
+    src/workspace/WorkspaceSavePackageService.cpp
 
 )
 
@@ -207,6 +277,8 @@ target_link_libraries(TraceScope
         Qt6::Charts
         Qt6::Concurrent
 )
+
+add_subdirectory(tools/live-log-generator)
 
 enable_testing()
 add_subdirectory(tests)

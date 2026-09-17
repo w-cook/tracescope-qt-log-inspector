@@ -33,6 +33,8 @@ private slots:
     void importFileReportsOpenFailure();
     void importFileReportsProgress();
     void importFileCanBeCancelled();
+
+    void importLinesPreservesExplicitSourcePosition();
 };
 
 namespace
@@ -1039,6 +1041,47 @@ void RegexTextImporterTests::
         );
 
     QVERIFY(!result.sourceTruncated);
+}
+
+void RegexTextImporterTests::
+    importLinesPreservesExplicitSourcePosition()
+{
+    RegexTextImporter importer(
+        basicRegexProfile()
+        );
+
+    const ImportResult result =
+        importer.importLines(
+            {
+                QStringLiteral(
+                    "2026-09-10T10:00:00Z "
+                    "[INFO] [Gateway] Live record"
+                    )
+            },
+            QStringLiteral(
+                "samples/live/session.log"
+                ),
+            37,
+            2
+            );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QCOMPARE(
+        record.source.recordNumber,
+        qint64(37)
+        );
+
+    QCOMPARE(
+        record.source.sourceGeneration,
+        quint64(2)
+        );
 }
 
 QTEST_MAIN(

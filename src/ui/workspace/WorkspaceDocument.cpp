@@ -35,6 +35,16 @@ WorkspaceDocument::documentTitle() const
     return m_documentTitle;
 }
 
+QString WorkspaceDocument::tabToolTip() const
+{
+    return toolTip();
+}
+
+QColor WorkspaceDocument::tabTint() const
+{
+    return {};
+}
+
 void WorkspaceDocument::setDocumentTitle(
     const QString &title
     )
@@ -98,4 +108,14 @@ void WorkspaceDocument::populateExportMenu(
                 );
         }
         );
+}
+
+QWidget *WorkspaceDocument::
+    createTabAccessoryWidget(
+        QWidget *parent
+        )
+{
+    Q_UNUSED(parent);
+
+    return nullptr;
 }

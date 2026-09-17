@@ -9,6 +9,8 @@
 #include <QStringList>
 #include <QTextStream>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -27,13 +29,16 @@ struct ParsedKeyValueLine
 
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
 
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -316,6 +321,7 @@ void processKeyValueRecord(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     const ImportProfile &profile,
     ImportResult &result
     )
@@ -329,7 +335,8 @@ void processKeyValueRecord(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     const ParsedKeyValueLine parsed =
@@ -407,7 +414,9 @@ QString KeyValueTextImporter::displayName() const
 
 ImportResult KeyValueTextImporter::importLines(
     const QStringList &lines,
-    const QString &sourcePath
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
     ) const
 {
     ImportResult result;
@@ -418,7 +427,9 @@ ImportResult KeyValueTextImporter::importLines(
         processKeyValueRecord(
             lines.at(index),
             sourcePath,
-            index + 1,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
             profile,
             result
             );
@@ -433,12 +444,18 @@ ImportResult KeyValueTextImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -450,7 +467,7 @@ ImportResult KeyValueTextImporter::importFile(
                 "The source file could not be opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
@@ -516,6 +533,7 @@ ImportResult KeyValueTextImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 profile,
                 result
                 );

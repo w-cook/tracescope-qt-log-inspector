@@ -8,6 +8,8 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -15,7 +17,8 @@ namespace
 {
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
@@ -25,6 +28,9 @@ RecordSourceMetadata createSourceMetadata(
 
     source.recordNumber =
         recordNumber;
+
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -295,6 +301,7 @@ void processIisLine(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     QStringList &activeFields,
     const ImportProfile &profile,
     ImportResult &result
@@ -315,7 +322,8 @@ void processIisLine(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     /*
@@ -483,9 +491,180 @@ ImportResult IisW3cImporter::importLines(
     const QString &sourcePath
     ) const
 {
-    ImportResult result;
+    IisW3cImportState state;
 
-    QStringList activeFields;
+    return importIncrementalLines(
+        lines,
+        state,
+        sourcePath,
+        1,
+        0
+        );
+}
+
+IncrementalImportInitializationResult
+    IisW3cImporter::
+    initializeIncrementalStateFromFile(
+        const QString &sourcePath,
+        qint64 existingByteCount,
+        IisW3cImportState &state
+        ) const
+{
+    IncrementalImportInitializationResult
+        initialization;
+
+    state.reset();
+
+    if (existingByteCount < 0) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The incremental import baseline "
+                "byte count cannot be negative."
+                );
+
+        return initialization;
+    }
+
+    QFile file;
+
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            sourcePath,
+            QIODevice::ReadOnly
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing IIS W3C source "
+                "could not be opened while "
+                "initializing incremental import: %1"
+                )
+                .arg(
+                    openResult.errorMessage
+                    );
+
+        return initialization;
+    }
+
+    while (file.pos()
+           < existingByteCount) {
+        const qint64 lineStart =
+            file.pos();
+
+        QByteArray lineBytes =
+            file.readLine();
+
+        if (lineBytes.isEmpty()) {
+            break;
+        }
+
+        const qint64 allowedByteCount =
+            existingByteCount
+            - lineStart;
+
+        if (lineBytes.size()
+            > allowedByteCount) {
+            lineBytes.truncate(
+                allowedByteCount
+                );
+        }
+
+        QString rawSource =
+            QString::fromUtf8(
+                lineBytes
+                );
+
+        if (rawSource.endsWith('\n')) {
+            rawSource.chop(1);
+        }
+
+        if (rawSource.endsWith('\r')) {
+            rawSource.chop(1);
+        }
+
+        const QString trimmed =
+            normalizeLine(
+                rawSource
+                )
+                .trimmed();
+
+        if (!isFieldsDirective(
+                trimmed
+                )) {
+            continue;
+        }
+
+        const QStringList fields =
+            parseFieldsDirective(
+                trimmed
+                );
+
+        /*
+         * Match normal IIS import semantics: an
+         * empty #Fields directive invalidates the
+         * previously active field definition.
+         */
+        if (fields.isEmpty()) {
+            state.activeFields.clear();
+            continue;
+        }
+
+        state.activeFields =
+            fields;
+    }
+
+    if (file.pos() < existingByteCount
+        && file.atEnd()) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing IIS W3C source became "
+                "shorter than the captured baseline "
+                "while initializing incremental import."
+                );
+
+        return initialization;
+    }
+
+    if (file.error()
+        != QFileDevice::NoError) {
+        initialization.succeeded = false;
+
+        initialization.errorMessage =
+            QStringLiteral(
+                "The existing IIS W3C source "
+                "could not be completely read while "
+                "initializing incremental import: %1"
+                )
+                .arg(
+                    file.errorString()
+                    );
+
+        return initialization;
+    }
+
+    return initialization;
+}
+
+ImportResult
+IisW3cImporter::importIncrementalLines(
+    const QStringList &lines,
+    IisW3cImportState &state,
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
+    ) const
+{
+    ImportResult result;
 
     for (qsizetype index = 0;
          index < lines.size();
@@ -493,8 +672,10 @@ ImportResult IisW3cImporter::importLines(
         processIisLine(
             lines.at(index),
             sourcePath,
-            index + 1,
-            activeFields,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
+            state.activeFields,
             profile,
             result
             );
@@ -509,12 +690,18 @@ ImportResult IisW3cImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -526,7 +713,7 @@ ImportResult IisW3cImporter::importFile(
                 "The source file could not be opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
@@ -599,6 +786,7 @@ ImportResult IisW3cImporter::importFile(
             rawSource,
             filePath,
             physicalLineNumber,
+            0,
             activeFields,
             profile,
             result

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "name": "Live Generator Structured JSON",
+  "importerId": "structured-json",
+  "recordPath": "data.records",
+  "canonicalFields": {
+    "timestamp": "timestamp",
+    "severity": "level",
+    "subsystem": "subsystem",
+    "eventCode": "eventCode",
+    "entityId": "entityId",
+    "message": "message"
+  },
+  "customFields": [],
+  "severityAliases": {},
+  "timestampRules": [
+    {
+      "type": "iso8601"
+    }
+  ],
+  "preserveUnmappedFields": true
+}

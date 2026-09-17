@@ -2,6 +2,61 @@
 
 #include <utility>
 
+namespace
+{
+PersistedInvestigationExternalSourceBinding
+captureExternalSourceBinding(
+    const InvestigationExternalSourceBinding &source
+    )
+{
+    PersistedInvestigationExternalSourceBinding
+        persisted;
+
+    persisted.sourcePath =
+        source.sourcePath;
+
+    persisted.logicalSourceKey =
+        source.logicalSourceKey;
+
+    persisted.sourceFamilyConfiguration =
+        source.sourceFamilyConfiguration;
+
+    /*
+     * Physical rotated members are discovery results,
+     * not durable configuration.
+     */
+    persisted
+        .sourceFamilyConfiguration
+        .rotatedSourcePaths
+        .clear();
+
+    persisted.sourceGeneration =
+        source.sourceGeneration;
+
+    persisted.sourceIdentity =
+        source.sourceIdentity;
+
+    return persisted;
+}
+
+PersistedSourceFamilyConfiguration
+captureLegacySourceFamilyConfiguration(
+    const SourceFamilyConfiguration &configuration
+    )
+{
+    PersistedSourceFamilyConfiguration
+        persisted;
+
+    persisted.includeRotatedSources =
+        configuration.includeRotatedSources;
+
+    persisted.rotationRule =
+        configuration.rotationRule;
+
+    return persisted;
+}
+}
+
 PersistedInvestigationSession
 InvestigationSessionPersistence::capture(
     const InvestigationSession &session,
@@ -14,11 +69,113 @@ InvestigationSessionPersistence::capture(
     persisted.sessionId =
         session.id();
 
-    persisted.sourcePath =
-        session.sourceMetadata().sourcePath;
+    const InvestigationSessionBacking
+        &sessionBacking =
+        session.backing();
 
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        sessionBacking.externalSource();
+
+    const InvestigationSnapshotBinding
+        *snapshot =
+        sessionBacking.snapshot();
+
+    /*
+     * Populate the normalized schema-v2 backing model.
+     */
+    switch (sessionBacking.mode()) {
+    case InvestigationSessionBackingMode::
+        SourceBacked:
+        persisted.backing.mode =
+            PersistedInvestigationSessionBackingMode::
+            SourceBacked;
+
+        if (externalSource) {
+            persisted
+                .backing
+                .externalSourceBinding =
+                captureExternalSourceBinding(
+                    *externalSource
+                    );
+        }
+
+        persisted.backing.sourceImportProfile =
+            session.importProfile();
+        break;
+
+    case InvestigationSessionBackingMode::
+        SnapshotBacked: {
+        persisted.backing.mode =
+            PersistedInvestigationSessionBackingMode::
+            SnapshotBacked;
+
+        if (snapshot) {
+            persisted.backing.snapshotReference =
+                snapshot->snapshotPath;
+        }
+
+        const InvestigationExternalSourceBinding
+            *reconnectSource =
+            session.reconnectSourceHint();
+
+        if (reconnectSource != nullptr) {
+            persisted
+                .backing
+                .externalSourceBinding =
+                captureExternalSourceBinding(
+                    *reconnectSource
+                    );
+        }
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        Hybrid:
+        persisted.backing.mode =
+            PersistedInvestigationSessionBackingMode::
+            Hybrid;
+
+        if (externalSource) {
+            persisted
+                .backing
+                .externalSourceBinding =
+                captureExternalSourceBinding(
+                    *externalSource
+                    );
+        }
+
+        if (snapshot) {
+            persisted.backing.snapshotReference =
+                snapshot->snapshotPath;
+        }
+        break;
+    }
+
+    /*
+     * Temporary compatibility mirrors for the current
+     * workspace-open implementation.
+     *
+     * These disappear once restoration reads backing
+     * directly.
+     */
     persisted.importProfile =
         session.importProfile();
+
+    if (externalSource) {
+        persisted.sourcePath =
+            externalSource->sourcePath;
+
+        persisted.sourceFamilyConfiguration =
+            captureLegacySourceFamilyConfiguration(
+                externalSource
+                    ->sourceFamilyConfiguration
+                );
+    } else {
+        persisted.sourcePath =
+            session.sourceMetadata().sourcePath;
+    }
 
     const InvestigationStateStore *stateStore =
         session.investigationStateStore();

@@ -577,6 +577,21 @@ WorkspaceDocument *
         updateDocumentTitle
         );
 
+    disconnect(
+        document,
+        &WorkspaceDocument::
+        documentTabPresentationChanged,
+        this,
+        &WorkspaceDocumentHost::
+        updateDocumentTabPresentation
+        );
+
+    m_tabs
+        ->workspaceTabBar()
+        ->clearDocumentTint(
+            documentId
+            );
+
     m_tabs->removeTab(
         index
         );
@@ -673,7 +688,19 @@ bool WorkspaceDocumentHost::
 
     m_tabs->setTabToolTip(
         insertedIndex,
-        document->toolTip()
+        document->tabToolTip()
+        );
+
+    m_tabs
+        ->workspaceTabBar()
+        ->setDocumentTint(
+            document->documentId(),
+            document->tabTint()
+            );
+
+    refreshDocumentTabAccessory(
+        document,
+        insertedIndex
         );
 
     connect(
@@ -683,6 +710,16 @@ bool WorkspaceDocumentHost::
         this,
         &WorkspaceDocumentHost::
         updateDocumentTitle,
+        Qt::UniqueConnection
+        );
+
+    connect(
+        document,
+        &WorkspaceDocument::
+        documentTabPresentationChanged,
+        this,
+        &WorkspaceDocumentHost::
+        updateDocumentTabPresentation,
         Qt::UniqueConnection
         );
 
@@ -1639,6 +1676,107 @@ void WorkspaceDocumentHost::updateDocumentTitle(
         index,
         title
         );
+}
+
+void WorkspaceDocumentHost::
+    updateDocumentTabPresentation()
+{
+    auto *document =
+        qobject_cast<WorkspaceDocument *>(
+            sender()
+            );
+
+    if (document == nullptr) {
+        return;
+    }
+
+    const int index =
+        m_tabs->indexOf(
+            document
+            );
+
+    if (index < 0) {
+        return;
+    }
+
+    m_tabs->setTabToolTip(
+        index,
+        document->tabToolTip()
+        );
+
+    m_tabs
+        ->workspaceTabBar()
+        ->setDocumentTint(
+            document->documentId(),
+            document->tabTint()
+            );
+
+    refreshDocumentTabAccessory(
+        document,
+        index
+        );
+}
+
+void WorkspaceDocumentHost::
+    refreshDocumentTabAccessory(
+        WorkspaceDocument *document,
+        int index
+        )
+{
+    if (document == nullptr
+        || index < 0
+        || index >= m_tabs->count()) {
+        return;
+    }
+
+    WorkspaceTabBar *tabBar =
+        m_tabs->workspaceTabBar();
+
+    QWidget *existingAccessory =
+        tabBar->tabButton(
+            index,
+            QTabBar::LeftSide
+            );
+
+    QWidget *newAccessory =
+        document
+            ->createTabAccessoryWidget(
+                tabBar
+                );
+
+    /*
+     * Nothing changed for documents that neither had
+     * nor now require an accessory.
+     */
+    if (existingAccessory == nullptr
+        && newAccessory == nullptr) {
+        return;
+    }
+
+    /*
+     * Remove the previous accessory explicitly before
+     * installing the newly derived presentation.
+     *
+     * Investigation backing transitions can change
+     * whether live-follow controls are supported.
+     */
+    if (existingAccessory != nullptr) {
+        tabBar->setTabButton(
+            index,
+            QTabBar::LeftSide,
+            nullptr
+            );
+
+        existingAccessory->deleteLater();
+    }
+
+    if (newAccessory != nullptr) {
+        tabBar->setTabButton(
+            index,
+            QTabBar::LeftSide,
+            newAccessory
+            );
+    }
 }
 
 void WorkspaceDocumentHost::

@@ -3,6 +3,7 @@
 #include <QtTypes>
 
 #include <QString>
+#include <QStringList>
 
 #include "ImportExecutionContext.h"
 #include "ImportPreviewResult.h"
@@ -16,6 +17,14 @@ public:
 
     ImportPreviewResult previewFile(
         const QString &filePath,
+        const ImportProfile &profile,
+        qint64 maxProcessedRecords =
+        DefaultMaxProcessedRecords,
+        const ImportExecutionContext &executionContext = {}
+        ) const;
+
+    ImportPreviewResult previewFiles(
+        const QStringList &orderedFilePaths,
         const ImportProfile &profile,
         qint64 maxProcessedRecords =
         DefaultMaxProcessedRecords,

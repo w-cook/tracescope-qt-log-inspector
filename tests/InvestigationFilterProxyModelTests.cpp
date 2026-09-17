@@ -19,6 +19,8 @@ private slots:
     void filtersBySeverity();
     void filtersBySubsystem();
 
+    void activeFilterAcceptsAppendedMatchingRecordsWithoutReset();
+
     void searchesCanonicalFieldsCaseInsensitively();
     void searchesCustomAttributes();
     void searchesNormalizedSeverityWithRawSource();
@@ -35,8 +37,8 @@ private slots:
 
     void completeFilterStateUsesSingleModelReset();
 
-    void verticalHeadersUseSourceRecordNumbers();
-    void bookmarkedVerticalHeadersUseSourceRecordNumbers();
+    void verticalHeadersUseInvestigationEventNumbers();
+    void bookmarkedVerticalHeadersUseInvestigationEventNumbers();
 };
 
 static QVector<InvestigationRecord>
@@ -295,6 +297,190 @@ void InvestigationFilterProxyModelTests::
             .toString(),
         QStringLiteral(
             "ERROR"
+            )
+        );
+}
+
+void InvestigationFilterProxyModelTests::
+    activeFilterAcceptsAppendedMatchingRecordsWithoutReset()
+{
+    InvestigationTableModel sourceModel;
+
+    sourceModel.setRecords(
+        sampleRecords()
+        );
+
+    InvestigationFilterProxyModel proxyModel;
+
+    proxyModel.setSourceModel(
+        &sourceModel
+        );
+
+    /*
+     * Subsystem filtering deliberately uses reset
+     * semantics when the filter itself changes because
+     * that proved faster for large interleaved datasets.
+     */
+    proxyModel.setSubsystemFilter(
+        QStringLiteral("Comms")
+        );
+
+    QCOMPARE(
+        proxyModel.rowCount(),
+        1
+        );
+
+    QCOMPARE(
+        proxyModel.subsystemFilter(),
+        QStringLiteral("Comms")
+        );
+
+    /*
+     * Begin observing only after the filter has been
+     * established. Appending source data must not be
+     * treated as another filter-state change.
+     */
+    QSignalSpy resetSpy(
+        &proxyModel,
+        &QAbstractItemModel::modelReset
+        );
+
+    InvestigationRecord matching;
+
+    matching.recordId =
+        QStringLiteral("record-live-comms");
+
+    matching.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:03:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    matching.severity =
+        RecordSeverity::Error;
+
+    matching.subsystem =
+        QStringLiteral("Comms");
+
+    matching.eventCode =
+        QStringLiteral("PACKET_RETRY");
+
+    matching.entityId =
+        QStringLiteral("LINK-B");
+
+    matching.message =
+        QStringLiteral(
+            "Packet retry threshold exceeded"
+            );
+
+    InvestigationRecord nonMatching;
+
+    nonMatching.recordId =
+        QStringLiteral("record-live-startup");
+
+    nonMatching.timestamp =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-08-08T10:04:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    nonMatching.severity =
+        RecordSeverity::Info;
+
+    nonMatching.subsystem =
+        QStringLiteral("Startup");
+
+    nonMatching.eventCode =
+        QStringLiteral("HEALTH_CHECK");
+
+    nonMatching.entityId =
+        QStringLiteral("SYS-001");
+
+    nonMatching.message =
+        QStringLiteral("Health check completed");
+
+    sourceModel.appendRecords({
+        matching,
+        nonMatching
+    });
+
+    QCOMPARE(
+        sourceModel.rowCount(),
+        5
+        );
+
+    /*
+     * Only the new Comms record should enter the
+     * already-filtered proxy.
+     */
+    QCOMPARE(
+        proxyModel.rowCount(),
+        2
+        );
+
+    QCOMPARE(
+        proxyModel.subsystemFilter(),
+        QStringLiteral("Comms")
+        );
+
+    /*
+     * Most importantly, growing the source dataset
+     * must not trigger the expensive categorical
+     * filter reset path.
+     */
+    QCOMPARE(
+        resetSpy.count(),
+        0
+        );
+
+    QSet<QString> visibleRecordIds;
+
+    for (
+        int proxyRow = 0;
+        proxyRow < proxyModel.rowCount();
+        ++proxyRow
+        ) {
+        const QModelIndex sourceIndex =
+            proxyModel.mapToSource(
+                proxyModel.index(
+                    proxyRow,
+                    0
+                    )
+                );
+
+        const InvestigationRecord *record =
+            sourceModel.recordAt(
+                sourceIndex.row()
+                );
+
+        QVERIFY(
+            record != nullptr
+            );
+
+        visibleRecordIds.insert(
+            record->recordId
+            );
+    }
+
+    QVERIFY(
+        visibleRecordIds.contains(
+            QStringLiteral("record-comms")
+            )
+        );
+
+    QVERIFY(
+        visibleRecordIds.contains(
+            QStringLiteral("record-live-comms")
+            )
+        );
+
+    QVERIFY(
+        !visibleRecordIds.contains(
+            QStringLiteral("record-live-startup")
             )
         );
 }
@@ -1237,7 +1423,7 @@ void InvestigationFilterProxyModelTests::
 }
 
 void InvestigationFilterProxyModelTests::
-    verticalHeadersUseSourceRecordNumbers()
+    verticalHeadersUseInvestigationEventNumbers()
 {
     InvestigationTableModel sourceModel;
 
@@ -1257,9 +1443,21 @@ void InvestigationFilterProxyModelTests::
         );
 
     /*
-     * Timestamp order is startup, comms, tracking.
-     * The gutter must follow preserved source
-     * record numbers rather than proxy row numbers.
+     * Source-model order is:
+     *
+     *   1 startup
+     *   2 tracking
+     *   3 comms
+     *
+     * Timestamp sorting displays:
+     *
+     *   1 startup
+     *   3 comms
+     *   2 tracking
+     *
+     * The investigation event number must remain
+     * stable instead of following proxy row position
+     * or source-relative record numbering.
      */
     QCOMPARE(
         proxyModel.headerData(
@@ -1267,7 +1465,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("2")
+        QStringLiteral("1")
         );
 
     QCOMPARE(
@@ -1276,7 +1474,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("11")
+        QStringLiteral("3")
         );
 
     QCOMPARE(
@@ -1285,7 +1483,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("7")
+        QStringLiteral("2")
         );
 
     proxyModel.setSeverityFilter(
@@ -1297,18 +1495,23 @@ void InvestigationFilterProxyModelTests::
         1
         );
 
+    /*
+     * Filtering must not renumber the surviving
+     * event from investigation event 3 to visible
+     * row 1.
+     */
     QCOMPARE(
         proxyModel.headerData(
                       0,
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("11")
+        QStringLiteral("3")
         );
 }
 
 void InvestigationFilterProxyModelTests::
-    bookmarkedVerticalHeadersUseSourceRecordNumbers()
+    bookmarkedVerticalHeadersUseInvestigationEventNumbers()
 {
     InvestigationTableModel sourceModel;
 
@@ -1340,7 +1543,7 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("★ 11")
+        QStringLiteral("★ 3")
         );
 }
 

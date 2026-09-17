@@ -230,6 +230,13 @@ struct InvestigationReportBurstSnapshot
 struct InvestigationReportEvidenceRecord
 {
     /*
+     * Stable investigation-facing sequence number from the
+     * complete captured record set. This is separate from
+     * source-relative record provenance.
+     */
+    qint64 investigationEventNumber = 0;
+
+    /*
      * Immutable shareable copy of the investigation
      * record. Canonical fields, custom fields, source
      * filename/record number, and raw source content are

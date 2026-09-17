@@ -2,24 +2,25 @@
 
 #include <algorithm>
 
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QLabel>
-#include <QPlainTextEdit>
-#include <QPushButton>
-#include <QSplitter>
-#include <QTextOption>
-#include <QVBoxLayout>
-#include <QResizeEvent>
-#include <QSizePolicy>
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
-#include <QTimer>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QMessageBox>
-#include <QAction>
+#include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QResizeEvent>
+#include <QSizePolicy>
+#include <QSplitter>
+#include <QStringList>
+#include <QTextOption>
+#include <QTimer>
+#include <QVBoxLayout>
 
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
@@ -40,6 +41,8 @@
 #include "../../preferences/FilterPresetStore.h"
 #include "../../workspace/InvestigationSession.h"
 #include "../../workspace/InvestigationStateStore.h"
+
+#include "LiveFollowTabControl.h"
 
 namespace
 {
@@ -256,6 +259,9 @@ InvestigationSessionView::
             Qt::Vertical,
             this
             )
+        ),
+    m_liveRefreshTimer(
+        new QTimer(this)
         )
 {
     m_issueSummaryPanel =
@@ -582,6 +588,22 @@ InvestigationSessionView::
             );
     }
 
+    m_liveRefreshTimer->setSingleShot(
+        true
+        );
+
+    m_liveRefreshTimer->setInterval(
+        750
+        );
+
+    connect(
+        m_liveRefreshTimer,
+        &QTimer::timeout,
+        this,
+        &InvestigationSessionView::
+        refreshLiveSessionPresentation
+        );
+
     refreshSession();
 }
 
@@ -589,6 +611,248 @@ InvestigationSession *
 InvestigationSessionView::session() const
 {
     return m_session;
+}
+
+QString InvestigationSessionView::
+    tabToolTip() const
+{
+    if (m_session == nullptr) {
+        return {};
+    }
+
+    QStringList lines;
+
+    const InvestigationSessionBacking
+        &backing =
+        m_session->backing();
+
+    switch (backing.mode()) {
+    case InvestigationSessionBackingMode::
+        SourceBacked: {
+        lines.append(
+            tr("Backing: SourceBacked")
+            );
+
+        lines.append(
+            tr(
+                "The external source is authoritative."
+                )
+            );
+
+        const InvestigationExternalSourceBinding
+            *source =
+            backing.externalSource();
+
+        if (source != nullptr
+            && !source
+                    ->sourcePath
+                    .trimmed()
+                    .isEmpty()) {
+            const QFileInfo sourceInfo(
+                source->sourcePath
+                );
+
+            lines.append(QString());
+
+            lines.append(
+                tr("Source:")
+                );
+
+            lines.append(
+                source->sourcePath
+                );
+
+            lines.append(
+                tr("Status: %1")
+                    .arg(
+                        sourceInfo.exists()
+                                && sourceInfo.isFile()
+                            ? tr("Available")
+                            : tr("Unavailable")
+                        )
+                );
+        }
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        SnapshotBacked: {
+        lines.append(
+            tr("Backing: SnapshotBacked")
+            );
+
+        lines.append(
+            tr(
+                "Saved TraceScope evidence is "
+                "authoritative."
+                )
+            );
+
+        const InvestigationSnapshotBinding
+            *snapshot =
+            backing.snapshot();
+
+        if (snapshot != nullptr
+            && !snapshot
+                    ->snapshotPath
+                    .trimmed()
+                    .isEmpty()) {
+            lines.append(QString());
+
+            lines.append(
+                tr("Snapshot:")
+                );
+
+            lines.append(
+                snapshot->snapshotPath
+                );
+        }
+
+        const QString originalSourcePath =
+            m_session
+                ->sourceMetadata()
+                .sourcePath;
+
+        if (!originalSourcePath
+                 .trimmed()
+                 .isEmpty()) {
+            lines.append(QString());
+
+            lines.append(
+                tr("Original source:")
+                );
+
+            lines.append(
+                originalSourcePath
+                );
+        }
+
+        break;
+    }
+
+    case InvestigationSessionBackingMode::
+        Hybrid: {
+        lines.append(
+            tr("Backing: Hybrid")
+            );
+
+        lines.append(
+            tr(
+                "Saved evidence is preserved while "
+                "the external source can contribute "
+                "continuation records."
+                )
+            );
+
+        const InvestigationSnapshotBinding
+            *snapshot =
+            backing.snapshot();
+
+        if (snapshot != nullptr
+            && !snapshot
+                    ->snapshotPath
+                    .trimmed()
+                    .isEmpty()) {
+            lines.append(QString());
+
+            lines.append(
+                tr("Snapshot:")
+                );
+
+            lines.append(
+                snapshot->snapshotPath
+                );
+        }
+
+        const InvestigationExternalSourceBinding
+            *source =
+            backing.externalSource();
+
+        if (source != nullptr
+            && !source
+                    ->sourcePath
+                    .trimmed()
+                    .isEmpty()) {
+            const QFileInfo sourceInfo(
+                source->sourcePath
+                );
+
+            lines.append(QString());
+
+            lines.append(
+                tr("External source:")
+                );
+
+            lines.append(
+                source->sourcePath
+                );
+
+            lines.append(
+                tr("Status: %1")
+                    .arg(
+                        sourceInfo.exists()
+                                && sourceInfo.isFile()
+                            ? tr("Available")
+                            : tr("Unavailable")
+                        )
+                );
+        }
+
+        break;
+    }
+    }
+
+    return lines.join(
+        QLatin1Char('\n')
+        );
+}
+
+QColor InvestigationSessionView::
+    tabTint() const
+{
+    if (m_session == nullptr) {
+        return {};
+    }
+
+    switch (
+        m_session->backing().mode()
+        ) {
+    case InvestigationSessionBackingMode::
+        SourceBacked:
+        /*
+         * Blue.
+         */
+        return QColor(
+            47,
+            128,
+            237
+            );
+
+    case InvestigationSessionBackingMode::
+        SnapshotBacked:
+        /*
+         * Berry.
+         */
+        return QColor(
+            214,
+            70,
+            160
+            );
+
+    case InvestigationSessionBackingMode::
+        Hybrid:
+        /*
+         * Green.
+         */
+        return QColor(
+            45,
+            200,
+            25
+            );
+    }
+
+    return {};
 }
 
 InvestigationSessionSummaryPanel *
@@ -602,6 +866,10 @@ void InvestigationSessionView::
 {
     if (m_session == nullptr) {
         return;
+    }
+
+    if (m_liveRefreshTimer != nullptr) {
+        m_liveRefreshTimer->stop();
     }
 
     m_filterPanel->setSession(
@@ -640,6 +908,8 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
+
+    emit documentTabPresentationChanged();
 }
 
 InvestigationSessionPresentationState
@@ -953,6 +1223,79 @@ void InvestigationSessionView::
         );
 }
 
+QWidget *InvestigationSessionView::
+    createTabAccessoryWidget(
+        QWidget *parent
+        )
+{
+    if (m_session == nullptr
+        || !m_session
+                ->supportsLiveFollowing()) {
+        return nullptr;
+    }
+
+    auto *control =
+        new LiveFollowTabControl(
+            m_session,
+            parent
+            );
+
+    /*
+     * Restore the document-owned Follow Newest state
+     * whenever the tab accessory is created again.
+     */
+    control->setFollowNewestEnabled(
+        m_followNewest
+        );
+
+    if (m_eventPanel != nullptr) {
+        m_eventPanel
+            ->setFollowNewestEnabled(
+                m_followNewest
+                );
+    }
+
+    connect(
+        control,
+        &LiveFollowTabControl::
+        followNewestChanged,
+        this,
+        [this](
+            bool enabled
+            ) {
+            m_followNewest =
+                enabled;
+
+            if (m_eventPanel != nullptr) {
+                m_eventPanel
+                    ->setFollowNewestEnabled(
+                        enabled
+                        );
+            }
+        }
+        );
+
+    connect(
+        control,
+        &LiveFollowTabControl::
+        liveFollowStateChanged,
+        this,
+        &InvestigationSessionView::
+        liveFollowStateChanged
+        );
+
+    connect(
+        control,
+        &LiveFollowTabControl::
+        liveSessionUpdated,
+        this,
+        &InvestigationSessionView::
+        scheduleLiveRefresh
+        );
+
+    return control;
+}
+
 void InvestigationSessionView::
     applyFilters()
 {
@@ -972,7 +1315,14 @@ void InvestigationSessionView::
         m_session
             ->selectedRecordId();
 
+    /*
+     * This is the user-driven path. Only here do we
+     * push the filter control state back into the
+     * proxy model.
+     */
     m_filterPanel->applyToSession();
+
+    refreshDerivedViewsForCurrentFilter();
 
     const int selectedProxyRow =
         !selectedRecordId.isEmpty()
@@ -981,36 +1331,6 @@ void InvestigationSessionView::
                       selectedRecordId
                       )
             : -1;
-
-    const QVector<InvestigationRecord>
-        visibleRecords =
-        controller
-            ->recordsForAnalysis();
-
-    m_summaryPanel->refresh(
-        visibleRecords
-        );
-
-    if (
-        m_session->hasSeverityData()
-        && m_session
-               ->hasSubsystemData()
-        ) {
-        m_issueSummaryPanel
-            ->updateRecords(
-                visibleRecords
-                );
-    } else {
-        m_issueSummaryPanel->clear();
-    }
-
-    m_analyticsPanel->updateRecords(
-        visibleRecords
-        );
-
-    m_timelinePanel->updateRecords(
-        visibleRecords
-        );
 
     if (selectedProxyRow >= 0) {
         m_eventPanel->selectProxyRow(
@@ -1024,8 +1344,6 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
-
-    updateFindingsExportState();
 }
 
 void InvestigationSessionView::
@@ -2003,4 +2321,140 @@ void InvestigationSessionView::
             )
             .arg(records.size())
         );
+}
+
+void InvestigationSessionView::
+    refreshDerivedViewsForCurrentFilter()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    const QVector<InvestigationRecord>
+        visibleRecords =
+        controller
+            ->recordsForAnalysis();
+
+    m_summaryPanel->refresh(
+        visibleRecords
+        );
+
+    if (
+        m_session->hasSeverityData()
+        && m_session
+               ->hasSubsystemData()
+        ) {
+        m_issueSummaryPanel
+            ->updateRecords(
+                visibleRecords
+                );
+    } else {
+        m_issueSummaryPanel->clear();
+    }
+
+    m_analyticsPanel->updateRecords(
+        visibleRecords
+        );
+
+    m_timelinePanel->updateRecords(
+        visibleRecords
+        );
+
+    updateFindingsExportState();
+}
+
+void InvestigationSessionView::
+    scheduleLiveRefresh()
+{
+    if (m_liveRefreshTimer == nullptr
+        || m_liveRefreshTimer
+               ->isActive()) {
+        return;
+    }
+
+    /*
+     * Throttle rather than debounce. Continuous live
+     * input must still refresh the derived surfaces
+     * periodically.
+     */
+    m_liveRefreshTimer->start();
+}
+
+void InvestigationSessionView::
+    refreshLiveSessionPresentation()
+{
+    if (m_session == nullptr) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    /*
+     * The proxy model already handles newly inserted
+     * source rows dynamically. Do not reapply the
+     * user's filters here.
+     */
+    m_filterPanel
+        ->refreshAvailableOptions();
+
+    const bool issueSummaryAvailable =
+        m_session->hasSeverityData()
+        && m_session
+               ->hasSubsystemData();
+
+    m_reviewPanel
+        ->setIssueSummaryAvailable(
+            issueSummaryAvailable
+            );
+
+    refreshDerivedViewsForCurrentFilter();
+
+    /*
+     * Ordinary inserts preserve the current selection.
+     * A rare dynamic-column schema expansion can reset
+     * the table model, however, so restore the persisted
+     * record only when the view actually lost it.
+     *
+     * Do not repeatedly reselect an intact row: that
+     * would continually scroll the user back to it.
+     */
+    const QString selectedRecordId =
+        m_session
+            ->selectedRecordId();
+
+    if (
+        !selectedRecordId.isEmpty()
+        && m_eventPanel
+                   ->selectedRecord()
+               == nullptr
+        ) {
+        const int selectedProxyRow =
+            controller
+                ->proxyRowForRecordId(
+                    selectedRecordId
+                    );
+
+        if (selectedProxyRow >= 0) {
+            m_eventPanel->selectProxyRow(
+                selectedProxyRow
+                );
+        }
+    }
+
+    m_eventPanel
+        ->refreshPresentation();
 }

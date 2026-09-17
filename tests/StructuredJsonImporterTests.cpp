@@ -85,6 +85,9 @@ private slots:
     void honorsRecordLimit();
     void importFilePreservesSourceMetadata();
     void importFileReportsOpenFailure();
+    void importsCompleteRecordsFromOpenRecordArray();
+    void ignoresIncompleteTrailingRecordInOpenRecordArray();
+    void rejectsMalformedDocumentAfterClosedRecordArray();
 };
 
 void
@@ -716,6 +719,213 @@ void
                 )
             )
         != nullptr
+        );
+}
+
+void StructuredJsonImporterTests::
+    importsCompleteRecordsFromOpenRecordArray()
+{
+    StructuredJsonImportConfig config;
+
+    config.recordPath =
+        QStringLiteral(
+            "data.records"
+            );
+
+    StructuredJsonImporter importer(
+        config,
+        structuredProfile()
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "{"
+                "\"data\":{"
+                "\"records\":["
+                "{\"message\":\"One\"},"
+                "{\"message\":\"Two\"},"
+                )
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.records.at(0)
+            .message.value(),
+        QStringLiteral(
+            "One"
+            )
+        );
+
+    QCOMPARE(
+        result.records.at(1)
+            .message.value(),
+        QStringLiteral(
+            "Two"
+            )
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "MALFORMED_JSON_DOCUMENT"
+                )
+            )
+        == nullptr
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "STRUCTURED_JSON_OPEN_CONTAINER"
+                )
+            )
+        != nullptr
+        );
+}
+
+void StructuredJsonImporterTests::
+    ignoresIncompleteTrailingRecordInOpenRecordArray()
+{
+    StructuredJsonImportConfig config;
+
+    config.recordPath =
+        QStringLiteral(
+            "data.records"
+            );
+
+    StructuredJsonImporter importer(
+        config,
+        structuredProfile()
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "{"
+                "\"data\":{"
+                "\"records\":["
+                "{\"message\":\"One\"},"
+                "{\"message\":\"Two\"},"
+                "{\"message\":\"part"
+                )
+            );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        result.records.size(),
+        2
+        );
+
+    QCOMPARE(
+        result.records.at(0)
+            .message.value(),
+        QStringLiteral(
+            "One"
+            )
+        );
+
+    QCOMPARE(
+        result.records.at(1)
+            .message.value(),
+        QStringLiteral(
+            "Two"
+            )
+        );
+
+    /*
+     * The physically incomplete third object is not
+     * a processed source record yet.
+     */
+    QCOMPARE(
+        result.skippedRecordCount(),
+        qint64(0)
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "MALFORMED_JSON_DOCUMENT"
+                )
+            )
+        == nullptr
+        );
+}
+
+void StructuredJsonImporterTests::
+    rejectsMalformedDocumentAfterClosedRecordArray()
+{
+    StructuredJsonImportConfig config;
+
+    config.recordPath =
+        QStringLiteral(
+            "data.records"
+            );
+
+    StructuredJsonImporter importer(
+        config,
+        structuredProfile()
+        );
+
+    const ImportResult result =
+        importer.importContent(
+            QByteArrayLiteral(
+                "{"
+                "\"data\":{"
+                "\"records\":["
+                "{\"message\":\"One\"}"
+                "]"
+                )
+            );
+
+    /*
+     * The configured array itself already closed.
+     * Therefore this is not an active open record
+     * stream; it is simply malformed JSON.
+     */
+    QVERIFY(
+        result.records.isEmpty()
+        );
+
+    QCOMPARE(
+        result.processedRecordCount,
+        qint64(0)
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "MALFORMED_JSON_DOCUMENT"
+                )
+            )
+        != nullptr
+        );
+
+    QVERIFY(
+        findDiagnostic(
+            result,
+            QStringLiteral(
+                "STRUCTURED_JSON_OPEN_CONTAINER"
+                )
+            )
+        == nullptr
         );
 }
 

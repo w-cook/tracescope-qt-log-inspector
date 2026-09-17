@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "name": "Live Generator RFC 5424 Syslog",
+  "importerId": "syslog",
+  "canonicalFields": {
+    "timestamp": "timestamp",
+    "severity": "level",
+    "subsystem": "subsystem",
+    "eventCode": "eventCode",
+    "entityId": "structuredDataFields.tracescope@32473.entityId",
+    "message": "message"
+  },
+  "customFields": [
+    {
+      "name": "Hostname",
+      "sourcePath": "hostname"
+    },
+    {
+      "name": "Priority",
+      "sourcePath": "priority"
+    },
+    {
+      "name": "Facility Code",
+      "sourcePath": "facilityCode"
+    },
+    {
+      "name": "Syslog Severity Code",
+      "sourcePath": "severityCode"
+    },
+    {
+      "name": "Syslog Severity",
+      "sourcePath": "syslogSeverity"
+    },
+    {
+      "name": "Syslog Format",
+      "sourcePath": "syslogFormat"
+    },
+    {
+      "name": "Syslog Version",
+      "sourcePath": "syslogVersion"
+    },
+    {
+      "name": "Structured Data",
+      "sourcePath": "structuredData"
+    },
+    {
+      "name": "Site",
+      "sourcePath": "structuredDataFields.tracescope@32473.site"
+    },
+    {
+      "name": "Firmware",
+      "sourcePath": "structuredDataFields.tracescope@32473.firmware"
+    },
+    {
+      "name": "Endpoint",
+      "sourcePath": "structuredDataFields.tracescope@32473.endpoint"
+    },
+    {
+      "name": "Latency (ms)",
+      "sourcePath": "structuredDataFields.tracescope@32473.latencyMs"
+    },
+    {
+      "name": "Retrying",
+      "sourcePath": "structuredDataFields.tracescope@32473.retrying"
+    },
+    {
+      "name": "Timeout (ms)",
+      "sourcePath": "structuredDataFields.tracescope@32473.timeoutMs"
+    },
+    {
+      "name": "Attempt",
+      "sourcePath": "structuredDataFields.tracescope@32473.attempt"
+    },
+    {
+      "name": "Queued Records",
+      "sourcePath": "structuredDataFields.tracescope@32473.queuedRecords"
+    },
+    {
+      "name": "Capacity",
+      "sourcePath": "structuredDataFields.tracescope@32473.capacity"
+    }
+  ],
+  "severityAliases": {},
+  "timestampRules": [
+    {
+      "type": "iso8601"
+    }
+  ],
+  "preserveUnmappedFields": true
+}

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "HybridInvestigationReconstructionService.h"
+
 InvestigationWorkspace::InvestigationWorkspace(
     QObject *parent
     )
@@ -208,6 +210,394 @@ bool InvestigationWorkspace::reloadSession(
         );
 
     emit sessionReloaded(index);
+
+    return true;
+}
+
+bool InvestigationWorkspace::
+    applySnapshotReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        return false;
+    }
+
+    InvestigationSession *session =
+        sessionAt(index);
+
+    if (session == nullptr
+        || !session->applySnapshotReload(
+            std::move(snapshot)
+            )) {
+        return false;
+    }
+
+    emit sessionReloaded(index);
+
+    return true;
+}
+
+InvestigationSessionHybridReloadResult
+    InvestigationWorkspace::
+    applyHybridReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(index);
+
+    if (session == nullptr) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionHybridReloadResult result =
+        session->applyHybridReload(
+            std::move(snapshot),
+            std::move(reconstruction)
+            );
+
+    if (result.succeeded) {
+        emit sessionReloaded(index);
+    }
+
+    return result;
+}
+
+InvestigationSessionHybridReloadResult
+    InvestigationWorkspace::
+    applyHybridReconnect(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionHybridReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionHybridReloadResult result =
+        session->applyHybridReconnect(
+            std::move(snapshot),
+            std::move(reconstruction)
+            );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
+InvestigationSessionSourceRelocationResult
+InvestigationWorkspace::redefineSourcePath(
+    const QString &sessionId,
+    const QString &candidatePath
+    )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionSourceRelocationResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionSourceRelocationResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionSourceRelocationResult
+        result =
+        session->redefineSourcePath(
+            candidatePath
+            );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
+InvestigationSessionSourceAuthoritativeResult
+    InvestigationWorkspace::
+    applySourceAuthoritativeTransition(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionSourceAuthoritativeResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionSourceAuthoritativeResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionSourceAuthoritativeResult
+        result =
+        session
+            ->applySourceAuthoritativeTransition(
+                std::move(
+                    externalSourceBinding
+                    ),
+                std::move(
+                    importProfile
+                    ),
+                std::move(
+                    importResult
+                    ),
+                initialLiveFollowByteOffset
+                );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
+InvestigationSessionSourceReloadResult
+    InvestigationWorkspace::
+    applyPreparedSourceBackedReload(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionSourceReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionSourceReloadResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionSourceReloadResult
+        result =
+        session
+            ->applyPreparedSourceBackedReload(
+                std::move(
+                    externalSourceBinding
+                    ),
+                std::move(
+                    importProfile
+                    ),
+                std::move(
+                    importResult
+                    ),
+                initialLiveFollowByteOffset
+                );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
+bool InvestigationWorkspace::
+    applySnapshotOnlyTransition(
+        const QString &sessionId,
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        return false;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        return false;
+    }
+
+    if (!session
+             ->applySnapshotOnlyTransition(
+                 snapshotPath,
+                 sourceFidelity
+                 )) {
+        return false;
+    }
+
+    emit sessionReloaded(
+        index
+        );
 
     return true;
 }

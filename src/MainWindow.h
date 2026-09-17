@@ -14,6 +14,8 @@
 #include "importing/ImportResult.h"
 #include "preferences/FilterPresetStore.h"
 #include "preferences/RecentItemsStore.h"
+#include "preferences/RotatedSourceSettingsStore.h"
+#include "sources/SourceFamilyConfiguration.h"
 #include "workspace/InvestigationWorkspace.h"
 #include "workspace/WorkspacePersistenceState.h"
 
@@ -74,6 +76,7 @@ private:
     QSettings settings;
     RecentItemsStore recentItemsStore;
     FilterPresetStore filterPresetStore;
+    RotatedSourceSettingsStore rotatedSourceSettingsStore;
 
     QMenu *recentFilesMenu = nullptr;
     QMenu *recentWorkspacesMenu = nullptr;
@@ -84,6 +87,8 @@ private:
         nullptr;
 
     QAction *openAction = nullptr;
+    QAction *openSnapshotAction = nullptr;
+    QAction *saveSnapshotAction = nullptr;
     QAction *reloadAction = nullptr;
     QAction *compareAction = nullptr;
     QAction *saveWorkspaceAction = nullptr;
@@ -95,37 +100,75 @@ private:
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
 
+    bool workspaceOpenInProgress = false;
+    bool sessionReloadInProgress = false;
+    bool snapshotOpenInProgress = false;
+
     void buildLayout();
     void createMenus();
     void openLogFile(
         const QString &initialFilePath =
         QString()
         );
+    void openInvestigationSnapshot(
+        const QString &initialFilePath =
+        QString()
+        );
+    void saveInvestigationSnapshot();
     void loadLogFile(
         const QString &filePath,
         const ImportProfile &profile,
         const QString &reloadSessionId =
-        QString()
+        QString(),
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration = {}
         );
     bool startLogFileImport(
-        const QString &filePath,
+        const QString &activeFilePath,
+        const QStringList &orderedSourcePaths,
         const ImportProfile &profile,
         ImportCompletionHandler completion
         );
     void completeLogFileImport(
         const QString &filePath,
         const ImportProfile &profile,
+        SourceFamilyConfiguration
+            sourceFamilyConfiguration,
+        qint64 initialLiveFollowByteOffset,
         ImportResult result,
         const QString &reloadSessionId
         );
 
     void reloadActiveSession();
 
+    void reconnectSnapshotBackedSession(
+        const QString &sessionId
+        );
+
+    void redefineSessionSourcePath(
+        const QString &sessionId
+        );
+
+    void useSourceAsAuthoritative(
+        const QString &sessionId
+        );
+
+    void populateSessionSourceMenu(
+        const QString &sessionId,
+        QMenu *menu
+        );
+
+    void openSourceLocation(
+        const QString &sourcePath
+        );
+
     void createSessionComparison(
         const QString &preferredBaselineSessionId =
         QString()
         );
     void updateComparisonActionState();
+
+    void updateReloadActionState();
 
     void refreshRecentFilesMenu();
 
@@ -139,19 +182,45 @@ private:
         const QString &filePath
         );
 
+    void setWorkspaceOpenInProgress(
+        bool inProgress
+        );
+
+    void setSessionReloadInProgress(
+        bool inProgress
+        );
+
+    void setSnapshotOpenInProgress(
+        bool inProgress
+        );
+
+    enum class WorkspaceSessionRecoveryOutcome
+    {
+        Ready,
+        SkipSession,
+        Abort
+    };
+
+    WorkspaceSessionRecoveryOutcome
+    resolveWorkspaceSessionRecovery(
+        PersistedInvestigationSession
+            &persistedSession,
+        const QString &workspaceFilePath
+        );
+
     WorkspacePersistenceState
     captureWorkspaceState() const;
 
     bool saveWorkspaceToFile(
-        const QString &filePath
+        const QString &filePath,
+        const QString &snapshotOnlySessionId =
+        QString(),
+        QString *snapshotOnlyPath =
+        nullptr
         );
 
     void saveWorkspace();
     void saveWorkspaceAs();
-
-    bool resolveWorkspaceSourcePaths(
-        WorkspacePersistenceState &state
-        );
 
     struct WorkspaceOpenOperation;
 
@@ -176,5 +245,15 @@ private:
 
     void exportInvestigationReport(
         const QString &originDocumentId
+        );
+
+    std::optional<SourceFamilyConfiguration>
+    resolveSourceFamilyConfiguration(
+        const QString &activeFilePath,
+        SourceFamilyConfiguration configuration
+        );
+
+    void preserveSessionAsSnapshotOnly(
+        const QString &sessionId
         );
 };

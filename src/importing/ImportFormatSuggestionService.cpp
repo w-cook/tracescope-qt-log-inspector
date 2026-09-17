@@ -7,6 +7,8 @@
 #include <QRegularExpression>
 #include <QXmlStreamReader>
 
+#include "../io/SharedReadFile.h"
+
 #include "BuiltInImportProfilePresets.h"
 
 namespace
@@ -374,12 +376,18 @@ detectWindowsEventXml(
     const QString &filePath
     )
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         return {};
     }
 
@@ -556,12 +564,18 @@ ImportFormatSuggestionService::suggestForFile(
             );
     }
 
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         return {};
     }
 

@@ -13,6 +13,8 @@
 #include <QtGlobal>
 #include <QJsonArray>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -29,13 +31,16 @@ struct ParsedSyslogLine
 
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
 
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -1127,6 +1132,7 @@ void processSyslogRecord(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     const ImportProfile &profile,
     const QDate &legacyReferenceDate,
     ImportResult &result,
@@ -1142,7 +1148,8 @@ void processSyslogRecord(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     const ParsedSyslogLine parsed =
@@ -1239,7 +1246,9 @@ QString SyslogImporter::displayName() const
 
 ImportResult SyslogImporter::importLines(
     const QStringList &lines,
-    const QString &sourcePath
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
     ) const
 {
     ImportResult result;
@@ -1252,7 +1261,9 @@ ImportResult SyslogImporter::importLines(
         processSyslogRecord(
             lines.at(index),
             sourcePath,
-            index + 1,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
             profile,
             legacyReferenceDate,
             result,
@@ -1274,12 +1285,18 @@ ImportResult SyslogImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath,
             QIODevice::ReadOnly
-            | QIODevice::Text
-            )) {
+                | QIODevice::Text
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -1291,7 +1308,7 @@ ImportResult SyslogImporter::importFile(
                 "The source file could not be opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
@@ -1359,6 +1376,7 @@ ImportResult SyslogImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 profile,
                 legacyReferenceDate,
                 result,

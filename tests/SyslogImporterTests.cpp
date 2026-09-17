@@ -37,6 +37,8 @@ private slots:
     void importFileReportsOpenFailure();
     void importFileReportsProgress();
     void importFileCanBeCancelled();
+
+    void importLinesPreservesExplicitSourcePosition();
 };
 
 namespace
@@ -1394,6 +1396,48 @@ void SyslogImporterTests::
         result.records.first()
             .message.value(),
         QStringLiteral("First")
+        );
+}
+
+void SyslogImporterTests::
+    importLinesPreservesExplicitSourcePosition()
+{
+    SyslogImporter importer(
+        basicSyslogProfile()
+        );
+
+    const ImportResult result =
+        importer.importLines(
+            {
+                QStringLiteral(
+                    "<14>1 2026-09-10T10:00:00Z "
+                    "gateway app 123 EVT-100 - "
+                    "Live record"
+                    )
+            },
+            QStringLiteral(
+                "samples/live/session.log"
+                ),
+            125,
+            6
+            );
+
+    QCOMPARE(
+        result.records.size(),
+        1
+        );
+
+    const InvestigationRecord &record =
+        result.records.first();
+
+    QCOMPARE(
+        record.source.recordNumber,
+        qint64(125)
+        );
+
+    QCOMPARE(
+        record.source.sourceGeneration,
+        quint64(6)
         );
 }
 

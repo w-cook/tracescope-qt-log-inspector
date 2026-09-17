@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 1,
+  "name": "Warehouse Sync Deployment and Log Rotation",
+  "description": "A warehouse synchronization worker is replaced during a rolling deployment, processes a catch-up burst, and rotates its active log twice under sustained load.",
+  "steps": [
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 0,
+        "severity": "INFO",
+        "subsystem": "WarehouseSync",
+        "eventCode": "WORKER_STARTED",
+        "entityId": "sync-worker-07",
+        "message": "Warehouse synchronization worker started.",
+        "attributes": {
+          "environment": "production",
+          "region": "us-east",
+          "release": "2026.09.08.4",
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1200
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1200,
+        "severity": "INFO",
+        "subsystem": "Queue",
+        "eventCode": "BACKLOG_SAMPLE",
+        "entityId": "inventory-sync",
+        "message": "Inventory synchronization backlog is within the expected operating range.",
+        "attributes": {
+          "queuedMessages": 184,
+          "oldestMessageAgeMs": 920,
+          "consumerLag": 17
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1800
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 3000,
+        "severity": "INFO",
+        "subsystem": "Deployment",
+        "eventCode": "INSTANCE_DRAINING",
+        "entityId": "sync-worker-07",
+        "message": "Worker is draining in-flight work for a rolling deployment.",
+        "attributes": {
+          "releaseFrom": "2026.09.08.4",
+          "releaseTo": "2026.09.08.5",
+          "inFlight": 6
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1000
+    },
+    {
+      "type": "replace"
+    },
+    {
+      "type": "wait",
+      "durationMs": 400
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 4400,
+        "severity": "INFO",
+        "subsystem": "WarehouseSync",
+        "eventCode": "WORKER_STARTED",
+        "entityId": "sync-worker-12",
+        "message": "Replacement warehouse synchronization worker started after deployment.",
+        "attributes": {
+          "environment": "production",
+          "region": "us-east",
+          "release": "2026.09.08.5",
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 600
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 5000,
+        "severity": "WARN",
+        "subsystem": "Queue",
+        "eventCode": "BACKLOG_CATCHUP_STARTED",
+        "entityId": "inventory-sync",
+        "message": "Replacement worker began processing accumulated synchronization backlog.",
+        "attributes": {
+          "queuedMessages": 1482,
+          "oldestMessageAgeMs": 18340,
+          "consumerLag": 321
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 120
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 5120,
+        "severity": "INFO",
+        "subsystem": "InventorySync",
+        "eventCode": "BATCH_APPLIED",
+        "entityId": "batch-77341",
+        "message": "Inventory synchronization batch applied successfully.",
+        "attributes": {
+          "records": 250,
+          "durationMs": 184,
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 110
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 5230,
+        "severity": "INFO",
+        "subsystem": "InventorySync",
+        "eventCode": "BATCH_APPLIED",
+        "entityId": "batch-77342",
+        "message": "Inventory synchronization batch applied successfully.",
+        "attributes": {
+          "records": 250,
+          "durationMs": 176,
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 100
+    },
+    {
+      "type": "record",
+      "write": {
+        "mode": "partial",
+        "splitFraction": 0.52,
+        "holdMs": 700
+      },
+      "record": {
+        "timestampOffsetMs": 5330,
+        "severity": "INFO",
+        "subsystem": "InventorySync",
+        "eventCode": "BATCH_APPLIED",
+        "entityId": "batch-77343",
+        "message": "Inventory synchronization batch applied successfully.",
+        "attributes": {
+          "records": 250,
+          "durationMs": 191,
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 130
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 5460,
+        "severity": "INFO",
+        "subsystem": "InventorySync",
+        "eventCode": "BATCH_APPLIED",
+        "entityId": "batch-77344",
+        "message": "Inventory synchronization batch applied successfully.",
+        "attributes": {
+          "records": 250,
+          "durationMs": 169,
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1540
+    },
+    {
+      "type": "rotate"
+    },
+    {
+      "type": "wait",
+      "durationMs": 350
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 7350,
+        "severity": "INFO",
+        "subsystem": "Queue",
+        "eventCode": "BACKLOG_REDUCED",
+        "entityId": "inventory-sync",
+        "message": "Synchronization backlog fell below the warning threshold.",
+        "attributes": {
+          "queuedMessages": 412,
+          "oldestMessageAgeMs": 4210,
+          "consumerLag": 74
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 700
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 8050,
+        "severity": "INFO",
+        "subsystem": "InventorySync",
+        "eventCode": "BATCH_APPLIED",
+        "entityId": "batch-77345",
+        "message": "Inventory synchronization batch applied successfully.",
+        "attributes": {
+          "records": 250,
+          "durationMs": 158,
+          "warehouse": "east-2"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 950
+    },
+    {
+      "type": "rotate"
+    },
+    {
+      "type": "wait",
+      "durationMs": 300
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 9300,
+        "severity": "INFO",
+        "subsystem": "Queue",
+        "eventCode": "BACKLOG_CLEARED",
+        "entityId": "inventory-sync",
+        "message": "Inventory synchronization backlog returned to normal.",
+        "attributes": {
+          "queuedMessages": 46,
+          "oldestMessageAgeMs": 380,
+          "consumerLag": 5
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 900
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 10200,
+        "severity": "INFO",
+        "subsystem": "WarehouseSync",
+        "eventCode": "STEADY_STATE",
+        "entityId": "sync-worker-12",
+        "message": "Warehouse synchronization worker returned to steady-state processing.",
+        "attributes": {
+          "release": "2026.09.08.5",
+          "warehouse": "east-2",
+          "consumerLag": 4
+        }
+      }
+    }
+  ]
+}

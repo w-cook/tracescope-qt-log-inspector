@@ -6,7 +6,7 @@ TraceScope is a native C++/Qt desktop application for investigating file-based t
 
 TraceScope imports multiple structured and operational log formats and uses reusable import profiles to map source fields into a common investigation model. Timestamp, severity, subsystem, event code, entity ID, and message are optional canonical fields rather than a required fixed schema. Source-specific values and raw records remain available alongside normalized data.
 
-Once a source is loaded, investigators can combine canonical and custom-field filters, search and navigate records, inspect timeline and trend views, review deterministic event-code/entity analytics, detect explainable warning/error bursts, preserve bookmarks, notes, and finding states, keep multiple sessions open, detach or re-dock workspace documents, compare complete sessions, save and reopen the investigation workspace, and hand off results through record copy, CSV exports, or self-contained offline HTML reports.
+Once a source is loaded, investigators can combine canonical and custom-field filters, search and navigate records, inspect timeline and trend views, review deterministic event-code/entity analytics, detect explainable warning/error bursts, preserve bookmarks, notes, and finding states, keep multiple sessions open, follow supported sources while they continue growing, preserve live evidence when the external source changes, detach or re-dock workspace documents, compare complete sessions, save and reopen the investigation workspace, and hand off results through record copy, CSV exports, or self-contained offline HTML reports.
 
 TraceScope is intentionally file-oriented and offline. It does not claim to automatically understand every arbitrary log format, diagnose root cause, replace centralized observability systems, or guarantee a fixed maximum file size. Import and analysis behavior stays explicit, testable, and reproducible.
 
@@ -16,19 +16,19 @@ TraceScope is intentionally file-oriented and offline. It does not claim to auto
 
 Portable packages are published through [GitHub Releases](https://github.com/w-cook/tracescope-qt-log-inspector/releases).
 
-The current release is **`v0.15.0`**:
+The current published prerelease is **`v0.16.0`**:
 
 ```text
-TraceScope-v0.15.0-windows-x64.zip
-TraceScope-v0.15.0-linux-x86_64.AppImage
-TraceScope-v0.15.0-samples.zip
+TraceScope-v0.16.0-windows-x64.zip
+TraceScope-v0.16.0-linux-x86_64.AppImage
+TraceScope-v0.16.0-samples.zip
 ```
 
-Historical `v0.1.0` through `v0.14.0` prereleases remain available as earlier development milestones.
+Historical `v0.1.0` through `v0.15.0` prereleases remain available as earlier development milestones.
 
 ### Windows
 
-1. Download `TraceScope-v0.15.0-windows-x64.zip`.
+1. Download `TraceScope-v0.16.0-windows-x64.zip`.
 2. Extract the complete ZIP.
 3. Launch `TraceScope.exe`.
 4. Open a file from the included `samples` directory or choose one of your own supported log files.
@@ -37,29 +37,30 @@ The package includes the required Qt libraries, plugins, MinGW runtime dependenc
 
 ### Linux
 
-1. Download `TraceScope-v0.15.0-linux-x86_64.AppImage`.
+1. Download `TraceScope-v0.16.0-linux-x86_64.AppImage`.
 2. Make it executable:
 
 ```bash
-chmod +x TraceScope-v0.15.0-linux-x86_64.AppImage
+chmod +x TraceScope-v0.16.0-linux-x86_64.AppImage
 ```
 
 3. Launch it:
 
 ```bash
-./TraceScope-v0.15.0-linux-x86_64.AppImage
+./TraceScope-v0.16.0-linux-x86_64.AppImage
 ```
 
 ### Samples Only
 
-`TraceScope-v0.15.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable import profiles.
+`TraceScope-v0.16.0-samples.zip` provides a platform-neutral copy of the repository samples and reusable import profiles.
 
 Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the packaged applications.
 
 ## Documentation
 
-- [Feature Screenshot Gallery](docs/feature-screenshot-gallery.md) — visual walkthrough of import, investigation, analytics, findings, session comparison, workspace persistence, reporting/export, responsive layouts, and large-file behavior
+- [Feature Screenshot Gallery](docs/feature-screenshot-gallery.md) — visual walkthrough of import, investigation, analytics, findings, session comparison, persistence, live following, reporting/export, responsive layouts, and large-file behavior
 - [Expansion Roadmap](docs/expansion-roadmap.md) — product direction, completed milestones, active development, release discipline, and scope boundaries
+- [Live-Log Generator](docs/live-log-generator.md) — deterministic external log-producer utility used to exercise live following, file lifecycle changes, and supported live source formats
 - [Performance Notes](docs/performance.md) — measured large-file scenarios, methodology, environment, and interpretation limits
 - [Original Prototype Plan](docs/original-prototype-plan.md) — historical plan for the initial focused JSON Lines inspector
 
@@ -105,9 +106,24 @@ Applicable bookmark, note, and finding state survives in-place reloads when stab
 
 ![TraceScope Findings Review](docs/screenshots/tracescope-findings.png)
 
+### Follow an Active Log
+
+Supported sources can remain open while another application continues writing to them. TraceScope admits complete new records into the existing investigation, updates filters and derived investigation views on a controlled refresh cadence, and provides compact Pause, Resume, Stop, and Follow Newest controls without turning the application into a centralized monitoring service.
+
+Live following handles ordinary appends as well as incomplete trailing writes, same-path truncation or replacement, rotated source families, and supported structured JSON/XML sources whose outer document is still being written. Follow Newest can keep the table anchored to incoming visible records when the investigator wants a continuously updating view, while turning it off leaves normal browsing and selection behavior unchanged.
+
+![TraceScope Live Following](docs/screenshots/tracescope-live-following.gif)
+
+The animation above uses a deterministic Field Gateway live scenario and shows records entering the normal investigation table while Follow Newest keeps the view anchored and derived investigation views refresh on their controlled cadence.
+
+Live evidence is treated as investigation evidence rather than disposable screen state. TraceScope makes source lifecycle choices explicit: an investigation can preserve its complete admitted evidence as a durable snapshot, reconnect preserved evidence to a verified continuing source, intentionally return to the external source as authoritative, or redefine a moved source path when continuity can be verified. Bookmarks, notes, and findings remain tied to stable record identities when the corresponding evidence survives these transitions.
+
+
+Immutable comparisons and generated reports remain point-in-time artifacts. Later live appends do not silently change an already-created comparison or report.
+
 ### Work Across Related Sessions
 
-Multiple imported sources can remain open as independent investigation sessions. Each session retains its source/profile context, filters, controller state, timeline/analytics presentation state, bookmarks, notes, findings, and reload behavior. Investigation and comparison documents can be reordered, detached into independent workspace windows, moved between detached windows, and re-docked into the main workspace. Saved workspaces restore sessions, comparison snapshots, document ordering, active-document state, and detached-window organization so a multi-session investigation can be resumed after restarting TraceScope. Narrow layouts adapt for horizontally split and portrait-oriented use instead of requiring a wide desktop window.
+Multiple investigations can remain open as independent sessions. Each session retains its source/profile context, backing state, filters, controller state, timeline/analytics presentation state, bookmarks, notes, findings, and reload behavior. Investigation and comparison documents can be reordered, detached into independent workspace windows, moved between detached windows, and re-docked into the main workspace. Saved workspaces restore source-backed, snapshot-backed, and hybrid investigation state as applicable, along with comparison snapshots, document ordering, active-document state, and detached-window organization so a multi-session investigation can be resumed after restarting TraceScope. Narrow layouts adapt for horizontally split and portrait-oriented use instead of requiring a wide desktop window.
 
 ![TraceScope Multi-Session Workspace](docs/screenshots/tracescope-multi-session-workspace.png)
 
@@ -146,7 +162,7 @@ Different source formats need different amounts of configuration. TraceScope kee
 | Structured XML | Nested elements, attributes, repeated elements, record paths, and raw XML preservation |
 | Windows Event XML | Uses the XML importer with Windows Event detection, presets, severity aliases, and named `EventData` fields |
 
-Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.15.0`.
+Windows Event XML support covers XML-formatted events and collections. Native binary `.evtx` ingestion is not part of `v0.16.0`.
 
 ### Canonical Investigation Fields
 
@@ -175,7 +191,9 @@ The larger scenarios are designed to resemble files a prospective user might act
 
 Additional repository samples exercise structured XML, Windows Event XML, CSV/TSV, structured JSON, Syslog, Apache/Nginx/IIS access logs, regex-configurable application logs, and other supported import paths.
 
-The samples are fictional and self-contained. They are intended to demonstrate import configuration, profile reuse, canonical mappings, custom fields, filtering, timeline behavior, analytics, findings, burst detection, comparison, persistence, and reporting/export workflows without external services.
+A separate deterministic live-scenario library under `samples/live/` drives the standalone Live-Log Generator. Those scenarios cover representative append growth, partial writes, truncation, same-path replacement, rotation, structured open-container writing, degraded/recovery sequences, and access-log traffic so live-follow behavior can be reproduced without manually editing files.
+
+The samples are fictional and self-contained. They are intended to demonstrate import configuration, profile reuse, canonical mappings, custom fields, filtering, timeline behavior, analytics, findings, burst detection, comparison, persistence, live following, and reporting/export workflows without external services.
 
 ## Performance and Large-File Behavior
 
@@ -258,14 +276,34 @@ See [Performance Notes](docs/performance.md) for methodology, environment, scena
 - Relax only filters that would otherwise hide a finding target
 - Retain applicable bookmark, note, and finding state across in-place reloads when stable identities survive
 
+### Live Following and Source Continuity
+
+- Follow supported line-oriented and structured sources while they continue receiving complete records
+- Admit new records incrementally into the existing investigation instead of rebuilding the complete table on each update
+- Pause, resume, and stop live following from compact document-tab controls
+- Optionally keep the event table locked to the newest visible records while live following is active
+- Keep filters usable while new records arrive and refresh summaries, timeline, analytics, findings, and other derived views on a controlled cadence
+- Hold incomplete trailing lines or structured records until the producer finishes writing them
+- Handle same-path truncation and replacement as explicit new physical source generations
+- Discover and import rotated files as members of the same logical source family while retaining independent physical-file identity
+- Follow supported structured JSON, structured XML, and Windows Event XML sources while their outer containers remain open
+- Preserve admitted live evidence in durable versioned `.tsinv` investigation snapshots
+- Open and save standalone investigation snapshots without requiring a complete workspace file
+- Preserve a SourceBacked or Hybrid investigation as SnapshotBacked only after a fresh durable snapshot containing its complete current evidence has been written successfully
+- Reconnect preserved snapshot evidence to a verified external source as a Hybrid investigation when continuity is available
+- Intentionally rebuild a Hybrid investigation from the external source through **Use Source as Authoritative** when the user wants current source content to replace snapshot-only evidence
+- Redefine a moved source path only after continuity with the retained logical source can be verified
+- Preserve applicable bookmark, note, and finding state across identity-aware source reloads when the corresponding records remain present
+- Keep already-created comparisons and exported reports immutable even when their source investigations later receive new live evidence
+
 ### Workspace and Session Comparison
 
-- Keep multiple imported sessions open in one application instance with independent source/profile context, filters, presentation state, bookmarks, notes, and findings
+- Keep multiple imported sessions open in one application instance with independent source/profile context, backing state, filters, presentation state, bookmarks, notes, and findings
 - Reload sessions in place while preserving the existing session unchanged when a reload is cancelled
 - Reorder investigation and comparison documents, detach them into independent workspace windows, move documents between detached windows, and re-dock them into the main workspace
 - Keep workspace documents usable in horizontally split and portrait-oriented layouts through responsive summaries, filters, review panels, selected-event controls, tables, and fine-resolution timeline windows
-- Save and reopen versioned local JSON workspaces with source/import-profile context, bookmarks, notes, finding state, active filters, session presentation state, immutable comparison snapshots, document ordering, active-document state, and main/detached window layout
-- Recover workspaces with missing source files by locating moved sources or skipping unavailable sessions without discarding unrelated recoverable workspace state
+- Save and reopen versioned local JSON workspaces with source/import-profile context, durable investigation snapshots where required, bookmarks, notes, finding state, active filters, session presentation state, immutable comparison snapshots, document ordering, active-document state, and main/detached window layout
+- Recover workspaces with unavailable or moved source files through explicit locate/reconnect/skip behavior without discarding unrelated recoverable workspace or snapshot-backed evidence
 - Maintain bounded, deduplicated recent-file, recent-profile, and recent-workspace history in local application settings; reopen recent files through Import Configuration and recent workspaces through the workspace-restoration workflow
 - Create comparisons with explicit Baseline and Comparison selection, including an orientation swap before creation
 - Compare complete imported-session snapshots rather than current filtered views, so later filter changes do not alter comparison meaning
@@ -288,6 +326,7 @@ See [Performance Notes](docs/performance.md) for methodology, environment, scena
 - Keep HTML reports self-contained and offline, omit local workstation source paths, and support browser printing without adding a dedicated PDF-generation dependency
 - Include demonstration logs and reusable profiles across supported source families
 - Include larger realistic fictional investigation scenarios for product walkthroughs
+- Include a standalone deterministic Live-Log Generator and scenario library for repeatable manual verification of active-file growth and lifecycle behavior
 - Build and test on Windows and Linux through GitHub Actions
 - Produce portable Windows x64, Linux AppImage, and platform-neutral samples packages
 - Verify representative packaged samples and smoke-test packaged Windows and Linux applications in CI
@@ -314,14 +353,15 @@ Implemented expansion milestones:
 | `v0.13.0` | Directional session comparison, immutable comparison snapshots, detachable multi-window workspace documents, and constrained-layout hardening |
 | `v0.14.0` | Versioned local workspace persistence, session/investigation restoration, immutable comparison persistence, document/window layout restoration, missing-source recovery, and recent workspace history |
 | `v0.15.0` | Findings/record handoff, immutable report capture, and self-contained offline HTML investigation/comparison reporting |
+| `v0.16.0` | Live file following, rotated/source-generation handling, durable investigation snapshots, and explicit source continuity/lifecycle workflows |
 
-The current release is **`v0.15.0`**.
+The current published prerelease is **`v0.16.0`**.
 
-**Phase 15 — Live File Following is in active development.** It extends the existing file-oriented investigation model to logs that are actively receiving appended records, with explicit handling planned for pause/resume, incremental parsing, partial lines, truncation/replacement, live summaries, and live filtering. Existing immutable comparison snapshots and exported reports remain stable artifacts; any continuously updating live-comparison behavior is being designed as a separate explicit workflow rather than silently changing those semantics.
+**Phase 15 — Live File Following is complete.** `v0.16.0` extends the existing file-oriented investigation model to actively growing supported sources, including append following, partial-record handling, pause/resume/stop, structured-source following, truncation/replacement generations, rotated source families, live investigation refresh, durable snapshot preservation, verified source reconnection/relocation, and explicit source-authoritative transitions. Existing comparisons and reports retain their immutable point-in-time meaning.
 
-Phase 16 completes final UI polish, documentation, packaging, and the stable `v1.0.0` release.
+**Phase 16 — Final UI Polish, Documentation, and 1.0 Release is active.** The remaining work focuses on final cross-workflow presentation consistency, documentation and screenshot polish, architecture/import-profile/test-strategy documentation, final packaging verification, product-claim review, and the stable `v1.0.0` release.
 
-Planned capabilities are not presented as implemented until their corresponding phases are completed and verified.
+Planned Phase 16 capabilities are not presented as implemented until they are completed and verified.
 
 ## Tech Stack
 
@@ -355,6 +395,7 @@ docs/
 ├── original-prototype-plan.md    # Historical initial implementation plan
 ├── expansion-roadmap.md          # Expansion architecture and phased roadmap
 ├── feature-screenshot-gallery.md # Visual feature walkthrough
+├── live-log-generator.md         # Live-log generator architecture and usage
 ├── performance.md                # Measured large-file scenarios and interpretation
 └── screenshots/                  # Product screenshots
 
@@ -363,7 +404,8 @@ packaging/
     ├── tracescope.desktop         # Linux desktop metadata
     └── tracescope.svg             # Application icon
 
-samples/                           # Demonstration logs and reusable profiles
+samples/                           # Demonstration logs, live scenarios, and reusable profiles
+├── live/                          # Deterministic live-follow playback scenarios
 └── profiles/                      # Versioned sample import profiles
 
 src/
@@ -382,6 +424,9 @@ src/
 ├── MainWindow.cpp                # Qt Widgets presentation and workflow orchestration
 ├── MainWindow.h
 └── main.cpp
+
+tools/
+└── live-log-generator/            # Standalone CLI generator and Qt Widgets launcher
 
 tests/                             # Qt Test coverage for core application logic
 ```
@@ -421,7 +466,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-The Qt Test suite covers the flexible record/import domain, supported importer families, progress/cancellation, profile validation and preview behavior, model/filter coordination, presets, bookmarks and findings, timeline and deterministic analytics, burst detection, CSV/findings export, selected-record formatting, immutable report-model capture, HTML rendering/escaping, per-session state and reload behavior, session-comparison analysis and immutable snapshots, comparison-dialog defaults/validation, workspace-document semantics, versioned workspace serialization/restoration, presentation-state persistence, and recent-item history.
+The Qt Test suite covers the flexible record/import domain, supported importer families, progress/cancellation, profile validation and preview behavior, model/filter coordination, presets, bookmarks and findings, timeline and deterministic analytics, burst detection, CSV/findings export, selected-record formatting, immutable report-model capture, HTML rendering/escaping, per-session state and identity-aware reload behavior, live-follow ingestion/coordinator behavior, source generations and rotated-family handling, investigation-snapshot serialization/restoration, source continuity transitions, session-comparison analysis and immutable snapshots, comparison-dialog defaults/validation, workspace-document semantics, versioned workspace serialization/restoration, presentation-state persistence, and recent-item history.
 
 The same CTest suite runs in GitHub Actions on Windows and Linux.
 
@@ -429,15 +474,15 @@ The same CTest suite runs in GitHub Actions on Windows and Linux.
 
 The GitHub Actions workflow runs three parallel jobs with read-only repository permissions:
 
-- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.15.0-windows-x64.zip`
-- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.15.0-linux-x86_64.AppImage`
-- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.15.0-samples.zip`
+- **Windows x64:** pinned Qt/MinGW Release build, CTest, `windeployqt`, package verification, startup smoke test, and `TraceScope-v0.16.0-windows-x64.zip`
+- **Linux x86_64:** pinned Qt/GCC Release build on Ubuntu 22.04, CTest, `linuxdeploy`, AppImage verification, offscreen startup smoke test, and `TraceScope-v0.16.0-linux-x86_64.AppImage`
+- **Samples:** verifies representative source/profile pairs and packages the complete `samples` directory as `TraceScope-v0.16.0-samples.zip`
 
 Workflow artifacts validate candidate packages. Approved packages are attached permanently to GitHub Releases.
 
 ## Design Goals
 
-TraceScope emphasizes practical native desktop investigation, explicit and reproducible source mapping, preservation of source-specific information, deterministic and explainable analysis, complete-session comparison with explicit semantics, resumable local workspaces, responsive multi-window workflows, offline operation, immutable capture for persisted comparison/report artifacts, clear separation between importing, investigation data, presentation, analysis, comparison, persistence, and export, testable non-UI logic, conservative product claims, and repeatable cross-platform releases.
+TraceScope emphasizes practical native desktop investigation, explicit and reproducible source mapping, preservation of source-specific and live-admitted evidence, deterministic and explainable analysis, explicit source-continuity choices when files move or change, complete-session comparison with stable point-in-time semantics, resumable local workspaces, responsive multi-window workflows, offline operation, immutable capture for persisted comparison/report artifacts, clear separation between importing, investigation data, live source handling, presentation, analysis, comparison, persistence, and export, testable non-UI logic, conservative product claims, and repeatable cross-platform releases.
 
 ## License
 

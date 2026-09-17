@@ -188,6 +188,13 @@ QString InvestigationRecordExportFormatter::
         record.source.recordNumber
         );
 
+    source.insert(
+        QStringLiteral("sourceGeneration"),
+        static_cast<qint64>(
+            record.source.sourceGeneration
+            )
+        );
+
     object.insert(
         QStringLiteral("source"),
         source
@@ -294,7 +301,8 @@ QString InvestigationRecordExportFormatter::
     const bool hasSourceContext =
         !record.source.sourcePath.isEmpty()
         || !record.source.sourceName.isEmpty()
-        || record.source.recordNumber > 0;
+        || record.source.recordNumber > 0
+        || record.source.sourceGeneration > 0;
 
     if (hasSourceContext) {
         lines.append(QString());
@@ -322,12 +330,19 @@ QString InvestigationRecordExportFormatter::
 
         if (record.source.recordNumber > 0) {
             lines.append(
-                QStringLiteral("  Record: %1")
+                QStringLiteral("  Source Record: %1")
                     .arg(
                         record.source.recordNumber
                         )
                 );
         }
+
+        lines.append(
+            QStringLiteral("  Source Generation: %1")
+                .arg(
+                    record.source.sourceGeneration
+                    )
+            );
     }
 
     if (!record.rawSource.isEmpty()) {

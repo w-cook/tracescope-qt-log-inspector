@@ -1500,6 +1500,12 @@ void InvestigationReportHtmlRendererTests::
             );
 
     evidence.record.source.recordNumber =
+        4;
+
+    evidence.record.source.sourceGeneration =
+        3;
+
+    evidence.investigationEventNumber =
         17;
 
     evidence.record.customAttributes.insert(
@@ -1704,10 +1710,10 @@ void InvestigationReportHtmlRendererTests::
                 )
             );
 
-    const qsizetype sourceRecordPosition =
+    const qsizetype eventNumberPosition =
         annotationTable.indexOf(
             QStringLiteral(
-                "<th>Source Record</th>"
+                "<th title=\"Investigation event number\">#</th>"
                 )
             );
 
@@ -1741,8 +1747,32 @@ void InvestigationReportHtmlRendererTests::
         );
 
     QVERIFY(
-        sourceRecordPosition
+        eventNumberPosition
         > timestampPosition
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "<dt>Event #</dt><dd>17</dd>"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "Source generation"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                "<dt>Source generation</dt><dd>3</dd>"
+                )
+            )
         );
 
     /*

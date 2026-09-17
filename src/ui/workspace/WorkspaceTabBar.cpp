@@ -55,6 +55,163 @@ WorkspaceTabBar::WorkspaceTabBar(
         );
 }
 
+void WorkspaceTabBar::setDocumentTint(
+    const QString &documentId,
+    const QColor &color
+    )
+{
+    if (documentId.trimmed().isEmpty()) {
+        return;
+    }
+
+    if (color.isValid()) {
+        m_documentTints.insert(
+            documentId,
+            color
+            );
+    } else {
+        m_documentTints.remove(
+            documentId
+            );
+    }
+
+    update();
+}
+
+void WorkspaceTabBar::clearDocumentTint(
+    const QString &documentId
+    )
+{
+    if (documentId.isEmpty()) {
+        return;
+    }
+
+    m_documentTints.remove(
+        documentId
+        );
+
+    update();
+}
+
+void WorkspaceTabBar::paintDocumentTint(
+    QPainter &painter,
+    int index,
+    const QRect &rectangle
+    ) const
+{
+    if (index < 0
+        || index >= count()) {
+        return;
+    }
+
+    const QString documentId =
+        tabData(index).toString();
+
+    const auto iterator =
+        m_documentTints.constFind(
+            documentId
+            );
+
+    if (iterator
+            == m_documentTints.constEnd()
+        || !iterator.value().isValid()) {
+        return;
+    }
+
+    QColor tint =
+        iterator.value();
+
+    /*
+     * Preserve the native Qt tab styling underneath
+     * the semantic tint. The active tab receives a
+     * slightly stronger version while remaining
+     * recognizable as the selected tab.
+     */
+    tint.setAlpha(
+        index == currentIndex()
+            ? 48
+            : 30
+        );
+
+    painter.save();
+
+    painter.fillRect(
+        rectangle,
+        tint
+        );
+
+    painter.restore();
+
+    /*
+     * The tint is drawn after Qt's normal tab, so
+     * redraw the label over it for crisp text/icons.
+     */
+    QStyleOptionTab option;
+
+    initStyleOption(
+        &option,
+        index
+        );
+
+    option.rect =
+        rectangle;
+
+    style()->drawControl(
+        QStyle::CE_TabBarTabLabel,
+        &option,
+        &painter,
+        this
+        );
+}
+
+void WorkspaceTabBar::
+    refreshTabAccessoryLayout(
+        QWidget *accessory
+        )
+{
+    if (accessory == nullptr) {
+        return;
+    }
+
+    for (int index = 0;
+         index < count();
+         ++index) {
+        if (
+            tabButton(
+                index,
+                QTabBar::LeftSide
+                )
+            != accessory
+            ) {
+            continue;
+        }
+
+        /*
+         * QTabBar does not reliably recalculate its
+         * tab geometry when a custom tab-side widget
+         * merely changes its own size hint.
+         *
+         * Reinstalling the same accessory through
+         * setTabButton() forces QTabBar to rebuild
+         * the tab layout using the accessory's
+         * current size.
+         */
+        setTabButton(
+            index,
+            QTabBar::LeftSide,
+            nullptr
+            );
+
+        setTabButton(
+            index,
+            QTabBar::LeftSide,
+            accessory
+            );
+
+        return;
+    }
+}
+
 void WorkspaceTabBar::mousePressEvent(
     QMouseEvent *event
     )
@@ -237,6 +394,12 @@ void WorkspaceTabBar::startExternalDrag(
         &dragOption,
         &dragPainter,
         this
+        );
+
+    paintDocumentTint(
+        dragPainter,
+        index,
+        dragOption.rect
         );
 
     dragPainter.end();
@@ -699,6 +862,18 @@ void WorkspaceTabBar::paintEvent(
             event
             );
 
+        QPainter tintPainter(this);
+
+        for (int index = 0;
+             index < count();
+             ++index) {
+            paintDocumentTint(
+                tintPainter,
+                index,
+                tabRect(index)
+                );
+        }
+
         /*
          * An empty tab group should advertise itself
          * only while it is relevant to an active
@@ -767,6 +942,12 @@ void WorkspaceTabBar::paintEvent(
             &option,
             &painter,
             this
+            );
+
+        paintDocumentTint(
+            painter,
+            index,
+            option.rect
             );
     }
 

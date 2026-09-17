@@ -4,17 +4,17 @@
 
 TraceScope began as a focused Qt/C++ desktop application for inspecting structured JSON Lines telemetry logs. The original prototype provides a complete investigation workflow for its supported schema, including loading, filtering, searching, event inspection, grouped issue analysis, timeline visualization, and CSV export.
 
-The next stage of development expands TraceScope into a configurable native desktop workbench that developers can use to import, normalize, inspect, filter, compare, annotate, and report on application and system logs.
+Through the completed expansion phases, TraceScope has grown into a configurable native desktop workbench for importing, normalizing, inspecting, filtering, comparing, annotating, reporting on, and live-following application and system logs.
 
-The intended product position is:
+The current product position is:
 
 > TraceScope supports multiple built-in log formats and reusable import profiles that map source fields into a common investigation model.
 
-TraceScope is not intended to claim automatic understanding of every arbitrary log format. Import behavior will remain explicit, configurable, testable, and reproducible.
+TraceScope does not claim automatic understanding of every arbitrary log format. Import behavior remains explicit, configurable, testable, and reproducible.
 
 ## Product Principles
 
-The expansion will follow these principles:
+Development follows these principles:
 
 * Remain an offline native desktop application built with C++ and Qt.
 * Support multiple built-in formats through a common importer architecture.
@@ -125,6 +125,7 @@ Completed release milestones:
 | `v0.13.0` | Session Comparison | prerelease |
 | `v0.14.0` | Workspace and Profile Persistence | prerelease |
 | `v0.15.0` | Reporting and Export | prerelease |
+| `v0.16.0` | Live File Following | prerelease |
 
 Release assets follow a consistent naming convention:
 
@@ -161,7 +162,7 @@ The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsi
 
 ## Import Architecture
 
-Implemented foundations through `v0.15.0`:
+Implemented foundations through `v0.16.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -230,12 +231,22 @@ Implemented foundations through `v0.15.0`:
 * responsive persistent report navigation, compact evidence linking, print-oriented styling, and deterministic evidence anchors inside the generated document
 * atomic HTML writing through `QSaveFile`
 * automated coverage for report configuration/resolution, immutable snapshot construction, findings export, selected-record formatting, HTML escaping/privacy, comparison rendering, sparse-data behavior, report structure/navigation, and end-to-end export integration
+* incremental live-follow ingestion through the existing investigation model, with newly admitted records entering the table and active filters without replacing the session
+* live pause/resume/stop controls, coalesced derived-view refresh, and an optional Follow Newest table anchor for actively growing investigations
+* live handling for supported line-oriented and structured sources, including incomplete-record deferral where a producer has not yet finished writing a parseable record or document state
+* explicit same-path source-generation handling for truncation and replacement, plus rotated source-family discovery/import while the active physical file remains the live-follow target
+* stable logical-source identity and source-aware record identities so surviving bookmarks, notes, and finding state can persist across reload, reconnection, relocation, and source-family continuation
+* SourceBacked, SnapshotBacked, and Hybrid investigation backing modes with explicit source lifecycle actions rather than silent authority changes
+* versioned `.tsinv` investigation snapshots that can preserve admitted evidence independently of later source mutation while retaining optional source-continuity metadata for verified reconnection
+* standalone investigation snapshot open/save, Preserve as Snapshot Only, verified source relocation, source reconnection, and Use Source as Authoritative workflows
+* identity-aware SourceBacked reload and workspace restoration paths that verify source continuity before mutating an open investigation
+* a standalone scenario-driven live-log generator used to reproduce append, truncation, replacement, rotation, structured-document, and continuous producer behavior during manual verification
 
 Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
 Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 completed local workspace persistence in `v0.14.0`, allowing source/profile context, investigation state, immutable comparison snapshots, document organization, and detached-window layouts to survive application restarts with explicit missing-source recovery. Phase 14 completed the current static investigation handoff workflow in `v0.15.0` with selected-record copy, structured findings export, and self-contained HTML investigation/comparison reporting built from immutable point-in-time capture. Phase 15 is now in active development and extends the same file-oriented model to logs that continue growing while an investigation is open, while preserving the stable capture boundaries established for persisted comparisons and reports. Final UI/documentation hardening remains reserved for Phase 16 rather than returning to open-ended format expansion.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 completed local workspace persistence in `v0.14.0`, allowing source/profile context, investigation state, immutable comparison snapshots, document organization, and detached-window layouts to survive application restarts with explicit missing-source recovery. Phase 14 completed the static investigation handoff workflow in `v0.15.0` with selected-record copy, structured findings export, and self-contained HTML investigation/comparison reporting built from immutable point-in-time capture. Phase 15 completed live file following in `v0.16.0`, extending the same file-oriented investigation model to actively written sources while preserving durable evidence, stable source identity, explicit backing/source lifecycle semantics, and the immutable capture boundaries already established for comparisons and reports. Phase 16 is now active and focuses on final cross-workflow polish, documentation, packaging, claims review, and the stable `v1.0.0` release.
 
 ## Development Phases
 
@@ -710,7 +721,7 @@ Expanded investigation output beyond the existing visible-record CSV workflow so
 
 Reporting completes the static investigation workflow without turning TraceScope into a configurable report designer or collaborative case-management system. Exported reports remain deterministic, self-contained, offline, and understandable without requiring TraceScope or a hosted backend.
 
-Report generation captures immutable export state before rendering begins. Generated output does not depend on later widget changes, filter changes, session navigation, or comparison-document mutation. That point-in-time boundary is also the foundation Phase 15 can reuse when live-followed sessions introduce continuously changing source state.
+Report generation captures immutable export state before rendering begins. Generated output does not depend on later widget changes, filter changes, session navigation, or comparison-document mutation. Phase 15 retained that same point-in-time boundary for live-followed sessions so later source growth does not silently mutate an already-created comparison or exported report.
 
 Completed deliverables:
 
@@ -742,33 +753,51 @@ The generated HTML contains its own styling and small navigation behavior and do
 
 ### Phase 15 — Live File Following
 
-**Status: In progress.**
+**Status: Completed in `v0.16.0`.**
 
-Extend TraceScope to support files that are actively receiving appended records so TraceScope can be used during application runs, QA execution, simulations, engineering tests, and other situations where investigators need to observe a diagnostic log as it grows.
+Extended TraceScope to support files that are actively receiving new records so the same investigation workflow can be used during application runs, QA execution, simulations, engineering tests, and other situations where a diagnostic source continues changing while it is open.
 
-Live following should extend the existing investigation model rather than create a separate monitoring product. TraceScope will remain file-oriented and offline rather than becoming a centralized collection service.
+Live following extends the existing investigation model rather than creating a separate monitoring product. TraceScope remains file-oriented and offline: the external file is still the producer-facing boundary, while the open investigation retains explicit source identity, evidence, annotation, and persistence semantics.
 
-The existing Phase 12/13 comparison documents and Phase 14 report snapshots establish stable point-in-time semantics. An immutable comparison preserves the meaning of a Baseline → Comparison analysis at the moment the comparison is created, while an exported report preserves the selected investigation/comparison state captured when report generation begins. Neither artifact should silently change because a source session is later filtered, reloaded, closed, restored, or—once this phase is implemented—continues receiving appended records. Live following therefore introduces a separate need for comparisons that can update as their source sessions change. Phase 15 should evaluate that behavior explicitly rather than weakening existing snapshot semantics.
+The existing Phase 12/13 comparison documents and Phase 14 report snapshots establish stable point-in-time semantics. An immutable comparison preserves the meaning of a Baseline → Comparison analysis at the moment the comparison is created, while an exported report preserves the selected investigation/comparison state captured when report generation begins. Phase 15 preserves those boundaries for live-followed sessions: later appends, filtering, reloads, source transitions, workspace restoration, or session closure do not silently mutate an existing comparison or generated report.
 
-A likely model is to keep immutable comparison snapshots as stable evidence while allowing a live comparison document to reference active sessions, recompute as new records arrive, and be frozen into an immutable comparison snapshot for persistence, reporting, or later review. The exact live-comparison UI and comparison-window semantics should be finalized during Phase 15 implementation, including how unequal observed record counts or timestamp coverage are communicated.
+Phase 15 also explicitly evaluated a separate continuously updating comparison workflow. Recomputing the existing whole-session Baseline → Comparison model as a live run grows was rejected because incomplete sessions make cumulative record counts, timing coverage, and several existing comparison dimensions progressively difficult to interpret. A higher-value future design would instead compare a known-good baseline against a bounded recent window of a live-followed run using rate- and change-oriented signals such as elevated-event rates, severity proportions, newly appearing event codes, elevated subsystems or entities, and active burst behavior. That would require a distinct analysis model, live document lifecycle, refresh policy, and persistence semantics, so it remains a potential post-1.0 feature rather than part of the completed Phase 15 scope.
 
-Planned deliverables:
+Completed deliverables:
 
-* follow appended records
-* pause and resume
-* incremental parsing
-* partial-line handling
-* truncation handling
-* file-replacement handling
-* live summaries
-* live filtering
-* explicit live-session state that remains compatible with the existing investigation model and persistence/report capture boundaries
-* evaluation and implementation of continuously updating Baseline → Comparison behavior for live-followed sessions without weakening immutable comparison-snapshot semantics
-* ability to capture/freeze a live comparison into a stable immutable comparison snapshot if the live-comparison workflow is implemented
+* start, pause, resume, and stop controls integrated directly into live-capable investigation tabs with explicit following/paused/stopped/error presentation
+* optional Follow Newest control that can anchor the event table to newly arriving visible records while live following is active without forcing that behavior on users who are inspecting older evidence
+* incremental insertion of newly admitted records through the existing investigation model/proxy path rather than rebuilding or replacing the complete session
+* immediate participation of newly appended records in the active proxy filters, with heavier summaries, filter-option discovery, timeline, analytics, findings, and other derived surfaces refreshed on a coalesced cadence
+* dynamic source-record gutter sizing as live investigations grow across additional row-number digits while continuing to reserve bookmark-indicator space
+* live following for supported line-oriented sources with incomplete trailing records held until they become parseable
+* live following for supported structured JSON and structured XML sources where the producer may temporarily leave the document in an incomplete but still-growing state
+* explicit same-path source-generation tracking for truncation and replacement so newly written evidence is distinguished from earlier physical generations without discarding already admitted investigation records
+* rotated source-family discovery and import that treats related rotated files as one logical investigation while preserving each physical file's identity and keeping the active file as the live-follow target
+* overlap-safe deduplication across initial import, rotated-family evidence, source generations, and live continuation using stable source-aware record identities
+* Windows sharing-mode hardening so TraceScope can read supported sources that remain actively open by their producer where the operating system permits shared access
+* live summaries, timeline, analytics, findings, navigation, filtering, and selected-record workflows that remain usable as evidence arrives
+* SourceBacked, SnapshotBacked, and Hybrid backing modes that make the authority of the external source and durable TraceScope evidence explicit
+* versioned `.tsinv` investigation snapshots containing normalized evidence, diagnostics, import-profile context, and source-continuity metadata without requiring the original source file to remain authoritative
+* standalone **Open Investigation Snapshot** and **Save Investigation Snapshot** workflows independent of complete workspace persistence
+* **Preserve as Snapshot Only** transition that writes a fresh durable snapshot containing all currently admitted evidence before disconnecting a SourceBacked or Hybrid investigation from its external source
+* SnapshotBacked source reconnection that verifies the recorded source continuity and reconstructs a Hybrid investigation without treating the external source as a replacement for durable snapshot evidence
+* **Use Source as Authoritative** transition that prepares and verifies a complete SourceBacked candidate before transactionally replacing Hybrid evidence, while preserving investigation state for stable record identities that survive the transition
+* verified **Redefine Source Path** relocation that updates a logical source only when the candidate file can be validated against retained physical-source identity information
+* identity-aware SourceBacked reload preparation that preserves logical source identity and generation semantics, rediscovers applicable rotated files, verifies the source before mutation, and retains bookmark/note/finding state when the corresponding stable records survive
+* workspace/session persistence changes that preserve already admitted live evidence so later truncation, replacement, rotation, or source unavailability does not silently erase the durable investigation record
+* explicit source lifecycle menus that group backing transitions separately from physical-source management and keep potentially destructive authority changes user-visible
+* preservation of immutable comparison snapshots and report captures after their source investigations receive later live-appended records
+* permanent standalone scenario-driven live-log generator utility with deterministic scenarios/renderers for realistic append, truncation, replacement, rotation, structured-document, and continuous-loop manual testing
+* automated coverage for incremental model behavior, live-ingestion/source-generation logic, rotated source families, structured live sources, persistence/backing transitions, source continuity/relocation, stable-state retention, and immutable comparison behavior
+* local full-suite and manual regression verification across live-follow lifecycle, truncation/replacement, rotation, persistence/reload, snapshot/reconnect, source-authority, and source-relocation workflows
+* `v0.16.0` prerelease publication and downloadable package verification
 
 ### Phase 16 — Final UI Polish, Documentation, and 1.0 Release
 
-Complete the expansion with final UI polish, polished documentation, and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
+**Status: In progress.**
+
+The active final phase focuses on cross-workflow UI polish, user-facing documentation, packaging, and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
 
 The foundational constrained-layout work originally planned for this phase was pulled forward and completed during Phase 12 because detachable workspace documents make side-by-side and portrait-oriented use part of the normal investigation workflow rather than a final-release edge case. Phase 16 should build on that responsive foundation instead of reimplementing it.
 
@@ -807,4 +836,4 @@ The current roadmap does not expand TraceScope into:
 * an enterprise observability platform
 * an external binary plugin ecosystem during the initial expansion
 
-TraceScope will remain an offline, configurable, native developer tool.
+TraceScope remains an offline, configurable, native developer tool.

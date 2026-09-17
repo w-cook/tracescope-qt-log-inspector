@@ -16,6 +16,8 @@
 #include <QVariant>
 #include <QByteArray>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
 
@@ -23,12 +25,16 @@ namespace
 {
 RecordSourceMetadata createSourceMetadata(
     const QString &sourcePath,
-    qint64 recordNumber
+    qint64 recordNumber,
+    quint64 sourceGeneration = 0
     )
 {
     RecordSourceMetadata source;
+
     source.sourcePath = sourcePath;
     source.recordNumber = recordNumber;
+    source.sourceGeneration =
+        sourceGeneration;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
@@ -84,7 +90,9 @@ QString JsonLinesImporter::displayName() const
 
 ImportResult JsonLinesImporter::importLines(
     const QStringList &lines,
-    const QString &sourcePath
+    const QString &sourcePath,
+    qint64 firstPhysicalLineNumber,
+    quint64 sourceGeneration
     ) const
 {
     ImportResult result;
@@ -95,7 +103,9 @@ ImportResult JsonLinesImporter::importLines(
         processLine(
             lines.at(index),
             sourcePath,
-            index + 1,
+            firstPhysicalLineNumber
+                + index,
+            sourceGeneration,
             result
             );
     }
@@ -109,9 +119,16 @@ ImportResult JsonLinesImporter::importFile(
     const ImportExecutionContext &executionContext
     ) const
 {
-    QFile file(filePath);
+    QFile file;
 
-    if (!file.open(QIODevice::ReadOnly)) {
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         const RecordSourceMetadata source =
@@ -127,7 +144,10 @@ ImportResult JsonLinesImporter::importFile(
                 ),
             QStringLiteral(
                 "The source file could not be opened: %1"
-                ).arg(file.errorString()),
+                )
+                .arg(
+                    openResult.errorMessage
+                    ),
             ImportDiagnosticSeverity::Error,
             source
             );
@@ -190,6 +210,7 @@ ImportResult JsonLinesImporter::importFile(
                 rawSource,
                 filePath,
                 physicalLineNumber,
+                0,
                 result
                 );
         }
@@ -227,6 +248,7 @@ void JsonLinesImporter::processLine(
     const QString &rawSource,
     const QString &sourcePath,
     qint64 recordNumber,
+    quint64 sourceGeneration,
     ImportResult &result
     ) const
 {
@@ -242,7 +264,8 @@ void JsonLinesImporter::processLine(
     const RecordSourceMetadata source =
         createSourceMetadata(
             sourcePath,
-            recordNumber
+            recordNumber,
+            sourceGeneration
             );
 
     QJsonParseError parseError;

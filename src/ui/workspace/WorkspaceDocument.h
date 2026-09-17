@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QString>
 #include <QWidget>
 
@@ -21,12 +22,20 @@ public:
 
     const QString &documentTitle() const;
 
+    virtual QString tabToolTip() const;
+
+    virtual QColor tabTint() const;
+
     void setDocumentTitle(
         const QString &title
         );
 
     virtual void populateExportMenu(
         QMenu *menu
+        );
+
+    virtual QWidget *createTabAccessoryWidget(
+        QWidget *parent
         );
 
 signals:
@@ -37,6 +46,8 @@ signals:
     void investigationReportExportRequested(
         const QString &documentId
         );
+
+    void documentTabPresentationChanged();
 
 private:
     QString m_documentId;

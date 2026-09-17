@@ -43,6 +43,60 @@ public:
         ImportResult result
         );
 
+    bool applySnapshotReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot
+        );
+
+    InvestigationSessionHybridReloadResult
+    applyHybridReload(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
+    InvestigationSessionHybridReloadResult
+    applyHybridReconnect(
+        const QString &sessionId,
+        InvestigationSessionSnapshot snapshot,
+        HybridInvestigationReconstructionResult
+            reconstruction
+        );
+
+    InvestigationSessionSourceRelocationResult
+    redefineSourcePath(
+        const QString &sessionId,
+        const QString &candidatePath
+        );
+
+    InvestigationSessionSourceAuthoritativeResult
+    applySourceAuthoritativeTransition(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
+    InvestigationSessionSourceReloadResult
+    applyPreparedSourceBackedReload(
+        const QString &sessionId,
+        InvestigationExternalSourceBinding
+            externalSourceBinding,
+        ImportProfile importProfile,
+        ImportResult importResult,
+        qint64 initialLiveFollowByteOffset
+        );
+
+    bool applySnapshotOnlyTransition(
+        const QString &sessionId,
+        const QString &snapshotPath,
+        InvestigationSnapshotSourceFidelity
+            sourceFidelity
+        );
+
 signals:
     void sessionAdded(int index);
     void activeSessionChanged(int index);

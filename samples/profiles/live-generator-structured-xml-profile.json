@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "name": "Live Generator Structured XML",
+  "importerId": "xml",
+  "recordPath": "session.events.event",
+  "canonicalFields": {
+    "timestamp": "metadata.timestamp",
+    "severity": "metadata.level",
+    "subsystem": "metadata.component",
+    "eventCode": "metadata.code",
+    "entityId": "context.deviceId",
+    "message": "details.message"
+  },
+  "customFields": [],
+  "severityAliases": {},
+  "timestampRules": [
+    {
+      "type": "iso8601"
+    }
+  ],
+  "preserveUnmappedFields": true
+}

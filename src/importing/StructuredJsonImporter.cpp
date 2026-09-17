@@ -12,8 +12,11 @@
 #include <QJsonValue>
 #include <QStringList>
 
+#include "../io/SharedReadFile.h"
+
 #include "ImportDiagnostic.h"
 #include "JsonObjectRecordMapper.h"
+#include "StructuredJsonRecordStreamFramer.h"
 
 namespace
 {
@@ -24,12 +27,17 @@ RecordSourceMetadata createSourceMetadata(
 {
     RecordSourceMetadata source;
 
-    source.sourcePath = sourcePath;
-    source.recordNumber = recordNumber;
+    source.sourcePath =
+        sourcePath;
+
+    source.recordNumber =
+        recordNumber;
 
     if (!sourcePath.isEmpty()) {
         source.sourceName =
-            QFileInfo(sourcePath).fileName();
+            QFileInfo(
+                sourcePath
+                ).fileName();
     }
 
     return source;
@@ -46,10 +54,17 @@ void appendDiagnostic(
 {
     ImportDiagnostic diagnostic;
 
-    diagnostic.code = code;
-    diagnostic.message = message;
-    diagnostic.severity = severity;
-    diagnostic.source = source;
+    diagnostic.code =
+        code;
+
+    diagnostic.message =
+        message;
+
+    diagnostic.severity =
+        severity;
+
+    diagnostic.source =
+        source;
 
     result.diagnostics.append(
         diagnostic
@@ -76,9 +91,12 @@ QJsonValue readJsonPath(
             Qt::KeepEmptyParts
             );
 
-    QJsonValue currentValue(object);
+    QJsonValue currentValue(
+        object
+        );
 
-    for (const QString &segment : segments) {
+    for (const QString &segment
+         : segments) {
         if (segment.isEmpty()
             || !currentValue.isObject()) {
             return QJsonValue(
@@ -89,7 +107,9 @@ QJsonValue readJsonPath(
         currentValue =
             currentValue
                 .toObject()
-                .value(segment);
+                .value(
+                    segment
+                    );
 
         if (currentValue.isUndefined()) {
             return currentValue;
@@ -104,9 +124,11 @@ QString compactJson(
     )
 {
     return QString::fromUtf8(
-        QJsonDocument(object).toJson(
-            QJsonDocument::Compact
-            )
+        QJsonDocument(
+            object
+            ).toJson(
+                QJsonDocument::Compact
+                )
         );
 }
 
@@ -127,7 +149,9 @@ void processObject(
             );
 
     const QString rawSource =
-        compactJson(object);
+        compactJson(
+            object
+            );
 
     result.records.append(
         JsonObjectRecordMapper::mapRecord(
@@ -154,7 +178,9 @@ void processArray(
         if (maxProcessedRecords > 0
             && result.processedRecordCount
                    >= maxProcessedRecords) {
-            result.sourceTruncated = true;
+            result.sourceTruncated =
+                true;
+
             break;
         }
 
@@ -167,7 +193,9 @@ void processArray(
                 );
 
         const QJsonValue value =
-            array.at(index);
+            array.at(
+                index
+                );
 
         if (!value.isObject()) {
             appendDiagnostic(
@@ -176,7 +204,8 @@ void processArray(
                     "STRUCTURED_JSON_RECORD_NOT_OBJECT"
                     ),
                 QStringLiteral(
-                    "The selected JSON record is not an object."
+                    "The selected JSON record is "
+                    "not an object."
                     ),
                 ImportDiagnosticSeverity::Error,
                 source
@@ -189,7 +218,9 @@ void processArray(
             value.toObject();
 
         const QString rawSource =
-            compactJson(object);
+            compactJson(
+                object
+                );
 
         result.records.append(
             JsonObjectRecordMapper::mapRecord(
@@ -202,38 +233,195 @@ void processArray(
             );
     }
 }
+
+bool tryImportOpenRecordArray(
+    const QByteArray &json,
+    const QString &recordPath,
+    const QString &sourcePath,
+    const ImportProfile &profile,
+    qint64 maxProcessedRecords,
+    ImportResult &result
+    )
+{
+    /*
+     * A structured source that is actively being
+     * written may deliberately have an unclosed
+     * outer document and record array.
+     *
+     * Use the same incremental framing logic as
+     * live following so initial import and later
+     * live ingestion agree about which complete
+     * records are currently available.
+     */
+    StructuredJsonRecordStreamFramer framer(
+        recordPath
+        );
+
+    StructuredJsonRecordFrameResult
+        frameResult =
+        framer.appendBytes(
+            json
+            );
+
+    /*
+     * This fallback applies only to a successfully
+     * located record array that is genuinely still
+     * open.
+     *
+     * If the record array has already closed, then
+     * a malformed outer document remains an ordinary
+     * malformed JSON document and follows the normal
+     * error path.
+     */
+    if (!frameResult.succeeded
+        || !framer.recordArrayLocated()
+        || framer.recordArrayClosed()) {
+        return false;
+    }
+
+    qint64 recordNumber = 1;
+
+    for (const QByteArray &recordBytes
+         : std::as_const(frameResult.records)) {
+        if (maxProcessedRecords > 0
+            && result.processedRecordCount
+                   >= maxProcessedRecords) {
+            result.sourceTruncated =
+                true;
+
+            break;
+        }
+
+        QJsonParseError recordParseError;
+
+        const QJsonDocument recordDocument =
+            QJsonDocument::fromJson(
+                recordBytes,
+                &recordParseError
+                );
+
+        /*
+         * The stream framer establishes physical
+         * object boundaries but deliberately does
+         * not act as the JSON semantic parser.
+         *
+         * Count a framed-but-malformed object as a
+         * processed source record and continue with
+         * later complete records.
+         */
+        if (recordParseError.error
+                != QJsonParseError::NoError
+            || !recordDocument.isObject()) {
+            ++result.processedRecordCount;
+
+            const RecordSourceMetadata source =
+                createSourceMetadata(
+                    sourcePath,
+                    recordNumber
+                    );
+
+            appendDiagnostic(
+                result,
+                QStringLiteral(
+                    "MALFORMED_STRUCTURED_JSON_RECORD"
+                    ),
+                QStringLiteral(
+                    "A complete record in the open "
+                    "structured JSON stream could "
+                    "not be parsed."
+                    ),
+                ImportDiagnosticSeverity::Error,
+                source
+                );
+
+            ++recordNumber;
+
+            continue;
+        }
+
+        processObject(
+            recordDocument.object(),
+            recordNumber,
+            sourcePath,
+            profile,
+            result
+            );
+
+        ++recordNumber;
+    }
+
+    /*
+     * This is not an import failure. The outer
+     * container is expected to remain open while
+     * another application is actively producing
+     * records.
+     *
+     * Preserve that fact as informational context
+     * while still returning every complete record
+     * currently available.
+     */
+    appendDiagnostic(
+        result,
+        QStringLiteral(
+            "STRUCTURED_JSON_OPEN_CONTAINER"
+            ),
+        QStringLiteral(
+            "The structured JSON record array is "
+            "still open. Complete records available "
+            "at the current end of the source were "
+            "imported."
+            ),
+        ImportDiagnosticSeverity::Information,
+        createSourceMetadata(
+            sourcePath,
+            0
+            )
+        );
+
+    return true;
+}
 }
 
-StructuredJsonImporter::StructuredJsonImporter(
-    StructuredJsonImportConfig config,
-    ImportProfile profile
-    )
-    : config(std::move(config)),
-    profile(std::move(profile))
+StructuredJsonImporter::
+    StructuredJsonImporter(
+        StructuredJsonImportConfig config,
+        ImportProfile profile
+        )
+    : config(
+          std::move(config)
+          ),
+    profile(
+        std::move(profile)
+        )
 {
     this->profile.importerId =
-        QStringLiteral("structured-json");
+        QStringLiteral(
+            "structured-json"
+            );
 }
 
-QString StructuredJsonImporter::id() const
+QString StructuredJsonImporter::
+    id() const
 {
     return QStringLiteral(
         "structured-json"
         );
 }
 
-QString StructuredJsonImporter::displayName() const
+QString StructuredJsonImporter::
+    displayName() const
 {
     return QStringLiteral(
         "Structured JSON"
         );
 }
 
-ImportResult StructuredJsonImporter::importContent(
-    const QByteArray &json,
-    const QString &sourcePath,
-    qint64 maxProcessedRecords
-    ) const
+ImportResult StructuredJsonImporter::
+    importContent(
+        const QByteArray &json,
+        const QString &sourcePath,
+        qint64 maxProcessedRecords
+        ) const
 {
     ImportResult result;
 
@@ -245,15 +433,37 @@ ImportResult StructuredJsonImporter::importContent(
             &parseError
             );
 
+    /*
+     * Before Phase 15, any incomplete outer JSON
+     * document was treated as unusable.
+     *
+     * Structured live sources intentionally remain
+     * open while records are being produced, so try
+     * the shared record-stream framing path before
+     * reporting an ordinary malformed-document
+     * error.
+     */
     if (parseError.error
         != QJsonParseError::NoError) {
+        if (tryImportOpenRecordArray(
+                json,
+                config.recordPath.trimmed(),
+                sourcePath,
+                profile,
+                maxProcessedRecords,
+                result
+                )) {
+            return result;
+        }
+
         appendDiagnostic(
             result,
             QStringLiteral(
                 "MALFORMED_JSON_DOCUMENT"
                 ),
             QStringLiteral(
-                "The JSON document could not be parsed: %1"
+                "The JSON document could not be "
+                "parsed: %1"
                 )
                 .arg(
                     parseError.errorString()
@@ -287,7 +497,9 @@ ImportResult StructuredJsonImporter::importContent(
         if (document.isObject()) {
             if (maxProcessedRecords > 0
                 && maxProcessedRecords < 1) {
-                result.sourceTruncated = true;
+                result.sourceTruncated =
+                    true;
+
                 return result;
             }
 
@@ -308,7 +520,8 @@ ImportResult StructuredJsonImporter::importContent(
                 "STRUCTURED_JSON_ROOT_UNSUPPORTED"
                 ),
             QStringLiteral(
-                "The JSON document root must be an object or array."
+                "The JSON document root must be "
+                "an object or array."
                 ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
@@ -327,7 +540,8 @@ ImportResult StructuredJsonImporter::importContent(
                 "JSON_RECORD_PATH_REQUIRES_OBJECT_ROOT"
                 ),
             QStringLiteral(
-                "A configured JSON record path requires an object document root."
+                "A configured JSON record path "
+                "requires an object document root."
                 ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
@@ -352,9 +566,12 @@ ImportResult StructuredJsonImporter::importContent(
                 "JSON_RECORD_PATH_NOT_FOUND"
                 ),
             QStringLiteral(
-                "The configured JSON record path '%1' was not found."
+                "The configured JSON record path "
+                "'%1' was not found."
                 )
-                .arg(recordPath),
+                .arg(
+                    recordPath
+                    ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(
                 sourcePath,
@@ -395,9 +612,12 @@ ImportResult StructuredJsonImporter::importContent(
             "JSON_RECORD_PATH_NOT_CONTAINER"
             ),
         QStringLiteral(
-            "The configured JSON record path '%1' must resolve to an object or array."
+            "The configured JSON record path '%1' "
+            "must resolve to an object or array."
             )
-            .arg(recordPath),
+            .arg(
+                recordPath
+                ),
         ImportDiagnosticSeverity::Error,
         createSourceMetadata(
             sourcePath,
@@ -408,17 +628,27 @@ ImportResult StructuredJsonImporter::importContent(
     return result;
 }
 
-ImportResult StructuredJsonImporter::importFile(
-    const QString &filePath,
-    qint64 maxProcessedRecords,
-    const ImportExecutionContext &executionContext
-    ) const
+ImportResult StructuredJsonImporter::
+    importFile(
+        const QString &filePath,
+        qint64 maxProcessedRecords,
+        const ImportExecutionContext &executionContext
+        ) const
 {
-    QFile file(filePath);
+    Q_UNUSED(
+        executionContext
+        );
 
-    if (!file.open(
-            QIODevice::ReadOnly
-            )) {
+    QFile file;
+
+    const SharedReadFileOpenResult
+        openResult =
+        openSharedReadFile(
+            file,
+            filePath
+            );
+
+    if (!openResult.succeeded) {
         ImportResult result;
 
         appendDiagnostic(
@@ -427,10 +657,11 @@ ImportResult StructuredJsonImporter::importFile(
                 "FILE_OPEN_FAILED"
                 ),
             QStringLiteral(
-                "The source file could not be opened: %1"
+                "The source file could not be "
+                "opened: %1"
                 )
                 .arg(
-                    file.errorString()
+                    openResult.errorMessage
                     ),
             ImportDiagnosticSeverity::Error,
             createSourceMetadata(

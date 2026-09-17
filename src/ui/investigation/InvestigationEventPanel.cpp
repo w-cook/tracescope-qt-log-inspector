@@ -205,6 +205,60 @@ InvestigationEventPanel::
         m_table
         );
 
+    QScrollBar *verticalScrollBar =
+        m_table->verticalScrollBar();
+
+    connect(
+        verticalScrollBar,
+        &QScrollBar::rangeChanged,
+        this,
+        [
+            this,
+            verticalScrollBar
+        ](
+            int,
+            int maximum
+            ) {
+            if (!m_followNewest) {
+                return;
+            }
+
+            verticalScrollBar->setValue(
+                maximum
+                );
+        }
+        );
+
+    connect(
+        verticalScrollBar,
+        &QScrollBar::valueChanged,
+        this,
+        [
+            this,
+            verticalScrollBar
+        ](
+            int value
+            ) {
+            if (!m_followNewest
+                || value
+                       == verticalScrollBar
+                              ->maximum()) {
+                return;
+            }
+
+            /*
+             * While Follow Newest is enabled, the
+             * scrollbar is genuinely anchored. The user
+             * must turn the toggle off before browsing
+             * older records.
+             */
+            verticalScrollBar->setValue(
+                verticalScrollBar
+                    ->maximum()
+                );
+        }
+        );
+
     /*
      * ---------------------------------------------------------
      * Navigation actions
@@ -795,13 +849,29 @@ void InvestigationEventPanel::
                 );
 
     if (record != nullptr) {
-        positionText +=
-            tr(" • Source record %1")
-                .arg(
-                    record
-                        ->source
-                        .recordNumber
+        InvestigationController *controller =
+            m_session
+                ->investigationController();
+
+        InvestigationFilterProxyModel *proxyModel =
+            controller != nullptr
+                ? controller->proxyModel()
+                : nullptr;
+
+        if (proxyModel != nullptr) {
+            const QModelIndex sourceIndex =
+                proxyModel->mapToSource(
+                    currentIndex
                     );
+
+            if (sourceIndex.isValid()) {
+                positionText +=
+                    tr(" • #%1")
+                        .arg(
+                            sourceIndex.row() + 1
+                            );
+            }
+        }
     }
 
     m_eventPositionLabel->setText(
@@ -819,6 +889,29 @@ void InvestigationEventPanel::
 void InvestigationEventPanel::focusTable()
 {
     m_table->setFocus();
+}
+
+void InvestigationEventPanel::
+    setFollowNewestEnabled(
+        bool enabled
+        )
+{
+    m_followNewest =
+        enabled;
+
+    if (!m_followNewest
+        || m_table == nullptr
+        || m_table->verticalScrollBar()
+               == nullptr) {
+        return;
+    }
+
+    QScrollBar *scrollBar =
+        m_table->verticalScrollBar();
+
+    scrollBar->setValue(
+        scrollBar->maximum()
+        );
 }
 
 InvestigationEventTablePresentationState

@@ -29,7 +29,9 @@ public:
 
     ImportResult importLines(
         const QStringList &lines,
-        const QString &sourcePath = {}
+        const QString &sourcePath = {},
+        qint64 firstPhysicalLineNumber = 1,
+        quint64 sourceGeneration = 0
         ) const;
 
 private:
@@ -37,6 +39,7 @@ private:
         const QString &rawSource,
         const QString &sourcePath,
         qint64 recordNumber,
+        quint64 sourceGeneration,
         ImportResult &result
         ) const;
 

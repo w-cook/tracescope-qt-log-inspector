@@ -20,6 +20,7 @@ class InvestigationSessionSummaryPanel;
 class InvestigationTimelinePanel;
 class QSplitter;
 class QResizeEvent;
+class QTimer;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
@@ -38,6 +39,10 @@ public:
         );
 
     InvestigationSession *session() const;
+
+    QString tabToolTip() const override;
+
+    QColor tabTint() const override;
 
     InvestigationSessionSummaryPanel *
     summaryPanel() const;
@@ -59,6 +64,13 @@ public:
     void populateExportMenu(
         QMenu *menu
         ) override;
+
+    QWidget *createTabAccessoryWidget(
+        QWidget *parent
+        ) override;
+
+signals:
+    void liveFollowStateChanged();
 
 protected:
     void resizeEvent(
@@ -129,6 +141,12 @@ private:
 
     void exportFilteredResults();
 
+    void refreshDerivedViewsForCurrentFilter();
+
+    void scheduleLiveRefresh();
+
+    void refreshLiveSessionPresentation();
+
     InvestigationSession *m_session =
         nullptr;
 
@@ -167,4 +185,10 @@ private:
 
     QSplitter *m_mainSplitter =
         nullptr;
+
+    QTimer *m_liveRefreshTimer =
+        nullptr;
+
+    bool m_followNewest =
+        false;
 };

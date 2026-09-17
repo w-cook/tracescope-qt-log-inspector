@@ -11,10 +11,17 @@ QString createStableRecordIdentity(
     const QString &rawSource
     )
 {
-    QString sourceKey = source.sourcePath.trimmed();
+    QString sourceKey =
+        source.logicalSourceKey.trimmed();
 
     if (sourceKey.isEmpty()) {
-        sourceKey = source.sourceName.trimmed();
+        sourceKey =
+            source.sourcePath.trimmed();
+    }
+
+    if (sourceKey.isEmpty()) {
+        sourceKey =
+            source.sourceName.trimmed();
     }
 
     sourceKey.replace('\\', '/');
@@ -25,6 +32,21 @@ QString createStableRecordIdentity(
     stream.setVersion(QDataStream::Qt_6_0);
 
     stream << sourceKey;
+
+    /*
+     * Preserve the original identity material exactly
+     * for ordinary/static records. This keeps existing
+     * generation-zero record IDs stable across the
+     * Phase 15 change.
+     */
+    if (source.sourceGeneration > 0) {
+        stream << QStringLiteral(
+            "source-generation"
+            );
+
+        stream << source.sourceGeneration;
+    }
+
     stream << source.recordNumber;
     stream << rawSource;
 

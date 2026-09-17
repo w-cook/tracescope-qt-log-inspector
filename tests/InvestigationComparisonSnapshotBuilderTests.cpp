@@ -1,5 +1,7 @@
 #include <QtTest>
 
+#include <utility>
+
 #include "../src/workspace/InvestigationComparisonSnapshotBuilder.h"
 
 namespace
@@ -51,6 +53,7 @@ private slots:
     void usesCompleteSessionRecordsDespiteFilters();
     void copiesSourceIdentityAndMetadata();
     void snapshotsRemainUnchangedAfterSourceReload();
+    void snapshotsRemainUnchangedAfterLiveAppend();
     void preservesBurstRequestState();
     void assignsDistinctComparisonIds();
 };
@@ -279,6 +282,181 @@ void InvestigationComparisonSnapshotBuilderTests::
             .totalRecords
             .baselineCount,
         2
+        );
+}
+
+void InvestigationComparisonSnapshotBuilderTests::
+    snapshotsRemainUnchangedAfterLiveAppend()
+{
+    ImportProfile profile;
+
+    InvestigationSession baseline(
+        QStringLiteral("baseline.jsonl"),
+        profile,
+        makeResult({
+            makeRecord(
+                QStringLiteral("baseline-1"),
+                RecordSeverity::Info,
+                QStringLiteral("Normal operation")
+                ),
+            makeRecord(
+                QStringLiteral("baseline-2"),
+                RecordSeverity::Warning,
+                QStringLiteral("Initial warning")
+                )
+        })
+        );
+
+    InvestigationSession comparison(
+        QStringLiteral("comparison.jsonl"),
+        profile,
+        makeResult({
+            makeRecord(
+                QStringLiteral("comparison-1"),
+                RecordSeverity::Error,
+                QStringLiteral("Comparison failure")
+                )
+        })
+        );
+
+    InvestigationComparisonSnapshotBuilder builder;
+
+    const InvestigationComparisonSnapshot snapshot =
+        builder.build(
+            baseline,
+            comparison
+            );
+
+    /*
+     * Freeze the important values from the snapshot
+     * before either live source changes.
+     */
+    QCOMPARE(
+        snapshot.analysis()
+            .totalRecords
+            .baselineCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        snapshot.analysis()
+            .totalRecords
+            .comparisonCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        snapshot.analysis()
+            .severity
+            .baselinePopulatedRecordCount,
+        qint64(2)
+        );
+
+    /*
+     * Model the exact session-level operation used by
+     * live following after another physical record is
+     * successfully framed and imported.
+     */
+    ImportResult liveResult =
+        makeResult({
+            makeRecord(
+                QStringLiteral("baseline-live-3"),
+                RecordSeverity::Critical,
+                QStringLiteral(
+                    "Critical live failure"
+                    )
+                )
+        });
+
+    baseline.appendLiveImportResult(
+        std::move(liveResult)
+        );
+
+    /*
+     * The source session itself must have changed.
+     */
+    QCOMPARE(
+        baseline.importedRecordCount(),
+        qint64(3)
+        );
+
+    QCOMPARE(
+        baseline
+            .investigationController()
+            ->allRecords()
+            .size(),
+        3
+        );
+
+    /*
+     * The existing comparison remains an immutable
+     * point-in-time result. It must not acquire the
+     * later live record merely because its source
+     * session continued changing.
+     */
+    QCOMPARE(
+        snapshot.analysis()
+            .totalRecords
+            .baselineCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        snapshot.analysis()
+            .totalRecords
+            .comparisonCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        snapshot.analysis()
+            .severity
+            .baselinePopulatedRecordCount,
+        qint64(2)
+        );
+
+    /*
+     * Building a new comparison after the live append
+     * should, however, capture the current source
+     * state.
+     */
+    const InvestigationComparisonSnapshot
+        refreshedSnapshot =
+        builder.build(
+            baseline,
+            comparison
+            );
+
+    QCOMPARE(
+        refreshedSnapshot.analysis()
+            .totalRecords
+            .baselineCount,
+        qint64(3)
+        );
+
+    QCOMPARE(
+        refreshedSnapshot.analysis()
+            .totalRecords
+            .comparisonCount,
+        qint64(1)
+        );
+
+    QCOMPARE(
+        refreshedSnapshot.analysis()
+            .severity
+            .baselinePopulatedRecordCount,
+        qint64(3)
+        );
+
+    /*
+     * Reconfirm that creating a newer snapshot did
+     * not alter the older one.
+     */
+    QCOMPARE(
+        snapshot.analysis()
+            .totalRecords
+            .baselineCount,
+        qint64(2)
         );
 }
 

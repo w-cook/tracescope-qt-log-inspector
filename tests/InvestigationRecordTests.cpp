@@ -17,6 +17,9 @@ private slots:
     void stableIdentityIsDeterministic();
     void stableIdentityNormalizesPathSeparators();
     void stableIdentityChangesWhenRecordChanges();
+    void stableIdentityChangesAcrossSourceGenerations();
+    void stableIdentitySurvivesPhysicalSourceRelocation();
+    void stableIdentityStillFallsBackToPhysicalPath();
 };
 
 void InvestigationRecordTests::defaultRecordHasNoCanonicalValues()
@@ -33,6 +36,7 @@ void InvestigationRecordTests::defaultRecordHasNoCanonicalValues()
     QVERIFY(record.customAttributes.isEmpty());
     QVERIFY(record.rawSource.isEmpty());
     QCOMPARE(record.source.recordNumber, qint64(0));
+    QCOMPARE(record.source.sourceGeneration, quint64(0));
 }
 
 void InvestigationRecordTests::recordPreservesCanonicalAndCustomValues()
@@ -64,28 +68,30 @@ void InvestigationRecordTests::recordPreservesCanonicalAndCustomValues()
     record.source.sourcePath = QStringLiteral("samples/session.jsonl");
     record.source.sourceName = QStringLiteral("session.jsonl");
     record.source.recordNumber = 12;
+    record.source.sourceGeneration = 3;
 
     QVERIFY(record.timestamp.has_value());
     QCOMPARE(record.severity, std::optional<RecordSeverity>(
-                                  RecordSeverity::Warning
-                                  ));
+        RecordSeverity::Warning
+        ));
     QCOMPARE(
         record.subsystem,
         std::optional<QString>(QStringLiteral("Tracking"))
         );
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("durationMs")
-                                   ).toInt(),
+            QStringLiteral("durationMs")
+            ).toInt(),
         1200
         );
     QCOMPARE(
         record.customAttributes.value(
-                                   QStringLiteral("recovered")
-                                   ).toBool(),
+            QStringLiteral("recovered")
+            ).toBool(),
         false
         );
     QCOMPARE(record.source.recordNumber, qint64(12));
+    QCOMPARE(record.source.sourceGeneration, quint64(3));
     QVERIFY(!record.rawSource.isEmpty());
 }
 
@@ -119,8 +125,8 @@ void InvestigationRecordTests::
     parseRecordTimestampReturnsEmptyForInvalidInput()
 {
     QVERIFY(!parseRecordTimestamp(
-                 QStringLiteral("not-a-timestamp")
-                 ).has_value());
+        QStringLiteral("not-a-timestamp")
+        ).has_value());
 
     QVERIFY(!parseRecordTimestamp(QString()).has_value());
 }
@@ -200,6 +206,155 @@ void InvestigationRecordTests::stableIdentityChangesWhenRecordChanges()
 
     QVERIFY(originalIdentity != changedContentIdentity);
     QVERIFY(originalIdentity != changedRecordNumberIdentity);
+}
+
+void InvestigationRecordTests::
+    stableIdentityChangesAcrossSourceGenerations()
+{
+    RecordSourceMetadata source;
+
+    source.sourcePath =
+        QStringLiteral(
+            "samples/session.jsonl"
+            );
+
+    source.recordNumber = 1;
+
+    const QString rawSource =
+        QStringLiteral(
+            R"({"message":"Started"})"
+            );
+
+    const QString originalIdentity =
+        createStableRecordIdentity(
+            source,
+            rawSource
+            );
+
+    source.sourceGeneration = 1;
+
+    const QString firstReplacementIdentity =
+        createStableRecordIdentity(
+            source,
+            rawSource
+            );
+
+    source.sourceGeneration = 2;
+
+    const QString secondReplacementIdentity =
+        createStableRecordIdentity(
+            source,
+            rawSource
+            );
+
+    QVERIFY(
+        originalIdentity
+        != firstReplacementIdentity
+        );
+
+    QVERIFY(
+        firstReplacementIdentity
+        != secondReplacementIdentity
+        );
+
+    QVERIFY(
+        originalIdentity
+        != secondReplacementIdentity
+        );
+
+    /*
+     * Returning to generation zero must reproduce
+     * the ordinary/static record identity.
+     */
+    source.sourceGeneration = 0;
+
+    QCOMPARE(
+        createStableRecordIdentity(
+            source,
+            rawSource
+            ),
+        originalIdentity
+        );
+}
+
+void InvestigationRecordTests::
+    stableIdentitySurvivesPhysicalSourceRelocation()
+{
+    RecordSourceMetadata original;
+
+    original.sourcePath =
+        QStringLiteral(
+            "C:/logs/service.log"
+            );
+
+    original.logicalSourceKey =
+        QStringLiteral(
+            "C:/logs/service.log"
+            );
+
+    original.recordNumber = 12;
+
+    RecordSourceMetadata relocated =
+        original;
+
+    relocated.sourcePath =
+        QStringLiteral(
+            "D:/archive/service-renamed.log"
+            );
+
+    const QString rawSource =
+        QStringLiteral(
+            "request completed"
+            );
+
+    QCOMPARE(
+        createStableRecordIdentity(
+            original,
+            rawSource
+            ),
+        createStableRecordIdentity(
+            relocated,
+            rawSource
+            )
+        );
+}
+
+void InvestigationRecordTests::
+    stableIdentityStillFallsBackToPhysicalPath()
+{
+    RecordSourceMetadata first;
+
+    first.sourcePath =
+        QStringLiteral(
+            "C:/logs/service.log"
+            );
+
+    first.recordNumber = 12;
+
+    RecordSourceMetadata second =
+        first;
+
+    second.sourcePath =
+        QStringLiteral(
+            "D:/logs/service.log"
+            );
+
+    const QString rawSource =
+        QStringLiteral(
+            "request completed"
+            );
+
+    QVERIFY(
+        createStableRecordIdentity(
+            first,
+            rawSource
+            )
+        !=
+        createStableRecordIdentity(
+            second,
+            rawSource
+            )
+        );
 }
 
 QTEST_MAIN(InvestigationRecordTests)
