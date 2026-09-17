@@ -63,6 +63,14 @@ private slots:
     void ordinaryAppendDoesNotChangeIdentity();
     void samePathReplacementChangesIdentity();
     void truncationBelowCapturedSizeChangesIdentity();
+
+    void verifiesCopiedSourceAsRelocationCandidate();
+    void verifiesGrownSourceAsRelocationCandidate();
+    void rejectsShorterRelocationCandidate();
+    void rejectsChangedRelocationCandidatePrefix();
+    void rejectsMissingRelocationCandidate();
+    void rejectsRelocationWithoutHistoricalEvidence();
+    void verifiesBirthTimeOnlyRelocationEvidence();
 };
 
 void SourcePhysicalIdentityTests::
@@ -314,6 +322,374 @@ void SourcePhysicalIdentityTests::
         sourcePhysicalIdentityChanged(
             sourcePath,
             captureResult.identity
+            )
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    verifiesCopiedSourceAsRelocationCandidate()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral("original.log")
+            );
+
+    const QString candidatePath =
+        directory.filePath(
+            QStringLiteral("relocated.log")
+            );
+
+    const QByteArray content(
+        6000,
+        'A'
+        );
+
+    writeFile(
+        originalPath,
+        content
+        );
+
+    const SourcePhysicalIdentityCaptureResult
+        captureResult =
+        captureSourcePhysicalIdentity(
+            originalPath
+            );
+
+    QVERIFY2(
+        captureResult.succeeded,
+        qPrintable(
+            captureResult.errorMessage
+            )
+        );
+
+    writeFile(
+        candidatePath,
+        content
+        );
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            candidatePath,
+            captureResult.identity
+            );
+
+    QVERIFY2(
+        result.verified,
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        result.candidateIdentity.observedSizeBytes,
+        qint64(content.size())
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    verifiesGrownSourceAsRelocationCandidate()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral("original.log")
+            );
+
+    const QString candidatePath =
+        directory.filePath(
+            QStringLiteral("relocated.log")
+            );
+
+    const QByteArray original(
+        "historical source content\n"
+        );
+
+    writeFile(
+        originalPath,
+        original
+        );
+
+    const SourcePhysicalIdentityCaptureResult
+        captureResult =
+        captureSourcePhysicalIdentity(
+            originalPath
+            );
+
+    QVERIFY2(
+        captureResult.succeeded,
+        qPrintable(
+            captureResult.errorMessage
+            )
+        );
+
+    writeFile(
+        candidatePath,
+        original
+        );
+
+    appendFile(
+        candidatePath,
+        QByteArray(
+            "newer content\n"
+            )
+        );
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            candidatePath,
+            captureResult.identity
+            );
+
+    QVERIFY2(
+        result.verified,
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QVERIFY(
+        result.candidateIdentity.observedSizeBytes
+        > captureResult.identity.observedSizeBytes
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    rejectsShorterRelocationCandidate()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral("original.log")
+            );
+
+    const QString candidatePath =
+        directory.filePath(
+            QStringLiteral("shorter.log")
+            );
+
+    const QByteArray original(
+        6000,
+        'A'
+        );
+
+    writeFile(
+        originalPath,
+        original
+        );
+
+    const SourcePhysicalIdentityCaptureResult
+        captureResult =
+        captureSourcePhysicalIdentity(
+            originalPath
+            );
+
+    QVERIFY(captureResult.succeeded);
+
+    /*
+     * This still contains the complete historical
+     * 4096-byte fingerprint prefix but is shorter
+     * than the previously observed source.
+     */
+    writeFile(
+        candidatePath,
+        original.left(5000)
+        );
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            candidatePath,
+            captureResult.identity
+            );
+
+    QVERIFY(
+        !result.verified
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    rejectsChangedRelocationCandidatePrefix()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral("original.log")
+            );
+
+    const QString candidatePath =
+        directory.filePath(
+            QStringLiteral("different.log")
+            );
+
+    writeFile(
+        originalPath,
+        QByteArray(
+            5000,
+            'A'
+            )
+        );
+
+    const SourcePhysicalIdentityCaptureResult
+        captureResult =
+        captureSourcePhysicalIdentity(
+            originalPath
+            );
+
+    QVERIFY(captureResult.succeeded);
+
+    writeFile(
+        candidatePath,
+        QByteArray(
+            5000,
+            'B'
+            )
+        );
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            candidatePath,
+            captureResult.identity
+            );
+
+    QVERIFY(
+        !result.verified
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    rejectsMissingRelocationCandidate()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    SourcePhysicalIdentity identity;
+
+    identity.fingerprintLength = 1;
+    identity.prefixFingerprint =
+        QByteArray(
+            32,
+            'A'
+            );
+
+    identity.observedSizeBytes = 1;
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            directory.filePath(
+                QStringLiteral(
+                    "missing.log"
+                    )
+                ),
+            identity
+            );
+
+    QVERIFY(
+        !result.verified
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    rejectsRelocationWithoutHistoricalEvidence()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString candidatePath =
+        directory.filePath(
+            QStringLiteral("candidate.log")
+            );
+
+    writeFile(
+        candidatePath,
+        QByteArray()
+        );
+
+    SourcePhysicalIdentity identity;
+
+    identity.observedSizeBytes = 0;
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            candidatePath,
+            identity
+            );
+
+    QVERIFY(
+        !result.verified
+        );
+}
+
+void SourcePhysicalIdentityTests::
+    verifiesBirthTimeOnlyRelocationEvidence()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("empty.log")
+            );
+
+    writeFile(
+        sourcePath,
+        QByteArray()
+        );
+
+    const SourcePhysicalIdentityCaptureResult
+        captureResult =
+        captureSourcePhysicalIdentity(
+            sourcePath
+            );
+
+    QVERIFY(captureResult.succeeded);
+
+    if (!captureResult
+             .identity
+             .birthTime
+             .isValid()) {
+        QSKIP(
+            "Filesystem does not expose a usable birth time."
+            );
+    }
+
+    SourcePhysicalIdentity birthTimeOnly =
+        captureResult.identity;
+
+    birthTimeOnly.fingerprintLength = 0;
+    birthTimeOnly.prefixFingerprint.clear();
+
+    const SourceRelocationVerificationResult
+        result =
+        verifySourceRelocationCandidate(
+            sourcePath,
+            birthTimeOnly
+            );
+
+    QVERIFY2(
+        result.verified,
+        qPrintable(
+            result.errorMessage
             )
         );
 }

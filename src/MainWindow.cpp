@@ -2715,6 +2715,127 @@ void MainWindow::
         );
 }
 
+void MainWindow::redefineSessionSourcePath(
+    const QString &sessionId
+    )
+{
+    if (workspace == nullptr
+        || importWatcher != nullptr
+        || workspaceOpenInProgress
+        || sessionReloadInProgress) {
+        return;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            sessionId
+            );
+
+    if (sessionIndex < 0) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->sessionAt(
+            sessionIndex
+            );
+
+    if (session == nullptr) {
+        return;
+    }
+
+    const InvestigationExternalSourceBinding
+        *sourceBinding =
+        session
+            ->backing()
+            .externalSource();
+
+    if (sourceBinding == nullptr) {
+        sourceBinding =
+            session->reconnectSourceHint();
+    }
+
+    if (sourceBinding == nullptr
+        || !sourceBinding
+                ->sourceIdentity
+                .has_value()) {
+        QMessageBox::information(
+            this,
+            tr("Redefine Source Path"),
+            tr(
+                "This investigation does not retain "
+                "enough physical source identity "
+                "information to verify a relocated "
+                "source safely."
+                )
+            );
+
+        return;
+    }
+
+    const QString currentSourcePath =
+        sourceBinding->sourcePath;
+
+    QString initialDirectory;
+
+    if (!currentSourcePath
+             .trimmed()
+             .isEmpty()) {
+        initialDirectory =
+            QFileInfo(
+                currentSourcePath
+                ).absolutePath();
+    }
+
+    const QString candidatePath =
+        QFileDialog::getOpenFileName(
+            this,
+            tr("Redefine Source Path"),
+            initialDirectory,
+            tr("All Files (*)")
+            );
+
+    if (candidatePath.isEmpty()) {
+        return;
+    }
+
+    const InvestigationSessionSourceRelocationResult
+        result =
+        workspace->redefineSourcePath(
+            sessionId,
+            candidatePath
+            );
+
+    if (!result.succeeded) {
+        QMessageBox::warning(
+            this,
+            tr("Redefine Source Path Failed"),
+            result.errorMessage.isEmpty()
+                ? tr(
+                      "The selected file could not be "
+                      "verified as the same logical "
+                      "source."
+                      )
+                : result.errorMessage
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tr("Source Path Redefined"),
+        tr(
+            "TraceScope verified the selected file "
+            "against the investigation's saved source "
+            "identity and updated the physical source "
+            "location.\n\n"
+            "The logical source identity and source "
+            "generation were preserved."
+            )
+        );
+}
+
 void MainWindow::openSourceLocation(
     const QString &sourcePath
     )
@@ -2820,6 +2941,53 @@ void MainWindow::populateSessionSourceMenu(
             return;
         }
 
+        QAction *redefineAction =
+            sourceMenu->addAction(
+                tr("Redefine Source Path...")
+                );
+
+        const bool canRedefine =
+            source
+                ->sourceIdentity
+                .has_value();
+
+        redefineAction->setEnabled(
+            canRedefine
+            );
+
+        redefineAction->setToolTip(
+            canRedefine
+                ? tr(
+                      "Select a relocated copy of this source. "
+                      "TraceScope will update the path only if "
+                      "the file can be verified against the "
+                      "saved physical source identity."
+                      )
+                : tr(
+                      "This investigation does not retain "
+                      "enough physical source identity "
+                      "information to verify relocation."
+                      )
+            );
+
+        if (canRedefine) {
+            connect(
+                redefineAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
+                    sessionId
+                ]() {
+                    redefineSessionSourcePath(
+                        sessionId
+                        );
+                }
+                );
+        }
+
+        sourceMenu->addSeparator();
+
         QAction *snapshotOnlyAction =
             sourceMenu->addAction(
                 tr("Preserve as Snapshot Only...")
@@ -2883,6 +3051,53 @@ void MainWindow::populateSessionSourceMenu(
         const InvestigationExternalSourceBinding
             *reconnectHint =
             session->reconnectSourceHint();
+
+        QAction *redefineAction =
+            sourceMenu->addAction(
+                tr("Redefine Source Path...")
+                );
+
+        const bool canRedefine =
+            reconnectHint != nullptr
+            && reconnectHint
+                   ->sourceIdentity
+                   .has_value();
+
+        redefineAction->setEnabled(
+            canRedefine
+            );
+
+        redefineAction->setToolTip(
+            canRedefine
+                ? tr(
+                      "Select the relocated external source "
+                      "represented by this investigation's "
+                      "saved continuity information."
+                      )
+                : tr(
+                      "This investigation does not retain "
+                      "enough physical source identity "
+                      "information to verify relocation."
+                      )
+            );
+
+        if (canRedefine) {
+            connect(
+                redefineAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
+                    sessionId
+                ]() {
+                    redefineSessionSourcePath(
+                        sessionId
+                        );
+                }
+                );
+        }
+
+        sourceMenu->addSeparator();
 
         QAction *reconnectAction =
             sourceMenu->addAction(
@@ -3000,6 +3215,52 @@ void MainWindow::populateSessionSourceMenu(
             return;
         }
 
+        QAction *redefineAction =
+            sourceMenu->addAction(
+                tr("Redefine Source Path...")
+                );
+
+        const bool canRedefine =
+            source
+                ->sourceIdentity
+                .has_value();
+
+        redefineAction->setEnabled(
+            canRedefine
+            );
+
+        redefineAction->setToolTip(
+            canRedefine
+                ? tr(
+                      "Select a relocated copy of the connected "
+                      "source. TraceScope will update the path "
+                      "only after verifying source identity."
+                      )
+                : tr(
+                      "This investigation does not retain "
+                      "enough physical source identity "
+                      "information to verify relocation."
+                      )
+            );
+
+        if (canRedefine) {
+            connect(
+                redefineAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
+                    sessionId
+                ]() {
+                    redefineSessionSourcePath(
+                        sessionId
+                        );
+                }
+                );
+        }
+
+        sourceMenu->addSeparator();
+
         QAction *snapshotOnlyAction =
             sourceMenu->addAction(
                 tr("Preserve as Snapshot Only...")
@@ -3038,11 +3299,7 @@ void MainWindow::populateSessionSourceMenu(
 
         if (!sourceInfo.exists()
             || !sourceInfo.isFile()) {
-            sourceMenu->setEnabled(
-                false
-                );
-
-            return;
+            break;
         }
 
         QAction *openAction =

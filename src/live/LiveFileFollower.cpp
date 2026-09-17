@@ -12,11 +12,27 @@ LiveFileFollower::LiveFileFollower(
     QString sourcePath,
     QObject *parent
     )
+    : LiveFileFollower(
+          std::move(sourcePath),
+          0,
+          parent
+          )
+{
+}
+
+LiveFileFollower::LiveFileFollower(
+    QString sourcePath,
+    quint64 initialSourceGeneration,
+    QObject *parent
+    )
     : QObject(parent),
     m_sourcePath(
         QFileInfo(
             std::move(sourcePath)
             ).absoluteFilePath()
+        ),
+    m_state(
+        initialSourceGeneration
         )
 {
 }

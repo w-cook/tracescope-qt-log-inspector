@@ -12,6 +12,10 @@ enum class LiveFileFollowStatus
 class LiveFileFollowState
 {
 public:
+    explicit LiveFileFollowState(
+        quint64 sourceGeneration = 0
+        );
+
     LiveFileFollowStatus status() const;
 
     bool isStopped() const;

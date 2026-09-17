@@ -64,6 +64,12 @@ public:
             reconstruction
         );
 
+    InvestigationSessionSourceRelocationResult
+    redefineSourcePath(
+        const QString &sessionId,
+        const QString &candidatePath
+        );
+
     bool applySnapshotOnlyTransition(
         const QString &sessionId,
         const QString &snapshotPath,

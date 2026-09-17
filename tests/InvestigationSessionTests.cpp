@@ -37,6 +37,12 @@ private slots:
     void rejectsSnapshotReloadForSourceBackedSession();
     void captureSnapshotPreservesActiveSourceContinuity();
     void captureSnapshotPreservesDormantReconnectContinuity();
+    void capturesInitialExternalSourceIdentity();
+    void redefinesActiveSourcePathWithoutChangingLogicalIdentity();
+    void rejectsUnverifiedSourceRelocationWithoutMutation();
+    void redefinesDormantSnapshotReconnectPath();
+    void sourceRelocationPreservesLiveFollowBoundary();
+    void sourceRelocationSynchronizesPendingGenerationReset();
 };
 
 void InvestigationSessionTests::
@@ -3610,6 +3616,1008 @@ void InvestigationSessionTests::
             .sourceIdentity
             ->observedSizeBytes,
         identity.observedSizeBytes
+        );
+}
+
+void InvestigationSessionTests::
+    capturesInitialExternalSourceIdentity()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("source.jsonl")
+            );
+
+    QFile sourceFile(sourcePath);
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    const QByteArray content(
+        "{\"message\":\"existing\"}\n"
+        );
+
+    QCOMPARE(
+        sourceFile.write(content),
+        qint64(content.size())
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+    ImportResult result;
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(result)
+        );
+
+    const InvestigationExternalSourceBinding
+        *binding =
+        session
+            .backing()
+            .externalSource();
+
+    if (binding == nullptr) {
+        QFAIL(
+            "Expected an active external source binding."
+            );
+
+        return;
+    }
+
+    QVERIFY(
+        binding
+            ->sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        binding
+            ->sourceIdentity
+            ->observedSizeBytes,
+        qint64(content.size())
+        );
+}
+
+void InvestigationSessionTests::
+    redefinesActiveSourcePathWithoutChangingLogicalIdentity()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("source.log")
+            );
+
+    const QString relocatedPath =
+        directory.filePath(
+            QStringLiteral("relocated.log")
+            );
+
+    const QByteArray content(
+        6000,
+        'A'
+        );
+
+    QFile sourceFile(sourcePath);
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(content),
+        qint64(content.size())
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+    ImportResult importResult;
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(importResult)
+        );
+
+    const QString logicalSourceKey =
+        QStringLiteral(
+            "stable-logical-source"
+            );
+
+    QVERIFY(
+        session.updateExternalSourceLogicalKey(
+            logicalSourceKey
+            )
+        );
+
+    const InvestigationExternalSourceBinding
+        *initialBinding =
+        session
+            .backing()
+            .externalSource();
+
+    if (initialBinding == nullptr) {
+        QFAIL(
+            "Expected an active external source binding."
+            );
+
+        return;
+    }
+
+    QVERIFY(
+        initialBinding
+            ->sourceIdentity
+            .has_value()
+        );
+
+    const SourcePhysicalIdentity identity =
+        *initialBinding->sourceIdentity;
+
+    session.updateExternalSourceRuntimeState(
+        4,
+        &identity
+        );
+
+    SourceFamilyConfiguration
+        familyConfiguration;
+
+    familyConfiguration.includeRotatedSources =
+        true;
+
+    familyConfiguration.rotatedSourcePaths = {
+        QStringLiteral("old-rotation-1.log"),
+        QStringLiteral("old-rotation-2.log")
+    };
+
+    session.setSourceFamilyConfiguration(
+        familyConfiguration
+        );
+
+    QVERIFY(
+        QFile::copy(
+            sourcePath,
+            relocatedPath
+            )
+        );
+
+    const InvestigationSessionSourceRelocationResult
+        relocation =
+        session.redefineSourcePath(
+            relocatedPath
+            );
+
+    QVERIFY2(
+        relocation.succeeded,
+        qPrintable(
+            relocation.errorMessage
+            )
+        );
+
+    const InvestigationExternalSourceBinding
+        *binding =
+        session
+            .backing()
+            .externalSource();
+
+    QVERIFY(binding != nullptr);
+
+    QCOMPARE(
+        binding->sourcePath,
+        QFileInfo(relocatedPath)
+            .absoluteFilePath()
+        );
+
+    QCOMPARE(
+        binding->logicalSourceKey,
+        logicalSourceKey
+        );
+
+    QCOMPARE(
+        binding->sourceGeneration,
+        quint64(4)
+        );
+
+    QVERIFY(
+        binding
+            ->sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    QVERIFY(binding->sourceIdentity);
+
+    QCOMPARE(
+        session
+            .sourceMetadata()
+            .sourcePath,
+        QFileInfo(relocatedPath)
+            .absoluteFilePath()
+        );
+}
+
+void InvestigationSessionTests::
+    rejectsUnverifiedSourceRelocationWithoutMutation()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("source.log")
+            );
+
+    const QString unrelatedPath =
+        directory.filePath(
+            QStringLiteral("unrelated.log")
+            );
+
+    QFile sourceFile(sourcePath);
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    sourceFile.write(
+        QByteArray(
+            5000,
+            'A'
+            )
+        );
+
+    sourceFile.close();
+
+    QFile unrelatedFile(unrelatedPath);
+
+    QVERIFY(
+        unrelatedFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    unrelatedFile.write(
+        QByteArray(
+            5000,
+            'B'
+            )
+        );
+
+    unrelatedFile.close();
+
+    ImportProfile profile;
+    ImportResult importResult;
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(importResult)
+        );
+
+    const QString originalPath =
+        session.externalSourcePath();
+
+    const InvestigationSessionSourceRelocationResult
+        relocation =
+        session.redefineSourcePath(
+            unrelatedPath
+            );
+
+    QVERIFY(!relocation.succeeded);
+
+    QCOMPARE(
+        session.externalSourcePath(),
+        originalPath
+        );
+}
+
+void InvestigationSessionTests::
+    redefinesDormantSnapshotReconnectPath()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral("original.log")
+            );
+
+    const QString relocatedPath =
+        directory.filePath(
+            QStringLiteral("relocated.log")
+            );
+
+    QFile originalFile(originalPath);
+
+    QVERIFY(
+        originalFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    const QByteArray content(
+        5000,
+        'A'
+        );
+
+    QCOMPARE(
+        originalFile.write(content),
+        qint64(content.size())
+        );
+
+    originalFile.close();
+
+    const SourcePhysicalIdentityCaptureResult
+        identity =
+        captureSourcePhysicalIdentity(
+            originalPath
+            );
+
+    QVERIFY(identity.succeeded);
+
+    QVERIFY(
+        QFile::copy(
+            originalPath,
+            relocatedPath
+            )
+        );
+
+    InvestigationExternalSourceBinding
+        reconnectHint;
+
+    reconnectHint.sourcePath =
+        QFileInfo(originalPath)
+            .absoluteFilePath();
+
+    reconnectHint.logicalSourceKey =
+        QStringLiteral(
+            "stable-logical-source"
+            );
+
+    reconnectHint.sourceGeneration = 3;
+
+    reconnectHint.sourceIdentity =
+        identity.identity;
+
+    InvestigationSessionSnapshot snapshot;
+
+    auto session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            QStringLiteral(
+                "investigation.tsinv"
+                ),
+            std::move(snapshot),
+            reconnectHint
+            );
+
+    QVERIFY(session != nullptr);
+
+    const InvestigationSessionSourceRelocationResult
+        relocation =
+        session->redefineSourcePath(
+            relocatedPath
+            );
+
+    QVERIFY2(
+        relocation.succeeded,
+        qPrintable(
+            relocation.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        session
+            ->backing()
+            .externalSource()
+        == nullptr
+        );
+
+    const InvestigationExternalSourceBinding
+        *updatedHint =
+        session->reconnectSourceHint();
+
+    QVERIFY(updatedHint != nullptr);
+
+    QCOMPARE(
+        updatedHint->sourcePath,
+        QFileInfo(relocatedPath)
+            .absoluteFilePath()
+        );
+
+    QCOMPARE(
+        updatedHint->logicalSourceKey,
+        QStringLiteral(
+            "stable-logical-source"
+            )
+        );
+
+    QCOMPARE(
+        updatedHint->sourceGeneration,
+        quint64(3)
+        );
+}
+
+void InvestigationSessionTests::
+    sourceRelocationPreservesLiveFollowBoundary()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral(
+                "original-live.jsonl"
+                )
+            );
+
+    const QString relocatedPath =
+        directory.filePath(
+            QStringLiteral(
+                "relocated-live.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Initial record"})"
+        "\n"
+        );
+
+    QFile originalFile(
+        originalPath
+        );
+
+    QVERIFY(
+        originalFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        originalFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    originalFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral(
+            "Live JSON Lines"
+            );
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            originalPath
+            );
+
+    QCOMPARE(
+        initialResult.records.size(),
+        1
+        );
+
+    InvestigationSession session(
+        originalPath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        coordinator != nullptr
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        startResult.baselineByteCount,
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    const QByteArray followedRecord(
+        R"({"message":"Followed before relocation"})"
+        "\n"
+        );
+
+    QVERIFY(
+        originalFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        originalFile.write(
+            followedRecord
+            ),
+        qint64(
+            followedRecord.size()
+            )
+        );
+
+    originalFile.close();
+
+    const LiveSessionFollowPollResult
+        firstPoll =
+        coordinator->pollOnce();
+
+    QVERIFY2(
+        firstPoll.succeeded,
+        qPrintable(
+            firstPoll.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        firstPoll.importedRecordCount,
+        qint64(1)
+        );
+
+    const qint64 consumedByteCount =
+        qint64(
+            initialRecord.size()
+            + followedRecord.size()
+            );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .readOffset(),
+        consumedByteCount
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(2)
+        );
+
+    QVERIFY(
+        QFile::copy(
+            originalPath,
+            relocatedPath
+            )
+        );
+
+    const InvestigationSessionSourceRelocationResult
+        relocation =
+        session.redefineSourcePath(
+            relocatedPath
+            );
+
+    QVERIFY2(
+        relocation.succeeded,
+        qPrintable(
+            relocation.errorMessage
+            )
+        );
+
+    /*
+     * redefineSourcePath() destroys the coordinator
+     * that belonged to the previous physical path.
+     */
+    QVERIFY(
+        session.liveFollowCoordinator()
+        == nullptr
+        );
+
+    QCOMPARE(
+        session.initialLiveFollowByteOffset(),
+        consumedByteCount
+        );
+
+    QCOMPARE(
+        session.externalSourcePath(),
+        QFileInfo(
+            relocatedPath
+            ).absoluteFilePath()
+        );
+
+    LiveSessionFollowCoordinator
+        *relocatedCoordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        relocatedCoordinator != nullptr
+        );
+
+    const LiveSessionFollowStartResult
+        relocatedStart =
+        relocatedCoordinator->start();
+
+    QVERIFY2(
+        relocatedStart.succeeded,
+        qPrintable(
+            relocatedStart.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        relocatedStart.baselineByteCount,
+        consumedByteCount
+        );
+
+    QCOMPARE(
+        relocatedCoordinator
+            ->state()
+            .readOffset(),
+        consumedByteCount
+        );
+
+    const QByteArray postRelocationRecord(
+        R"({"message":"Followed after relocation"})"
+        "\n"
+        );
+
+    QFile relocatedFile(
+        relocatedPath
+        );
+
+    QVERIFY(
+        relocatedFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Append
+            )
+        );
+
+    QCOMPARE(
+        relocatedFile.write(
+            postRelocationRecord
+            ),
+        qint64(
+            postRelocationRecord.size()
+            )
+        );
+
+    relocatedFile.close();
+
+    const LiveSessionFollowPollResult
+        secondPoll =
+        relocatedCoordinator->pollOnce();
+
+    QVERIFY2(
+        secondPoll.succeeded,
+        qPrintable(
+            secondPoll.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        secondPoll.importedRecordCount,
+        qint64(1)
+        );
+
+    QVERIFY(
+        !secondPoll.sourceGenerationChanged
+        );
+
+    QCOMPARE(
+        session.importedRecordCount(),
+        qint64(3)
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        3
+        );
+
+    QCOMPARE(
+        records.at(2).message,
+        std::optional<QString>(
+            QStringLiteral(
+                "Followed after relocation"
+                )
+            )
+        );
+
+    /*
+     * Relocating the same logical source must not
+     * create a new source generation.
+     */
+    QCOMPARE(
+        records.at(2)
+            .source
+            .sourceGeneration,
+        quint64(0)
+        );
+}
+
+void InvestigationSessionTests::
+    sourceRelocationSynchronizesPendingGenerationReset()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString originalPath =
+        directory.filePath(
+            QStringLiteral(
+                "original-live.jsonl"
+                )
+            );
+
+    const QString relocatedPath =
+        directory.filePath(
+            QStringLiteral(
+                "relocated-live.jsonl"
+                )
+            );
+
+    const QByteArray initialRecord(
+        R"({"message":"Generation zero"})"
+        "\n"
+        );
+
+    QFile sourceFile(
+        originalPath
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            initialRecord
+            ),
+        qint64(
+            initialRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    JsonLinesImporter importer(
+        profile
+        );
+
+    ImportResult initialResult =
+        importer.importFile(
+            originalPath
+            );
+
+    InvestigationSession session(
+        originalPath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(coordinator != nullptr);
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .sourceGeneration(),
+        quint64(0)
+        );
+
+    /*
+     * Simulate the generator's in-place truncate.
+     * Do not poll TraceScope afterward: relocation
+     * itself must discover this pending generation.
+     */
+    const QByteArray replacementRecord(
+        R"({"message":"Generation one"})"
+        "\n"
+        );
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Truncate
+            )
+        );
+
+    QCOMPARE(
+        sourceFile.write(
+            replacementRecord
+            ),
+        qint64(
+            replacementRecord.size()
+            )
+        );
+
+    sourceFile.close();
+
+    QVERIFY(
+        QFile::copy(
+            originalPath,
+            relocatedPath
+            )
+        );
+
+    const InvestigationSessionSourceRelocationResult
+        relocation =
+        session.redefineSourcePath(
+            relocatedPath
+            );
+
+    QVERIFY2(
+        relocation.succeeded,
+        qPrintable(
+            relocation.errorMessage
+            )
+        );
+
+    const InvestigationExternalSourceBinding
+        *binding =
+        session
+            .backing()
+            .externalSource();
+
+    if (binding == nullptr) {
+        QFAIL(
+            "Expected an active external source binding."
+            );
+
+        return;
+    }
+
+    QCOMPARE(
+        binding->sourceGeneration,
+        quint64(1)
+        );
+
+    QCOMPARE(
+        session.initialLiveFollowByteOffset(),
+        qint64(0)
+        );
+
+    QVERIFY(
+        session.liveFollowCoordinator()
+        == nullptr
+        );
+
+    LiveSessionFollowCoordinator
+        *relocatedCoordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        relocatedCoordinator != nullptr
+        );
+
+    const LiveSessionFollowStartResult
+        relocatedStart =
+        relocatedCoordinator->start();
+
+    QVERIFY2(
+        relocatedStart.succeeded,
+        qPrintable(
+            relocatedStart.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        relocatedCoordinator
+            ->state()
+            .sourceGeneration(),
+        quint64(1)
+        );
+
+    QCOMPARE(
+        relocatedStart.baselineByteCount,
+        qint64(0)
+        );
+
+    const LiveSessionFollowPollResult
+        pollResult =
+        relocatedCoordinator->pollOnce();
+
+    QVERIFY2(
+        pollResult.succeeded,
+        qPrintable(
+            pollResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        pollResult.importedRecordCount,
+        qint64(1)
+        );
+
+    QVERIFY(
+        !pollResult.sourceGenerationChanged
+        );
+
+    const QVector<InvestigationRecord> &records =
+        session
+            .investigationController()
+            ->allRecords();
+
+    QCOMPARE(
+        records.size(),
+        2
+        );
+
+    QCOMPARE(
+        records.last()
+            .source
+            .sourceGeneration,
+        quint64(1)
         );
 }
 

@@ -48,6 +48,12 @@ public:
         QObject *parent = nullptr
         );
 
+    LiveFileFollower(
+        QString sourcePath,
+        quint64 initialSourceGeneration,
+        QObject *parent
+        );
+
     const QString &sourcePath() const;
 
     const SourcePhysicalIdentity *

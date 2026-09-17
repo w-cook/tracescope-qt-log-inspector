@@ -39,9 +39,24 @@ struct SourcePhysicalIdentityCaptureResult
     QString errorMessage;
 };
 
+struct SourceRelocationVerificationResult
+{
+    SourcePhysicalIdentity candidateIdentity;
+
+    bool verified = false;
+
+    QString errorMessage;
+};
+
 SourcePhysicalIdentityCaptureResult
 captureSourcePhysicalIdentity(
     const QString &sourcePath
+    );
+
+SourceRelocationVerificationResult
+verifySourceRelocationCandidate(
+    const QString &candidatePath,
+    const SourcePhysicalIdentity &expectedIdentity
     );
 
 bool sourcePhysicalIdentityChanged(

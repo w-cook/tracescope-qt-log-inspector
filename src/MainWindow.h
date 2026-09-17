@@ -137,6 +137,10 @@ private:
         const QString &sessionId
         );
 
+    void redefineSessionSourcePath(
+        const QString &sessionId
+        );
+
     void populateSessionSourceMenu(
         const QString &sessionId,
         QMenu *menu

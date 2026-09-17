@@ -37,6 +37,17 @@ struct LiveSessionFollowPollResult
     bool sourceGenerationChanged = false;
 };
 
+struct LiveSessionSourceSynchronizationResult
+{
+    bool succeeded = true;
+
+    QString errorMessage;
+
+    LiveFileObservation observation;
+
+    bool sourceGenerationChanged = false;
+};
+
 class LiveSessionFollowCoordinator
     : public QObject
 {
@@ -66,6 +77,9 @@ public:
     bool pause();
     bool resume();
     bool stop();
+
+    LiveSessionSourceSynchronizationResult
+    synchronizeSourceForRelocation();
 
     LiveSessionFollowPollResult pollOnce(
         qint64 maxByteCount =

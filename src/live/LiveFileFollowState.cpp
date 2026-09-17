@@ -2,6 +2,15 @@
 
 #include <algorithm>
 
+LiveFileFollowState::LiveFileFollowState(
+    quint64 sourceGeneration
+    )
+    : m_sourceGeneration(
+          sourceGeneration
+          )
+{
+}
+
 LiveFileFollowStatus
 LiveFileFollowState::status() const
 {

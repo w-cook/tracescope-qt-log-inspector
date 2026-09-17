@@ -76,6 +76,13 @@ struct InvestigationSessionHybridReloadResult
     qint64 replaySkippedRecordCount = 0;
 };
 
+struct InvestigationSessionSourceRelocationResult
+{
+    bool succeeded = false;
+
+    QString errorMessage;
+};
+
 class InvestigationSession
 {
 public:
@@ -281,6 +288,11 @@ public:
 
     bool updateExternalSourceLogicalKey(
         const QString &logicalSourceKey
+        );
+
+    InvestigationSessionSourceRelocationResult
+    redefineSourcePath(
+        const QString &candidatePath
         );
 
     bool applySnapshotReload(

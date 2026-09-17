@@ -102,6 +102,21 @@ qint64 lastCompleteLineBoundary(
      */
     return 0;
 }
+
+quint64 sessionSourceGeneration(
+    const InvestigationSession &session
+    )
+{
+    const InvestigationExternalSourceBinding
+        *externalSource =
+        session
+            .backing()
+            .externalSource();
+
+    return externalSource != nullptr
+               ? externalSource->sourceGeneration
+               : 0;
+}
 }
 
 LiveSessionFollowCoordinator::
@@ -113,6 +128,9 @@ LiveSessionFollowCoordinator::
     m_session(&session),
     m_follower(
         session.externalSourcePath(),
+        sessionSourceGeneration(
+            session
+            ),
         this
         ),
     m_lineImportAdapter(
@@ -524,6 +542,106 @@ bool LiveSessionFollowCoordinator::stop()
     m_pollTimer.stop();
 
     return m_follower.stop();
+}
+
+LiveSessionSourceSynchronizationResult
+    LiveSessionFollowCoordinator::
+    synchronizeSourceForRelocation()
+{
+    LiveSessionSourceSynchronizationResult
+        result;
+
+    if (m_session == nullptr) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "Live following has no investigation "
+                "session to synchronize."
+                );
+
+        return result;
+    }
+
+    /*
+     * A stopped follower deliberately preserves its
+     * last known generation and cursor. Do not admit
+     * new physical source state merely because a
+     * relocation operation was requested.
+     */
+    if (m_follower
+            .state()
+            .isStopped()) {
+        return result;
+    }
+
+    result.observation =
+        m_follower.poll();
+
+    if (result.observation.kind
+        == LiveFileObservationKind::Missing) {
+        result.succeeded = false;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The current live source is no longer "
+                "available for relocation verification."
+                );
+
+        return result;
+    }
+
+    if (result.observation.kind
+        == LiveFileObservationKind::SourceReset) {
+        result.sourceGenerationChanged =
+            true;
+
+        const quint64 sourceGeneration =
+            m_follower
+                .state()
+                .sourceGeneration();
+
+        switch (m_ingestionKind) {
+        case IngestionKind::Line:
+            m_lineSourceContext
+                .beginSourceGeneration(
+                    sourceGeneration
+                    );
+
+            m_lineImportAdapter
+                .beginSourceGeneration();
+            break;
+
+        case IngestionKind::StructuredJson:
+            m_structuredJsonSourceContext
+                .beginSourceGeneration(
+                    sourceGeneration
+                    );
+            break;
+
+        case IngestionKind::StructuredXml:
+            m_structuredXmlSourceContext
+                .beginSourceGeneration(
+                    sourceGeneration
+                    );
+            break;
+
+        case IngestionKind::Unsupported:
+            break;
+        }
+    }
+
+    synchronizeExternalSourceBinding();
+
+    if (result.sourceGenerationChanged) {
+        emit sourceGenerationChanged(
+            m_follower
+                .state()
+                .sourceGeneration()
+            );
+    }
+
+    return result;
 }
 
 LiveSessionFollowPollResult

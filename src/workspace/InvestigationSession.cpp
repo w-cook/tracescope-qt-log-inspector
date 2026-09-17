@@ -74,6 +74,17 @@ initialExternalSourceBinding(
             sourceFamilyConfiguration
             );
 
+    const SourcePhysicalIdentityCaptureResult
+        identityResult =
+        captureSourcePhysicalIdentity(
+            absolutePath
+            );
+
+    if (identityResult.succeeded) {
+        binding.sourceIdentity =
+            identityResult.identity;
+    }
+
     return binding;
 }
 }
@@ -1259,6 +1270,265 @@ bool InvestigationSession::
         logicalSourceKey;
 
     return true;
+}
+
+InvestigationSessionSourceRelocationResult
+InvestigationSession::redefineSourcePath(
+    const QString &candidatePath
+    )
+{
+    InvestigationSessionSourceRelocationResult
+        result;
+
+    if (candidatePath.trimmed().isEmpty()) {
+        result.errorMessage =
+            QStringLiteral(
+                "A source path must be selected."
+                );
+
+        return result;
+    }
+
+    InvestigationExternalSourceBinding
+        *sourceBinding =
+        m_backing.externalSource();
+
+    const bool hasActiveExternalSource =
+        sourceBinding != nullptr;
+
+    if (sourceBinding == nullptr
+        && m_reconnectSourceHint.has_value()) {
+        sourceBinding =
+            &*m_reconnectSourceHint;
+    }
+
+    if (sourceBinding == nullptr) {
+        result.errorMessage =
+            QStringLiteral(
+                "This investigation does not have an "
+                "external source relationship that can "
+                "be relocated."
+                );
+
+        return result;
+    }
+
+    qint64 minimumCandidateSize = 0;
+
+    /*
+     * If live following is active or paused, reconcile
+     * any pending truncation/replacement before deciding
+     * which physical generation the relocation candidate
+     * must represent.
+     */
+    if (hasActiveExternalSource
+        && m_liveFollowCoordinator
+        && !m_liveFollowCoordinator
+                ->state()
+                .isStopped()) {
+        const LiveSessionSourceSynchronizationResult
+            synchronization =
+            m_liveFollowCoordinator
+                ->synchronizeSourceForRelocation();
+
+        if (!synchronization.succeeded) {
+            result.errorMessage =
+                synchronization.errorMessage;
+
+            return result;
+        }
+
+        sourceBinding =
+            m_backing.externalSource();
+
+        if (sourceBinding == nullptr) {
+            result.errorMessage =
+                QStringLiteral(
+                    "The active external source binding "
+                    "became unavailable during relocation."
+                    );
+
+            return result;
+        }
+
+        minimumCandidateSize =
+            std::max<qint64>(
+                0,
+                synchronization
+                    .observation
+                    .observedSizeBytes
+                );
+    }
+
+    if (!sourceBinding
+             ->sourceIdentity
+             .has_value()) {
+        result.errorMessage =
+            QStringLiteral(
+                "TraceScope does not have enough saved "
+                "physical source identity information "
+                "to verify this relocation."
+                );
+
+        return result;
+    }
+
+    const SourcePhysicalIdentity
+        expectedIdentity =
+        *sourceBinding->sourceIdentity;
+
+    const QString currentSourcePath =
+        sourceBinding->sourcePath;
+
+    const QString absoluteCandidatePath =
+        QFileInfo(
+            candidatePath
+            ).absoluteFilePath();
+
+    /*
+     * Once a live coordinator exists, its cursor is
+     * authoritative. In particular, a source reset
+     * legitimately moves that cursor back to zero for
+     * the new generation.
+     */
+    qint64 continuationOffset =
+        m_initialLiveFollowByteOffset;
+
+    if (hasActiveExternalSource
+        && m_liveFollowCoordinator) {
+        continuationOffset =
+            m_liveFollowCoordinator
+                ->state()
+                .readOffset();
+    }
+
+    if (continuationOffset >= 0) {
+        minimumCandidateSize =
+            std::max(
+                minimumCandidateSize,
+                continuationOffset
+                );
+    }
+
+    const SourceRelocationVerificationResult
+        verification =
+        verifySourceRelocationCandidate(
+            absoluteCandidatePath,
+            expectedIdentity
+            );
+
+    if (!verification.verified) {
+        result.errorMessage =
+            verification.errorMessage.isEmpty()
+                ? QStringLiteral(
+                      "The selected file could not be "
+                      "verified as the same logical "
+                      "source."
+                      )
+                : verification.errorMessage;
+
+        return result;
+    }
+
+    if (verification
+            .candidateIdentity
+            .observedSizeBytes
+        < minimumCandidateSize) {
+        result.errorMessage =
+            QStringLiteral(
+                "The selected source does not contain "
+                "the complete physical range currently "
+                "represented by this investigation."
+                );
+
+        return result;
+    }
+
+    /*
+     * The producer is independent from TraceScope and
+     * may continue changing the source while candidate
+     * verification runs. Recheck the old path before
+     * committing the relocation.
+     */
+    if (hasActiveExternalSource) {
+        const QFileInfo currentSourceInfo(
+            currentSourcePath
+            );
+
+        if (!currentSourceInfo.exists()
+            || !currentSourceInfo.isFile()) {
+            result.errorMessage =
+                QStringLiteral(
+                    "The source changed while relocation "
+                    "was being verified. Try again."
+                    );
+
+            return result;
+        }
+
+        if (sourcePhysicalIdentityChanged(
+                currentSourcePath,
+                expectedIdentity
+                )
+            || currentSourceInfo.size()
+                   > verification
+                         .candidateIdentity
+                         .observedSizeBytes) {
+            result.errorMessage =
+                QStringLiteral(
+                    "The source changed while relocation "
+                    "was being verified. Try again."
+                    );
+
+            return result;
+        }
+    }
+
+    const QString logicalSourceKey =
+        sourceBinding
+                ->logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? sourceBinding->sourcePath
+            : sourceBinding->logicalSourceKey;
+
+    if (hasActiveExternalSource
+        && m_liveFollowCoordinator) {
+        m_liveFollowCoordinator->stop();
+        m_liveFollowCoordinator.reset();
+    }
+
+    sourceBinding->sourcePath =
+        absoluteCandidatePath;
+
+    sourceBinding->logicalSourceKey =
+        logicalSourceKey;
+
+    sourceBinding->sourceIdentity =
+        verification.candidateIdentity;
+
+    sourceBinding
+        ->sourceFamilyConfiguration
+        .rotatedSourcePaths
+        .clear();
+
+    /*
+     * Relocation preserves the current logical source
+     * generation. It does not create another one.
+     */
+
+    if (hasActiveExternalSource) {
+        if (continuationOffset >= 0) {
+            m_initialLiveFollowByteOffset =
+                continuationOffset;
+        }
+
+        refreshSourceMetadata();
+    }
+
+    result.succeeded = true;
+
+    return result;
 }
 
 bool InvestigationSession::

@@ -360,6 +360,63 @@ InvestigationSessionHybridReloadResult
     return result;
 }
 
+InvestigationSessionSourceRelocationResult
+InvestigationWorkspace::redefineSourcePath(
+    const QString &sessionId,
+    const QString &candidatePath
+    )
+{
+    const int index =
+        indexOfSession(
+            sessionId
+            );
+
+    if (index < 0) {
+        InvestigationSessionSourceRelocationResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session could "
+                "not be found."
+                );
+
+        return result;
+    }
+
+    InvestigationSession *session =
+        sessionAt(
+            index
+            );
+
+    if (session == nullptr) {
+        InvestigationSessionSourceRelocationResult
+            result;
+
+        result.errorMessage =
+            QStringLiteral(
+                "The investigation session is no "
+                "longer available."
+                );
+
+        return result;
+    }
+
+    InvestigationSessionSourceRelocationResult
+        result =
+        session->redefineSourcePath(
+            candidatePath
+            );
+
+    if (result.succeeded) {
+        emit sessionReloaded(
+            index
+            );
+    }
+
+    return result;
+}
+
 bool InvestigationWorkspace::
     applySnapshotOnlyTransition(
         const QString &sessionId,
