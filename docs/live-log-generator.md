@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The TraceScope live-log generator is a small standalone test utility used to exercise Phase 15 live-file-following behavior under realistic, reproducible conditions. It provides both a command-line generator and a thin Qt Widgets launcher for convenient manual playback.
+The TraceScope live-log generator is a small standalone test utility used to exercise the live-file-following behavior completed in Phase 15 and released in `v0.16.0` under realistic, reproducible conditions. It provides both a command-line generator and a thin Qt Widgets launcher for convenient manual playback.
 
 The generator behaves like an external application writing logs to disk. TraceScope has no knowledge of or dependency on the generator; it observes only the resulting file.
 
@@ -13,7 +13,7 @@ Its primary goals are to:
 * produce deterministic, human-readable live-log scenarios
 * render the same semantic scenario into multiple TraceScope-supported formats where practical
 * exercise realistic file-writing behavior such as ordinary appends, bursts, idle periods, partial writes, truncation, replacement, and rotation
-* make Phase 15 manual verification repeatable
+* make live-follow manual verification and regression testing repeatable
 * document the kinds of live-file conditions TraceScope has been tested against
 
 ## Architecture
@@ -239,7 +239,7 @@ The repository includes a small permanent library of deterministic scenarios und
 
 These scenarios are intended to serve two related purposes:
 
-* provide repeatable manual-test inputs for Phase 15 live-file-following behavior
+* provide repeatable manual-test inputs for TraceScope live-file-following behavior
 * provide realistic, presentation-quality data for screenshots and demonstrations of live following, filtering, analytics, navigation, and comparison behavior
 
 Scenario content should therefore remain technically deterministic without looking like artificial test fixtures. Service names, event codes, entities, messages, and attributes should form a coherent fictional production story that a TraceScope user could reasonably imagine investigating.
@@ -303,6 +303,10 @@ The launcher exposes:
 * playback status
 * captured generator standard output and error output
 
+The launcher provides a compact manual-test surface for selecting a deterministic scenario, choosing its output format and destination, controlling playback speed and looping behavior, and observing generator output while TraceScope follows the resulting file independently.
+
+![TraceScope Live-Log Generator Launcher](screenshots/tracescope-live-log-generator-launcher.png)
+
 The launcher starts `TraceScopeLiveLogGenerator` as a child process through `QProcess`. The generator executable is expected to reside in the same application directory as the launcher.
 
 Starting playback constructs the same arguments that may be supplied directly to the command-line interface. The launcher therefore does not introduce a separate playback path or alternate interpretation of scenarios.
@@ -321,7 +325,7 @@ The launcher is intentionally limited to playback convenience. It does not provi
 * renderer configuration
 * TraceScope integration
 
-Those features would add a second application surface without materially improving Phase 15 verification.
+Those features would add a second application surface without materially improving live-follow verification.
 
 The command-line executable remains available for automated tests, direct invocation, and any workflow where a graphical launcher is unnecessary.
 
@@ -419,7 +423,7 @@ TraceScopeLiveLogGenerator
     --loop-mode restart
 ```
 
-Additional controls such as starting from a particular step should be added only if Phase 15 testing demonstrates a concrete need.
+Additional controls such as starting from a particular step should be added only if future live-follow testing demonstrates a concrete need.
 
 ## Renderer Boundary
 
@@ -489,7 +493,7 @@ Renderers should not sleep, manipulate the output file, or know about scenario p
 
 ## Format and Live-Behavior Capability Matrix
 
-Phase 15 live following should support all current TraceScope source families when the configured import behavior identifies a usable repeatable record structure. The physical ingestion strategy differs by format; live support does not require every format to behave like a newline-delimited text file.
+`v0.16.0` live following supports all current TraceScope source families when the configured import behavior identifies a usable repeatable record structure. The physical ingestion strategy differs by format; live support does not require every format to behave like a newline-delimited text file.
 
 The generator should exercise both line-oriented append streams and structured open-container streams.
 
@@ -542,7 +546,7 @@ Partial-write behavior applies to structured formats exactly as it does to line-
 
 A normally completed structured playback must leave a valid standalone document. Rotation finalizes the old document before preserving it and starts a fresh container at the active path. Truncation and replacement intentionally model abrupt lifecycle events and therefore start a fresh container without first repairing the discarded document.
 
-Structured sources may also be maintained by a producer that repeatedly rewrites, truncates, or replaces a formally closed document. Phase 15 should treat those cases through the corresponding file-lifecycle and reconciliation behavior rather than requiring byte-append semantics.
+Structured sources may also be maintained by a producer that repeatedly rewrites, truncates, or replaces a formally closed document. TraceScope handles those cases through the corresponding file-lifecycle and reconciliation behavior rather than requiring byte-append semantics.
 
 Appending an unrelated second complete JSON or XML document after an already closed document is not a supported live-source model.
 
@@ -586,9 +590,9 @@ Runtime-generated values may include:
 
 These values must not alter the semantic incident story.
 
-## Phase 15 Verification Role
+## Live-Follow Verification Role
 
-The generator and scenario library are designed to support manual verification of:
+The generator and scenario library support repeatable manual verification of:
 
 * appended-record following for every supported line-oriented source family
 * structured JSON record-array following
@@ -611,17 +615,18 @@ The generator and scenario library are designed to support manual verification o
 * filtering while records arrive
 * summary updates
 * analytics updates
-* live comparison behavior, if implemented
 
 The generator itself does not verify TraceScope behavior. It creates known external conditions against which TraceScope can be observed and tested.
 
 ## Generator Completion Boundary
 
+The generator is complete for the `v0.16.0` live-follow milestone and is treated as a stable permanent test harness rather than an actively expanding secondary product.
+
 The live-log generator is not complete merely because a representative subset of renderers works.
 
-Before Phase 15 implementation moves into TraceScope's live-follow ingestion and presentation behavior, the utility should provide reproducible generation for every currently supported source family using the appropriate live strategy.
+Before TraceScope's live-follow ingestion and presentation work began, the utility was completed to provide reproducible generation for every currently supported source family using the appropriate live strategy.
 
-Generator completion therefore requires representative coverage for:
+The completed generator provides representative coverage for:
 
 * JSON Lines
 * CSV
@@ -638,7 +643,7 @@ Generator completion therefore requires representative coverage for:
 * Structured XML
 * Windows Event XML
 
-Across those formats, the generator must also exercise the lifecycle behaviors relevant to the format:
+Across those formats, the generator exercises the lifecycle behaviors relevant to the format:
 
 * ordinary record growth
 * deterministic semantic timing independent of playback speed
@@ -649,23 +654,23 @@ Across those formats, the generator must also exercise the lifecycle behaviors r
 * header regeneration where required
 * structured-container initialization, record separation, and normal finalization where required
 
-The implemented renderer set, five-scenario library, and graphical launcher provide the planned source-family, lifecycle, and manual-playback inputs for this boundary. Remaining generator-side completion work should focus on the final documented manual verification pass rather than expanding the scenario language, adding speculative formats, or growing the launcher beyond its testing role.
+The implemented renderer set, five-scenario library, and graphical launcher provide the completed source-family, lifecycle, and manual-playback inputs for this boundary. The generator was frozen before TraceScope live-follow implementation proceeded, with the standing rule that new generator features should be added only when real TraceScope testing exposes a concrete missing capability.
 
-TraceScope live-follow implementation should begin only after this generator-side coverage is complete and manually verifiable.
+That completion boundary was satisfied before TraceScope's live-follow implementation proceeded and remains the basis for ongoing manual regression testing.
 
 ## Stable Snapshot Boundaries
 
-Live following must not weaken existing immutable behavior.
+Live following does not weaken existing immutable behavior.
 
-A live investigation session may continue changing as its source file grows.
+A live investigation session may continue changing as its source file grows, rotates, is replaced, or is reconciled with preserved snapshot evidence.
 
 However:
 
-* an existing immutable comparison snapshot must remain unchanged
-* an already-generated report must remain unchanged
-* persisted immutable comparisons must retain their captured meaning
+* an existing immutable comparison snapshot remains unchanged
+* an already-generated report remains unchanged
+* persisted immutable comparisons retain their captured meaning
 
-If Phase 15 introduces continuously updating live comparisons, those comparisons must remain explicitly distinct from immutable comparison snapshots and should be capable of being frozen into a stable snapshot for persistence or reporting.
+Phase 15 explicitly evaluated continuously updating comparison behavior and did not add it to `v0.16.0`. Existing comparisons remain point-in-time immutable snapshots. A future live-comparison workflow, if added, would require a separate bounded analysis model and lifecycle rather than mutating the existing Baseline → Comparison semantics.
 
 ## Scope Discipline
 
@@ -679,6 +684,6 @@ The live-log generator is not intended to become:
 * a monitoring service
 * a TraceScope runtime dependency
 
-Features should be added only when they materially improve reproducible Phase 15 verification.
+Features should be added only when they materially improve reproducible live-follow verification or regression testing.
 
-The utility should remain small enough that its behavior can be easily understood and trusted.
+The utility remains intentionally small enough that its behavior can be easily understood and trusted.

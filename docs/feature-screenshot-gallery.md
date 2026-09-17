@@ -1,6 +1,6 @@
 # TraceScope Feature Screenshot Gallery
 
-This gallery provides a visual walkthrough of the TraceScope `v0.15.0` investigation workflow. The screenshots use fictional repository samples and reusable import profiles so the demonstrated behavior can be reproduced without external services.
+This gallery provides a visual walkthrough of the published TraceScope `v0.16.0` prerelease investigation workflow. The screenshots use fictional repository samples, reusable import profiles, and deterministic live-log scenarios so the demonstrated behavior can be reproduced without external services. Phase 15 — Live File Following is complete in `v0.16.0`; Phase 16 — Final UI Polish, Documentation, and 1.0 Release is in progress.
 
 For a product overview, downloads, supported formats, and current capabilities, see the [main README](../README.md).
 
@@ -20,13 +20,69 @@ The example below uses the Order Fulfillment Incident JSON Lines sample and its 
 
 ![TraceScope Import Configuration](screenshots/tracescope-import-configuration.png)
 
+## Rotated Source Families
+
+TraceScope can treat an active log and its rotated physical files as one logical source family without collapsing those files into one indistinguishable stream. The Rotated Source Files workflow lets the investigator choose a naming scheme, preview the physical files TraceScope discovered, control their chronology, and decide whether rotated files should be included with the active source.
+
+Built-in numeric and date/timestamp schemes cover common rotation conventions, while a saved custom-pattern workflow supports source families whose filenames use application-specific ordering rules. The active file remains the live-follow target; rotated files are imported as independently identifiable physical evidence within the same logical investigation.
+
+The captured example uses the deterministic Warehouse Sync deployment-rotation scenario so the discovered source family contains multiple real rotated siblings rather than a manually staged filename list.
+
+![TraceScope Rotated Source Files](screenshots/tracescope-rotated-source-files.png)
+
+## Live File Following
+
+A supported source can remain open while another application continues writing to it. TraceScope admits newly completed records into the existing investigation, keeps active filters applicable to arriving data, and refreshes timeline, analytics, summaries, findings, and other derived investigation views without replacing the session.
+
+The captured example uses the deterministic Field Gateway live scenario with the `[LIVE]` state active, Follow Newest enabled, a populated event table, and timeline/analysis context that makes it clear live following is part of the same investigation workflow rather than a separate monitoring screen.
+
+![TraceScope Live Following](screenshots/tracescope-live-following.png)
+
+The animation below shows the same workflow in motion: complete records are appended incrementally, Follow Newest keeps the table anchored to arriving visible evidence, and derived investigation views refresh on their controlled cadence.
+
+![TraceScope Live Following Animation](screenshots/tracescope-live-following.gif)
+
+Live following handles ordinary append growth, incomplete trailing records, same-path truncation and replacement, rotated source families, and supported structured JSON/XML sources whose outer document is still being written. File-lifecycle changes do not require abandoning the existing investigation model.
+
+### Live Follow Controls and Follow Newest
+
+Compact tab controls keep the live-session state visible without consuming investigation workspace. While following, users can Pause, Stop, or enable Follow Newest. Follow Newest keeps the event table anchored to newly arriving visible records; it turns off when live following is no longer active so normal table browsing is not unexpectedly overridden.
+
+![TraceScope Live Follow Controls](screenshots/tracescope-live-follow-controls.png)
+
+## Investigation Snapshots and Source Continuity
+
+Live evidence is treated as investigation evidence rather than disposable screen state. TraceScope can save or open a standalone versioned `.tsinv` investigation snapshot independently of a complete workspace file. A snapshot captures the normalized evidence and investigation state needed to preserve useful work even when the original external source later changes or disappears.
+
+The File menu exposes the standalone snapshot workflow directly alongside the broader workspace commands.
+
+![TraceScope Investigation Snapshot Commands](screenshots/tracescope-investigation-snapshot-menu.png)
+
+Source relationships remain explicit after a snapshot exists. A Hybrid investigation combines durable snapshot evidence with a connected external source. Its Source menu makes the consequential transitions visible: the investigator can deliberately return to the external source as authoritative, preserve the complete current investigation as SnapshotBacked only, redefine a verified source path, or open the source location.
+
+![TraceScope Hybrid Source Lifecycle](screenshots/tracescope-source-lifecycle-hybrid-menu.png)
+
+A SnapshotBacked investigation no longer depends on the original external source for its retained evidence. When source continuity information is available, the Source menu offers an explicit Reconnect Source workflow rather than silently reattaching or replacing snapshot evidence.
+
+![TraceScope Snapshot Source Lifecycle](screenshots/tracescope-source-lifecycle-snapshot-menu.png)
+
+These lifecycle choices preserve applicable bookmarks, notes, and finding state when the corresponding stable evidence remains present. Existing comparison snapshots and already-generated reports remain immutable point-in-time artifacts even if the underlying investigation later reconnects to a source or receives additional live evidence.
+
 ## Advanced Filtering and Navigation
 
 Canonical and source-specific criteria can be combined to narrow an investigation without discarding the underlying source context. TraceScope supports multi-severity, subsystem, event-code, entity, UTC time-range, search, custom-field, bookmark, and finding-status filtering, plus reusable named presets.
 
 Navigation and drill-down actions operate directly on the active investigation. Previous/next event and warning/error navigation, grouped issue summaries, timeline bars, findings, and custom-field cells can all move or narrow the current investigation while preserving unrelated criteria where practical.
 
+The Environmental Chamber example combines WARN and ERROR severities, the `ThermalControl` subsystem, entity `DUT-018`, a UTC time range, and one custom-field filter, narrowing the run to nine visible records.
+
 ![TraceScope Advanced Filtering and Navigation](screenshots/tracescope-advanced-filtering.png)
+
+## CSV Export
+
+TraceScope exports the currently visible investigation records to CSV using readable canonical headers and configured custom-field names. The CSV shown below is the exact nine-record Environmental Chamber result produced by the Advanced Filtering example above, demonstrating a direct narrow-in-TraceScope → hand-off-the-visible-evidence workflow.
+
+![TraceScope Exported CSV](screenshots/tracescope-exported-csv.png)
 
 ## Analytics Overview
 
@@ -42,6 +98,8 @@ TraceScope groups qualifying clusters of WARN, ERROR, and CRITICAL records into 
 
 Auto mode derives timing from the investigation's timestamp cadence with an explicit fallback for sparse data; Manual mode allows direct timing control. Double-clicking a burst narrows the investigation to its contributing elevated-event range while preserving unrelated filters.
 
+The captured Order Fulfillment example selects the strongest 31-event burst, whose highest severity is CRITICAL, with the one-minute timeline centered on the burst interval without changing the record set used for detection.
+
 This feature is deterministic analysis, not AI anomaly detection or root-cause diagnosis.
 
 ![TraceScope Burst Detection](screenshots/tracescope-burst-detection.png)
@@ -56,9 +114,17 @@ Bookmarks, multiline analyst notes, and Open/Resolved/Dismissed finding states l
 
 The Findings panel summarizes classified records with source-record and timestamp context. Double-click navigation returns to the exact source record and relaxes only filters that would otherwise hide it.
 
-The example below uses the fictional Environmental Chamber QA Run and records observations around DUT-specific thermal, power, and radio behavior.
+The example below uses the fictional Environmental Chamber QA Run and contains five reviewed findings spanning Open, Resolved, and Dismissed states across DUT-specific thermal, power, radio, and supporting sensor behavior.
 
 ![TraceScope Findings Review](screenshots/tracescope-findings.png)
+
+## Findings CSV Export
+
+Classified findings can be exported separately from the current visible-record CSV workflow. The findings export preserves investigator state and stable source-record context so the result can be reviewed in a spreadsheet or moved into QA, issue-tracking, or documentation workflows without copying rows by hand.
+
+The example below exports the same five Environmental Chamber findings shown in the Findings Review screenshot, preserving their mixed Open, Resolved, and Dismissed dispositions.
+
+![TraceScope Exported Findings CSV](screenshots/tracescope-exported-findings-csv.png)
 
 ## Fine-Resolution Timeline Navigation
 
@@ -70,7 +136,7 @@ When a chosen resolution would create too many buckets, TraceScope materializes 
 
 ## Multi-Session Workspace
 
-Related sources can remain open as independent investigation sessions in one application instance. Session switching preserves each source's import context, active filters, model state, presentation state, bookmarks, notes, findings, and reload behavior.
+Related investigations can remain open as independent sessions in one application instance. Session switching preserves each investigation's source/profile context, backing state, active filters, model state, presentation state, bookmarks, notes, findings, and reload behavior.
 
 The example below uses matched known-good and degraded fictional Field Gateway captures so an investigator can keep both sessions available while moving between their individual evidence and the comparison built from them.
 
@@ -86,7 +152,7 @@ Comparisons operate on complete session snapshots rather than the sessions' curr
 
 ## Session Comparison
 
-The dedicated comparison document surfaces investigation-relevant differences while avoiding unsupported causal claims. It preserves an immutable Baseline → Comparison snapshot, so later filtering, session reload, source closure, workspace restoration, or report generation does not silently change what the comparison means.
+The dedicated comparison document surfaces investigation-relevant differences while avoiding unsupported causal claims. It preserves an immutable Baseline → Comparison snapshot, so later filtering, session reload, source closure, workspace restoration, live appends, source-lifecycle transitions, or report generation do not silently change what the comparison means.
 
 The matched Field Gateway samples provide a reproducible example. The first view establishes source orientation, immutable snapshot semantics, and the highest-impact differences before the document continues into deeper comparison sections.
 
@@ -130,19 +196,15 @@ Bounded recent-file, recent-profile, and recent-workspace histories are stored i
 
 ![TraceScope Recent Files](screenshots/tracescope-recent-files.png)
 
-Saved workspaces retain the source/import-profile context needed to reopen sessions along with investigation state, comparison snapshots, document ordering, active-document state, and main/detached window organization. Recent workspaces provide a direct route back into those saved investigations.
+Saved workspaces retain the source/import-profile context and durable snapshot evidence needed to restore SourceBacked, SnapshotBacked, and Hybrid sessions as applicable, along with investigation state, immutable comparison snapshots, document ordering, active-document state, and main/detached window organization. Recent workspaces provide a direct route back into those saved investigations.
 
 ![TraceScope Recent Workspaces](screenshots/tracescope-recent-workspaces.png)
-
-## CSV Export
-
-TraceScope exports the currently visible investigation records to CSV using readable canonical headers and configured custom-field names. This allows an investigator to narrow a session first and hand off only the records relevant to the current question or finding.
-
-![TraceScope Exported CSV](screenshots/tracescope-exported-csv.png)
 
 ## Document-Scoped Export and Record Copy
 
 Each investigation document exposes export actions in its own context. A selected record can be copied as structured JSON for machine-friendly handoff or as compact formatted text for tickets, chat, notes, and documentation. The same export surface provides access to visible-record CSV, findings CSV, and the offline report workflow where those actions apply.
+
+The captured Order Fulfillment export menu also shows live Findings submenu counts for all, filtered, and bookmarked findings, making the relationship between current investigation state and export scope visible before the export is created.
 
 ![TraceScope Document Export Menu](screenshots/tracescope-export-menu.png)
 
@@ -150,25 +212,21 @@ Selected-record copy lives directly in the Selected Event Details context menu s
 
 ![TraceScope Selected Record Copy](screenshots/tracescope-record-copy-menu.png)
 
-## Findings CSV Export
-
-Classified findings can be exported separately from the current visible-record CSV workflow. The findings export preserves investigator state and stable source-record context so the result can be reviewed in a spreadsheet or moved into QA, issue-tracking, or documentation workflows without copying rows by hand.
-
-The example below uses findings from the Environmental Chamber QA Run.
-
-![TraceScope Exported Findings CSV](screenshots/tracescope-exported-findings-csv.png)
-
 ## Offline Report Configuration
 
 The report setup dialog lets the investigator provide a human-facing title and optional context, choose which open investigation and comparison documents to include, and decide whether the report should include detailed supporting evidence and the technical import appendix.
 
 Document selection is logical rather than window-based, so docked and detached workspace documents are treated consistently.
 
+The captured configuration produces the representative **Field Gateway Telemetry Degradation Investigation — Baseline vs. Degraded Run** report from the matched known-good/degraded sessions and their comparison.
+
 ![TraceScope Investigation Report Export](screenshots/tracescope-report-export-dialog.png)
 
 ## Self-Contained HTML Investigation Report
 
-TraceScope renders the selected report content into one offline HTML file that can be opened in an ordinary browser without TraceScope, an account, a backend, or companion assets. Report state is captured immutably before rendering begins so later investigation changes cannot silently alter an already-generated artifact.
+TraceScope renders the selected report content into one offline HTML file that can be opened in an ordinary browser without TraceScope, an account, a backend, or companion assets. Report state is captured immutably before rendering begins, so later investigation changes—including new live records or source-lifecycle transitions—cannot silently alter an already-generated artifact.
+
+The screenshots below come from the refreshed `v0.16.0` Field Gateway report exported from the same known-good/degraded investigation and comparison workflow shown earlier in this gallery.
 
 The report overview records its title/context, generation time, selected source/session context, record counts, time coverage, and navigation into the included investigation and comparison documents. Local workstation source paths are intentionally omitted.
 
@@ -189,3 +247,15 @@ Included comparison documents preserve their original Baseline → Comparison or
 The generated report remains deterministic and descriptive. It does not claim automated diagnosis or root cause, and browser printing can be used when a PDF handoff is preferable.
 
 A representative [Field Gateway investigation report](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html) is published for direct browser viewing. It uses the fictional matched known-good/degraded Field Gateway samples shown throughout the comparison and multi-session sections, allowing the complete exported artifact—not only the screenshots above—to be inspected directly in a browser.
+
+## Reproducible Live-Source Demonstration Utility
+
+The standalone TraceScope Live-Log Generator provides a deterministic external producer for exercising and demonstrating live following without coupling the application to a test-only data source. A thin Qt Widgets launcher selects a scenario, destination file, output format, playback speed, looping mode, and start/stop behavior while the actual generator process writes the source file independently.
+
+The captured launcher uses the Warehouse Sync deployment-rotation scenario, the same deterministic producer used for the Rotated Source Files example above.
+
+![TraceScope Live-Log Generator Launcher](screenshots/tracescope-live-log-generator-launcher.png)
+
+The included live scenario library covers ordinary growth, waits, partial writes, truncation, same-path replacement, rotation, structured open-container output, access-log traffic, and degraded/recovery sequences across TraceScope-supported source families. The utility is a permanent verification and demonstration artifact rather than a TraceScope runtime dependency or generalized synthetic-data product.
+
+See the [Live-Log Generator documentation](live-log-generator.md) for the scenario model, supported renderers, lifecycle behavior, runtime options, and verification boundaries.
