@@ -48,6 +48,60 @@ snapshotSourceMetadata(
     return sourceMetadata;
 }
 
+std::optional<InvestigationExternalSourceBinding>
+snapshotReconnectSourceHint(
+    const InvestigationSessionSnapshot &snapshot
+    )
+{
+    if (!snapshot.sourceContinuity.has_value()) {
+        return std::nullopt;
+    }
+
+    const InvestigationSnapshotSourceContinuity
+        &continuity =
+        *snapshot.sourceContinuity;
+
+    if (continuity
+            .sourcePath
+            .trimmed()
+            .isEmpty()) {
+        return std::nullopt;
+    }
+
+    InvestigationExternalSourceBinding binding;
+
+    binding.sourcePath =
+        continuity.sourcePath;
+
+    binding.logicalSourceKey =
+        continuity
+                .logicalSourceKey
+                .trimmed()
+                .isEmpty()
+            ? continuity.sourcePath
+            : continuity.logicalSourceKey;
+
+    binding.sourceFamilyConfiguration =
+        continuity.sourceFamilyConfiguration;
+
+    /*
+     * Rotated physical paths are transient discovery
+     * results, not durable source-family identity.
+     */
+    binding
+        .sourceFamilyConfiguration
+        .rotatedSourcePaths
+        .clear();
+
+    binding.sourceGeneration =
+        continuity.sourceGeneration;
+
+    binding.sourceIdentity =
+        continuity.sourceIdentity;
+
+    return binding;
+}
+
 InvestigationExternalSourceBinding
 initialExternalSourceBinding(
     const QString &filePath,
@@ -1156,6 +1210,13 @@ InvestigationSession::createSnapshotBacked(
         reconnectSourceHint
     )
 {
+    if (!reconnectSourceHint.has_value()) {
+        reconnectSourceHint =
+            snapshotReconnectSourceHint(
+                snapshot
+                );
+    }
+
     /*
      * Recover descriptive provenance from the most
      * recent saved record that contains source

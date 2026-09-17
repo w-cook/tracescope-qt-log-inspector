@@ -43,6 +43,8 @@ private slots:
     void redefinesDormantSnapshotReconnectPath();
     void sourceRelocationPreservesLiveFollowBoundary();
     void sourceRelocationSynchronizesPendingGenerationReset();
+    void snapshotBackedSessionDerivesReconnectHintFromSnapshot();
+    void snapshotBackedSessionWithoutContinuityHasNoReconnectHint();
 };
 
 void InvestigationSessionTests::
@@ -4618,6 +4620,200 @@ void InvestigationSessionTests::
             .source
             .sourceGeneration,
         quint64(1)
+        );
+}
+
+void InvestigationSessionTests::
+    snapshotBackedSessionDerivesReconnectHintFromSnapshot()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString snapshotPath =
+        directory.filePath(
+            QStringLiteral(
+                "standalone.tsinv"
+                )
+            );
+
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile.name =
+        QStringLiteral(
+            "Snapshot Profile"
+            );
+
+    snapshot.importProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    InvestigationSnapshotSourceContinuity
+        continuity;
+
+    continuity.sourcePath =
+        QStringLiteral(
+            "C:/logs/field-gateway.jsonl"
+            );
+
+    continuity.logicalSourceKey =
+        QStringLiteral(
+            "logical-field-gateway"
+            );
+
+    continuity
+        .sourceFamilyConfiguration
+        .includeRotatedSources = true;
+
+    continuity
+        .sourceFamilyConfiguration
+        .rotatedSourcePaths = {
+        QStringLiteral(
+            "C:/logs/field-gateway.jsonl.1"
+            )
+    };
+
+    continuity.sourceGeneration = 4;
+
+    SourcePhysicalIdentity identity;
+
+    identity.observedSizeBytes = 128;
+    identity.fingerprintLength = 64;
+    identity.prefixFingerprint =
+        QByteArray(
+            32,
+            'a'
+            );
+
+    continuity.sourceIdentity =
+        identity;
+
+    snapshot.sourceContinuity =
+        continuity;
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            snapshotPath,
+            std::move(snapshot)
+            );
+
+    QVERIFY(session != nullptr);
+
+    QCOMPARE(
+        session
+            ->backing()
+            .mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    const InvestigationExternalSourceBinding
+        *reconnectHint =
+        session->reconnectSourceHint();
+
+    if (reconnectHint == nullptr) {
+        QFAIL(
+            "Expected schema-v2 source continuity "
+            "to produce a reconnect hint."
+            );
+
+        return;
+    }
+
+    QCOMPARE(
+        reconnectHint->sourcePath,
+        QStringLiteral(
+            "C:/logs/field-gateway.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        reconnectHint->logicalSourceKey,
+        QStringLiteral(
+            "logical-field-gateway"
+            )
+        );
+
+    QCOMPARE(
+        reconnectHint->sourceGeneration,
+        quint64(4)
+        );
+
+    QVERIFY(
+        reconnectHint
+            ->sourceIdentity
+            .has_value()
+        );
+
+    QCOMPARE(
+        reconnectHint
+            ->sourceIdentity
+            ->observedSizeBytes,
+        qint64(128)
+        );
+
+    QVERIFY(
+        reconnectHint
+            ->sourceFamilyConfiguration
+            .includeRotatedSources
+        );
+
+    QVERIFY(
+        reconnectHint
+            ->sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+}
+
+void InvestigationSessionTests::
+    snapshotBackedSessionWithoutContinuityHasNoReconnectHint()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    InvestigationSessionSnapshot snapshot;
+
+    snapshot.importProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    std::unique_ptr<InvestigationSession>
+        session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "legacy-snapshot-session"
+                ),
+            directory.filePath(
+                QStringLiteral(
+                    "legacy.tsinv"
+                    )
+                ),
+            std::move(snapshot)
+            );
+
+    QVERIFY(session != nullptr);
+
+    QCOMPARE(
+        session
+            ->backing()
+            .mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        session->reconnectSourceHint()
+        == nullptr
         );
 }
 

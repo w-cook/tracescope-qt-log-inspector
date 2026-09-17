@@ -87,6 +87,8 @@ private:
         nullptr;
 
     QAction *openAction = nullptr;
+    QAction *openSnapshotAction = nullptr;
+    QAction *saveSnapshotAction = nullptr;
     QAction *reloadAction = nullptr;
     QAction *compareAction = nullptr;
     QAction *saveWorkspaceAction = nullptr;
@@ -100,6 +102,7 @@ private:
 
     bool workspaceOpenInProgress = false;
     bool sessionReloadInProgress = false;
+    bool snapshotOpenInProgress = false;
 
     void buildLayout();
     void createMenus();
@@ -107,6 +110,11 @@ private:
         const QString &initialFilePath =
         QString()
         );
+    void openInvestigationSnapshot(
+        const QString &initialFilePath =
+        QString()
+        );
+    void saveInvestigationSnapshot();
     void loadLogFile(
         const QString &filePath,
         const ImportProfile &profile,
@@ -175,6 +183,10 @@ private:
         );
 
     void setSessionReloadInProgress(
+        bool inProgress
+        );
+
+    void setSnapshotOpenInProgress(
         bool inProgress
         );
 

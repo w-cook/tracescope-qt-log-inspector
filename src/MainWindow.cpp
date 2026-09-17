@@ -27,6 +27,7 @@
 #include <QStyledItemDelegate>
 #include <QtConcurrentRun>
 #include <QUrl>
+#include <QUuid>
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -871,6 +872,27 @@ void MainWindow::createMenus()
 
     fileMenu->addAction(openAction);
 
+    openSnapshotAction =
+        new QAction(
+            tr(
+                "Open Investigation &Snapshot..."
+                ),
+            this
+            );
+
+    connect(
+        openSnapshotAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            openInvestigationSnapshot();
+        }
+        );
+
+    fileMenu->addAction(
+        openSnapshotAction
+        );
+
     openWorkspaceAction =
         new QAction(
             tr("Open &Workspace..."),
@@ -929,6 +951,33 @@ void MainWindow::createMenus()
         );
 
     refreshRecentWorkspacesMenu();
+
+    fileMenu->addSeparator();
+
+    saveSnapshotAction =
+        new QAction(
+            tr(
+                "Save Investigation &Snapshot..."
+                ),
+            this
+            );
+
+    saveSnapshotAction->setEnabled(
+        false
+        );
+
+    connect(
+        saveSnapshotAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            saveInvestigationSnapshot();
+        }
+        );
+
+    fileMenu->addAction(
+        saveSnapshotAction
+        );
 
     reloadAction =
         new QAction(
@@ -1133,6 +1182,7 @@ void MainWindow::openLogFile(const QString &initialFilePath)
 {
     if (importWatcher != nullptr
         || workspaceOpenInProgress
+        || snapshotOpenInProgress
         || sessionReloadInProgress) {
         QMessageBox::information(
             this,
@@ -1194,6 +1244,517 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         std::move(
             sourceFamilyConfiguration
             )
+        );
+}
+
+void MainWindow::openInvestigationSnapshot(
+    const QString &initialFilePath
+    )
+{
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress
+        || sessionReloadInProgress
+        || snapshotOpenInProgress) {
+        QMessageBox::information(
+            this,
+            tr("File Operation In Progress"),
+            tr(
+                "TraceScope is already importing, "
+                "restoring, or opening another file. "
+                "Wait for the current operation to "
+                "finish before opening an investigation "
+                "snapshot."
+                )
+            );
+
+        return;
+    }
+
+    QString filePath =
+        initialFilePath;
+
+    if (filePath.isEmpty()) {
+        filePath =
+            QFileDialog::getOpenFileName(
+                this,
+                tr(
+                    "Open Investigation Snapshot"
+                    ),
+                QString(),
+                tr(
+                    "TraceScope Investigation Snapshot "
+                    "(*.tsinv);;"
+                    "All Files (*)"
+                    )
+                );
+    }
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const QFileInfo fileInfo(
+        filePath
+        );
+
+    if (!fileInfo.exists()
+        || !fileInfo.isFile()) {
+        QMessageBox::warning(
+            this,
+            tr(
+                "Open Investigation Snapshot Failed"
+                ),
+            tr(
+                "The selected investigation snapshot "
+                "does not exist or is not a file."
+                )
+            );
+
+        return;
+    }
+
+    const QString absoluteSnapshotPath =
+        fileInfo.absoluteFilePath();
+
+    /*
+     * Standalone snapshot opening intentionally uses
+     * the same SnapshotBacked restoration path used
+     * when restoring a saved workspace.
+     *
+     * The absolute snapshot reference means no
+     * workspace-relative resolution is required.
+     */
+    PersistedInvestigationSession
+        persistedSession;
+
+    persistedSession.sessionId =
+        QUuid::createUuid().toString(
+            QUuid::WithoutBraces
+            );
+
+    persistedSession.backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        SnapshotBacked;
+
+    persistedSession
+        .backing
+        .snapshotReference =
+        absoluteSnapshotPath;
+
+    auto *watcher =
+        new QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>(
+            this
+            );
+
+    auto *progressDialog =
+        new QProgressDialog(
+            tr(
+                "Opening %1...\n"
+                "Loading investigation snapshot..."
+                )
+                .arg(
+                    fileInfo.fileName()
+                    ),
+            tr("Cancel"),
+            0,
+            0,
+            this
+            );
+
+    progressDialog->setWindowTitle(
+        tr(
+            "Open Investigation Snapshot"
+            )
+        );
+
+    progressDialog->setWindowModality(
+        Qt::NonModal
+        );
+
+    progressDialog->setMinimumDuration(
+        500
+        );
+
+    progressDialog->setAutoClose(
+        false
+        );
+
+    progressDialog->setAutoReset(
+        false
+        );
+
+    setSnapshotOpenInProgress(
+        true
+        );
+
+    connect(
+        progressDialog,
+        &QProgressDialog::canceled,
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        cancel
+        );
+
+    connect(
+        watcher,
+        &QFutureWatcher<
+            InvestigationSessionRestorationPreparationResult>::
+        finished,
+        this,
+        [
+            this,
+            watcher,
+            progressDialog,
+            persistedSession
+        ]() mutable {
+            const bool cancelled =
+                watcher->isCanceled();
+
+            progressDialog->hide();
+            progressDialog->deleteLater();
+
+            if (cancelled) {
+                watcher->deleteLater();
+
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                return;
+            }
+
+            if (watcher
+                    ->future()
+                    .resultCount()
+                <= 0) {
+                watcher->deleteLater();
+
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope did not receive a "
+                        "snapshot restoration result."
+                        )
+                    );
+
+                return;
+            }
+
+            InvestigationSessionRestorationPreparationResult
+                preparation =
+                watcher->result();
+
+            watcher->deleteLater();
+
+            if (!preparation.succeeded) {
+                const QString reason =
+                    preparation
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "The selected investigation "
+                              "snapshot could not be loaded."
+                              )
+                        : preparation.errorMessage;
+
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope was unable to open "
+                        "the selected investigation "
+                        "snapshot.\n\n"
+                        "Reason:\n%1"
+                        )
+                        .arg(
+                            reason
+                            )
+                    );
+
+                return;
+            }
+
+            /*
+             * InvestigationSession and its Qt model
+             * graph are materialized back on the UI
+             * thread.
+             */
+            InvestigationSessionRestorationService
+                restorationService;
+
+            InvestigationSessionRestorationResult
+                restoration =
+                restorationService.materialize(
+                    persistedSession,
+                    std::move(
+                        preparation
+                        )
+                    );
+
+            if (!restoration.succeeded
+                || restoration.session
+                       == nullptr) {
+                const QString reason =
+                    restoration
+                            .errorMessage
+                            .isEmpty()
+                        ? tr(
+                              "The loaded investigation "
+                              "snapshot could not be "
+                              "materialized."
+                              )
+                        : restoration.errorMessage;
+
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope was unable to "
+                        "materialize the selected "
+                        "investigation snapshot.\n\n"
+                        "Reason:\n%1"
+                        )
+                        .arg(
+                            reason
+                            )
+                    );
+
+                return;
+            }
+
+            const bool emptySnapshot =
+                restoration
+                    .session
+                    ->importedRecordCount()
+                == 0;
+
+            workspace->addSession(
+                std::move(
+                    restoration.session
+                    )
+                );
+
+            setSnapshotOpenInProgress(
+                false
+                );
+
+            if (emptySnapshot) {
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Empty Investigation Snapshot"
+                        ),
+                    tr(
+                        "The investigation snapshot "
+                        "opened successfully, but it "
+                        "contains no investigation "
+                        "records."
+                        )
+                    );
+            }
+        }
+        );
+
+    watcher->setFuture(
+        QtConcurrent::run(
+            [
+                persistedSession
+            ](
+                QPromise<
+                    InvestigationSessionRestorationPreparationResult>
+                    &promise
+                ) {
+                /*
+                 * Snapshot deserialization currently has
+                 * no incremental byte-progress callback,
+                 * so this operation remains indeterminate.
+                 */
+                promise.setProgressRange(
+                    0,
+                    0
+                    );
+
+                InvestigationSessionRestorationService
+                    restorationService;
+
+                InvestigationSessionRestorationPreparationResult
+                    preparation =
+                    restorationService.prepare(
+                        persistedSession,
+                        QString()
+                        );
+
+                if (promise.isCanceled()) {
+                    return;
+                }
+
+                promise.addResult(
+                    std::move(
+                        preparation
+                        )
+                    );
+            }
+            )
+        );
+}
+
+void MainWindow::saveInvestigationSnapshot()
+{
+    if (workspace == nullptr
+        || importWatcher != nullptr
+        || workspaceOpenInProgress
+        || sessionReloadInProgress
+        || snapshotOpenInProgress) {
+        return;
+    }
+
+    InvestigationSession *session =
+        workspace->activeSession();
+
+    if (session == nullptr) {
+        return;
+    }
+
+    /*
+     * Freeze the investigation evidence immediately.
+     *
+     * Unlike Preserve as Snapshot Only, this operation
+     * does not change the runtime backing mode. Live
+     * following therefore does not need to remain paused
+     * while the user chooses a destination or while the
+     * standalone snapshot is written.
+     */
+    const InvestigationSessionSnapshot snapshot =
+        session->captureSnapshot();
+
+    QString suggestedFileName =
+        session
+            ->sourceMetadata()
+            .sourceName
+            .trimmed();
+
+    if (suggestedFileName.isEmpty()) {
+        suggestedFileName =
+            QStringLiteral(
+                "investigation"
+                );
+    } else {
+        suggestedFileName =
+            QFileInfo(
+                suggestedFileName
+                )
+                .completeBaseName();
+
+        if (suggestedFileName.isEmpty()) {
+            suggestedFileName =
+                QStringLiteral(
+                    "investigation"
+                    );
+        }
+    }
+
+    suggestedFileName +=
+        QStringLiteral(
+            ".tsinv"
+            );
+
+    QString filePath =
+        QFileDialog::getSaveFileName(
+            this,
+            tr(
+                "Save Investigation Snapshot"
+                ),
+            suggestedFileName,
+            tr(
+                "TraceScope Investigation Snapshot "
+                "(*.tsinv);;"
+                "All Files (*)"
+                )
+            );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    if (QFileInfo(filePath)
+            .suffix()
+            .compare(
+                QStringLiteral(
+                    "tsinv"
+                    ),
+                Qt::CaseInsensitive
+                )
+        != 0) {
+        filePath +=
+            QStringLiteral(
+                ".tsinv"
+                );
+    }
+
+    const InvestigationSessionSnapshotSaveResult
+        saveResult =
+        InvestigationSessionSnapshotFile()
+            .save(
+                filePath,
+                snapshot
+                );
+
+    if (!saveResult.isSuccess()) {
+        QMessageBox::warning(
+            this,
+            tr(
+                "Save Investigation Snapshot Failed"
+                ),
+            saveResult
+                    .errorMessage
+                    .isEmpty()
+                ? tr(
+                      "TraceScope could not save "
+                      "the investigation snapshot."
+                      )
+                : saveResult.errorMessage
+            );
+
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tr(
+            "Investigation Snapshot Saved"
+            ),
+        tr(
+            "The current investigation evidence was "
+            "saved as a standalone snapshot.\n\n"
+            "%1\n\n"
+            "The open investigation and its backing "
+            "mode were not changed."
+            )
+            .arg(
+                QFileInfo(filePath)
+                    .absoluteFilePath()
+                )
         );
 }
 
@@ -1284,6 +1845,7 @@ bool MainWindow::startLogFileImport(
 {
     if (importWatcher != nullptr
         || workspaceOpenInProgress
+        || snapshotOpenInProgress
         || sessionReloadInProgress) {
         return false;
     }
@@ -1363,6 +1925,10 @@ bool MainWindow::startLogFileImport(
 
     if (openAction != nullptr) {
         openAction->setEnabled(false);
+    }
+
+    if (openSnapshotAction != nullptr) {
+        openSnapshotAction->setEnabled(false);
     }
 
     if (openWorkspaceAction != nullptr) {
@@ -1448,6 +2014,10 @@ bool MainWindow::startLogFileImport(
 
             if (openAction != nullptr) {
                 openAction->setEnabled(true);
+            }
+
+            if (openSnapshotAction != nullptr) {
+                openSnapshotAction->setEnabled(true);
             }
 
             if (openWorkspaceAction != nullptr) {
@@ -1727,6 +2297,7 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
     if (importWatcher != nullptr
         || workspaceOpenInProgress
+        || snapshotOpenInProgress
         || sessionReloadInProgress) {
         return;
     }
@@ -3481,6 +4052,7 @@ void MainWindow::setWorkspaceOpenInProgress(
     const bool fileOperationAvailable =
         !workspaceOpenInProgress
         && !sessionReloadInProgress
+        && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
     if (openAction != nullptr) {
@@ -3491,6 +4063,12 @@ void MainWindow::setWorkspaceOpenInProgress(
 
     if (openWorkspaceAction != nullptr) {
         openWorkspaceAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    if (openSnapshotAction != nullptr) {
+        openSnapshotAction->setEnabled(
             fileOperationAvailable
             );
     }
@@ -3508,14 +4086,59 @@ void MainWindow::setSessionReloadInProgress(
 {
     sessionReloadInProgress =
         inProgress;
-
+    
     const bool fileOperationAvailable =
         !workspaceOpenInProgress
         && !sessionReloadInProgress
+        && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
     if (openAction != nullptr) {
         openAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    if (openWorkspaceAction != nullptr) {
+        openWorkspaceAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    if (openSnapshotAction != nullptr) {
+        openSnapshotAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    setAcceptDrops(
+        fileOperationAvailable
+        );
+
+    updateReloadActionState();
+}
+
+void MainWindow::setSnapshotOpenInProgress(
+    bool inProgress
+    )
+{
+    snapshotOpenInProgress =
+        inProgress;
+
+    const bool fileOperationAvailable =
+        !workspaceOpenInProgress
+        && !sessionReloadInProgress
+        && !snapshotOpenInProgress
+        && importWatcher == nullptr;
+
+    if (openAction != nullptr) {
+        openAction->setEnabled(
+            fileOperationAvailable
+            );
+    }
+
+    if (openSnapshotAction != nullptr) {
+        openSnapshotAction->setEnabled(
             fileOperationAvailable
             );
     }
@@ -3533,26 +4156,36 @@ void MainWindow::setSessionReloadInProgress(
     updateReloadActionState();
 }
 
-void MainWindow::
-    updateReloadActionState()
+void MainWindow::updateReloadActionState()
 {
-    if (reloadAction == nullptr) {
-        return;
-    }
-
     InvestigationSession *session =
         workspace != nullptr
             ? workspace->activeSession()
             : nullptr;
 
-    bool liveFollowActive =
-        false;
+    const bool fileOperationAvailable =
+        importWatcher == nullptr
+        && !workspaceOpenInProgress
+        && !sessionReloadInProgress
+        && !snapshotOpenInProgress;
+
+    if (saveSnapshotAction != nullptr) {
+        saveSnapshotAction->setEnabled(
+            session != nullptr
+            && fileOperationAvailable
+            );
+    }
+
+    if (reloadAction == nullptr) {
+        return;
+    }
+
+    bool liveFollowActive = false;
 
     if (session != nullptr) {
         const LiveSessionFollowCoordinator
             *coordinator =
-            session
-                ->liveFollowCoordinator();
+            session->liveFollowCoordinator();
 
         liveFollowActive =
             coordinator != nullptr
@@ -3563,9 +4196,7 @@ void MainWindow::
 
     reloadAction->setEnabled(
         session != nullptr
-        && importWatcher == nullptr
-        && !workspaceOpenInProgress
-        && !sessionReloadInProgress
+        && fileOperationAvailable
         && !liveFollowActive
         );
 }
@@ -4618,6 +5249,7 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
 {
     if (importWatcher != nullptr
         || workspaceOpenInProgress
+        || snapshotOpenInProgress
         || sessionReloadInProgress) {
         QMessageBox::information(
             this,
