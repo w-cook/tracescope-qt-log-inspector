@@ -4595,9 +4595,50 @@ void MainWindow::populateSessionSourceMenu(
             return;
         }
 
+        /*
+         * Lifecycle transition:
+         *
+         * SourceBacked -> SnapshotBacked
+         */
+        QAction *snapshotOnlyAction =
+            sourceMenu->addAction(
+                tr(
+                    "Preserve as Snapshot Only..."
+                    )
+                );
+
+        snapshotOnlyAction->setToolTip(
+            tr(
+                "Capture all currently admitted evidence into "
+                "a fresh durable snapshot and convert this "
+                "investigation to Snapshot-backed"
+                )
+            );
+
+        connect(
+            snapshotOnlyAction,
+            &QAction::triggered,
+            sourceMenu,
+            [
+                this,
+                sessionId
+            ]() {
+                preserveSessionAsSnapshotOnly(
+                    sessionId
+                    );
+            }
+            );
+
+        sourceMenu->addSeparator();
+
+        /*
+         * External-source management.
+         */
         QAction *redefineAction =
             sourceMenu->addAction(
-                tr("Redefine Source Path...")
+                tr(
+                    "Redefine Source Path..."
+                    )
                 );
 
         const bool canRedefine =
@@ -4640,40 +4681,11 @@ void MainWindow::populateSessionSourceMenu(
                 );
         }
 
-        sourceMenu->addSeparator();
-
-        QAction *snapshotOnlyAction =
-            sourceMenu->addAction(
-                tr("Preserve as Snapshot Only...")
-                );
-
-        snapshotOnlyAction->setToolTip(
-            tr(
-                "Capture the current investigation as a "
-                "durable snapshot and disconnect it from the "
-                "external source"
-                )
-            );
-
-        connect(
-            snapshotOnlyAction,
-            &QAction::triggered,
-            sourceMenu,
-            [
-                this,
-                sessionId
-            ]() {
-                preserveSessionAsSnapshotOnly(
-                    sessionId
-                    );
-            }
-            );
-
-        sourceMenu->addSeparator();
-
         QAction *openAction =
             sourceMenu->addAction(
-                tr("Open Source Location")
+                tr(
+                    "Open Source Location"
+                    )
                 );
 
         openAction->setToolTip(
@@ -4690,7 +4702,10 @@ void MainWindow::populateSessionSourceMenu(
             openAction,
             &QAction::triggered,
             sourceMenu,
-            [this, sourcePath]() {
+            [
+                this,
+                sourcePath
+            ]() {
                 openSourceLocation(
                     sourcePath
                     );
@@ -4706,9 +4721,77 @@ void MainWindow::populateSessionSourceMenu(
             *reconnectHint =
             session->reconnectSourceHint();
 
+        /*
+         * Lifecycle transition:
+         *
+         * SnapshotBacked -> Hybrid
+         */
+        QAction *reconnectAction =
+            sourceMenu->addAction(
+                tr(
+                    "Reconnect Source"
+                    )
+                );
+
+        const bool canReconnect =
+            reconnectHint != nullptr
+            && !reconnectHint
+                    ->sourcePath
+                    .trimmed()
+                    .isEmpty();
+
+        reconnectAction->setEnabled(
+            canReconnect
+            );
+
+        if (canReconnect) {
+            const QString reconnectPath =
+                reconnectHint->sourcePath;
+
+            reconnectAction->setToolTip(
+                tr(
+                    "Reconnect this investigation to its "
+                    "previously recorded external source "
+                    "and restore Hybrid backing:\n%1"
+                    )
+                    .arg(
+                        reconnectPath
+                        )
+                );
+
+            connect(
+                reconnectAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
+                    sessionId
+                ]() {
+                    reconnectSnapshotBackedSession(
+                        sessionId
+                        );
+                }
+                );
+        } else {
+            reconnectAction->setToolTip(
+                tr(
+                    "This investigation does not retain "
+                    "source continuity metadata required "
+                    "for safe reconnection."
+                    )
+                );
+        }
+
+        sourceMenu->addSeparator();
+
+        /*
+         * Dormant external-source management.
+         */
         QAction *redefineAction =
             sourceMenu->addAction(
-                tr("Redefine Source Path...")
+                tr(
+                    "Redefine Source Path..."
+                    )
                 );
 
         const bool canRedefine =
@@ -4751,65 +4834,10 @@ void MainWindow::populateSessionSourceMenu(
                 );
         }
 
-        sourceMenu->addSeparator();
-
-        QAction *reconnectAction =
-            sourceMenu->addAction(
-                tr("Reconnect Source")
-                );
-
-        const bool canReconnect =
-            reconnectHint != nullptr
-            && !reconnectHint
-                    ->sourcePath
-                    .trimmed()
-                    .isEmpty();
-
-        reconnectAction->setEnabled(
-            canReconnect
-            );
-
-        if (canReconnect) {
-            const QString reconnectPath =
-                reconnectHint->sourcePath;
-
-            reconnectAction->setToolTip(
-                tr(
-                    "Reconnect the investigation to its "
-                    "previously recorded external source:\n%1"
-                    )
-                    .arg(
-                        reconnectPath
-                        )
-                );
-
-            connect(
-                reconnectAction,
-                &QAction::triggered,
-                sourceMenu,
-                [
-                    this,
-                    sessionId
-                ]() {
-                    reconnectSnapshotBackedSession(
-                        sessionId
-                        );
-                }
-                );
-        } else {
-            reconnectAction->setToolTip(
-                tr(
-                    "This investigation does not retain "
-                    "source continuity metadata required "
-                    "for safe reconnection."
-                    )
-                );
-        }
-
         /*
          * Original source provenance is informational.
-         * Only expose the location action while that file
-         * currently exists.
+         * Only expose the location action while that
+         * physical source currently exists.
          */
         const QString originalSourcePath =
             session
@@ -4825,14 +4853,20 @@ void MainWindow::populateSessionSourceMenu(
                  .isEmpty()
             && sourceInfo.exists()
             && sourceInfo.isFile()) {
-            sourceMenu->addSeparator();
-
             QAction *openAction =
                 sourceMenu->addAction(
                     tr(
                         "Open Original Source Location"
                         )
                     );
+
+            openAction->setToolTip(
+                tr(
+                    "Open the directory containing the "
+                    "original external source represented "
+                    "by this Snapshot-backed investigation"
+                    )
+                );
 
             connect(
                 openAction,
@@ -4869,9 +4903,80 @@ void MainWindow::populateSessionSourceMenu(
             return;
         }
 
+        /*
+         * Lifecycle transitions:
+         *
+         * Hybrid -> SourceBacked
+         * Hybrid -> SnapshotBacked
+         */
+        QAction *sourceAuthoritativeAction =
+            sourceMenu->addAction(
+                tr(
+                    "Use Source as Authoritative..."
+                    )
+                );
+
+        sourceAuthoritativeAction->setToolTip(
+            tr(
+                "Rebuild the investigation entirely from "
+                "the connected external source and convert "
+                "it to Source-backed"
+                )
+            );
+
+        connect(
+            sourceAuthoritativeAction,
+            &QAction::triggered,
+            sourceMenu,
+            [
+                this,
+                sessionId
+            ]() {
+                useSourceAsAuthoritative(
+                    sessionId
+                    );
+            }
+            );
+
+        QAction *snapshotOnlyAction =
+            sourceMenu->addAction(
+                tr(
+                    "Preserve as Snapshot Only..."
+                    )
+                );
+
+        snapshotOnlyAction->setToolTip(
+            tr(
+                "Capture all currently admitted evidence into "
+                "a fresh durable snapshot and convert this "
+                "investigation to Snapshot-backed"
+                )
+            );
+
+        connect(
+            snapshotOnlyAction,
+            &QAction::triggered,
+            sourceMenu,
+            [
+                this,
+                sessionId
+            ]() {
+                preserveSessionAsSnapshotOnly(
+                    sessionId
+                    );
+            }
+            );
+
+        sourceMenu->addSeparator();
+
+        /*
+         * Connected external-source management.
+         */
         QAction *redefineAction =
             sourceMenu->addAction(
-                tr("Redefine Source Path...")
+                tr(
+                    "Redefine Source Path..."
+                    )
                 );
 
         const bool canRedefine =
@@ -4913,66 +5018,6 @@ void MainWindow::populateSessionSourceMenu(
                 );
         }
 
-        sourceMenu->addSeparator();
-
-        QAction *sourceAuthoritativeAction =
-            sourceMenu->addAction(
-                tr(
-                    "Use Source as Authoritative..."
-                    )
-                );
-
-        sourceAuthoritativeAction->setToolTip(
-            tr(
-                "Rebuild the investigation entirely from "
-                "the connected external source and stop "
-                "using the durable snapshot as backing"
-                )
-            );
-
-        connect(
-            sourceAuthoritativeAction,
-            &QAction::triggered,
-            sourceMenu,
-            [
-                this,
-                sessionId
-            ]() {
-                useSourceAsAuthoritative(
-                    sessionId
-                    );
-            }
-            );
-
-        QAction *snapshotOnlyAction =
-            sourceMenu->addAction(
-                tr("Preserve as Snapshot Only...")
-                );
-
-        snapshotOnlyAction->setToolTip(
-            tr(
-                "Capture all currently admitted evidence into "
-                "a fresh durable snapshot and disconnect the "
-                "external source"
-                )
-            );
-
-        connect(
-            snapshotOnlyAction,
-            &QAction::triggered,
-            sourceMenu,
-            [
-                this,
-                sessionId
-            ]() {
-                preserveSessionAsSnapshotOnly(
-                    sessionId
-                    );
-            }
-            );
-
-        sourceMenu->addSeparator();
-
         const QString sourcePath =
             source->sourcePath;
 
@@ -4980,36 +5025,37 @@ void MainWindow::populateSessionSourceMenu(
             sourcePath
             );
 
-        if (!sourceInfo.exists()
-            || !sourceInfo.isFile()) {
-            break;
-        }
+        if (sourceInfo.exists()
+            && sourceInfo.isFile()) {
+            QAction *openAction =
+                sourceMenu->addAction(
+                    tr(
+                        "Open Source Location"
+                        )
+                    );
 
-        QAction *openAction =
-            sourceMenu->addAction(
+            openAction->setToolTip(
                 tr(
-                    "Open Connected Source Location"
+                    "Open the directory containing the "
+                    "Hybrid investigation's connected "
+                    "external source"
                     )
                 );
 
-        openAction->setToolTip(
-            tr(
-                "Open the directory containing the "
-                "Hybrid investigation's connected "
-                "external source"
-                )
-            );
-
-        connect(
-            openAction,
-            &QAction::triggered,
-            sourceMenu,
-            [this, sourcePath]() {
-                openSourceLocation(
+            connect(
+                openAction,
+                &QAction::triggered,
+                sourceMenu,
+                [
+                    this,
                     sourcePath
-                    );
-            }
-            );
+                ]() {
+                    openSourceLocation(
+                        sourcePath
+                        );
+                }
+                );
+        }
 
         break;
     }
