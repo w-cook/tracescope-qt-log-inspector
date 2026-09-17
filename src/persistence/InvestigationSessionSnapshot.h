@@ -1,10 +1,15 @@
 #pragma once
 
+#include <optional>
+
+#include <QString>
 #include <QVector>
 
 #include "../domain/InvestigationRecord.h"
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
+#include "../sources/SourceFamilyConfiguration.h"
+#include "../sources/SourcePhysicalIdentity.h"
 
 enum class InvestigationSnapshotSourceFidelity
 {
@@ -23,10 +28,57 @@ enum class InvestigationSnapshotSourceFidelity
     CompleteSource
 };
 
+/*
+ * Frozen source-continuity information describing the
+ * external source from which snapshot evidence originated.
+ *
+ * This is provenance/reconnect information only. Its
+ * presence does not mean that the external source currently
+ * controls a SnapshotBacked investigation.
+ */
+struct InvestigationSnapshotSourceContinuity
+{
+    /*
+     * Physical path observed when this snapshot was
+     * captured. A verified relocation may later replace
+     * this path while preserving logicalSourceKey.
+     */
+    QString sourcePath;
+
+    /*
+     * Stable identity of the logical source. Unlike
+     * sourcePath, this survives verified relocation.
+     */
+    QString logicalSourceKey;
+
+    /*
+     * Durable source-family discovery configuration.
+     * rotatedSourcePaths contains transient discovery
+     * results and must not be persisted.
+     */
+    SourceFamilyConfiguration
+        sourceFamilyConfiguration;
+
+    /*
+     * Generation identifies same-logical-source
+     * replacement/truncation history. Relocation alone
+     * does not advance this value.
+     */
+    quint64 sourceGeneration = 0;
+
+    /*
+     * Optional physical evidence used to conservatively
+     * verify that a later path still represents the same
+     * underlying source.
+     */
+    std::optional<SourcePhysicalIdentity>
+        sourceIdentity;
+};
+
 struct InvestigationSessionSnapshot
 {
     inline static constexpr int
-        CurrentSchemaVersion = 1;
+        CurrentSchemaVersion = 2;
 
     int schemaVersion =
         CurrentSchemaVersion;
@@ -35,6 +87,15 @@ struct InvestigationSessionSnapshot
         sourceFidelity =
         InvestigationSnapshotSourceFidelity::
         NormalizedOnly;
+
+    /*
+     * Optional persisted source provenance introduced in
+     * schema version 2. Version-1 snapshots deserialize
+     * with no source continuity information.
+     */
+    std::optional<
+        InvestigationSnapshotSourceContinuity>
+        sourceContinuity;
 
     /*
      * The interpretation that produced the saved

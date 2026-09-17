@@ -35,6 +35,8 @@ private slots:
     void followsReplacementAfterPausedObservation();
     void appliesSnapshotReloadWithoutChangingBackingMode();
     void rejectsSnapshotReloadForSourceBackedSession();
+    void captureSnapshotPreservesActiveSourceContinuity();
+    void captureSnapshotPreservesDormantReconnectContinuity();
 };
 
 void InvestigationSessionTests::
@@ -3226,6 +3228,388 @@ void InvestigationSessionTests::
         session.backing().mode(),
         InvestigationSessionBackingMode::
         SourceBacked
+        );
+}
+
+void InvestigationSessionTests::
+    captureSnapshotPreservesActiveSourceContinuity()
+{
+    QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+
+    const QString sourcePath =
+        directory.filePath(
+            QStringLiteral("active-source.jsonl")
+            );
+
+    QFile sourceFile(sourcePath);
+
+    QVERIFY(
+        sourceFile.open(
+            QIODevice::WriteOnly
+            | QIODevice::Text
+            )
+        );
+
+    sourceFile.write(
+        "{\"message\":\"test\"}\n"
+        );
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.name =
+        QStringLiteral("Active Source");
+
+    profile.importerId =
+        QStringLiteral("json-lines");
+
+    ImportResult result;
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(result)
+        );
+
+    const QString logicalSourceKey =
+        QStringLiteral(
+            "C:/original/location/active-source.jsonl"
+            );
+
+    QVERIFY(
+        session.updateExternalSourceLogicalKey(
+            logicalSourceKey
+            )
+        );
+
+    SourceFamilyConfiguration
+        familyConfiguration;
+
+    familyConfiguration.includeRotatedSources =
+        true;
+
+    familyConfiguration
+        .rotationRule
+        .namingScheme =
+        RotatedSourceNamingScheme::
+        NumericSuffix;
+
+    familyConfiguration.rotatedSourcePaths = {
+        QStringLiteral(
+            "C:/temporary/discovered/source.log.2"
+            ),
+        QStringLiteral(
+            "C:/temporary/discovered/source.log.1"
+            )
+    };
+
+    session.setSourceFamilyConfiguration(
+        familyConfiguration
+        );
+
+    SourcePhysicalIdentity identity;
+
+    identity.birthTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-17T12:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    identity.fingerprintLength = 16;
+
+    identity.prefixFingerprint =
+        QByteArray(
+            32,
+            static_cast<char>(0x4a)
+            );
+
+    identity.observedSizeBytes = 128;
+
+    session.updateExternalSourceRuntimeState(
+        4,
+        &identity
+        );
+
+    const InvestigationSessionSnapshot
+        snapshot =
+        session.captureSnapshot();
+
+    QVERIFY(
+        snapshot.sourceContinuity.has_value()
+        );
+
+    const InvestigationSnapshotSourceContinuity
+        &continuity =
+        *snapshot.sourceContinuity;
+
+    QCOMPARE(
+        continuity.sourcePath,
+        QFileInfo(sourcePath)
+            .absoluteFilePath()
+        );
+
+    QCOMPARE(
+        continuity.logicalSourceKey,
+        logicalSourceKey
+        );
+
+    QCOMPARE(
+        continuity.sourceGeneration,
+        quint64(4)
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceFamilyConfiguration
+            .includeRotatedSources,
+        true
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceFamilyConfiguration
+            .rotationRule
+            .namingScheme,
+        RotatedSourceNamingScheme::
+        NumericSuffix
+        );
+
+    QVERIFY(
+        continuity
+            .sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    QVERIFY(
+        continuity.sourceIdentity.has_value()
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->birthTime,
+        identity.birthTime
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->fingerprintLength,
+        identity.fingerprintLength
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->prefixFingerprint,
+        identity.prefixFingerprint
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->observedSizeBytes,
+        identity.observedSizeBytes
+        );
+}
+
+void InvestigationSessionTests::
+    captureSnapshotPreservesDormantReconnectContinuity()
+{
+    InvestigationSessionSnapshot
+        initialSnapshot;
+
+    initialSnapshot.importProfile.name =
+        QStringLiteral(
+            "Snapshot Profile"
+            );
+
+    initialSnapshot.importProfile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    InvestigationExternalSourceBinding
+        reconnectHint;
+
+    reconnectHint.sourcePath =
+        QStringLiteral(
+            "C:/moved/service.jsonl"
+            );
+
+    reconnectHint.logicalSourceKey =
+        QStringLiteral(
+            "C:/original/service.jsonl"
+            );
+
+    reconnectHint.sourceGeneration = 6;
+
+    reconnectHint
+        .sourceFamilyConfiguration
+        .includeRotatedSources = true;
+
+    reconnectHint
+        .sourceFamilyConfiguration
+        .rotationRule
+        .namingScheme =
+        RotatedSourceNamingScheme::
+        NumericBeforeExtension;
+
+    reconnectHint
+        .sourceFamilyConfiguration
+        .rotatedSourcePaths = {
+        QStringLiteral(
+            "C:/moved/service.2.jsonl"
+            ),
+        QStringLiteral(
+            "C:/moved/service.1.jsonl"
+            )
+    };
+
+    SourcePhysicalIdentity identity;
+
+    identity.birthTime =
+        QDateTime::fromString(
+            QStringLiteral(
+                "2026-09-17T13:00:00.000Z"
+                ),
+            Qt::ISODateWithMs
+            );
+
+    identity.fingerprintLength = 8;
+
+    identity.prefixFingerprint =
+        QByteArray(
+            32,
+            static_cast<char>(0x2b)
+            );
+
+    identity.observedSizeBytes = 512;
+
+    reconnectHint.sourceIdentity =
+        identity;
+
+    auto session =
+        InvestigationSession::
+        createSnapshotBacked(
+            QStringLiteral(
+                "snapshot-session"
+                ),
+            QStringLiteral(
+                "saved-investigation.tsinv"
+                ),
+            std::move(initialSnapshot),
+            reconnectHint
+            );
+
+    QVERIFY(session != nullptr);
+
+    QCOMPARE(
+        session->backing().mode(),
+        InvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        session->backing().externalSource()
+        == nullptr
+        );
+
+    QVERIFY(
+        session->reconnectSourceHint()
+        != nullptr
+        );
+
+    const InvestigationSessionSnapshot
+        captured =
+        session->captureSnapshot();
+
+    QVERIFY(
+        captured.sourceContinuity.has_value()
+        );
+
+    const InvestigationSnapshotSourceContinuity
+        &continuity =
+        *captured.sourceContinuity;
+
+    QCOMPARE(
+        continuity.sourcePath,
+        QStringLiteral(
+            "C:/moved/service.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        continuity.logicalSourceKey,
+        QStringLiteral(
+            "C:/original/service.jsonl"
+            )
+        );
+
+    QCOMPARE(
+        continuity.sourceGeneration,
+        quint64(6)
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceFamilyConfiguration
+            .includeRotatedSources,
+        true
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceFamilyConfiguration
+            .rotationRule
+            .namingScheme,
+        RotatedSourceNamingScheme::
+        NumericBeforeExtension
+        );
+
+    QVERIFY(
+        continuity
+            .sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .isEmpty()
+        );
+
+    QVERIFY(
+        continuity.sourceIdentity.has_value()
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->birthTime,
+        identity.birthTime
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->fingerprintLength,
+        identity.fingerprintLength
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->prefixFingerprint,
+        identity.prefixFingerprint
+        );
+
+    QCOMPARE(
+        continuity
+            .sourceIdentity
+            ->observedSizeBytes,
+        identity.observedSizeBytes
         );
 }
 

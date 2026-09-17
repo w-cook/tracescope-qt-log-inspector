@@ -1057,6 +1057,65 @@ InvestigationSession::captureSnapshot() const
         InvestigationSnapshotSourceFidelity::
         NormalizedOnly;
 
+    /*
+     * Preserve source continuity whenever this session
+     * knows where its evidence originated.
+     *
+     * Active external backing takes precedence. A
+     * SnapshotBacked session may instead retain a
+     * dormant reconnect hint from a previous external
+     * source relationship.
+     */
+    const InvestigationExternalSourceBinding
+        *continuitySource =
+        m_backing.externalSource();
+
+    if (continuitySource == nullptr
+        && m_reconnectSourceHint.has_value()) {
+        continuitySource =
+            &*m_reconnectSourceHint;
+    }
+
+    if (continuitySource != nullptr) {
+        InvestigationSnapshotSourceContinuity
+            continuity;
+
+        continuity.sourcePath =
+            continuitySource->sourcePath;
+
+        continuity.logicalSourceKey =
+            continuitySource
+                    ->logicalSourceKey
+                    .trimmed()
+                    .isEmpty()
+                ? continuitySource->sourcePath
+                : continuitySource
+                      ->logicalSourceKey;
+
+        continuity.sourceFamilyConfiguration =
+            continuitySource
+                ->sourceFamilyConfiguration;
+
+        /*
+         * Physical rotated members are discovery
+         * results. Persist only the durable discovery
+         * rule/configuration.
+         */
+        continuity
+            .sourceFamilyConfiguration
+            .rotatedSourcePaths
+            .clear();
+
+        continuity.sourceGeneration =
+            continuitySource->sourceGeneration;
+
+        continuity.sourceIdentity =
+            continuitySource->sourceIdentity;
+
+        snapshot.sourceContinuity =
+            std::move(continuity);
+    }
+
     snapshot.importProfile =
         m_importProfile;
 
