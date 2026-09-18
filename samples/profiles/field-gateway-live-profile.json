@@ -1,0 +1,58 @@
+{
+    "schemaVersion": 1,
+    "name": "Field Gateway Live Degradation",
+    "importerId": "json-lines",
+    "canonicalFields": {
+        "timestamp": "timestamp",
+        "severity": "level",
+        "subsystem": "subsystem",
+        "eventCode": "eventCode",
+        "entityId": "entityId",
+        "message": "message"
+    },
+    "customFields": [
+        {
+            "name": "Site",
+            "sourcePath": "site"
+        },
+        {
+            "name": "Firmware",
+            "sourcePath": "firmware"
+        },
+        {
+            "name": "Endpoint",
+            "sourcePath": "endpoint"
+        },
+        {
+            "name": "Latency (ms)",
+            "sourcePath": "latencyMs"
+        },
+        {
+            "name": "Queued Records",
+            "sourcePath": "queuedRecords"
+        },
+        {
+            "name": "Queue Capacity",
+            "sourcePath": "capacity"
+        },
+        {
+            "name": "Retrying",
+            "sourcePath": "retrying"
+        },
+        {
+            "name": "Attempt",
+            "sourcePath": "attempt"
+        },
+        {
+            "name": "Timeout (ms)",
+            "sourcePath": "timeoutMs"
+        }
+    ],
+    "severityAliases": {},
+    "timestampRules": [
+        {
+            "type": "iso8601"
+        }
+    ],
+    "preserveUnmappedFields": true
+}

@@ -618,6 +618,31 @@ The generator and scenario library support repeatable manual verification of:
 
 The generator itself does not verify TraceScope behavior. It creates known external conditions against which TraceScope can be observed and tested.
 
+## Building and Release Distribution
+
+The Live-Log Generator source is part of the TraceScope `v0.16.0` source tree under `tools/live-log-generator/`, and the deterministic scenarios used by the generator are stored under `samples/live/`. The tagged source is the authoritative version of the utility.
+
+The generator is separate from the main TraceScope application packages. It is not required to run TraceScope and is not bundled into the primary Windows ZIP or Linux AppImage.
+
+The source tree defines two generator executables:
+
+- `TraceScopeLiveLogGenerator` — the command-line generator and authoritative playback implementation
+- `TraceScopeLiveLogGeneratorLauncher` — the thin Qt Widgets launcher that starts the command-line generator as a child process
+
+The launcher expects the command-line executable to be available alongside it.
+
+On Windows, the CMake project also provides the `TraceScopeLiveLogGeneratorPortable` target. That target collects both executables and uses `windeployqt` to assemble the Qt and compiler runtime dependencies required for a self-contained portable directory.
+
+The `v0.16.0` release provides one supplemental generator convenience package:
+
+- `TraceScope-v0.16.0-live-log-generator-windows-x64.zip`
+
+This Windows package is separate from the primary TraceScope packages produced by the repository's automated release workflow. It was assembled locally from the tagged `v0.16.0` generator source using the portable generator target and was smoke-tested again after extraction.
+
+No Linux generator convenience package is provided for `v0.16.0`. Linux users of this prerelease should build the generator from the tagged source with a native Qt 6 toolchain. A corresponding Linux convenience package is planned as part of the final `v1.0.0` packaging work.
+
+This distinction affects packaging provenance only. The generator source, renderer behavior, scenario format, and deterministic scenario library are the same `v0.16.0` implementation documented in this file.
+
 ## Generator Completion Boundary
 
 The generator is complete for the `v0.16.0` live-follow milestone and is treated as a stable permanent test harness rather than an actively expanding secondary product.
