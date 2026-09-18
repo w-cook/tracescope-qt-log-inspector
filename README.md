@@ -56,6 +56,8 @@ chmod +x TraceScope-v0.16.0-linux-x86_64.AppImage
 
 Qt, Qt Creator, CMake, Git, and a local compiler are not required to run the packaged applications.
 
+The Live-Log Generator is a separate test and demonstration utility rather than a TraceScope runtime dependency, and it is not bundled into these primary application packages. Its tagged source and distribution notes are documented in [Live-Log Generator](docs/live-log-generator.md).
+
 ## Documentation
 
 - [Feature Screenshot Gallery](docs/feature-screenshot-gallery.md) — visual walkthrough of import, investigation, analytics, findings, session comparison, persistence, live following, reporting/export, responsive layouts, and large-file behavior
@@ -116,14 +118,25 @@ Live following handles ordinary appends as well as incomplete trailing writes, s
 
 The animation above uses a deterministic Field Gateway live scenario and shows records entering the normal investigation table while Follow Newest keeps the view anchored and derived investigation views refresh on their controlled cadence.
 
-Live evidence is treated as investigation evidence rather than disposable screen state. TraceScope makes source lifecycle choices explicit: an investigation can preserve its complete admitted evidence as a durable snapshot, reconnect preserved evidence to a verified continuing source, intentionally return to the external source as authoritative, or redefine a moved source path when continuity can be verified. Bookmarks, notes, and findings remain tied to stable record identities when the corresponding evidence survives these transitions.
+Live evidence is treated as investigation evidence rather than disposable screen state. TraceScope can preserve the complete normalized evidence admitted to an investigation in a versioned `.tsinv` snapshot. A standalone `.tsinv` stores the normalized records together with the import profile, import diagnostics/counts, truncation state, and available source-continuity metadata. It is an evidence snapshot rather than a complete workspace: bookmarks, analyst notes, finding states, active filters, comparison documents, and UI presentation state are persisted by `.tsw` workspaces instead.
 
+TraceScope makes the relationship between that preserved evidence and an external source explicit through three backing states:
 
-Immutable comparisons and generated reports remain point-in-time artifacts. Later live appends do not silently change an already-created comparison or report.
+- **SourceBacked — blue:** the external source is authoritative.
+- **Hybrid — green:** durable snapshot evidence is preserved while a verified external source remains connected and can contribute continuation records.
+- **SnapshotBacked — berry:** the saved TraceScope snapshot is authoritative, so the retained evidence no longer depends on the external source remaining available or unchanged.
+
+Source-lifecycle actions are deliberate rather than automatic. A SourceBacked or Hybrid investigation can preserve its complete current evidence as SnapshotBacked only; preserved evidence can reconnect to a verified continuing source as Hybrid; a Hybrid investigation can explicitly use the external source as authoritative; and a moved source path can be redefined only when continuity can be verified. Applicable bookmarks, notes, and finding state remain tied to stable record identities when the corresponding evidence survives a transition.
+
+Immutable comparisons and generated reports remain point-in-time artifacts. Later live appends, source reconnection, or backing-state changes do not silently change an already-created comparison or report.
 
 ### Work Across Related Sessions
 
-Multiple investigations can remain open as independent sessions. Each session retains its source/profile context, backing state, filters, controller state, timeline/analytics presentation state, bookmarks, notes, findings, and reload behavior. Investigation and comparison documents can be reordered, detached into independent workspace windows, moved between detached windows, and re-docked into the main workspace. Saved workspaces restore source-backed, snapshot-backed, and hybrid investigation state as applicable, along with comparison snapshots, document ordering, active-document state, and detached-window organization so a multi-session investigation can be resumed after restarting TraceScope. Narrow layouts adapt for horizontally split and portrait-oriented use instead of requiring a wide desktop window.
+Multiple investigations can remain open as independent sessions. Each session retains its source/profile context, backing state, active filters, presentation state, bookmarks, notes, findings, and reload behavior. Investigation and comparison documents can be reordered, detached into independent workspace windows, moved between detached windows, and re-docked into the main workspace.
+
+Saved `.tsw` workspaces restore the broader investigation state around SourceBacked, Hybrid, and SnapshotBacked sessions, including bookmarks, notes, finding states, filters, presentation state, immutable comparison snapshots, document ordering, active-document state, and detached-window organization. Snapshot-backed evidence is restored through its durable `.tsinv` snapshot while the workspace restores the surrounding investigation context. This allows a multi-session investigation to resume after restarting TraceScope without treating a standalone snapshot as a complete workspace.
+
+Narrow layouts adapt for horizontally split and portrait-oriented use instead of requiring a wide desktop window.
 
 ![TraceScope Multi-Session Workspace](docs/screenshots/tracescope-multi-session-workspace.png)
 
@@ -135,7 +148,7 @@ The comparison view prioritizes meaningful differences in event codes, severity,
 
 ### Export the Current Investigation
 
-TraceScope supports several levels of investigation handoff without requiring a hosted service. The currently visible record set can be exported to CSV, a selected record can be copied as structured JSON or compact human-readable text, and classified findings can be exported to a dedicated CSV for QA, issue-tracking, spreadsheet, or documentation workflows.
+TraceScope supports several levels of investigation handoff without requiring a hosted service. The currently visible record set can be exported to CSV, a selected record can be copied to the clipboard as structured JSON or compact human-readable text for pasting into tickets, chat, notes, documentation, or another application, and classified findings can be exported to a dedicated CSV for QA, issue-tracking, spreadsheet, or documentation workflows.
 
 Offline HTML reports provide a broader investigation artifact. The report setup workflow lets the investigator supply a title and optional context, choose which open investigation and comparison documents to include, and decide whether to include detailed supporting evidence and the technical import appendix. Reports summarize captured source/session context, filters, findings, deterministic analytics, burst analysis when available, and Baseline → Comparison results without presenting automated diagnosis or root-cause claims.
 
@@ -192,6 +205,8 @@ The larger scenarios are designed to resemble files a prospective user might act
 Additional repository samples exercise structured XML, Windows Event XML, CSV/TSV, structured JSON, Syslog, Apache/Nginx/IIS access logs, regex-configurable application logs, and other supported import paths.
 
 A separate deterministic live-scenario library under `samples/live/` drives the standalone Live-Log Generator. Those scenarios cover representative append growth, partial writes, truncation, same-path replacement, rotation, structured open-container writing, degraded/recovery sequences, and access-log traffic so live-follow behavior can be reproduced without manually editing files.
+
+The generator itself lives under `tools/live-log-generator/` and remains separate from the TraceScope application. Its source is part of the `v0.16.0` tag. The `v0.16.0` release also provides a locally built and smoke-tested Windows x64 convenience package for the generator; Linux users of this prerelease should build the generator from source. A corresponding Linux convenience package is planned as part of the final `v1.0.0` packaging work.
 
 The samples are fictional and self-contained. They are intended to demonstrate import configuration, profile reuse, canonical mappings, custom fields, filtering, timeline behavior, analytics, findings, burst detection, comparison, persistence, live following, and reporting/export workflows without external services.
 

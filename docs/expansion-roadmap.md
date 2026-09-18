@@ -778,7 +778,7 @@ Completed deliverables:
 * Windows sharing-mode hardening so TraceScope can read supported sources that remain actively open by their producer where the operating system permits shared access
 * live summaries, timeline, analytics, findings, navigation, filtering, and selected-record workflows that remain usable as evidence arrives
 * SourceBacked, SnapshotBacked, and Hybrid backing modes that make the authority of the external source and durable TraceScope evidence explicit
-* versioned `.tsinv` investigation snapshots containing normalized evidence, diagnostics, import-profile context, and source-continuity metadata without requiring the original source file to remain authoritative
+* versioned `.tsinv` investigation snapshots containing normalized evidence, import diagnostics and counts, import-profile context, source-truncation state, and optional source-continuity metadata without requiring the original source file to remain authoritative; broader investigation state such as bookmarks, analyst notes, finding dispositions, active filters, comparisons, and UI/layout state remains part of `.tsw` workspace persistence
 * standalone **Open Investigation Snapshot** and **Save Investigation Snapshot** workflows independent of complete workspace persistence
 * **Preserve as Snapshot Only** transition that writes a fresh durable snapshot containing all currently admitted evidence before disconnecting a SourceBacked or Hybrid investigation from its external source
 * SnapshotBacked source reconnection that verifies the recorded source continuity and reconstructs a Hybrid investigation without treating the external source as a replacement for durable snapshot evidence
@@ -808,7 +808,8 @@ Planned deliverables:
 * final cross-workflow UI consistency and small visual cleanup across features completed in earlier phases
 * responsive regression verification for the final persistence, reporting, and live-following surfaces introduced after the Phase 12 hardening pass
 * representative full-width, horizontally split, and portrait-layout regression verification before `v1.0.0`
-* final Windows and Linux distributables
+* final Windows and Linux TraceScope distributables
+* Windows and Linux Live-Log Generator convenience packages built from the final tagged source, with the generator remaining separate from the primary TraceScope application packages
 * automated release packaging
 * architecture documentation
 * import-profile specification
