@@ -4,13 +4,13 @@
 
 TraceScope is a native C++/Qt desktop application for investigating file-based telemetry and diagnostic logs. It helps developers, QA engineers, field-support teams, and other technical users move from unfamiliar source files to a structured, repeatable investigation without requiring a hosted backend, log-shipping infrastructure, user accounts, or an indexing service.
 
+![TraceScope investigation workspace](docs/screenshots/tracescope-dashboard.png)
+
 TraceScope imports multiple structured and operational log formats and uses reusable import profiles to map source fields into a common investigation model. Timestamp, severity, subsystem, event code, entity ID, and message are optional canonical fields rather than a required fixed schema. Source-specific values and raw records remain available alongside normalized data.
 
 Once a source is loaded, investigators can combine canonical and custom-field filters, search and navigate records, inspect timeline and trend views, review deterministic event-code/entity analytics, detect explainable warning/error bursts, preserve bookmarks, notes, and finding states, keep multiple sessions open, follow supported sources while they continue growing, preserve live evidence when the external source changes, detach or re-dock workspace documents, compare complete sessions, save and reopen the investigation workspace, and hand off results through record copy, CSV exports, or self-contained offline HTML reports.
 
 TraceScope is intentionally file-oriented and offline. It does not claim to automatically understand every arbitrary log format, diagnose root cause, replace centralized observability systems, or guarantee a fixed maximum file size. Import and analysis behavior stays explicit, testable, and reproducible.
-
-![TraceScope investigation workspace](docs/screenshots/tracescope-dashboard.png)
 
 ## Download TraceScope
 
@@ -82,9 +82,9 @@ Supported source families include JSON Lines, structured JSON, CSV/TSV, key-valu
 
 Investigations can be narrowed using multiple severities, subsystem, event code, entity, UTC time range, full-record search, dynamic custom-field values, bookmark state, and finding status. Named filter presets preserve useful combinations for reuse.
 
-Previous/next event navigation, warning/error-class navigation, grouped issue drill-down, timeline drill-down, and direct finding navigation keep source-record context available while moving through a filtered investigation.
-
 ![TraceScope Advanced Filtering and Navigation](docs/screenshots/tracescope-advanced-filtering.png)
+
+Previous/next event navigation, warning/error-class navigation, grouped issue drill-down, timeline drill-down, and direct finding navigation keep source-record context available while moving through a filtered investigation.
 
 ### Analyze Frequencies, Trends, and Bursts
 
@@ -104,9 +104,9 @@ Burst detection is deterministic and explainable. It is **not** presented as AI 
 
 Records can be bookmarked, annotated with multiline analyst notes, and classified as Open, Resolved, or Dismissed findings. The Findings review panel summarizes the investigation record and supports direct navigation back to the exact preserved source record.
 
-Applicable bookmark, note, and finding state survives in-place reloads when stable record identities remain present. Saved workspaces also preserve that investigation state across application restarts when the corresponding source records can be restored.
-
 ![TraceScope Findings Review](docs/screenshots/tracescope-findings.png)
+
+Applicable bookmark, note, and finding state survives in-place reloads when stable record identities remain present. Saved workspaces also preserve that investigation state across application restarts when the corresponding source records can be restored.
 
 ### Follow an Active Log
 
@@ -134,17 +134,17 @@ Immutable comparisons and generated reports remain point-in-time artifacts. Late
 
 Multiple investigations can remain open as independent sessions. Each session retains its source/profile context, backing state, active filters, presentation state, bookmarks, notes, findings, and reload behavior. Investigation and comparison documents can be reordered, detached into independent workspace windows, moved between detached windows, and re-docked into the main workspace.
 
+![TraceScope Multi-Session Workspace](docs/screenshots/tracescope-multi-session-workspace.png)
+
 Saved `.tsw` workspaces restore the broader investigation state around SourceBacked, Hybrid, and SnapshotBacked sessions, including bookmarks, notes, finding states, filters, presentation state, immutable comparison snapshots, document ordering, active-document state, and detached-window organization. Snapshot-backed evidence is restored through its durable `.tsinv` snapshot while the workspace restores the surrounding investigation context. This allows a multi-session investigation to resume after restarting TraceScope without treating a standalone snapshot as a complete workspace.
 
 Narrow layouts adapt for horizontally split and portrait-oriented use instead of requiring a wide desktop window.
 
-![TraceScope Multi-Session Workspace](docs/screenshots/tracescope-multi-session-workspace.png)
-
 TraceScope can also compare two complete imported sessions using an explicit **Baseline → Comparison** orientation. Comparison snapshots are immutable and are built from complete session records rather than the sessions' current filters, so temporary investigation choices do not silently change the meaning of an existing comparison.
 
-The comparison view prioritizes meaningful differences in event codes, severity, elevated subsystem/entity activity, conservative shared custom fields, optional burst behavior, and session-level context such as total records, duration, and event rate. Missing dimensions are reported as unavailable rather than treated as zero, and the output remains descriptive rather than claiming causal diagnosis or root cause.
-
 ![TraceScope Session Comparison](docs/screenshots/tracescope-session-comparison-overview.png)
+
+The comparison view prioritizes meaningful differences in event codes, severity, elevated subsystem/entity activity, conservative shared custom fields, optional burst behavior, and session-level context such as total records, duration, and event rate. Missing dimensions are reported as unavailable rather than treated as zero, and the output remains descriptive rather than claiming causal diagnosis or root cause.
 
 ### Export the Current Investigation
 
@@ -152,11 +152,11 @@ TraceScope supports several levels of investigation handoff without requiring a 
 
 Offline HTML reports provide a broader investigation artifact. The report setup workflow lets the investigator supply a title and optional context, choose which open investigation and comparison documents to include, and decide whether to include detailed supporting evidence and the technical import appendix. Reports summarize captured source/session context, filters, findings, deterministic analytics, burst analysis when available, and Baseline → Comparison results without presenting automated diagnosis or root-cause claims.
 
+![TraceScope Offline HTML Investigation Report](docs/screenshots/tracescope-html-report-overview.png)
+
 Report generation captures immutable point-in-time state before rendering begins, including generation time and relevant record/time-span context. The generated HTML is self-contained and usable without TraceScope or a backend; local workstation source paths are intentionally omitted. Browser printing can also provide a practical PDF handoff when needed.
 
 A representative [Field Gateway investigation report](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html) is published for direct browser viewing so the exported format can be reviewed without installing TraceScope. It is generated from the same fictional known-good/degraded Field Gateway samples used elsewhere in the documentation.
-
-![TraceScope Offline HTML Investigation Report](docs/screenshots/tracescope-html-report-overview.png)
 
 ## Supported Formats and Profiles
 

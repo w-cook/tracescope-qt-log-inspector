@@ -60,7 +60,7 @@ TraceScope groups qualifying clusters of WARN, ERROR, and CRITICAL records into 
 
 Auto mode derives timing from the investigation's timestamp cadence with an explicit fallback for sparse data; Manual mode allows direct timing control. Double-clicking a burst narrows the investigation to its contributing elevated-event range while preserving unrelated filters.
 
-The captured Order Fulfillment example selects the strongest 31-event burst, whose highest severity is CRITICAL, with the one-minute timeline centered on the burst interval without changing the record set used for detection.
+The captured Order Fulfillment example selects the strongest 31-event burst, whose highest severity is CRITICAL. The timeline is centered on the burst interval and uses a one-minute bucket size, meaning records are grouped into consecutive one-minute intervals for timeline visualization. Changing the bucket size affects only how records are grouped on the timeline; it does not change the record set used for burst detection.
 
 This feature is deterministic analysis, not AI anomaly detection or root-cause diagnosis.
 
@@ -214,7 +214,7 @@ For the smallest handoff unit, selected-record copy lives directly in the Select
 
 ### Visible-Record CSV Export
 
-TraceScope exports the currently visible investigation records to CSV using readable canonical headers and configured custom-field names. The CSV shown below is the same nine-record Environmental Chamber result demonstrated in **Advanced Filtering and Navigation** earlier in this gallery, completing a direct narrow-in-TraceScope → hand-off-the-visible-evidence workflow.
+TraceScope exports the current filtered investigation record set to CSV using readable canonical headers and configured custom-field names. Here, **Visible Records** means all records that pass the active filters, including records outside the portion of the Event Table currently shown on screen. The CSV below contains the same nine-record Environmental Chamber result demonstrated in **Advanced Filtering and Navigation** earlier in this gallery, completing a direct narrow-in-TraceScope → hand-off-the-filtered-evidence workflow.
 
 ![TraceScope Exported CSV](screenshots/tracescope-exported-csv.png)
 
@@ -228,9 +228,9 @@ The example below exports the same six Environmental Chamber findings shown in *
 
 Findings can also be exported directly from the Findings panel itself. Its Export menu exposes separate scopes for all classified findings, findings whose source records match the current investigation filters, and bookmarked findings regardless of those filters.
 
-The captured Order Fulfillment example contains five classified findings, with four matching the active investigation filters and two bookmarked. This makes the export scope visible at the point of handoff without requiring the investigator to return to the application-level export menu.
-
 ![TraceScope Findings Panel Export Menu](screenshots/tracescope-findings-export-menu.png)
+
+The captured Order Fulfillment example contains five classified findings, with four matching the active investigation filters and two bookmarked. This makes the export scope visible at the point of handoff without requiring the investigator to return to the application-level export menu.
 
 ### Offline Report Configuration
 
@@ -274,7 +274,7 @@ The standalone TraceScope Live-Log Generator provides a deterministic external p
 
 TraceScope does not depend on the generator and does not communicate with it directly; it observes only the files the utility produces. The generator source is part of the tagged `v0.16.0` repository under `tools/live-log-generator/`, while its deterministic scenario library lives under `samples/live/`.
 
-The captured launcher uses the Warehouse Sync deployment-rotation scenario, the same deterministic producer used for the Rotated Source Files example above.
+The captured launcher uses the Warehouse Sync deployment-rotation scenario, the same deterministic producer used earlier in this gallery to demonstrate **Rotated Source Families**.
 
 ![TraceScope Live-Log Generator Launcher](screenshots/tracescope-live-log-generator-launcher.png)
 
