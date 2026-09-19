@@ -225,10 +225,19 @@ private:
         int index
         );
 
+    void setWorkspaceDocumentDragActive(
+        bool active
+        );
+
+    void updateEmptyStatePresentation();
+
     WorkspaceDocumentHost *m_rootHost =
         nullptr;
 
     WorkspaceTabWidget *m_tabs =
+        nullptr;
+
+    QWidget *m_emptyStateWidget =
         nullptr;
 
     /*
@@ -238,6 +247,9 @@ private:
         m_detachedWindows;
 
     PendingDocumentDrag m_pendingDocumentDrag;
+
+    bool m_workspaceDocumentDragActive =
+        false;
 
     QString m_activeDocumentId;
 };

@@ -49,10 +49,6 @@ WorkspaceTabBar::WorkspaceTabBar(
         QSizePolicy::Expanding,
         QSizePolicy::Fixed
         );
-
-    setMinimumHeight(
-        emptyDropTargetHeight()
-        );
 }
 
 void WorkspaceTabBar::setDocumentTint(
@@ -884,7 +880,8 @@ void WorkspaceTabBar::paintEvent(
          * documents have simply been closed.
          */
         if (count() == 0
-            && (m_externalDragActive
+            && (m_emptyDropTargetActive
+                || m_externalDragActive
                 || m_workspaceDragOver)) {
             QPainter painter(this);
 
@@ -1214,6 +1211,14 @@ QSize WorkspaceTabBar::sizeHint()
         QTabBar::sizeHint();
 
     if (count() == 0) {
+        if (!m_emptyDropTargetActive) {
+            result.setHeight(
+                0
+                );
+
+            return result;
+        }
+
         result.setWidth(
             qMax(
                 180,
@@ -1239,6 +1244,14 @@ QSize WorkspaceTabBar::minimumSizeHint()
         QTabBar::minimumSizeHint();
 
     if (count() == 0) {
+        if (!m_emptyDropTargetActive) {
+            result.setHeight(
+                0
+                );
+
+            return result;
+        }
+
         result.setWidth(
             qMax(
                 180,
@@ -1336,4 +1349,25 @@ void WorkspaceTabBar::
         );
 
     update();
+}
+
+void WorkspaceTabBar::
+    setEmptyDropTargetActive(
+        bool active
+        )
+{
+    if (m_emptyDropTargetActive
+        == active) {
+        return;
+    }
+
+    m_emptyDropTargetActive =
+        active;
+
+    updateGeometry();
+    update();
+
+    if (parentWidget() != nullptr) {
+        parentWidget()->updateGeometry();
+    }
 }

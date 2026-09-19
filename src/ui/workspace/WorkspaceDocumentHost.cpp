@@ -1,9 +1,12 @@
 #include "WorkspaceDocumentHost.h"
 
 #include <QApplication>
+#include <QLabel>
 #include <QMenu>
 #include <QPoint>
+#include <QResizeEvent>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QCursor>
@@ -40,6 +43,63 @@ public:
             tabBar()
             );
     }
+
+    void setEmptyStateWidget(
+        QWidget *widget
+        )
+    {
+        m_emptyStateWidget =
+            widget;
+
+        if (m_emptyStateWidget == nullptr) {
+            return;
+        }
+
+        m_emptyStateWidget->setParent(
+            this
+            );
+
+        updateEmptyStateGeometry();
+    }
+
+    void updateEmptyStateGeometry()
+    {
+        if (m_emptyStateWidget == nullptr) {
+            return;
+        }
+
+        /*
+         * The empty state occupies the complete
+         * document surface. The tab bar is explicitly
+         * raised above it whenever the empty host is
+         * acting as a workspace drop target.
+         */
+        m_emptyStateWidget->setGeometry(
+            rect()
+            );
+
+        m_emptyStateWidget->raise();
+
+        if (tabBar() != nullptr) {
+            tabBar()->raise();
+        }
+    }
+
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override
+    {
+        QTabWidget::resizeEvent(
+            event
+            );
+
+        updateEmptyStateGeometry();
+    }
+
+private:
+    QWidget *m_emptyStateWidget =
+        nullptr;
 };
 
 WorkspaceDocumentHost::WorkspaceDocumentHost(
@@ -66,8 +126,20 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         0
         );
 
+    /*
+     * The tab widget always owns the complete host
+     * surface. The empty-state presentation is
+     * overlaid inside it rather than occupying a
+     * separate layout row.
+     *
+     * This allows an empty tab bar to temporarily
+     * expand at the top during a workspace-document
+     * drag without moving the drop target into the
+     * middle of the window.
+     */
     layout->addWidget(
-        m_tabs
+        m_tabs,
+        1
         );
 
     m_tabs->setTabsClosable(
@@ -84,6 +156,99 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
 
     m_tabs->setUsesScrollButtons(
         true
+        );
+
+    /*
+     * Empty-workspace presentation.
+     */
+    m_emptyStateWidget =
+        new QWidget(m_tabs);
+
+    auto *emptyStateLayout =
+        new QVBoxLayout(
+            m_emptyStateWidget
+            );
+
+    emptyStateLayout->setContentsMargins(
+        32,
+        32,
+        32,
+        32
+        );
+
+    emptyStateLayout->addStretch(
+        1
+        );
+
+    auto *titleLabel =
+        new QLabel(
+            tr("TraceScope"),
+            m_emptyStateWidget
+            );
+
+    QFont titleFont =
+        titleLabel->font();
+
+    titleFont.setBold(
+        true
+        );
+
+    titleFont.setPointSizeF(
+        titleFont.pointSizeF() * 1.5
+        );
+
+    titleLabel->setFont(
+        titleFont
+        );
+
+    titleLabel->setAlignment(
+        Qt::AlignHCenter
+        );
+
+    emptyStateLayout->addWidget(
+        titleLabel
+        );
+
+    auto *instructionLabel =
+        new QLabel(
+            tr(
+                "Open a log file, Investigation Snapshot, "
+                "or Investigation Workspace to get started."
+                ),
+            m_emptyStateWidget
+            );
+
+    instructionLabel->setAlignment(
+        Qt::AlignHCenter
+        );
+
+    instructionLabel->setWordWrap(
+        true
+        );
+
+    QSizePolicy instructionPolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Minimum
+        );
+
+    instructionPolicy.setHeightForWidth(
+        true
+        );
+
+    instructionLabel->setSizePolicy(
+        instructionPolicy
+        );
+
+    emptyStateLayout->addWidget(
+        instructionLabel
+        );
+
+    emptyStateLayout->addStretch(
+        1
+        );
+
+    m_tabs->setEmptyStateWidget(
+        m_emptyStateWidget
         );
 
     WorkspaceTabBar *tabBar =
@@ -231,6 +396,11 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         this,
         [this]() {
             m_rootHost
+                ->setWorkspaceDocumentDragActive(
+                    false
+                    );
+
+            m_rootHost
                 ->cleanupEmptyDetachedHost(
                     this
                     );
@@ -293,6 +463,8 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
                     );
         }
         );
+
+    updateEmptyStatePresentation();
 }
 
 int WorkspaceDocumentHost::documentCount()
@@ -596,6 +768,8 @@ WorkspaceDocument *
         index
         );
 
+    updateEmptyStatePresentation();
+
     document->hide();
 
     document->setParent(
@@ -679,6 +853,8 @@ bool WorkspaceDocumentHost::
     if (insertedIndex < 0) {
         return false;
     }
+
+    updateEmptyStatePresentation();
 
     m_tabs->tabBar()
         ->setTabData(
@@ -1827,6 +2003,10 @@ void WorkspaceDocumentHost::
         .sourceIndex =
         sourceIndex;
 
+    root->setWorkspaceDocumentDragActive(
+        true
+        );
+
     /*
      * Do NOT clean up an empty detached source
      * window yet. Its tab bar is still executing
@@ -1919,4 +2099,62 @@ bool WorkspaceDocumentHost::
         );
 
     return true;
+}
+
+void WorkspaceDocumentHost::
+    setWorkspaceDocumentDragActive(
+        bool active
+        )
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    root->m_workspaceDocumentDragActive =
+        active;
+
+    root->updateEmptyStatePresentation();
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : std::as_const(
+             root->m_detachedWindows
+             )) {
+        if (window == nullptr
+            || window->documentHost()
+                   == nullptr) {
+            continue;
+        }
+
+        window->documentHost()
+            ->updateEmptyStatePresentation();
+    }
+}
+
+void WorkspaceDocumentHost::
+    updateEmptyStatePresentation()
+{
+    if (m_tabs == nullptr) {
+        return;
+    }
+
+    const bool empty =
+        m_tabs->count() == 0;
+
+    if (m_emptyStateWidget != nullptr) {
+        m_emptyStateWidget->setVisible(
+            empty
+            );
+    }
+
+    WorkspaceTabBar *tabBar =
+        m_tabs->workspaceTabBar();
+
+    if (tabBar != nullptr) {
+        tabBar->setEmptyDropTargetActive(
+            empty
+            && m_rootHost
+                   ->m_workspaceDocumentDragActive
+            );
+    }
+
+    m_tabs->updateEmptyStateGeometry();
 }
