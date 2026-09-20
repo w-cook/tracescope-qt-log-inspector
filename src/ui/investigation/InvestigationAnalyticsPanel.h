@@ -55,6 +55,8 @@ signals:
         const QDateTime &endTimestamp
         );
 
+    void burstConfigurationChanged();
+
 private:
     void restoreSelectedTab();
 

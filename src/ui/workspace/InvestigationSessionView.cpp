@@ -502,6 +502,15 @@ InvestigationSessionView::
         drillDownBurst
         );
 
+    connect(
+        m_analyticsPanel,
+        &InvestigationAnalyticsPanel::
+        burstConfigurationChanged,
+        this,
+        &InvestigationSessionView::
+        workspaceContentChanged
+        );
+
     /*
      * ---------------------------------------------------------
      * Timeline
@@ -1289,8 +1298,16 @@ QWidget *InvestigationSessionView::
         &LiveFollowTabControl::
         liveSessionUpdated,
         this,
-        &InvestigationSessionView::
-        scheduleLiveRefresh
+        [this]() {
+            /*
+             * Newly admitted live evidence changes the
+             * investigation snapshot that a workspace save
+             * would persist.
+             */
+            emit workspaceContentChanged();
+
+            scheduleLiveRefresh();
+        }
         );
 
     return control;
@@ -1344,6 +1361,8 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshNavigationState();
+
+    emit workspaceContentChanged();
 }
 
 void InvestigationSessionView::
@@ -1435,12 +1454,25 @@ void InvestigationSessionView::
         m_eventDetailPanel
             ->selectedFindingStatus();
 
-    m_session
-        ->investigationStateStore()
-        ->setFindingStatus(
+    InvestigationStateStore *stateStore =
+        m_session
+            ->investigationStateStore();
+
+    const FindingStatus previousStatus =
+        stateStore
+            ->stateForRecord(
+                record->recordId
+                )
+            .findingStatus;
+
+    if (previousStatus != status) {
+        stateStore->setFindingStatus(
             record->recordId,
             status
             );
+
+        emit workspaceContentChanged();
+    }
 
     syncInvestigationStatePresentation();
 
@@ -1485,6 +1517,8 @@ void InvestigationSessionView::
         record->recordId,
         !currentlyBookmarked
         );
+
+    emit workspaceContentChanged();
 
     syncInvestigationStatePresentation();
 
@@ -1822,7 +1856,7 @@ void InvestigationSessionView::
             dialog,
             noteEdit,
             recordId
-    ]() {
+        ]() {
             if (m_session == nullptr) {
                 dialog->close();
 
@@ -1833,14 +1867,30 @@ void InvestigationSessionView::
                 noteEdit
                     ->toPlainText();
 
-            m_session
-                ->investigationStateStore()
-                ->setNote(
+            InvestigationStateStore *stateStore =
+                m_session
+                    ->investigationStateStore();
+
+            const QString normalizedNote =
+                note.trimmed().isEmpty()
+                    ? QString()
+                    : note;
+
+            const QString previousNote =
+                stateStore
+                    ->stateForRecord(
+                        recordId
+                        )
+                    .note;
+
+            if (previousNote != normalizedNote) {
+                stateStore->setNote(
                     recordId,
-                    note.trimmed().isEmpty()
-                        ? QString()
-                        : note
+                    normalizedNote
                     );
+
+                emit workspaceContentChanged();
+            }
 
             updateInvestigationStateControls();
             updateFindingsPanel();

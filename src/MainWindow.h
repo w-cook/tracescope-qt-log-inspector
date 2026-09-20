@@ -111,6 +111,11 @@ private:
 
     QString currentWorkspacePath;
 
+    bool workspaceDirty = false;
+
+    bool workspaceMutationTrackingSuppressed =
+        false;
+
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
 
@@ -309,6 +314,12 @@ private:
     QString workspaceWindowTitle() const;
 
     void updateWorkspaceWindowTitles();
+
+    void setWorkspaceDirty(
+        bool dirty
+        );
+
+    void markWorkspaceDirty();
 
     void setFileOperationsEnabled(
         bool enabled

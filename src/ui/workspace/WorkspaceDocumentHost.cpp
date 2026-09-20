@@ -7,6 +7,7 @@
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QCursor>
@@ -497,6 +498,19 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         }
         );
 
+    connect(
+        tabBar,
+        &QTabBar::tabMoved,
+        this,
+        [this](
+            int,
+            int
+            ) {
+            emit m_rootHost
+                ->workspaceLayoutChanged();
+        }
+        );
+
     updateEmptyStatePresentation();
 }
 
@@ -826,11 +840,19 @@ bool WorkspaceDocumentHost::addDocument(
         return false;
     }
 
-    return insertLocalDocument(
-        document,
-        m_tabs->count(),
-        makeCurrent
-        );
+    const bool added =
+        insertLocalDocument(
+            document,
+            m_tabs->count(),
+            makeCurrent
+            );
+
+    if (added) {
+        emit m_rootHost
+            ->workspaceLayoutChanged();
+    }
+
+    return added;
 }
 
 WorkspaceDocument *
@@ -1100,6 +1122,11 @@ WorkspaceDocumentHost::removeDocument(
         host
         );
 
+    if (document != nullptr) {
+        emit root
+            ->workspaceLayoutChanged();
+    }
+
     return document;
 }
 
@@ -1217,6 +1244,9 @@ bool WorkspaceDocumentHost::transferDocument(
                 sourceHost
                 );
     }
+
+    emit m_rootHost
+        ->workspaceLayoutChanged();
 
     return true;
 }
@@ -1769,6 +1799,12 @@ void WorkspaceDocumentHost::
         return;
     }
 
+    /*
+     * The document has successfully moved between
+     * workspace tab groups.
+     */
+    emit root->workspaceLayoutChanged();
+
     pending.clear();
 
     if (sourceWasRoot
@@ -1864,6 +1900,9 @@ void WorkspaceDocumentHost::
 
         return;
     }
+
+    emit root
+        ->workspaceLayoutChanged();
 
     pending.clear();
 

@@ -132,6 +132,8 @@ signals:
         const QString &documentId
         );
 
+    void workspaceLayoutChanged();
+
 private slots:
     void updateDocumentTitle(
         const QString &title

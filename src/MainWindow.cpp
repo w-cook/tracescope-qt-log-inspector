@@ -525,6 +525,15 @@ MainWindow::MainWindow(QWidget *parent)
         );
 
     connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        workspaceLayoutChanged,
+        this,
+        &MainWindow::
+        markWorkspaceDirty
+        );
+
+    connect(
         workspace,
         &InvestigationWorkspace::sessionAdded,
         this,
@@ -559,6 +568,15 @@ MainWindow::MainWindow(QWidget *parent)
                 updateReloadActionState
                 );
 
+            connect(
+                sessionView,
+                &InvestigationSessionView::
+                workspaceContentChanged,
+                this,
+                &MainWindow::
+                markWorkspaceDirty
+                );
+
             /*
              * InvestigationWorkspace::addSession()
              * emits sessionAdded before it activates
@@ -575,7 +593,18 @@ MainWindow::MainWindow(QWidget *parent)
                          false
                          )) {
                 delete sessionView;
+                return;
             }
+
+            /*
+             * Adding an investigation changes the substantive
+             * workspace contents.
+             *
+             * During .tsw restoration markWorkspaceDirty()
+             * is suppressed by the workspace-restoration guard,
+             * so restored sessions still begin clean.
+             */
+            markWorkspaceDirty();
         }
         );
 
@@ -707,6 +736,8 @@ MainWindow::MainWindow(QWidget *parent)
             if (sessionView != nullptr) {
                 sessionView->refreshSession();
             }
+
+            markWorkspaceDirty();
         }
         );
 
@@ -1457,6 +1488,11 @@ QString MainWindow::workspaceWindowTitle()
         }
     }
 
+    if (workspaceDirty) {
+        workspaceName +=
+            QStringLiteral("*");
+    }
+
     return tr(
         "TraceScope — %1"
         )
@@ -1488,6 +1524,32 @@ void MainWindow::
                 );
         }
     }
+}
+
+void MainWindow::setWorkspaceDirty(
+    bool dirty
+    )
+{
+    workspaceDirty =
+        dirty;
+
+    /*
+     * Always refresh titles, even when the dirty
+     * value itself did not change. The workspace path
+     * may have changed because of Save As or Open.
+     */
+    updateWorkspaceWindowTitles();
+}
+
+void MainWindow::markWorkspaceDirty()
+{
+    if (workspaceMutationTrackingSuppressed) {
+        return;
+    }
+
+    setWorkspaceDirty(
+        true
+        );
 }
 
 int MainWindow::addSessionToWorkspace(
@@ -6223,7 +6285,9 @@ bool MainWindow::saveWorkspaceToFile(
         QFileInfo(filePath)
             .absoluteFilePath();
 
-    updateWorkspaceWindowTitles();
+    setWorkspaceDirty(
+        false
+        );
 
     recentItemsStore.addRecentWorkspace(
         currentWorkspacePath
@@ -7478,6 +7542,12 @@ void MainWindow::installOpenedWorkspace(
         return;
     }
 
+    const bool previousMutationSuppression =
+        workspaceMutationTrackingSuppressed;
+
+    workspaceMutationTrackingSuppressed =
+        true;
+
     /*
      * Every recoverable source has now completed its
      * import. This is the first point where replacing
@@ -7658,7 +7728,12 @@ void MainWindow::installOpenedWorkspace(
     currentWorkspacePath =
         operation->workspacePath;
 
-    updateWorkspaceWindowTitles();
+    workspaceMutationTrackingSuppressed =
+        previousMutationSuppression;
+
+    setWorkspaceDirty(
+        false
+        );
 
     recentItemsStore.addRecentWorkspace(
         currentWorkspacePath
@@ -8164,6 +8239,8 @@ void MainWindow::
                  )) {
         resumeAfterFailure();
 
+        markWorkspaceDirty();
+
         QMessageBox::critical(
             this,
             tr("Preserve Snapshot Failed"),
@@ -8184,6 +8261,23 @@ void MainWindow::
      * external-source dependency.
      */
     updateReloadActionState();
+
+    /*
+     * When a saved workspace owns the snapshot, the
+     * SnapshotBacked transition was already persisted
+     * atomically by saveWorkspaceToFile().
+     *
+     * For an unsaved workspace using a standalone
+     * snapshot, the runtime backing change still needs
+     * a future workspace save.
+     */
+    if (!currentWorkspacePath.isEmpty()) {
+        setWorkspaceDirty(
+            false
+            );
+    } else {
+        markWorkspaceDirty();
+    }
 }
 
 void MainWindow::populateRecentFilesMenu(

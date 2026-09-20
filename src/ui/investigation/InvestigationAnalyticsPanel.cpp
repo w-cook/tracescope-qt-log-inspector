@@ -2286,7 +2286,24 @@ void InvestigationAnalyticsPanel::
     newSettings.errorCriticalThreshold =
         errorCriticalSpin->value();
 
-    if (manualRadio->isChecked()) {
+    const InvestigationBurstTimingMode
+        previousTimingMode =
+        automatic
+            ? InvestigationBurstTimingMode::
+            Auto
+            : InvestigationBurstTimingMode::
+            Manual;
+
+    InvestigationBurstTimingMode newTimingMode =
+        manualRadio->isChecked()
+            ? InvestigationBurstTimingMode::
+            Manual
+            : InvestigationBurstTimingMode::
+            Auto;
+
+    if (newTimingMode
+        == InvestigationBurstTimingMode::
+        Manual) {
         newSettings.windowMilliseconds =
             std::max<qint64>(
                 1,
@@ -2308,25 +2325,35 @@ void InvestigationAnalyticsPanel::
                         )
                     )
                 );
-
-        m_session->setBurstTimingMode(
-            InvestigationBurstTimingMode::
-            Manual
-            );
-    } else {
-        /*
-         * Preserve the last manual timing values.
-         * Auto replaces them only for analysis.
-         */
-        m_session->setBurstTimingMode(
-            InvestigationBurstTimingMode::
-            Auto
-            );
     }
+
+    /*
+     * Avoid manufacturing an unsaved change when the
+     * user accepts the dialog without modifying anything.
+     */
+    const bool configurationChanged =
+        previousTimingMode
+            != newTimingMode
+        || currentSettings.windowMilliseconds
+               != newSettings.windowMilliseconds
+        || currentSettings.elevatedEventThreshold
+               != newSettings.elevatedEventThreshold
+        || currentSettings.errorCriticalThreshold
+               != newSettings.errorCriticalThreshold
+        || currentSettings.mergeGapMilliseconds
+               != newSettings.mergeGapMilliseconds;
+
+    m_session->setBurstTimingMode(
+        newTimingMode
+        );
 
     m_session->setBurstDetectionSettings(
         newSettings
         );
+
+    if (configurationChanged) {
+        emit burstConfigurationChanged();
+    }
 
     updateBursts();
 }

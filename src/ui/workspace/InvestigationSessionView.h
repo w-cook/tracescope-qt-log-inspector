@@ -72,6 +72,15 @@ public:
 signals:
     void liveFollowStateChanged();
 
+    /*
+     * Emitted when substantive investigation state
+     * captured by workspace persistence changes.
+     *
+     * Pure navigation/scrolling is intentionally not
+     * treated as an unsaved-workspace edit.
+     */
+    void workspaceContentChanged();
+
 protected:
     void resizeEvent(
         QResizeEvent *event
