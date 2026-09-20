@@ -108,6 +108,7 @@ private:
     QAction *saveWorkspaceAction = nullptr;
     QAction *saveWorkspaceAsAction = nullptr;
     QAction *openWorkspaceAction = nullptr;
+    QAction *newWorkspaceAction = nullptr;
 
     QString currentWorkspacePath;
 
@@ -265,8 +266,8 @@ private:
         nullptr
         );
 
-    void saveWorkspace();
-    void saveWorkspaceAs();
+    bool saveWorkspace();
+    bool saveWorkspaceAs();
 
     struct WorkspaceOpenOperation;
 
@@ -315,6 +316,8 @@ private:
 
     void updateWorkspaceWindowTitles();
 
+    QWidget *workspaceDialogParent() const;
+
     void setWorkspaceDirty(
         bool dirty
         );
@@ -337,4 +340,10 @@ private:
     void requestCloseDocumentsInHost(
         WorkspaceDocumentHost *host
         );
+
+    bool confirmWorkspaceReplacement();
+
+    void newWorkspace();
+
+    void requestApplicationClose();
 };

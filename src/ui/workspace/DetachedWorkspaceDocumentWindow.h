@@ -57,6 +57,8 @@ signals:
         WorkspaceDocumentHost *targetHost
         );
 
+    void newWorkspaceRequested();
+
     /*
      * Workspace open/save operations remain global
      * because one .tsw workspace spans every visible
@@ -93,6 +95,8 @@ signals:
         DetachedWorkspaceDocumentWindow *window
         );
 
+    void applicationCloseRequested();
+
 protected:
     void closeEvent(
         QCloseEvent *event
@@ -117,6 +121,9 @@ private:
         nullptr;
 
     QAction *m_reloadAction =
+        nullptr;
+
+    QAction *m_newWorkspaceAction =
         nullptr;
 
     QAction *m_saveWorkspaceAction =

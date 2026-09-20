@@ -52,6 +52,35 @@ void DetachedWorkspaceDocumentWindow::
             tr("&File")
             );
 
+    m_newWorkspaceAction =
+        new QAction(
+            tr("&New Workspace"),
+            this
+            );
+
+    m_newWorkspaceAction->setShortcut(
+        QKeySequence::New
+        );
+
+    m_newWorkspaceAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_newWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit newWorkspaceRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_newWorkspaceAction
+        );
+
+    fileMenu->addSeparator();
+
     m_openAction =
         new QAction(
             tr("&Open Log File..."),
@@ -411,6 +440,12 @@ void DetachedWorkspaceDocumentWindow::
         bool enabled
         )
 {
+    if (m_newWorkspaceAction != nullptr) {
+        m_newWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
     if (m_openAction != nullptr) {
         m_openAction->setEnabled(
             enabled
@@ -497,9 +532,14 @@ void DetachedWorkspaceDocumentWindow::
                 ->hasOtherVisibleWorkspaceWindow(
                     this
                     )) {
-        QMainWindow::closeEvent(
-            event
-            );
+        /*
+         * The root coordinator may currently be hidden.
+         * Route final application closure through it so
+         * the shared dirty-workspace protection runs.
+         */
+        event->ignore();
+
+        emit applicationCloseRequested();
 
         return;
     }

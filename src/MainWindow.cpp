@@ -924,6 +924,35 @@ void MainWindow::createMenus()
 {
     auto *fileMenu = menuBar()->addMenu("&File");
 
+    newWorkspaceAction =
+        new QAction(
+            tr("&New Workspace"),
+            this
+            );
+
+    newWorkspaceAction->setShortcut(
+        QKeySequence::New
+        );
+
+    newWorkspaceAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        newWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            newWorkspace();
+        }
+        );
+
+    fileMenu->addAction(
+        newWorkspaceAction
+        );
+
+    fileMenu->addSeparator();
+
     openAction =
         new QAction(
             "&Open Log File...",
@@ -1312,6 +1341,16 @@ void MainWindow::configureDetachedWindow(
     connect(
         window,
         &DetachedWorkspaceDocumentWindow::
+        newWorkspaceRequested,
+        this,
+        [this]() {
+            newWorkspace();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
         openLogRequested,
         this,
         [this](
@@ -1442,6 +1481,15 @@ void MainWindow::configureDetachedWindow(
         }
         );
 
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        applicationCloseRequested,
+        this,
+        &MainWindow::
+        requestApplicationClose
+        );
+
     const bool fileOperationAvailable =
         importWatcher == nullptr
         && !workspaceOpenInProgress
@@ -1524,6 +1572,46 @@ void MainWindow::
                 );
         }
     }
+}
+
+QWidget *MainWindow::
+    workspaceDialogParent() const
+{
+    QWidget *activeWindow =
+        QApplication::activeWindow();
+
+    /*
+     * Prefer the currently active TraceScope peer.
+     * MainWindow remains the internal coordinator,
+     * but dialogs should visually belong to the
+     * window from which the user invoked the command.
+     */
+    if (activeWindow == this) {
+        return const_cast<MainWindow *>(
+            this
+            );
+    }
+
+    if (workspaceDocumentHost != nullptr) {
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : workspaceDocumentHost
+                  ->detachedWindows()
+            ) {
+            if (window != nullptr
+                && activeWindow == window) {
+                return window;
+            }
+        }
+    }
+
+    /*
+     * Fall back to the coordinator when no visible
+     * workspace peer currently owns activation.
+     */
+    return const_cast<MainWindow *>(
+        this
+        );
 }
 
 void MainWindow::setWorkspaceDirty(
@@ -2810,10 +2898,13 @@ void MainWindow::closeEvent(
 
     /*
      * This is the final visible TraceScope window.
-     * Dirty-workspace protection will hook into this
-     * path later in Phase 16.
+     * Protect the complete workspace before allowing
+     * application shutdown.
      */
-    clearCurrentWorkspace();
+    if (!confirmWorkspaceReplacement()) {
+        event->ignore();
+        return;
+    }
 
     QMainWindow::closeEvent(
         event
@@ -6298,19 +6389,18 @@ bool MainWindow::saveWorkspaceToFile(
     return true;
 }
 
-void MainWindow::saveWorkspace()
+bool MainWindow::saveWorkspace()
 {
     if (currentWorkspacePath.isEmpty()) {
-        saveWorkspaceAs();
-        return;
+        return saveWorkspaceAs();
     }
 
-    saveWorkspaceToFile(
+    return saveWorkspaceToFile(
         currentWorkspacePath
         );
 }
 
-void MainWindow::saveWorkspaceAs()
+bool MainWindow::saveWorkspaceAs()
 {
     QString initialPath =
         currentWorkspacePath;
@@ -6324,7 +6414,7 @@ void MainWindow::saveWorkspaceAs()
 
     const QString filePath =
         QFileDialog::getSaveFileName(
-            this,
+            workspaceDialogParent(),
             tr("Save TraceScope Workspace"),
             initialPath,
             tr(
@@ -6335,10 +6425,10 @@ void MainWindow::saveWorkspaceAs()
             );
 
     if (filePath.isEmpty()) {
-        return;
+        return false;
     }
 
-    saveWorkspaceToFile(
+    return saveWorkspaceToFile(
         filePath
         );
 }
@@ -6812,7 +6902,7 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
     if (filePath.isEmpty()) {
         filePath =
             QFileDialog::getOpenFileName(
-                this,
+                workspaceDialogParent(),
                 tr("Open TraceScope Workspace"),
                 currentWorkspacePath,
                 tr(
@@ -6887,34 +6977,8 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
             result.workspace.value()
             );
 
-    /*
-     * Don't silently destroy the investigation the
-     * user is currently working in.
-     */
-    if (workspaceDocumentHost != nullptr
-        && !workspaceDocumentHost
-                ->documents()
-                .isEmpty()) {
-        const QMessageBox::StandardButton choice =
-            QMessageBox::question(
-                this,
-                tr("Replace Current Workspace"),
-                tr(
-                    "Opening this workspace will "
-                    "replace the workspace that is "
-                    "currently open.\n\n"
-                    "Save the current workspace first "
-                    "if you want to keep any changes.\n\n"
-                    "Continue?"
-                    ),
-                QMessageBox::Yes
-                    | QMessageBox::Cancel,
-                QMessageBox::Cancel
-                );
-
-        if (choice != QMessageBox::Yes) {
-            return;
-        }
+    if (!confirmWorkspaceReplacement()) {
+        return;
     }
 
     int skippedSessionCount = 0;
@@ -8411,6 +8475,12 @@ void MainWindow::setFileOperationsEnabled(
     bool enabled
     )
 {
+    if (newWorkspaceAction != nullptr) {
+        newWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
     if (openAction != nullptr) {
         openAction->setEnabled(
             enabled
@@ -8493,4 +8563,135 @@ void MainWindow::
                 documentId
                 );
     }
+}
+
+bool MainWindow::
+    confirmWorkspaceReplacement()
+{
+    if (!workspaceDirty) {
+        return true;
+    }
+
+    QMessageBox prompt(
+        workspaceDialogParent()
+        );
+
+    prompt.setIcon(
+        QMessageBox::Warning
+        );
+
+    prompt.setWindowTitle(
+        tr("Unsaved Workspace Changes")
+        );
+
+    prompt.setText(
+        tr(
+            "The current workspace has unsaved changes."
+            )
+        );
+
+    prompt.setInformativeText(
+        tr(
+            "Do you want to save your changes before continuing?"
+            )
+        );
+
+    prompt.setStandardButtons(
+        QMessageBox::Save
+        | QMessageBox::Discard
+        | QMessageBox::Cancel
+        );
+
+    prompt.setDefaultButton(
+        QMessageBox::Save
+        );
+
+    const QMessageBox::StandardButton choice =
+        static_cast<
+            QMessageBox::StandardButton>(
+            prompt.exec()
+            );
+
+    if (choice == QMessageBox::Cancel) {
+        return false;
+    }
+
+    if (choice == QMessageBox::Discard) {
+        return true;
+    }
+
+    if (choice == QMessageBox::Save) {
+        /*
+         * A cancelled Save As dialog or failed save
+         * must cancel the destructive operation too.
+         */
+        return saveWorkspace();
+    }
+
+    return false;
+}
+
+void MainWindow::newWorkspace()
+{
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress
+        || snapshotOpenInProgress
+        || sessionReloadInProgress) {
+        QMessageBox::information(
+            this,
+            tr("File Operation In Progress"),
+            tr(
+                "TraceScope cannot create a new "
+                "workspace while another file "
+                "operation is in progress."
+                )
+            );
+
+        return;
+    }
+
+    if (!confirmWorkspaceReplacement()) {
+        return;
+    }
+
+    const bool previousMutationSuppression =
+        workspaceMutationTrackingSuppressed;
+
+    workspaceMutationTrackingSuppressed =
+        true;
+
+    clearCurrentWorkspace();
+
+    if (workspaceDocumentHost != nullptr) {
+        workspaceDocumentHost
+            ->resetWindowLayout();
+    }
+
+    currentWorkspacePath.clear();
+
+    workspaceMutationTrackingSuppressed =
+        previousMutationSuppression;
+
+    setWorkspaceDirty(
+        false
+        );
+
+    updateComparisonActionState();
+    updateReloadActionState();
+}
+
+void MainWindow::
+    requestApplicationClose()
+{
+    if (!confirmWorkspaceReplacement()) {
+        return;
+    }
+
+    /*
+     * The visible final window may be a peer while
+     * MainWindow itself is hidden. Exiting the event
+     * loop lets normal object destruction tear down
+     * the internal coordinator and all peer windows.
+     */
+    QApplication::quit();
 }
