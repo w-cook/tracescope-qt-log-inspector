@@ -395,8 +395,7 @@ void WorkspaceDocumentHostTests::
         );
 
     const auto windows =
-        host.findChildren<
-            DetachedWorkspaceDocumentWindow *>();
+        host.detachedWindows();
 
     QCOMPARE(
         windows.size(),
@@ -421,6 +420,22 @@ void WorkspaceDocumentHostTests::
 
         return;
     }
+
+    /*
+     * Workspace windows are native top-level peers.
+     * They must not regain QObject/QWidget ownership
+     * through the root workspace host, because that
+     * creates owner-window z-order behavior on Windows.
+     */
+    QCOMPARE(
+        window->parentWidget(),
+        nullptr
+        );
+
+    QCOMPARE(
+        window->parent(),
+        nullptr
+        );
 
     WorkspaceDocumentHost *detachedHost =
         window->documentHost();
@@ -563,8 +578,7 @@ void WorkspaceDocumentHostTests::
         );
 
     const auto windows =
-        host.findChildren<
-            DetachedWorkspaceDocumentWindow *>();
+        host.detachedWindows();
 
     QCOMPARE(
         windows.size(),
@@ -767,8 +781,7 @@ void WorkspaceDocumentHostTests::
         );
 
     const auto windows =
-        host.findChildren<
-            DetachedWorkspaceDocumentWindow *>();
+        host.detachedWindows();
 
     QCOMPARE(
         windows.size(),
@@ -991,8 +1004,7 @@ void WorkspaceDocumentHostTests::
     QCoreApplication::processEvents();
 
     const auto detachedWindows =
-        originalHost.findChildren<
-            DetachedWorkspaceDocumentWindow *>();
+        originalHost.detachedWindows();
 
     QCOMPARE(
         detachedWindows.size(),

@@ -18,6 +18,39 @@
 #include "WorkspaceDocument.h"
 #include "WorkspaceTabBar.h"
 
+WorkspaceDocumentHost::~WorkspaceDocumentHost()
+{
+    /*
+     * Secondary TraceScope windows are intentionally
+     * native top-level peers rather than QWidget
+     * children of the root window.
+     *
+     * The root host therefore owns their application
+     * lifetime explicitly even though it does not own
+     * them through QObject parenting.
+     */
+    if (m_rootHost != this) {
+        return;
+    }
+
+    const QVector<
+        DetachedWorkspaceDocumentWindow *>
+        windows =
+        m_detachedWindows;
+
+    m_detachedWindows.clear();
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : windows) {
+        if (window == nullptr) {
+            continue;
+        }
+
+        window->hide();
+        delete window;
+    }
+}
+
 class WorkspaceTabWidget
     : public QTabWidget
 {
@@ -1118,16 +1151,48 @@ WorkspaceDocumentHost::createDetachedWindow(
     WorkspaceDocumentHost *root =
         m_rootHost;
 
+    /*
+     * Visible TraceScope windows are native top-level
+     * peers. The root WorkspaceDocumentHost remains the
+     * logical workspace coordinator, but it must not be
+     * the QWidget owner of secondary windows.
+     *
+     * Giving a secondary top-level window the root
+     * window as its QWidget parent creates an OS-level
+     * owned-window relationship on Windows, which forces
+     * the secondary window to remain above its owner.
+     */
     auto *window =
         new DetachedWorkspaceDocumentWindow(
             root,
-            root
+            nullptr
             );
 
     root->m_detachedWindows
         .push_back(
             window
             );
+
+    /*
+     * Secondary windows no longer have QObject/QWidget
+     * ownership through the root window, so keep the
+     * root's non-owning window registry synchronized
+     * explicitly.
+     */
+    connect(
+        window,
+        &QObject::destroyed,
+        root,
+        [
+            root,
+            window
+        ]() {
+            root->m_detachedWindows
+                .removeOne(
+                    window
+                    );
+        }
+        );
 
     /*
      * The root application coordinator can now wire

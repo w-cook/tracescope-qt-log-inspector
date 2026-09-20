@@ -22,6 +22,8 @@ public:
         WorkspaceDocumentHost *rootHost = nullptr
         );
 
+    ~WorkspaceDocumentHost() override;
+
     /*
      * These describe this particular tab group.
      */
