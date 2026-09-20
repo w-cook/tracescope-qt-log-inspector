@@ -519,9 +519,13 @@ MainWindow::MainWindow(QWidget *parent)
             InvestigationSession *session =
                 workspace->sessionAt(index);
 
+            WorkspaceDocumentHost *targetHost =
+                sessionDocumentTargetHost != nullptr
+                    ? sessionDocumentTargetHost
+                    : workspaceDocumentHost;
+
             if (session == nullptr
-                || workspaceDocumentHost
-                       == nullptr) {
+                || targetHost == nullptr) {
                 return;
             }
 
@@ -547,10 +551,10 @@ MainWindow::MainWindow(QWidget *parent)
              * selection get ahead of workspace state.
              */
             const QSignalBlocker blocker(
-                workspaceDocumentHost
+                targetHost
                 );
 
-            if (!workspaceDocumentHost
+            if (!targetHost
                      ->addDocument(
                          sessionView,
                          false
@@ -1179,6 +1183,42 @@ void MainWindow::buildLayout()
         );
 }
 
+int MainWindow::addSessionToWorkspace(
+    std::unique_ptr<InvestigationSession> session,
+    WorkspaceDocumentHost *targetHost
+    )
+{
+    if (workspace == nullptr
+        || !session) {
+        return -1;
+    }
+
+    /*
+     * addSession() emits sessionAdded synchronously.
+     * Set the desired presentation host only for the
+     * duration of that operation, then restore the
+     * previous value so workspace restoration and any
+     * future nested use remain deterministic.
+     */
+    WorkspaceDocumentHost *previousTarget =
+        sessionDocumentTargetHost;
+
+    sessionDocumentTargetHost =
+        targetHost != nullptr
+            ? targetHost
+            : workspaceDocumentHost;
+
+    const int sessionIndex =
+        workspace->addSession(
+            std::move(session)
+            );
+
+    sessionDocumentTargetHost =
+        previousTarget;
+
+    return sessionIndex;
+}
+
 void MainWindow::openLogFile(const QString &initialFilePath)
 {
     if (importWatcher != nullptr
@@ -1550,7 +1590,7 @@ void MainWindow::openInvestigationSnapshot(
                     ->importedRecordCount()
                 == 0;
 
-            workspace->addSession(
+            addSessionToWorkspace(
                 std::move(
                     restoration.session
                     )
@@ -2227,7 +2267,7 @@ void MainWindow::completeLogFileImport(
             initialLiveFollowByteOffset
             );
 
-        workspace->addSession(
+        addSessionToWorkspace(
             std::move(session)
             );
     } else {
@@ -7202,7 +7242,7 @@ void MainWindow::installOpenedWorkspace(
         const QString sessionId =
             session->id();
 
-        workspace->addSession(
+        addSessionToWorkspace(
             std::move(
                 session
                 )

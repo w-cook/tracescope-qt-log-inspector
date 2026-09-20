@@ -86,6 +86,18 @@ private:
     WorkspaceDocumentHost *workspaceDocumentHost =
         nullptr;
 
+    /*
+     * InvestigationWorkspace::addSession() emits
+     * sessionAdded synchronously before activating the
+     * new session. This temporary target tells the
+     * sessionAdded handler which document host should
+     * receive the new InvestigationSessionView.
+     *
+     * nullptr means the root document host.
+     */
+    WorkspaceDocumentHost *sessionDocumentTargetHost =
+        nullptr;
+
     QAction *openAction = nullptr;
     QAction *openSnapshotAction = nullptr;
     QAction *saveSnapshotAction = nullptr;
@@ -106,6 +118,10 @@ private:
 
     void buildLayout();
     void createMenus();
+    int addSessionToWorkspace(
+        std::unique_ptr<InvestigationSession> session,
+        WorkspaceDocumentHost *targetHost = nullptr
+        );
     void openLogFile(
         const QString &initialFilePath =
         QString()
