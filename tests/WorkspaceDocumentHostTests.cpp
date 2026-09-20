@@ -442,7 +442,8 @@ void WorkspaceDocumentHostTests::
 
     if (detachedHost == nullptr) {
         QFAIL(
-            "Detached workspace window had no document host."
+            "Detached workspace window had no "
+            "document host."
             );
 
         return;
@@ -500,6 +501,15 @@ void WorkspaceDocumentHostTests::
     QCOMPARE(
         redockedSpy.count(),
         1
+        );
+
+    /*
+     * Returning the final document to the root group
+     * makes the now-empty peer window redundant.
+     */
+    QCOMPARE(
+        host.detachedWindows().size(),
+        0
         );
 }
 
@@ -774,6 +784,30 @@ void WorkspaceDocumentHostTests::
             )
         );
 
+    /*
+     * Keep an independent document in the root window.
+     *
+     * This ensures the detached window is not the final
+     * visible TraceScope window when its close button is
+     * exercised. Closing it should therefore request
+     * closure of only the documents in that window.
+     */
+    auto *rootDocument =
+        new WorkspaceDocument(
+            QStringLiteral("root-session"),
+            QStringLiteral("Root Session")
+            );
+
+    QVERIFY(
+        host.addDocument(
+            rootDocument
+            )
+        );
+
+    host.show();
+
+    QCoreApplication::processEvents();
+
     QVERIFY(
         host.detachDocument(
             first->documentId()
@@ -812,7 +846,8 @@ void WorkspaceDocumentHostTests::
 
     if (detachedHost == nullptr) {
         QFAIL(
-            "Detached workspace window had no document host."
+            "Detached workspace window had no "
+            "document host."
             );
 
         return;
@@ -828,6 +863,21 @@ void WorkspaceDocumentHostTests::
         detachedHost->addDocument(
             second
             )
+        );
+
+    QCOMPARE(
+        host.documentCount(),
+        1
+        );
+
+    QCOMPARE(
+        host.documentAt(0),
+        rootDocument
+        );
+
+    QCOMPARE(
+        detachedHost->documentCount(),
+        2
         );
 
     QSignalSpy closeSpy(
@@ -870,14 +920,26 @@ void WorkspaceDocumentHostTests::
         expectedIds
         );
 
+    QVERIFY(
+        !requestedIds.contains(
+            QStringLiteral("root-session")
+            )
+        );
+
     /*
-     * This test has no workspace owner responding
-     * to documentCloseRequested, so close intent
-     * alone must not remove or destroy anything.
+     * This test has no MainWindow/InvestigationWorkspace
+     * owner responding to documentCloseRequested.
+     * Close intent alone therefore must not remove or
+     * destroy the detached documents.
      */
     QCOMPARE(
         detachedHost->documentCount(),
         2
+        );
+
+    QCOMPARE(
+        host.documentCount(),
+        1
         );
 
     QCOMPARE(
@@ -892,6 +954,13 @@ void WorkspaceDocumentHostTests::
             QStringLiteral("session-2")
             ),
         second
+        );
+
+    QCOMPARE(
+        host.documentById(
+            QStringLiteral("root-session")
+            ),
+        rootDocument
         );
 }
 

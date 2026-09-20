@@ -318,4 +318,8 @@ private:
     void populateRecentWorkspacesMenu(
         QMenu *menu
         );
+
+    void requestCloseDocumentsInHost(
+        WorkspaceDocumentHost *host
+        );
 };

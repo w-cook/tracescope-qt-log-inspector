@@ -481,20 +481,43 @@ void DetachedWorkspaceDocumentWindow::
         QCloseEvent *event
         )
 {
+    /*
+     * Closing the final visible TraceScope window is
+     * application closure, regardless of whether the
+     * internal coordinator happens to be the hidden
+     * root MainWindow.
+     *
+     * QApplication's normal last-window behavior will
+     * terminate the event loop after this peer closes.
+     * Dirty-workspace interception will be added later
+     * at the shared application-close boundary.
+     */
     if (m_documentHost == nullptr
-        || m_documentHost
-                   ->documentCount()
-               == 0) {
-        event->accept();
+        || !m_documentHost
+                ->hasOtherVisibleWorkspaceWindow(
+                    this
+                    )) {
+        QMainWindow::closeEvent(
+            event
+            );
+
+        return;
+    }
+
+    if (m_documentHost
+            ->documentCount()
+        == 0) {
+        QMainWindow::closeEvent(
+            event
+            );
+
         return;
     }
 
     /*
-     * For now, closing a secondary window continues
-     * to request closure of the documents it contains.
-     * The final equal-window lifecycle pass will decide
-     * application-window versus document-group closure
-     * semantics.
+     * Other TraceScope windows remain. Closing this
+     * window therefore means closing only the documents
+     * in this tab group.
      */
     event->ignore();
 

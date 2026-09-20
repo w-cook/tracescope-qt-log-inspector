@@ -59,6 +59,12 @@ public:
     QVector<DetachedWorkspaceDocumentWindow *>
     detachedWindows() const;
 
+    bool hasOtherVisibleWorkspaceWindow(
+        const QWidget *excludedWindow
+        ) const;
+
+    void resetWindowLayout();
+
     bool isDocumentDetached(
         const QString &documentId
         ) const;
@@ -210,7 +216,7 @@ private:
         WorkspaceDocumentHost *host
         ) const;
 
-    void cleanupEmptyDetachedHost(
+    void cleanupEmptyHost(
         WorkspaceDocumentHost *host
         );
 

@@ -2661,12 +2661,33 @@ void MainWindow::closeEvent(
     QCloseEvent *event
     )
 {
+    if (workspaceDocumentHost != nullptr
+        && workspaceDocumentHost
+               ->hasOtherVisibleWorkspaceWindow(
+                   this
+                   )) {
+        /*
+         * This is only one of multiple visible
+         * TraceScope windows.
+         *
+         * Close this window's documents, then hide the
+         * internally rooted shell. The application and
+         * documents in other windows remain open.
+         */
+        requestCloseDocumentsInHost(
+            workspaceDocumentHost
+            );
+
+        hide();
+
+        event->ignore();
+        return;
+    }
+
     /*
-     * Detached workspace windows are independent
-     * top-level windows. Tear down the complete
-     * document workspace before accepting closure
-     * of the primary application window so no
-     * detached TraceScope windows remain alive.
+     * This is the final visible TraceScope window.
+     * Dirty-workspace protection will hook into this
+     * path later in Phase 16.
      */
     clearCurrentWorkspace();
 
@@ -7400,6 +7421,9 @@ void MainWindow::installOpenedWorkspace(
      */
     clearCurrentWorkspace();
 
+    workspaceDocumentHost
+        ->resetWindowLayout();
+
     for (int index = 0;
          index < operation->state
                      .sessions
@@ -8261,5 +8285,52 @@ void MainWindow::setFileOperationsEnabled(
                 enabled
                 );
         }
+    }
+}
+
+void MainWindow::
+    requestCloseDocumentsInHost(
+        WorkspaceDocumentHost *host
+        )
+{
+    if (host == nullptr
+        || workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    /*
+     * Closing one visible TraceScope window closes
+     * the documents in that window only.
+     *
+     * Snapshot IDs first because every close request
+     * may synchronously modify the tab group.
+     */
+    QVector<QString> documentIds;
+
+    documentIds.reserve(
+        host->documentCount()
+        );
+
+    for (int index = 0;
+         index < host->documentCount();
+         ++index) {
+        WorkspaceDocument *document =
+            host->documentAt(
+                index
+                );
+
+        if (document != nullptr) {
+            documentIds.append(
+                document->documentId()
+                );
+        }
+    }
+
+    for (const QString &documentId
+         : documentIds) {
+        emit workspaceDocumentHost
+            ->documentCloseRequested(
+                documentId
+                );
     }
 }

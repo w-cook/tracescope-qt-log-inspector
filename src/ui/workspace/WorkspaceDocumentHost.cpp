@@ -434,7 +434,7 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
                     );
 
             m_rootHost
-                ->cleanupEmptyDetachedHost(
+                ->cleanupEmptyHost(
                     this
                     );
         }
@@ -679,6 +679,82 @@ WorkspaceDocumentHost::detachedWindows() const
 {
     return m_rootHost
         ->m_detachedWindows;
+}
+
+bool WorkspaceDocumentHost::
+    hasOtherVisibleWorkspaceWindow(
+        const QWidget *excludedWindow
+        ) const
+{
+    const WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    QWidget *rootWindow =
+        root->window();
+
+    if (rootWindow != nullptr
+        && rootWindow != excludedWindow
+        && rootWindow->isVisible()) {
+        return true;
+    }
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : root->m_detachedWindows) {
+        if (window != nullptr
+            && window != excludedWindow
+            && window->isVisible()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void WorkspaceDocumentHost::
+    resetWindowLayout()
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    if (root != this) {
+        root->resetWindowLayout();
+        return;
+    }
+
+    /*
+     * Full workspace replacement deliberately discards
+     * the previous multi-window presentation.
+     *
+     * Ordinary document removal preserves one final
+     * empty window, but that rule must not leave an old
+     * empty peer behind while a different .tsw layout is
+     * being installed.
+     */
+    const QVector<
+        DetachedWorkspaceDocumentWindow *>
+        windows =
+        root->m_detachedWindows;
+
+    root->m_detachedWindows.clear();
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : windows) {
+        if (window == nullptr) {
+            continue;
+        }
+
+        window->hide();
+        window->deleteLater();
+    }
+
+    root->m_activeDocumentId.clear();
+
+    QWidget *rootWindow =
+        root->window();
+
+    if (rootWindow != nullptr) {
+        rootWindow->show();
+    }
 }
 
 WorkspaceDocumentHost *
@@ -1020,7 +1096,7 @@ WorkspaceDocumentHost::removeDocument(
             documentId
             );
 
-    root->cleanupEmptyDetachedHost(
+    root->cleanupEmptyHost(
         host
         );
 
@@ -1067,17 +1143,19 @@ bool WorkspaceDocumentHost::setCurrentDocument(
     root->m_activeDocumentId =
         documentId;
 
-    if (host != root) {
-        DetachedWorkspaceDocumentWindow *window =
-            root->windowForHost(
-                host
-                );
+    QWidget *targetWindow =
+        host == root
+            ? root->window()
+            : static_cast<QWidget *>(
+                  root->windowForHost(
+                      host
+                      )
+                  );
 
-        if (window != nullptr) {
-            window->show();
-            window->raise();
-            window->activateWindow();
-        }
+    if (targetWindow != nullptr) {
+        targetWindow->show();
+        targetWindow->raise();
+        targetWindow->activateWindow();
     }
 
     return true;
@@ -1135,7 +1213,7 @@ bool WorkspaceDocumentHost::transferDocument(
 
     if (cleanupEmptySource) {
         m_rootHost
-            ->cleanupEmptyDetachedHost(
+            ->cleanupEmptyHost(
                 sourceHost
                 );
     }
@@ -1547,7 +1625,7 @@ void WorkspaceDocumentHost::
         }
 
         if (targetHost->documentCount() <= 0) {
-            root->cleanupEmptyDetachedHost(
+            root->cleanupEmptyHost(
                 targetHost
                 );
 
@@ -1613,6 +1691,16 @@ void WorkspaceDocumentHost::
             state.activeDocumentId
             );
     }
+
+    /*
+     * A saved workspace may legitimately contain only
+     * secondary document groups. Once restoration has
+     * recreated those windows, eliminate an empty root
+     * presentation just as interactive tab movement would.
+     */
+    root->cleanupEmptyHost(
+        root
+        );
 }
 
 void WorkspaceDocumentHost::
@@ -1809,7 +1897,7 @@ WorkspaceDocumentHost::windowForHost(
 }
 
 void WorkspaceDocumentHost::
-    cleanupEmptyDetachedHost(
+    cleanupEmptyHost(
         WorkspaceDocumentHost *host
         )
 {
@@ -1817,8 +1905,31 @@ void WorkspaceDocumentHost::
         m_rootHost;
 
     if (host == nullptr
-        || host == root
         || host->documentCount() > 0) {
+        return;
+    }
+
+    /*
+     * The internal root window is not privileged in
+     * the visible UI.
+     *
+     * If its last document moved elsewhere, hide it
+     * once another workspace window exists. If it is
+     * the final window, leave it visible with the
+     * empty-workspace start state.
+     */
+    if (host == root) {
+        QWidget *rootWindow =
+            root->window();
+
+        if (rootWindow != nullptr
+            && root
+                   ->hasOtherVisibleWorkspaceWindow(
+                       rootWindow
+                       )) {
+            rootWindow->hide();
+        }
+
         return;
     }
 
@@ -1831,6 +1942,37 @@ void WorkspaceDocumentHost::
         return;
     }
 
+    /*
+     * A root host containing documents must itself
+     * remain a visible peer. This also covers the
+     * programmatic redock path where the root may
+     * previously have been hidden.
+     */
+    QWidget *rootWindow =
+        root->window();
+
+    if (root->documentCount() > 0
+        && rootWindow != nullptr
+        && !rootWindow->isVisible()) {
+        rootWindow->show();
+    }
+
+    /*
+     * Preserve the final visible window even when its
+     * last document closes. It becomes the ordinary
+     * TraceScope empty-workspace window.
+     */
+    if (!root
+             ->hasOtherVisibleWorkspaceWindow(
+                 window
+                 )) {
+        return;
+    }
+
+    /*
+     * Another usable TraceScope window remains, so
+     * this empty peer is redundant.
+     */
     root->m_detachedWindows
         .removeOne(
             window
