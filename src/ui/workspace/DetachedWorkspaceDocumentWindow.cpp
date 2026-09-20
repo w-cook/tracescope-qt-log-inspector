@@ -31,6 +31,10 @@ DetachedWorkspaceDocumentWindow::
         760
         );
 
+    setMinimumWidth(
+        720
+        );
+
     m_documentHost =
         new WorkspaceDocumentHost(
             this,

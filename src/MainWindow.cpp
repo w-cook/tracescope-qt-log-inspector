@@ -510,6 +510,10 @@ MainWindow::MainWindow(QWidget *parent)
         );
     resize(1100, 760);
 
+    setMinimumWidth(
+        720
+        );
+
     setAcceptDrops(true);
 
     createMenus();

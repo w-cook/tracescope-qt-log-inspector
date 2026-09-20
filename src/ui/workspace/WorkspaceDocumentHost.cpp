@@ -205,10 +205,10 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             );
 
     emptyStateLayout->setContentsMargins(
-        32,
-        32,
-        32,
-        32
+        20,
+        24,
+        20,
+        24
         );
 
     emptyStateLayout->addStretch(
@@ -272,6 +272,10 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
 
     instructionLabel->setSizePolicy(
         instructionPolicy
+        );
+
+    instructionLabel->setMinimumWidth(
+        0
         );
 
     emptyStateLayout->addWidget(
