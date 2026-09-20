@@ -306,6 +306,10 @@ private:
         DetachedWorkspaceDocumentWindow *window
         );
 
+    QString workspaceWindowTitle() const;
+
+    void updateWorkspaceWindowTitles();
+
     void setFileOperationsEnabled(
         bool enabled
         );

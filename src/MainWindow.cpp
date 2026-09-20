@@ -503,7 +503,11 @@ MainWindow::MainWindow(QWidget *parent)
     rotatedSourceSettingsStore(settings),
     workspace(new InvestigationWorkspace(this))
 {
-    setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
+    setWindowTitle(
+        tr(
+            "TraceScope — Unsaved Workspace"
+            )
+        );
     resize(1100, 760);
 
     setAcceptDrops(true);
@@ -1270,6 +1274,10 @@ void MainWindow::configureDetachedWindow(
         return;
     }
 
+    window->setWorkspaceWindowTitle(
+        workspaceWindowTitle()
+        );
+
     connect(
         window,
         &DetachedWorkspaceDocumentWindow::
@@ -1426,6 +1434,60 @@ void MainWindow::configureDetachedWindow(
      * these states again.
      */
     updateReloadActionState();
+}
+
+QString MainWindow::workspaceWindowTitle()
+    const
+{
+    QString workspaceName =
+        tr("Unsaved Workspace");
+
+    if (!currentWorkspacePath
+             .trimmed()
+             .isEmpty()) {
+        const QString fileName =
+            QFileInfo(
+                currentWorkspacePath
+                )
+                .fileName();
+
+        if (!fileName.isEmpty()) {
+            workspaceName =
+                fileName;
+        }
+    }
+
+    return tr(
+        "TraceScope — %1"
+        )
+        .arg(
+            workspaceName
+            );
+}
+
+void MainWindow::
+    updateWorkspaceWindowTitles()
+{
+    const QString title =
+        workspaceWindowTitle();
+
+    setWindowTitle(
+        title
+        );
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window != nullptr) {
+            window->setWorkspaceWindowTitle(
+                title
+                );
+        }
+    }
 }
 
 int MainWindow::addSessionToWorkspace(
@@ -6161,6 +6223,8 @@ bool MainWindow::saveWorkspaceToFile(
         QFileInfo(filePath)
             .absoluteFilePath();
 
+    updateWorkspaceWindowTitles();
+
     recentItemsStore.addRecentWorkspace(
         currentWorkspacePath
         );
@@ -7593,6 +7657,8 @@ void MainWindow::installOpenedWorkspace(
 
     currentWorkspacePath =
         operation->workspacePath;
+
+    updateWorkspaceWindowTitles();
 
     recentItemsStore.addRecentWorkspace(
         currentWorkspacePath

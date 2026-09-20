@@ -20,19 +20,9 @@ DetachedWorkspaceDocumentWindow::
           Qt::Window
           )
 {
-    /*
-     * Do not expose the old "Detached Workspace"
-     * terminology. This window belongs to the same
-     * TraceScope workspace as every other application
-     * window.
-     *
-     * Phase 16 workspace-identity work will replace
-     * this temporary shared product title with the
-     * current .tsw identity.
-     */
     setWindowTitle(
         tr(
-            "TraceScope — Qt Telemetry Log Inspector"
+            "TraceScope — Unsaved Workspace"
             )
         );
 
@@ -474,6 +464,16 @@ void DetachedWorkspaceDocumentWindow::
             enabled
             );
     }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setWorkspaceWindowTitle(
+        const QString &title
+        )
+{
+    setWindowTitle(
+        title
+        );
 }
 
 void DetachedWorkspaceDocumentWindow::

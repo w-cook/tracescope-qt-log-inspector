@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QString>
 
 class QAction;
 class QCloseEvent;
@@ -35,6 +36,10 @@ public:
 
     void setCompareEnabled(
         bool enabled
+        );
+
+    void setWorkspaceWindowTitle(
+        const QString &title
         );
 
 signals:
