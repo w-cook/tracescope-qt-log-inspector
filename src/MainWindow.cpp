@@ -19,6 +19,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPromise>
 #include <QProgressDialog>
 #include <QPushButton>
@@ -1219,7 +1220,10 @@ int MainWindow::addSessionToWorkspace(
     return sessionIndex;
 }
 
-void MainWindow::openLogFile(const QString &initialFilePath)
+void MainWindow::openLogFile(
+    const QString &initialFilePath,
+    WorkspaceDocumentHost *targetHost
+    )
 {
     if (importWatcher != nullptr
         || workspaceOpenInProgress
@@ -1284,12 +1288,14 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         QString(),
         std::move(
             sourceFamilyConfiguration
-            )
+            ),
+        targetHost
         );
 }
 
 void MainWindow::openInvestigationSnapshot(
-    const QString &initialFilePath
+    const QString &initialFilePath,
+    WorkspaceDocumentHost *targetHost
     )
 {
     if (importWatcher != nullptr
@@ -1356,6 +1362,17 @@ void MainWindow::openInvestigationSnapshot(
 
     const QString absoluteSnapshotPath =
         fileInfo.absoluteFilePath();
+
+    /*
+     * A secondary TraceScope window may disappear
+     * while restoration runs asynchronously. QPointer
+     * lets completion safely fall back to the root host
+     * instead of retaining a dangling widget pointer.
+     */
+    const QPointer<WorkspaceDocumentHost>
+        targetHostGuard(
+            targetHost
+            );
 
     /*
      * Standalone snapshot opening intentionally uses
@@ -1448,7 +1465,8 @@ void MainWindow::openInvestigationSnapshot(
             this,
             watcher,
             progressDialog,
-            persistedSession
+            persistedSession,
+            targetHostGuard
         ]() mutable {
             const bool cancelled =
                 watcher->isCanceled();
@@ -1593,7 +1611,8 @@ void MainWindow::openInvestigationSnapshot(
             addSessionToWorkspace(
                 std::move(
                     restoration.session
-                    )
+                    ),
+                targetHostGuard.data()
                 );
 
             setSnapshotOpenInProgress(
@@ -1804,7 +1823,8 @@ void MainWindow::loadLogFile(
     const ImportProfile &profile,
     const QString &reloadSessionId,
     SourceFamilyConfiguration
-        sourceFamilyConfiguration
+        sourceFamilyConfiguration,
+    WorkspaceDocumentHost *targetHost
     )
 {
     const QString activeFilePath =
@@ -1844,6 +1864,16 @@ void MainWindow::loadLogFile(
             profile
             );
 
+    /*
+     * Imports complete asynchronously. A window may
+     * disappear while the import is running, so do not
+     * retain an unchecked raw QWidget pointer.
+     */
+    const QPointer<WorkspaceDocumentHost>
+        targetHostGuard(
+            targetHost
+            );
+
     startLogFileImport(
         activeFilePath,
         orderedSourcePaths,
@@ -1854,8 +1884,9 @@ void MainWindow::loadLogFile(
             profile,
             reloadSessionId,
             initialLiveFollowByteOffset,
+            targetHostGuard,
             resolved =
-            std::move(resolved)
+                std::move(resolved)
         ](
             std::optional<ImportResult> result
             ) mutable {
@@ -1871,7 +1902,8 @@ void MainWindow::loadLogFile(
                 std::move(
                     result.value()
                     ),
-                reloadSessionId
+                reloadSessionId,
+                targetHostGuard.data()
                 );
         }
         );
@@ -2243,7 +2275,8 @@ void MainWindow::completeLogFileImport(
         sourceFamilyConfiguration,
     qint64 initialLiveFollowByteOffset,
     ImportResult result,
-    const QString &reloadSessionId
+    const QString &reloadSessionId,
+    WorkspaceDocumentHost *targetHost
     )
 {
     if (result.cancelled) {
@@ -2268,7 +2301,8 @@ void MainWindow::completeLogFileImport(
             );
 
         addSessionToWorkspace(
-            std::move(session)
+            std::move(session),
+            targetHost
             );
     } else {
         const int sessionIndex =

@@ -124,27 +124,38 @@ private:
         );
     void openLogFile(
         const QString &initialFilePath =
-        QString()
+        QString(),
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
+
     void openInvestigationSnapshot(
         const QString &initialFilePath =
-        QString()
+        QString(),
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
+
     void saveInvestigationSnapshot();
+
     void loadLogFile(
         const QString &filePath,
         const ImportProfile &profile,
         const QString &reloadSessionId =
         QString(),
         SourceFamilyConfiguration
-            sourceFamilyConfiguration = {}
+            sourceFamilyConfiguration = {},
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
+
     bool startLogFileImport(
         const QString &activeFilePath,
         const QStringList &orderedSourcePaths,
         const ImportProfile &profile,
         ImportCompletionHandler completion
         );
+
     void completeLogFileImport(
         const QString &filePath,
         const ImportProfile &profile,
@@ -152,7 +163,9 @@ private:
             sourceFamilyConfiguration,
         qint64 initialLiveFollowByteOffset,
         ImportResult result,
-        const QString &reloadSessionId
+        const QString &reloadSessionId,
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
 
     void reloadActiveSession();
