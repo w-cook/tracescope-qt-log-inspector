@@ -440,6 +440,13 @@ void DetachedWorkspaceDocumentWindow::
         bool enabled
         )
 {
+    if (m_documentHost != nullptr) {
+        m_documentHost
+            ->setFileOperationsEnabled(
+                enabled
+                );
+    }
+
     if (m_newWorkspaceAction != nullptr) {
         m_newWorkspaceAction->setEnabled(
             enabled

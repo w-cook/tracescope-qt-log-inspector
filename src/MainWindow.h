@@ -346,4 +346,10 @@ private:
     void newWorkspace();
 
     void requestApplicationClose();
+
+    void closeWorkspaceDocument(
+        const QString &documentId
+        );
+
+    void resetWorkspaceIdentity();
 };

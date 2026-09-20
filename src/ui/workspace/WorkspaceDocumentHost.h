@@ -7,6 +7,8 @@
 #include "../../workspace/WorkspaceDocumentLayoutState.h"
 
 class QMenu;
+class QPushButton;
+
 class DetachedWorkspaceDocumentWindow;
 class WorkspaceDocument;
 class WorkspaceTabWidget;
@@ -102,6 +104,10 @@ public:
         const WorkspaceDocumentLayoutState &state
         );
 
+    void setFileOperationsEnabled(
+        bool enabled
+        );
+
 signals:
     void currentDocumentChanged(
         const QString &documentId
@@ -133,6 +139,16 @@ signals:
         );
 
     void workspaceLayoutChanged();
+
+    void openLogRequested(
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void openSnapshotRequested(
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void openWorkspaceRequested();
 
 private slots:
     void updateDocumentTitle(
@@ -256,6 +272,15 @@ private:
         nullptr;
 
     QWidget *m_emptyStateWidget =
+        nullptr;
+
+    QPushButton *m_emptyStateOpenLogButton =
+        nullptr;
+
+    QPushButton *m_emptyStateOpenSnapshotButton =
+        nullptr;
+
+    QPushButton *m_emptyStateOpenWorkspaceButton =
         nullptr;
 
     /*

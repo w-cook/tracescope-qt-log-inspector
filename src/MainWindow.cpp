@@ -534,6 +534,46 @@ MainWindow::MainWindow(QWidget *parent)
         );
 
     connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        openLogRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openLogFile(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        openSnapshotRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openInvestigationSnapshot(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        openWorkspaceRequested,
+        this,
+        [this]() {
+            openWorkspace();
+        }
+        );
+
+    connect(
         workspace,
         &InvestigationWorkspace::sessionAdded,
         this,
@@ -614,6 +654,14 @@ MainWindow::MainWindow(QWidget *parent)
         this,
         [this](int) {
             updateComparisonActionState();
+
+            /*
+             * InvestigationWorkspace owns session removal,
+             * while the corresponding document cleanup below
+             * deliberately blocks host signals. Record the
+             * substantive workspace mutation explicitly.
+             */
+            markWorkspaceDirty();
 
             if (workspaceDocumentHost
                 == nullptr) {
@@ -785,34 +833,60 @@ MainWindow::MainWindow(QWidget *parent)
         [this](
             const QString &documentId
             ) {
-            const int sessionIndex =
-                workspace->indexOfSession(
-                    documentId
-                    );
+            if (workspaceDocumentHost == nullptr
+                || workspaceDocumentHost
+                       ->documentById(
+                           documentId
+                           )
+                       == nullptr) {
+                return;
+            }
 
-            if (sessionIndex >= 0) {
-                workspace->closeSession(
-                    sessionIndex
+            const bool closingFinalDocument =
+                workspaceDocumentHost
+                    ->documents()
+                    .size()
+                == 1;
+
+            if (!closingFinalDocument) {
+                closeWorkspaceDocument(
+                    documentId
                     );
 
                 return;
             }
 
             /*
-             * Non-session workspace documents, such as
-             * immutable comparisons, are owned directly
-             * by the document workspace rather than by
-             * InvestigationWorkspace.
+             * Closing the final document is semantically
+             * closing the current workspace.
+             *
+             * Give the user the same unsaved-change
+             * protection used by New/Open Workspace and
+             * final application closure.
              */
-            WorkspaceDocument *document =
-                workspaceDocumentHost
-                    ->removeDocument(
-                        documentId
-                        );
-
-            if (document != nullptr) {
-                document->deleteLater();
+            if (!confirmWorkspaceReplacement()) {
+                return;
             }
+
+            const bool previousMutationSuppression =
+                workspaceMutationTrackingSuppressed;
+
+            workspaceMutationTrackingSuppressed =
+                true;
+
+            closeWorkspaceDocument(
+                documentId
+                );
+
+            workspaceMutationTrackingSuppressed =
+                previousMutationSuppression;
+
+            /*
+             * Preserve whichever TraceScope peer was the
+             * user's final working window. It now becomes
+             * the start surface for a fresh workspace.
+             */
+            resetWorkspaceIdentity();
         }
         );
 
@@ -8507,6 +8581,11 @@ void MainWindow::setFileOperationsEnabled(
         return;
     }
 
+    workspaceDocumentHost
+        ->setFileOperationsEnabled(
+            enabled
+            );
+
     for (DetachedWorkspaceDocumentWindow *window
          : workspaceDocumentHost
                ->detachedWindows()) {
@@ -8694,4 +8773,50 @@ void MainWindow::
      * the internal coordinator and all peer windows.
      */
     QApplication::quit();
+}
+
+void MainWindow::
+    closeWorkspaceDocument(
+        const QString &documentId
+        )
+{
+    if (workspace == nullptr
+        || workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            documentId
+            );
+
+    if (sessionIndex >= 0) {
+        workspace->closeSession(
+            sessionIndex
+            );
+
+        return;
+    }
+
+    WorkspaceDocument *document =
+        workspaceDocumentHost
+            ->removeDocument(
+                documentId
+                );
+
+    if (document != nullptr) {
+        document->deleteLater();
+    }
+}
+
+void MainWindow::resetWorkspaceIdentity()
+{
+    currentWorkspacePath.clear();
+
+    setWorkspaceDirty(
+        false
+        );
+
+    updateComparisonActionState();
+    updateReloadActionState();
 }

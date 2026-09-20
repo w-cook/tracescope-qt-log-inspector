@@ -1,8 +1,11 @@
 #include "WorkspaceDocumentHost.h"
 
 #include <QApplication>
+#include <QCursor>
+#include <QDrag>
 #include <QLabel>
 #include <QMenu>
+#include <QPushButton>
 #include <QPoint>
 #include <QResizeEvent>
 #include <QSignalBlocker>
@@ -10,8 +13,6 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
-#include <QCursor>
-#include <QDrag>
 
 #include <utility>
 
@@ -277,8 +278,87 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         instructionLabel
         );
 
+    emptyStateLayout->addSpacing(
+        14
+        );
+
+    /*
+     * Empty-workspace actions deliberately emit intent
+     * rather than invoking application workflows directly.
+     *
+     * WorkspaceDocumentHost remains reusable presentation
+     * infrastructure while MainWindow continues to own
+     * file/workspace orchestration.
+     */
+    m_emptyStateOpenLogButton =
+        new QPushButton(
+            tr("Open Log File..."),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateOpenSnapshotButton =
+        new QPushButton(
+            tr("Open Snapshot..."),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateOpenWorkspaceButton =
+        new QPushButton(
+            tr("Open Workspace..."),
+            m_emptyStateWidget
+            );
+
+    emptyStateLayout->addWidget(
+        m_emptyStateOpenLogButton,
+        0,
+        Qt::AlignHCenter
+        );
+
+    emptyStateLayout->addWidget(
+        m_emptyStateOpenSnapshotButton,
+        0,
+        Qt::AlignHCenter
+        );
+
+    emptyStateLayout->addWidget(
+        m_emptyStateOpenWorkspaceButton,
+        0,
+        Qt::AlignHCenter
+        );
+
     emptyStateLayout->addStretch(
         1
+        );
+
+    connect(
+        m_emptyStateOpenLogButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            emit openLogRequested(
+                this
+                );
+        }
+        );
+
+    connect(
+        m_emptyStateOpenSnapshotButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            emit openSnapshotRequested(
+                this
+                );
+        }
+        );
+
+    connect(
+        m_emptyStateOpenWorkspaceButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            emit openWorkspaceRequested();
+        }
         );
 
     m_tabs->setEmptyStateWidget(
@@ -369,6 +449,33 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             m_rootHost,
             &WorkspaceDocumentHost::
             documentContextMenuAboutToShow
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            openLogRequested,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            openLogRequested
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            openSnapshotRequested,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            openSnapshotRequested
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            openWorkspaceRequested,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            openWorkspaceRequested
             );
     }
 
@@ -1872,6 +1979,8 @@ void WorkspaceDocumentHost::
 
         pending.clear();
 
+        pending.clear();
+
         return;
     }
 
@@ -1895,6 +2004,8 @@ void WorkspaceDocumentHost::
                     true
                     );
         }
+
+        pending.clear();
 
         pending.clear();
 
@@ -2337,6 +2448,8 @@ void WorkspaceDocumentHost::
     if (m_emptyStateWidget != nullptr) {
         m_emptyStateWidget->setVisible(
             empty
+            && !m_rootHost
+                    ->m_workspaceDocumentDragActive
             );
     }
 
@@ -2352,4 +2465,31 @@ void WorkspaceDocumentHost::
     }
 
     m_tabs->updateEmptyStateGeometry();
+}
+
+void WorkspaceDocumentHost::
+    setFileOperationsEnabled(
+        bool enabled
+        )
+{
+    if (m_emptyStateOpenLogButton != nullptr) {
+        m_emptyStateOpenLogButton
+            ->setEnabled(
+                enabled
+                );
+    }
+
+    if (m_emptyStateOpenSnapshotButton != nullptr) {
+        m_emptyStateOpenSnapshotButton
+            ->setEnabled(
+                enabled
+                );
+    }
+
+    if (m_emptyStateOpenWorkspaceButton != nullptr) {
+        m_emptyStateOpenWorkspaceButton
+            ->setEnabled(
+                enabled
+                );
+    }
 }
