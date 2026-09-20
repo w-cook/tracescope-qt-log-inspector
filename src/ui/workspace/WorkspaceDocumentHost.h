@@ -49,6 +49,14 @@ public:
     QVector<WorkspaceDocument *>
     documents() const;
 
+    WorkspaceDocumentHost *
+    documentHostForId(
+        const QString &documentId
+        ) const;
+
+    QVector<DetachedWorkspaceDocumentWindow *>
+    detachedWindows() const;
+
     bool isDocumentDetached(
         const QString &documentId
         ) const;
@@ -97,6 +105,10 @@ signals:
 
     void documentDetached(
         const QString &documentId
+        );
+
+    void detachedWindowCreated(
+        DetachedWorkspaceDocumentWindow *window
         );
 
     void documentRedocked(
@@ -198,10 +210,6 @@ private:
 
     void cleanupEmptyDetachedHost(
         WorkspaceDocumentHost *host
-        );
-
-    void redockDetachedWindow(
-        DetachedWorkspaceDocumentWindow *window
         );
 
     void beginDocumentDrag(

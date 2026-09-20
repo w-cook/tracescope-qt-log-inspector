@@ -2,9 +2,10 @@
 
 #include <QAction>
 #include <QCloseEvent>
-#include <QToolBar>
+#include <QKeySequence>
 #include <QMenu>
-#include <QToolButton>
+#include <QMenuBar>
+#include <QMessageBox>
 
 #include "WorkspaceDocument.h"
 #include "WorkspaceDocumentHost.h"
@@ -19,9 +20,19 @@ DetachedWorkspaceDocumentWindow::
           Qt::Window
           )
 {
+    /*
+     * Do not expose the old "Detached Workspace"
+     * terminology. This window belongs to the same
+     * TraceScope workspace as every other application
+     * window.
+     *
+     * Phase 16 workspace-identity work will replace
+     * this temporary shared product title with the
+     * current .tsw identity.
+     */
     setWindowTitle(
         tr(
-            "TraceScope — Detached Workspace"
+            "TraceScope — Qt Telemetry Log Inspector"
             )
         );
 
@@ -40,46 +51,257 @@ DetachedWorkspaceDocumentWindow::
         m_documentHost
         );
 
-    auto *toolBar =
-        addToolBar(
-            tr("Workspace")
+    createMenus();
+}
+
+void DetachedWorkspaceDocumentWindow::
+    createMenus()
+{
+    QMenu *fileMenu =
+        menuBar()->addMenu(
+            tr("&File")
             );
 
-    toolBar->setMovable(
+    m_openAction =
+        new QAction(
+            tr("&Open Log File..."),
+            this
+            );
+
+    m_openAction->setShortcut(
+        QKeySequence::Open
+        );
+
+    m_openAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_openAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit openLogRequested(
+                m_documentHost
+                );
+        }
+        );
+
+    fileMenu->addAction(
+        m_openAction
+        );
+
+    m_openSnapshotAction =
+        new QAction(
+            tr(
+                "Open Investigation &Snapshot..."
+                ),
+            this
+            );
+
+    connect(
+        m_openSnapshotAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit openSnapshotRequested(
+                m_documentHost
+                );
+        }
+        );
+
+    fileMenu->addAction(
+        m_openSnapshotAction
+        );
+
+    m_openWorkspaceAction =
+        new QAction(
+            tr("Open &Workspace..."),
+            this
+            );
+
+    connect(
+        m_openWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit openWorkspaceRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_openWorkspaceAction
+        );
+
+    m_recentFilesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Files")
+            );
+
+    m_recentFilesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        m_recentFilesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            emit recentFilesMenuAboutToShow(
+                m_recentFilesMenu,
+                m_documentHost
+                );
+        }
+        );
+
+    m_recentWorkspacesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Workspaces")
+            );
+
+    m_recentWorkspacesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        m_recentWorkspacesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            emit recentWorkspacesMenuAboutToShow(
+                m_recentWorkspacesMenu
+                );
+        }
+        );
+
+    fileMenu->addSeparator();
+
+    m_saveSnapshotAction =
+        new QAction(
+            tr(
+                "Save Investigation &Snapshot..."
+                ),
+            this
+            );
+
+    m_saveSnapshotAction->setEnabled(
         false
         );
 
-    auto *exportingButton =
-        new QToolButton(
-            toolBar
+    connect(
+        m_saveSnapshotAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit saveSnapshotRequested(
+                m_documentHost
+                );
+        }
+        );
+
+    fileMenu->addAction(
+        m_saveSnapshotAction
+        );
+
+    m_reloadAction =
+        new QAction(
+            tr("&Reload Current Session"),
+            this
             );
 
-    exportingButton->setText(
-        tr("Exporting")
+    m_reloadAction->setShortcut(
+        QKeySequence::Refresh
         );
 
-    exportingButton->setToolTip(
-        tr(
-            "Export from the current document"
-            )
+    m_reloadAction->setShortcutContext(
+        Qt::WindowShortcut
         );
 
-    exportingButton->setToolButtonStyle(
-        Qt::ToolButtonTextOnly
+    m_reloadAction->setEnabled(
+        false
         );
 
-    exportingButton->setPopupMode(
-        QToolButton::InstantPopup
+    connect(
+        m_reloadAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit reloadRequested(
+                m_documentHost
+                );
+        }
         );
 
-    auto *exportingMenu =
-        new QMenu(
-            exportingButton
+    fileMenu->addAction(
+        m_reloadAction
+        );
+
+    fileMenu->addSeparator();
+
+    m_saveWorkspaceAction =
+        new QAction(
+            tr("&Save Workspace"),
+            this
             );
 
-    exportingButton->setMenu(
-        exportingMenu
+    m_saveWorkspaceAction->setShortcut(
+        QKeySequence::Save
         );
+
+    m_saveWorkspaceAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_saveWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit saveWorkspaceRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_saveWorkspaceAction
+        );
+
+    m_saveWorkspaceAsAction =
+        new QAction(
+            tr("Save Workspace &As..."),
+            this
+            );
+
+    m_saveWorkspaceAsAction->setShortcut(
+        QKeySequence::SaveAs
+        );
+
+    m_saveWorkspaceAsAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_saveWorkspaceAsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit saveWorkspaceAsRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_saveWorkspaceAsAction
+        );
+
+    /*
+     * Export actions belong to WorkspaceDocument
+     * itself, so this menu requires no coordinator
+     * routing. It always operates directly on this
+     * window's current document.
+     */
+    QMenu *exportingMenu =
+        menuBar()->addMenu(
+            tr("&Exporting")
+            );
 
     connect(
         exportingMenu,
@@ -100,11 +322,9 @@ DetachedWorkspaceDocumentWindow::
                     );
             }
 
-            if (
-                exportingMenu
+            if (exportingMenu
                     ->actions()
-                    .isEmpty()
-                ) {
+                    .isEmpty()) {
                 QAction *unavailableAction =
                     exportingMenu->addAction(
                         tr(
@@ -119,31 +339,73 @@ DetachedWorkspaceDocumentWindow::
         }
         );
 
-    toolBar->addWidget(
-        exportingButton
-        );
-
-    QAction *redockAction =
-        toolBar->addAction(
-            tr("Re-dock Window")
+    QMenu *investigationMenu =
+        menuBar()->addMenu(
+            tr("&Investigation")
             );
 
-    redockAction->setToolTip(
-        tr(
-            "Return all tabs in this window "
-            "to the main workspace."
-            )
+    m_compareAction =
+        new QAction(
+            tr("&Compare Sessions..."),
+            this
+            );
+
+    m_compareAction->setEnabled(
+        false
         );
 
     connect(
-        redockAction,
+        m_compareAction,
         &QAction::triggered,
         this,
         [this]() {
-            emit redockAllRequested(
-                this
+            emit compareSessionsRequested(
+                m_documentHost
                 );
         }
+        );
+
+    investigationMenu->addAction(
+        m_compareAction
+        );
+
+    QMenu *helpMenu =
+        menuBar()->addMenu(
+            tr("&Help")
+            );
+
+    QAction *aboutAction =
+        new QAction(
+            tr("&About TraceScope"),
+            this
+            );
+
+    connect(
+        aboutAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            /*
+             * This text intentionally matches the
+             * current root-window About dialog.
+             * Product-description cleanup belongs to
+             * the later v1 identity pass.
+             */
+            QMessageBox::about(
+                this,
+                tr("About TraceScope"),
+                tr(
+                    "TraceScope is a Qt/C++ telemetry "
+                    "log inspector for loading, filtering, "
+                    "visualizing, and exporting structured "
+                    "diagnostic log files."
+                    )
+                );
+        }
+        );
+
+    helpMenu->addAction(
+        aboutAction
         );
 }
 
@@ -155,26 +417,84 @@ WorkspaceDocumentHost *
 }
 
 void DetachedWorkspaceDocumentWindow::
+    setFileOperationsEnabled(
+        bool enabled
+        )
+{
+    if (m_openAction != nullptr) {
+        m_openAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_openSnapshotAction != nullptr) {
+        m_openSnapshotAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_openWorkspaceAction != nullptr) {
+        m_openWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setSaveSnapshotEnabled(
+        bool enabled
+        )
+{
+    if (m_saveSnapshotAction != nullptr) {
+        m_saveSnapshotAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setReloadEnabled(
+        bool enabled
+        )
+{
+    if (m_reloadAction != nullptr) {
+        m_reloadAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setCompareEnabled(
+        bool enabled
+        )
+{
+    if (m_compareAction != nullptr) {
+        m_compareAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
     closeEvent(
         QCloseEvent *event
         )
 {
     if (m_documentHost == nullptr
         || m_documentHost
-            ->documentCount()
-                == 0) {
+                   ->documentCount()
+               == 0) {
         event->accept();
         return;
     }
 
     /*
-     * A detached workspace window owns a group of
-     * open document presentations. Closing the
-     * window means closing every document currently
-     * contained in that group.
-     *
-     * Actual document lifetime remains controlled
-     * by the root workspace close contract.
+     * For now, closing a secondary window continues
+     * to request closure of the documents it contains.
+     * The final equal-window lifecycle pass will decide
+     * application-window versus document-group closure
+     * semantics.
      */
     event->ignore();
 

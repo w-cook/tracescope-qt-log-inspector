@@ -632,6 +632,23 @@ WorkspaceDocumentHost::documents()
 }
 
 WorkspaceDocumentHost *
+WorkspaceDocumentHost::documentHostForId(
+    const QString &documentId
+    ) const
+{
+    return m_rootHost->owningHost(
+        documentId
+        );
+}
+
+QVector<DetachedWorkspaceDocumentWindow *>
+WorkspaceDocumentHost::detachedWindows() const
+{
+    return m_rootHost
+        ->m_detachedWindows;
+}
+
+WorkspaceDocumentHost *
 WorkspaceDocumentHost::owningHost(
     const QString &documentId
     ) const
@@ -1112,19 +1129,13 @@ WorkspaceDocumentHost::createDetachedWindow(
             window
             );
 
-    connect(
-        window,
-        &DetachedWorkspaceDocumentWindow::
-        redockAllRequested,
-        root,
-        [root](
-            DetachedWorkspaceDocumentWindow
-                *requestedWindow
-            ) {
-            root->redockDetachedWindow(
-                requestedWindow
-                );
-        }
+    /*
+     * The root application coordinator can now wire
+     * this otherwise ordinary workspace window into
+     * shared TraceScope commands and command state.
+     */
+    emit root->detachedWindowCreated(
+        window
         );
 
     connect(
@@ -1762,68 +1773,6 @@ void WorkspaceDocumentHost::
 
     window->hide();
     window->deleteLater();
-}
-
-void WorkspaceDocumentHost::
-    redockDetachedWindow(
-        DetachedWorkspaceDocumentWindow *window
-        )
-{
-    WorkspaceDocumentHost *root =
-        m_rootHost;
-
-    if (window == nullptr
-        || window->documentHost()
-               == nullptr) {
-        return;
-    }
-
-    WorkspaceDocumentHost *sourceHost =
-        window->documentHost();
-
-    const QVector<WorkspaceDocument *>
-        sourceDocuments =
-        sourceHost
-            ->localDocuments();
-
-    QString lastDocumentId;
-
-    for (WorkspaceDocument *document
-         : sourceDocuments) {
-        if (document == nullptr) {
-            continue;
-        }
-
-        lastDocumentId =
-            document->documentId();
-
-        if (root->transferDocument(
-                sourceHost,
-                document->documentId(),
-                root,
-                root->documentCount(),
-                false,
-                false
-                )) {
-            emit root->documentRedocked(
-                document->documentId()
-                );
-        }
-    }
-
-    root->m_detachedWindows
-        .removeOne(
-            window
-            );
-
-    window->hide();
-    window->deleteLater();
-
-    if (!lastDocumentId.isEmpty()) {
-        root->setCurrentDocument(
-            lastDocumentId
-            );
-    }
 }
 
 void WorkspaceDocumentHost::updateDocumentTitle(

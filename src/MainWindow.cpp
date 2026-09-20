@@ -51,6 +51,7 @@
 #include "ui/ImportConfigurationDialog.h"
 #include "ui/InvestigationComparisonDialog.h"
 #include "ui/InvestigationReportExportDialog.h"
+#include "ui/workspace/DetachedWorkspaceDocumentWindow.h"
 #include "ui/workspace/InvestigationComparisonDocument.h"
 #include "ui/workspace/InvestigationReportWorkspaceContext.h"
 #include "ui/workspace/InvestigationSessionView.h"
@@ -511,6 +512,15 @@ MainWindow::MainWindow(QWidget *parent)
     buildLayout();
 
     connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        detachedWindowCreated,
+        this,
+        &MainWindow::
+        configureDetachedWindow
+        );
+
+    connect(
         workspace,
         &InvestigationWorkspace::sessionAdded,
         this,
@@ -715,13 +725,20 @@ MainWindow::MainWindow(QWidget *parent)
                     documentId
                     );
 
-            if (sessionIndex < 0) {
-                return;
+            if (sessionIndex >= 0) {
+                workspace->setActiveSession(
+                    sessionIndex
+                    );
             }
 
-            workspace->setActiveSession(
-                sessionIndex
-                );
+            /*
+             * Even when the document is not an
+             * InvestigationSessionView, command state
+             * must change. For example, Save Snapshot
+             * and Reload are unavailable while a
+             * comparison document is current.
+             */
+            updateReloadActionState();
         }
         );
 
@@ -805,6 +822,12 @@ MainWindow::MainWindow(QWidget *parent)
 
             menu->addSeparator();
 
+            WorkspaceDocumentHost *targetHost =
+                workspaceDocumentHost
+                    ->documentHostForId(
+                        documentId
+                        );
+
             QAction *comparisonAction =
                 menu->addAction(
                     tr(
@@ -816,7 +839,11 @@ MainWindow::MainWindow(QWidget *parent)
                 comparisonAction,
                 &QAction::triggered,
                 menu,
-                [this, documentId]() {
+                [
+                    this,
+                    documentId,
+                    targetHost
+                ]() {
                     const InvestigationSession
                         *activeSession =
                         workspace
@@ -840,7 +867,8 @@ MainWindow::MainWindow(QWidget *parent)
                     }
 
                     createSessionComparison(
-                        preferredBaselineId
+                        preferredBaselineId,
+                        targetHost
                         );
                 }
                 );
@@ -869,7 +897,7 @@ void MainWindow::createMenus()
     openAction->setShortcut(QKeySequence::Open);
 
     openAction->setShortcutContext(
-        Qt::ApplicationShortcut
+        Qt::WindowShortcut
         );
 
     connect(openAction, &QAction::triggered, this, [this]() {
@@ -977,7 +1005,9 @@ void MainWindow::createMenus()
         &QAction::triggered,
         this,
         [this]() {
-            saveInvestigationSnapshot();
+            saveInvestigationSnapshot(
+                workspaceDocumentHost
+                );
         }
         );
 
@@ -1002,7 +1032,9 @@ void MainWindow::createMenus()
         &QAction::triggered,
         this,
         [this]() {
-            reloadActiveSession();
+            reloadActiveSession(
+                workspaceDocumentHost
+                );
         }
         );
 
@@ -1023,7 +1055,7 @@ void MainWindow::createMenus()
         );
 
     saveWorkspaceAction->setShortcutContext(
-        Qt::ApplicationShortcut
+        Qt::WindowShortcut
         );
 
     connect(
@@ -1050,7 +1082,7 @@ void MainWindow::createMenus()
         );
 
     saveWorkspaceAsAction->setShortcutContext(
-        Qt::ApplicationShortcut
+        Qt::WindowShortcut
         );
 
     connect(
@@ -1129,7 +1161,10 @@ void MainWindow::createMenus()
         &QAction::triggered,
         this,
         [this]() {
-            createSessionComparison();
+            createSessionComparison(
+                QString(),
+                workspaceDocumentHost
+                );
         }
         );
 
@@ -1182,6 +1217,215 @@ void MainWindow::buildLayout()
     setCentralWidget(
         centralWidget
         );
+}
+
+InvestigationSession *
+MainWindow::sessionForHost(
+    WorkspaceDocumentHost *host
+    ) const
+{
+    if (workspace == nullptr) {
+        return nullptr;
+    }
+
+    /*
+     * A null host preserves the old coordinator-level
+     * fallback for internal callers that genuinely mean
+     * the globally active investigation.
+     */
+    if (host == nullptr) {
+        return workspace->activeSession();
+    }
+
+    WorkspaceDocument *document =
+        host->currentDocument();
+
+    if (document == nullptr) {
+        return nullptr;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            document->documentId()
+            );
+
+    if (sessionIndex < 0) {
+        /*
+         * The current document may be a comparison or
+         * another non-session workspace document.
+         */
+        return nullptr;
+    }
+
+    return workspace->sessionAt(
+        sessionIndex
+        );
+}
+
+void MainWindow::configureDetachedWindow(
+    DetachedWorkspaceDocumentWindow *window
+    )
+{
+    if (window == nullptr) {
+        return;
+    }
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        openLogRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openLogFile(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        openSnapshotRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openInvestigationSnapshot(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        openWorkspaceRequested,
+        this,
+        [this]() {
+            openWorkspace();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        saveWorkspaceRequested,
+        this,
+        [this]() {
+            saveWorkspace();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        saveWorkspaceAsRequested,
+        this,
+        [this]() {
+            saveWorkspaceAs();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        recentFilesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu,
+            WorkspaceDocumentHost *targetHost
+            ) {
+            populateRecentFilesMenu(
+                menu,
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        recentWorkspacesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu
+            ) {
+            populateRecentWorkspacesMenu(
+                menu
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        saveSnapshotRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            saveInvestigationSnapshot(
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        reloadRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            reloadActiveSession(
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        compareSessionsRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            createSessionComparison(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    const bool fileOperationAvailable =
+        importWatcher == nullptr
+        && !workspaceOpenInProgress
+        && !sessionReloadInProgress
+        && !snapshotOpenInProgress;
+
+    window->setFileOperationsEnabled(
+        fileOperationAvailable
+        );
+
+    window->setCompareEnabled(
+        workspace != nullptr
+        && workspace->sessionCount()
+               >= 2
+        );
+
+    /*
+     * Also initializes Save Snapshot / Reload for the
+     * new window. The window may still be empty here;
+     * insertion of its first document will refresh
+     * these states again.
+     */
+    updateReloadActionState();
 }
 
 int MainWindow::addSessionToWorkspace(
@@ -1243,8 +1487,13 @@ void MainWindow::openLogFile(
         return;
     }
 
+    QWidget *dialogParent =
+        targetHost != nullptr
+            ? targetHost->window()
+            : this;
+
     ImportConfigurationDialog dialog(
-        this,
+        dialogParent,
         &recentItemsStore,
         &rotatedSourceSettingsStore
         );
@@ -1679,7 +1928,9 @@ void MainWindow::openInvestigationSnapshot(
         );
 }
 
-void MainWindow::saveInvestigationSnapshot()
+void MainWindow::saveInvestigationSnapshot(
+    WorkspaceDocumentHost *targetHost
+    )
 {
     if (workspace == nullptr
         || importWatcher != nullptr
@@ -1690,11 +1941,18 @@ void MainWindow::saveInvestigationSnapshot()
     }
 
     InvestigationSession *session =
-        workspace->activeSession();
+        sessionForHost(
+            targetHost
+            );
 
     if (session == nullptr) {
         return;
     }
+
+    QWidget *dialogParent =
+        targetHost != nullptr
+            ? targetHost->window()
+            : this;
 
     /*
      * Freeze the investigation evidence immediately.
@@ -1741,7 +1999,7 @@ void MainWindow::saveInvestigationSnapshot()
 
     QString filePath =
         QFileDialog::getSaveFileName(
-            this,
+            dialogParent,
             tr(
                 "Save Investigation Snapshot"
                 ),
@@ -1782,7 +2040,7 @@ void MainWindow::saveInvestigationSnapshot()
 
     if (!saveResult.isSuccess()) {
         QMessageBox::warning(
-            this,
+            dialogParent,
             tr(
                 "Save Investigation Snapshot Failed"
                 ),
@@ -1800,7 +2058,7 @@ void MainWindow::saveInvestigationSnapshot()
     }
 
     QMessageBox::information(
-        this,
+        dialogParent,
         tr(
             "Investigation Snapshot Saved"
             ),
@@ -1996,19 +2254,9 @@ bool MainWindow::startLogFileImport(
         false
         );
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(false);
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(false);
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(false);
-    }
-
-    setAcceptDrops(false);
+    setFileOperationsEnabled(
+        false
+        );
 
     connect(
         progressDialog,
@@ -2085,19 +2333,9 @@ bool MainWindow::startLogFileImport(
                     nullptr;
             }
 
-            if (openAction != nullptr) {
-                openAction->setEnabled(true);
-            }
-
-            if (openSnapshotAction != nullptr) {
-                openSnapshotAction->setEnabled(true);
-            }
-
-            if (openWorkspaceAction != nullptr) {
-                openWorkspaceAction->setEnabled(true);
-            }
-
-            setAcceptDrops(true);
+            setFileOperationsEnabled(
+                true
+                );
 
             updateReloadActionState();
 
@@ -2437,7 +2675,9 @@ void MainWindow::closeEvent(
         );
 }
 
-void MainWindow::reloadActiveSession()
+void MainWindow::reloadActiveSession(
+    WorkspaceDocumentHost *targetHost
+    )
 {
     if (workspace == nullptr
         || importWatcher != nullptr
@@ -2447,7 +2687,9 @@ void MainWindow::reloadActiveSession()
     }
 
     InvestigationSession *session =
-        workspace->activeSession();
+        sessionForHost(
+            targetHost
+            );
 
     if (session == nullptr) {
         return;
@@ -5138,19 +5380,26 @@ void MainWindow::populateSessionSourceMenu(
 
 void MainWindow::
     createSessionComparison(
-        const QString &preferredBaselineSessionId
+        const QString &preferredBaselineSessionId,
+        WorkspaceDocumentHost *targetHost
         )
 {
+    WorkspaceDocumentHost *destinationHost =
+        targetHost != nullptr
+            ? targetHost
+            : workspaceDocumentHost;
+
     if (workspace == nullptr
-        || workspaceDocumentHost
-               == nullptr
+        || destinationHost == nullptr
         || workspace->sessionCount()
                < 2) {
         return;
     }
 
     const InvestigationSession *activeSession =
-        workspace->activeSession();
+        sessionForHost(
+            destinationHost
+            );
 
     if (activeSession == nullptr) {
         return;
@@ -5189,7 +5438,7 @@ void MainWindow::
         workspace,
         initialBaselineSessionId,
         initialComparisonSessionId,
-        this
+        destinationHost->window()
         );
 
     if (
@@ -5251,7 +5500,7 @@ void MainWindow::
             std::move(snapshot)
             );
 
-    if (!workspaceDocumentHost
+    if (!destinationHost
              ->addDocument(
                  document,
                  true
@@ -5263,15 +5512,30 @@ void MainWindow::
 void MainWindow::
     updateComparisonActionState()
 {
-    if (compareAction == nullptr) {
+    const bool enabled =
+        workspace != nullptr
+        && workspace->sessionCount()
+               >= 2;
+
+    if (compareAction != nullptr) {
+        compareAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (workspaceDocumentHost == nullptr) {
         return;
     }
 
-    compareAction->setEnabled(
-        workspace != nullptr
-        && workspace->sessionCount()
-               >= 2
-        );
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window != nullptr) {
+            window->setCompareEnabled(
+                enabled
+                );
+        }
+    }
 }
 
 void MainWindow::setWorkspaceOpenInProgress(
@@ -5287,25 +5551,7 @@ void MainWindow::setWorkspaceOpenInProgress(
         && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    setAcceptDrops(
+    setFileOperationsEnabled(
         fileOperationAvailable
         );
 
@@ -5325,25 +5571,7 @@ void MainWindow::setSessionReloadInProgress(
         && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    setAcceptDrops(
+    setFileOperationsEnabled(
         fileOperationAvailable
         );
 
@@ -5363,25 +5591,7 @@ void MainWindow::setSnapshotOpenInProgress(
         && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    setAcceptDrops(
+    setFileOperationsEnabled(
         fileOperationAvailable
         );
 
@@ -5390,167 +5600,109 @@ void MainWindow::setSnapshotOpenInProgress(
 
 void MainWindow::updateReloadActionState()
 {
-    InvestigationSession *session =
-        workspace != nullptr
-            ? workspace->activeSession()
-            : nullptr;
-
     const bool fileOperationAvailable =
         importWatcher == nullptr
         && !workspaceOpenInProgress
         && !sessionReloadInProgress
         && !snapshotOpenInProgress;
 
+    auto reloadAvailable =
+        [
+            fileOperationAvailable
+        ](
+            InvestigationSession *session
+            ) {
+            if (session == nullptr
+                || !fileOperationAvailable) {
+                return false;
+            }
+
+            const LiveSessionFollowCoordinator
+                *coordinator =
+                session
+                    ->liveFollowCoordinator();
+
+            const bool liveFollowActive =
+                coordinator != nullptr
+                && !coordinator
+                        ->state()
+                        .isStopped();
+
+            return !liveFollowActive;
+        };
+
+    InvestigationSession *rootSession =
+        sessionForHost(
+            workspaceDocumentHost
+            );
+
     if (saveSnapshotAction != nullptr) {
         saveSnapshotAction->setEnabled(
-            session != nullptr
+            rootSession != nullptr
             && fileOperationAvailable
             );
     }
 
-    if (reloadAction == nullptr) {
+    if (reloadAction != nullptr) {
+        reloadAction->setEnabled(
+            reloadAvailable(
+                rootSession
+                )
+            );
+    }
+
+    if (workspaceDocumentHost == nullptr) {
         return;
     }
 
-    bool liveFollowActive = false;
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window == nullptr) {
+            continue;
+        }
 
-    if (session != nullptr) {
-        const LiveSessionFollowCoordinator
-            *coordinator =
-            session->liveFollowCoordinator();
+        InvestigationSession *session =
+            sessionForHost(
+                window->documentHost()
+                );
 
-        liveFollowActive =
-            coordinator != nullptr
-            && !coordinator
-                    ->state()
-                    .isStopped();
+        window->setSaveSnapshotEnabled(
+            session != nullptr
+            && fileOperationAvailable
+            );
+
+        window->setReloadEnabled(
+            reloadAvailable(
+                session
+                )
+            );
     }
-
-    reloadAction->setEnabled(
-        session != nullptr
-        && fileOperationAvailable
-        && !liveFollowActive
-        );
 }
 
 void MainWindow::refreshRecentFilesMenu()
 {
-    if (recentFilesMenu == nullptr) {
-        return;
-    }
-
-    recentFilesMenu->clear();
-
-    const QStringList recentFiles =
-        recentItemsStore.recentFiles();
-
-    int validItemCount = 0;
-
-    for (const QString &filePath
-         : recentFiles) {
-        const QFileInfo fileInfo(filePath);
-
-        if (!fileInfo.exists()
-            || !fileInfo.isFile()) {
-            recentItemsStore
-                .removeRecentFile(
-                    filePath
-                    );
-
-            continue;
-        }
-
-        QAction *action =
-            recentFilesMenu->addAction(
-                fileInfo.fileName()
-                );
-
-        action->setToolTip(
-            filePath
-            );
-
-        connect(
-            action,
-            &QAction::triggered,
-            this,
-            [this, filePath]() {
-                openRecentFile(
-                    filePath
-                    );
-            }
-            );
-
-        ++validItemCount;
-    }
-
-    recentFilesMenu->setEnabled(
-        validItemCount > 0
+    populateRecentFilesMenu(
+        recentFilesMenu,
+        workspaceDocumentHost
         );
 }
 
 void MainWindow::refreshRecentWorkspacesMenu()
 {
-    if (recentWorkspacesMenu == nullptr) {
-        return;
-    }
-
-    recentWorkspacesMenu->clear();
-
-    const QStringList recentWorkspaces =
-        recentItemsStore.recentWorkspaces();
-
-    int validItemCount = 0;
-
-    for (const QString &filePath
-         : recentWorkspaces) {
-        const QFileInfo fileInfo(
-            filePath
-            );
-
-        if (!fileInfo.exists()
-            || !fileInfo.isFile()) {
-            recentItemsStore
-                .removeRecentWorkspace(
-                    filePath
-                    );
-
-            continue;
-        }
-
-        QAction *action =
-            recentWorkspacesMenu
-                ->addAction(
-                    fileInfo.fileName()
-                    );
-
-        action->setToolTip(
-            filePath
-            );
-
-        connect(
-            action,
-            &QAction::triggered,
-            this,
-            [this, filePath]() {
-                openRecentWorkspace(
-                    filePath
-                    );
-            }
-            );
-
-        ++validItemCount;
-    }
-
-    recentWorkspacesMenu->setEnabled(
-        validItemCount > 0
+    populateRecentWorkspacesMenu(
+        recentWorkspacesMenu
         );
 }
 
 void MainWindow::openRecentFile(
-    const QString &filePath
+    const QString &filePath,
+    WorkspaceDocumentHost *targetHost
     )
 {
-    const QFileInfo fileInfo(filePath);
+    const QFileInfo fileInfo(
+        filePath
+        );
 
     if (!fileInfo.exists()
         || !fileInfo.isFile()) {
@@ -5561,21 +5713,29 @@ void MainWindow::openRecentFile(
 
         refreshRecentFilesMenu();
 
+        QWidget *dialogParent =
+            targetHost != nullptr
+                ? targetHost->window()
+                : this;
+
         QMessageBox::warning(
-            this,
+            dialogParent,
             tr("Recent File Not Found"),
             tr(
                 "The recent log file no longer "
                 "exists at:\n%1"
                 )
-                .arg(filePath)
+                .arg(
+                    filePath
+                    )
             );
 
         return;
     }
 
     openLogFile(
-        filePath
+        filePath,
+        targetHost
         );
 }
 
@@ -7934,4 +8094,172 @@ void MainWindow::
      * external-source dependency.
      */
     updateReloadActionState();
+}
+
+void MainWindow::populateRecentFilesMenu(
+    QMenu *menu,
+    WorkspaceDocumentHost *targetHost
+    )
+{
+    if (menu == nullptr) {
+        return;
+    }
+
+    menu->clear();
+
+    const QStringList recentFiles =
+        recentItemsStore.recentFiles();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentFiles) {
+        const QFileInfo fileInfo(
+            filePath
+            );
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentFile(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            menu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            menu,
+            [
+                this,
+                filePath,
+                targetHost
+            ]() {
+                openRecentFile(
+                    filePath,
+                    targetHost
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    menu->setEnabled(
+        validItemCount > 0
+        );
+}
+
+void MainWindow::populateRecentWorkspacesMenu(
+    QMenu *menu
+    )
+{
+    if (menu == nullptr) {
+        return;
+    }
+
+    menu->clear();
+
+    const QStringList recentWorkspaces =
+        recentItemsStore.recentWorkspaces();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentWorkspaces) {
+        const QFileInfo fileInfo(
+            filePath
+            );
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentWorkspace(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            menu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            menu,
+            [
+                this,
+                filePath
+            ]() {
+                openRecentWorkspace(
+                    filePath
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    menu->setEnabled(
+        validItemCount > 0
+        );
+}
+
+void MainWindow::setFileOperationsEnabled(
+    bool enabled
+    )
+{
+    if (openAction != nullptr) {
+        openAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (openWorkspaceAction != nullptr) {
+        openWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (openSnapshotAction != nullptr) {
+        openSnapshotAction->setEnabled(
+            enabled
+            );
+    }
+
+    setAcceptDrops(
+        enabled
+        );
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window != nullptr) {
+            window->setFileOperationsEnabled(
+                enabled
+                );
+        }
+    }
 }

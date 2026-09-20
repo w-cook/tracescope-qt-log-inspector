@@ -26,21 +26,21 @@ using ImportCompletionHandler =
             )
         >;
 
-class QLabel;
-class QTableWidget;
-class QVBoxLayout;
-class QPlainTextEdit;
-class QGroupBox;
+class QAction;
+class QCloseEvent;
 class QChartView;
 class QDragEnterEvent;
 class QDropEvent;
-class QAction;
-class QScrollBar;
+class QGroupBox;
+class QLabel;
 class QMenu;
+class QPlainTextEdit;
+class QScrollBar;
+class QTableWidget;
+class QVBoxLayout;
 class QWidget;
-class QCloseEvent;
-class WorkspaceDocumentHost;
-class InvestigationSessionView;
+
+class DetachedWorkspaceDocumentWindow;
 class InvestigationAnalyticsPanel;
 class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
@@ -48,7 +48,9 @@ class InvestigationFilterPanel;
 class InvestigationFindingsPanel;
 class InvestigationIssueSummaryPanel;
 class InvestigationReviewPanel;
+class InvestigationSessionView;
 class InvestigationTimelinePanel;
+class WorkspaceDocumentHost;
 
 enum class InvestigationIssueDrillDownType;
 
@@ -136,7 +138,10 @@ private:
         nullptr
         );
 
-    void saveInvestigationSnapshot();
+    void saveInvestigationSnapshot(
+        WorkspaceDocumentHost *targetHost =
+        nullptr
+        );
 
     void loadLogFile(
         const QString &filePath,
@@ -168,7 +173,10 @@ private:
         nullptr
         );
 
-    void reloadActiveSession();
+    void reloadActiveSession(
+        WorkspaceDocumentHost *targetHost =
+        nullptr
+        );
 
     void reconnectSnapshotBackedSession(
         const QString &sessionId
@@ -193,7 +201,9 @@ private:
 
     void createSessionComparison(
         const QString &preferredBaselineSessionId =
-        QString()
+        QString(),
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
     void updateComparisonActionState();
 
@@ -204,7 +214,9 @@ private:
     void refreshRecentWorkspacesMenu();
 
     void openRecentFile(
-        const QString &filePath
+        const QString &filePath,
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
 
     void openRecentWorkspace(
@@ -284,5 +296,26 @@ private:
 
     void preserveSessionAsSnapshotOnly(
         const QString &sessionId
+        );
+
+    InvestigationSession *sessionForHost(
+        WorkspaceDocumentHost *host
+        ) const;
+
+    void configureDetachedWindow(
+        DetachedWorkspaceDocumentWindow *window
+        );
+
+    void setFileOperationsEnabled(
+        bool enabled
+        );
+
+    void populateRecentFilesMenu(
+        QMenu *menu,
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void populateRecentWorkspacesMenu(
+        QMenu *menu
         );
 };
