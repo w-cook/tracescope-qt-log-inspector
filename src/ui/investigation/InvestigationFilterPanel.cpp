@@ -25,6 +25,7 @@
 #include <QResizeEvent>
 
 #include "../CustomFieldFilterEditor.h"
+#include "../DevicePixelAlignedWidgetHost.h"
 #include "../MultiSelectFilterComboBox.h"
 #include "../../domain/RecordSeverity.h"
 #include "../../preferences/FilterPresetStore.h"
@@ -181,6 +182,20 @@ InvestigationFilterPanel::
             18
             );
 
+    m_levelFilterHost =
+        new DevicePixelAlignedWidgetHost(
+            m_levelFilterCombo,
+            Qt::RightEdge,
+            this
+            );
+
+    m_subsystemFilterHost =
+        new DevicePixelAlignedWidgetHost(
+            m_subsystemFilterCombo,
+            Qt::RightEdge,
+            this
+            );
+
     /*
      * Event code.
      */
@@ -210,8 +225,15 @@ InvestigationFilterPanel::
             170
             );
 
+    auto *eventCodeFilterHost =
+        new DevicePixelAlignedWidgetHost(
+            m_eventCodeFilterCombo,
+            Qt::RightEdge,
+            m_eventCodeFilterWidget
+            );
+
     eventCodeLayout->addWidget(
-        m_eventCodeFilterCombo
+        eventCodeFilterHost
         );
 
     /*
@@ -243,8 +265,15 @@ InvestigationFilterPanel::
             170
             );
 
+    auto *entityFilterHost =
+        new DevicePixelAlignedWidgetHost(
+            m_entityFilterCombo,
+            Qt::RightEdge,
+            m_entityFilterWidget
+            );
+
     entityLayout->addWidget(
-        m_entityFilterCombo
+        entityFilterHost
         );
 
     auto *primaryFilterLayout =
@@ -263,12 +292,12 @@ InvestigationFilterPanel::
         );
 
     primaryFilterLayout->addWidget(
-        m_levelFilterCombo,
+        m_levelFilterHost,
         1
         );
 
     primaryFilterLayout->addWidget(
-        m_subsystemFilterCombo,
+        m_subsystemFilterHost,
         1
         );
 
@@ -290,10 +319,10 @@ InvestigationFilterPanel::
         QWidget *filterWidget
         : {
             static_cast<QWidget *>(
-                m_levelFilterCombo
+                m_levelFilterHost
                 ),
             static_cast<QWidget *>(
-                m_subsystemFilterCombo
+                m_subsystemFilterHost
                 ),
             m_eventCodeFilterWidget,
             m_entityFilterWidget
@@ -375,6 +404,19 @@ InvestigationFilterPanel::
                 "Filter events by investigation "
                 "finding status"
                 )
+            );
+
+    m_findingStatusFilterHost =
+        new DevicePixelAlignedWidgetHost(
+            m_findingStatusFilterCombo,
+            Qt::RightEdge,
+            this
+            );
+
+    m_findingStatusFilterHost
+        ->setSizePolicy(
+            QSizePolicy::Fixed,
+            QSizePolicy::Fixed
             );
 
     /*
@@ -630,7 +672,7 @@ InvestigationFilterPanel::
         );
 
     m_secondaryFilterLayout->addWidget(
-        m_findingStatusFilterCombo,
+        m_findingStatusFilterHost,
         0,
         1
         );
@@ -1211,11 +1253,11 @@ void InvestigationFilterPanel::
                     );
         }
 
-        m_levelFilterCombo->setVisible(
+        m_levelFilterHost->setVisible(
             false
             );
 
-        m_subsystemFilterCombo->setVisible(
+        m_subsystemFilterHost->setVisible(
             false
             );
 
@@ -1231,7 +1273,7 @@ void InvestigationFilterPanel::
             false
             );
 
-        m_findingStatusFilterCombo
+        m_findingStatusFilterHost
             ->setVisible(
                 false
                 );
@@ -1502,11 +1544,11 @@ void InvestigationFilterPanel::
     /*
      * Capability-driven presentation.
      */
-    m_levelFilterCombo->setVisible(
+    m_levelFilterHost->setVisible(
         m_session->hasSeverityData()
         );
 
-    m_subsystemFilterCombo->setVisible(
+    m_subsystemFilterHost->setVisible(
         m_session->hasSubsystemData()
         );
 
@@ -1534,7 +1576,7 @@ void InvestigationFilterPanel::
         true
         );
 
-    m_findingStatusFilterCombo->setVisible(
+    m_findingStatusFilterHost->setVisible(
         true
         );
 
@@ -3325,11 +3367,11 @@ void InvestigationFilterPanel::
      * Live records can introduce capabilities that
      * were absent from the static baseline.
      */
-    m_levelFilterCombo->setVisible(
+    m_levelFilterHost->setVisible(
         m_session->hasSeverityData()
         );
 
-    m_subsystemFilterCombo->setVisible(
+    m_subsystemFilterHost->setVisible(
         m_session->hasSubsystemData()
         );
 
@@ -3392,7 +3434,7 @@ int InvestigationFilterPanel::
 
     return PreferredSearchWidth
            + controlWidth(
-               m_findingStatusFilterCombo
+               m_findingStatusFilterHost
                )
            + controlWidth(
                m_bookmarksOnlyCheckBox
@@ -3434,7 +3476,7 @@ void InvestigationFilterPanel::
 
     const QList<QWidget *> controls = {
         m_searchInput,
-        m_findingStatusFilterCombo,
+        m_findingStatusFilterHost,
         m_bookmarksOnlyCheckBox,
         m_timeRangeButton,
         m_customFiltersButton,
@@ -3463,7 +3505,7 @@ void InvestigationFilterPanel::
             );
 
         m_secondaryFilterLayout->addWidget(
-            m_findingStatusFilterCombo,
+            m_findingStatusFilterHost,
             0,
             1
             );
@@ -3513,7 +3555,7 @@ void InvestigationFilterPanel::
             );
 
         m_secondaryFilterLayout->addWidget(
-            m_findingStatusFilterCombo,
+            m_findingStatusFilterHost,
             0,
             2
             );

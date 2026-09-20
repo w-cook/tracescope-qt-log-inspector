@@ -1821,6 +1821,8 @@ qt_add_executable(
 
     ../src/ui/CustomFieldFilterEditor.h
     ../src/ui/CustomFieldFilterEditor.cpp
+    ../src/ui/DevicePixelAlignedWidgetHost.h
+    ../src/ui/DevicePixelAlignedWidgetHost.cpp
     ../src/ui/MultiSelectFilterComboBox.h
     ../src/ui/MultiSelectFilterComboBox.cpp
 

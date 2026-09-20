@@ -12,6 +12,11 @@ MultiSelectFilterComboBox::
     MultiSelectFilterComboBox(QWidget *parent)
     : QComboBox(parent)
 {
+    setProperty(
+        "_q_no_animation",
+        true
+        );
+
     setModel(
         new QStandardItemModel(this)
         );

@@ -268,6 +268,8 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationSessionRestorationService.cpp
     src/workspace/WorkspaceSavePackageService.h
     src/workspace/WorkspaceSavePackageService.cpp
+    src/ui/DevicePixelAlignedWidgetHost.h
+    src/ui/DevicePixelAlignedWidgetHost.cpp
 
 )
 
