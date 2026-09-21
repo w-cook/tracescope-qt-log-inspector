@@ -41,6 +41,7 @@
 #include "../importing/ILogImporter.h"
 #include "../preferences/RotatedSourceSettingsStore.h"
 
+#include "DevicePixelAlignedWidgetHost.h"
 #include "RotatedSourceConfigurationDialog.h"
 
 namespace
@@ -475,8 +476,20 @@ void ImportConfigurationDialog::
         tr("Select a log file...")
         );
 
+    auto *filePathHost =
+        new DevicePixelAlignedWidgetHost(
+            filePathEdit,
+            Qt::RightEdge,
+            this
+            );
+
+    filePathHost->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Fixed
+        );
+
     fileRow->addWidget(
-        filePathEdit,
+        filePathHost,
         1
         );
 
