@@ -12,6 +12,8 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
+#include "InterfaceScale.h"
+
 namespace
 {
 
@@ -30,11 +32,17 @@ void configureDocumentList(
         );
 
     list->setMinimumHeight(
-        DocumentListMinimumHeight
+        InterfaceScale::pixels(
+            DocumentListMinimumHeight,
+            list
+            )
         );
 
     list->setMaximumHeight(
-        DocumentListMaximumHeight
+        InterfaceScale::pixels(
+            DocumentListMaximumHeight,
+            list
+            )
         );
 
     list->setAlternatingRowColors(
@@ -133,14 +141,20 @@ InvestigationReportExportDialog::
         );
 
     setMinimumWidth(
-        600
+        InterfaceScale::pixels(
+            600,
+            this
+            )
         );
 
     auto *layout =
         new QVBoxLayout(this);
 
     layout->setSpacing(
-        10
+        InterfaceScale::pixels(
+            10,
+            this
+            )
         );
 
     auto *description =
@@ -195,7 +209,10 @@ InvestigationReportExportDialog::
         );
 
     m_contextEdit->setMaximumHeight(
-        90
+        InterfaceScale::pixels(
+            90,
+            m_contextEdit
+            )
         );
 
     reportLayout->addRow(

@@ -18,6 +18,8 @@
 #include "../workspace/InvestigationSession.h"
 #include "../workspace/InvestigationWorkspace.h"
 
+#include "InterfaceScale.h"
+
 namespace
 {
 
@@ -100,14 +102,20 @@ InvestigationComparisonDialog::
         );
 
     setMinimumWidth(
-        520
+        InterfaceScale::pixels(
+            520,
+            this
+            )
         );
 
     auto *layout =
         new QVBoxLayout(this);
 
     layout->setSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            this
+            )
         );
 
     auto *description =

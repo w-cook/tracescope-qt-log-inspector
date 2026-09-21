@@ -19,6 +19,7 @@
 #include <QFileInfo>
 #include <QTimer>
 
+#include "../InterfaceScale.h"
 #include "../../domain/RecordSeverity.h"
 
 namespace
@@ -665,7 +666,7 @@ QGroupBox *makeSourcesGroup(
         [
             layout,
             group
-    ](
+        ](
             int column,
             const QString &role,
             const InvestigationComparisonSourceSnapshot
@@ -849,7 +850,7 @@ QGroupBox *makeEventCodeGroup(
         [
             layout,
             group
-    ](
+        ](
             const QString &title,
             const QVector<InvestigationValueDifference>
                 &differences
@@ -1496,7 +1497,7 @@ QGroupBox *makeBurstGroup(
     const auto appendRow =
         [
             table
-    ](
+        ](
             const QString &metric,
             const QString &baseline,
             const QString &comparisonValue
@@ -1689,7 +1690,7 @@ QGroupBox *makeSessionContextGroup(
     const auto appendRow =
         [
             table
-    ](
+        ](
             const QString &metric,
             const QString &baseline,
             const QString &comparisonValue,
@@ -1891,10 +1892,13 @@ InvestigationComparisonDocument::
             );
 
     outerLayout->setContentsMargins(
-        6,
-        4,
-        6,
-        6
+        InterfaceScale::margins(
+            6,
+            4,
+            6,
+            6,
+            this
+            )
         );
 
     m_scrollArea =
@@ -1924,14 +1928,20 @@ InvestigationComparisonDocument::
             );
 
     contentLayout->setContentsMargins(
-        4,
-        4,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            4,
+            4,
+            4,
+            content
+            )
         );
 
     contentLayout->setSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            content
+            )
         );
 
     contentLayout->addWidget(

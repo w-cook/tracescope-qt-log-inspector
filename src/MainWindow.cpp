@@ -124,10 +124,10 @@ public:
             itemOption.text;
 
         /*
-     * Let Qt paint the normal cell background,
-     * selection, focus state, etc., but suppress
-     * its single-line text painting.
-     */
+         * Let Qt paint the normal cell background,
+         * selection, focus state, etc., but suppress
+         * its single-line text painting.
+         */
         itemOption.text.clear();
 
         style->drawControl(
@@ -162,8 +162,17 @@ public:
             text
             );
 
-        constexpr int horizontalPadding = 8;
-        constexpr int verticalPadding = 4;
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                4,
+                itemOption.widget
+                );
 
         document.setTextWidth(
             std::max(
@@ -174,10 +183,10 @@ public:
             );
 
         /*
-     * Choose the text color explicitly rather than
-     * relying on QTextDocument to infer it from the
-     * view's changing active/inactive palette.
-     */
+         * Choose the text color explicitly rather than
+         * relying on QTextDocument to infer it from the
+         * view's changing active/inactive palette.
+         */
         QPalette::ColorGroup colorGroup;
 
         if (!(itemOption.state
@@ -217,10 +226,10 @@ public:
             itemOption.palette;
 
         /*
-     * QTextDocument normally uses Text, but setting
-     * both roles makes the intended foreground
-     * unambiguous across platform styles.
-     */
+         * QTextDocument normally uses Text, but setting
+         * both roles makes the intended foreground
+         * unambiguous across platform styles.
+         */
         context.palette.setColor(
             QPalette::Text,
             textColor
@@ -246,8 +255,16 @@ public:
         painter->save();
 
         painter->translate(
-            option.rect.left() + 4,
-            option.rect.top() + 2
+            option.rect.left()
+                + InterfaceScale::pixels(
+                    4,
+                    itemOption.widget
+                    ),
+            option.rect.top()
+                + InterfaceScale::pixels(
+                    2,
+                    itemOption.widget
+                    )
             );
 
         document
@@ -299,10 +316,23 @@ public:
             itemOption.text
             );
 
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                6,
+                itemOption.widget
+                );
+
         document.setTextWidth(
             std::max(
                 1,
-                itemOption.rect.width() - 8
+                itemOption.rect.width()
+                    - horizontalPadding
                 )
             );
 
@@ -310,7 +340,8 @@ public:
             itemOption.rect.width(),
             static_cast<int>(
                 document.size().height()
-                ) + 6
+                )
+                + verticalPadding
             );
     }
 };

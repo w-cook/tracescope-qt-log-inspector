@@ -22,6 +22,8 @@
 
 #include "../preferences/RotatedSourceSettingsStore.h"
 
+#include "InterfaceScale.h"
+
 namespace
 {
 bool rotatedSourceRulesEqual(
@@ -149,8 +151,11 @@ RotatedSourceConfigurationDialog::
         );
 
     resize(
-        700,
-        480
+        InterfaceScale::size(
+            700,
+            480,
+            this
+            )
         );
 
     buildLayout();

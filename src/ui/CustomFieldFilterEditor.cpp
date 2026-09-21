@@ -10,6 +10,8 @@
 
 #include <utility>
 
+#include "InterfaceScale.h"
+
 CustomFieldFilterEditor::
     CustomFieldFilterEditor(
         QWidget *parent
@@ -47,7 +49,10 @@ CustomFieldFilterEditor::
         );
 
     mainLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     auto *inputLayout =
@@ -61,7 +66,10 @@ CustomFieldFilterEditor::
         );
 
     inputLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     auto *fieldLabel =
@@ -77,11 +85,17 @@ CustomFieldFilterEditor::
             );
 
     fieldCombo->setMinimumWidth(
-        180
+        InterfaceScale::pixels(
+            180,
+            fieldCombo
+            )
         );
 
     valueEdit->setMinimumWidth(
-        220
+        InterfaceScale::pixels(
+            220,
+            valueEdit
+            )
         );
 
     valueEdit->setPlaceholderText(
@@ -101,7 +115,10 @@ CustomFieldFilterEditor::
         );
 
     inputLayout->addSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            this
+            )
         );
 
     inputLayout->addWidget(
@@ -129,7 +146,10 @@ CustomFieldFilterEditor::
         );
 
     activeFiltersLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            activeFiltersWidget
+            )
         );
 
     mainLayout->addWidget(
@@ -482,7 +502,10 @@ void CustomFieldFilterEditor::
                 );
 
             rowLayout->setSpacing(
-                6
+                InterfaceScale::pixels(
+                    6,
+                    row
+                    )
                 );
 
             auto *label =

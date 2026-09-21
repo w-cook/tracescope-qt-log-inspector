@@ -268,8 +268,6 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationSessionRestorationService.cpp
     src/workspace/WorkspaceSavePackageService.h
     src/workspace/WorkspaceSavePackageService.cpp
-    src/ui/NativeStyleAnimationSuppressor.h
-    src/ui/NativeStyleAnimationSuppressor.cpp
     src/ui/InterfaceScale.h
     src/ui/InterfaceScale.cpp
     src/ui/InterfaceScaleStyle.h

@@ -1662,6 +1662,8 @@ qt_add_executable(
     ../src/models/InvestigationTableModel.h
     ../src/models/InvestigationTableModel.cpp
 
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
     ../src/ui/InvestigationComparisonDialog.h
     ../src/ui/InvestigationComparisonDialog.cpp
 

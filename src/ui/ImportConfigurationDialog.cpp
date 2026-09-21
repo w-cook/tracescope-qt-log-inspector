@@ -41,6 +41,7 @@
 #include "../importing/ILogImporter.h"
 #include "../preferences/RotatedSourceSettingsStore.h"
 
+#include "InterfaceScale.h"
 #include "RotatedSourceConfigurationDialog.h"
 
 namespace
@@ -315,7 +316,13 @@ ImportConfigurationDialog::ImportConfigurationDialog(
         );
 
     setAcceptDrops(true);
-    resize(1100, 700);
+    resize(
+        InterfaceScale::size(
+            1100,
+            700,
+            this
+            )
+        );
 
     workingProfile.name =
         QStringLiteral(
@@ -582,7 +589,10 @@ void ImportConfigurationDialog::
         );
 
     regexPatternEdit->setFixedHeight(
-        70
+        InterfaceScale::pixels(
+            70,
+            regexPatternEdit
+            )
         );
 
     profileLayout->addRow(
@@ -755,7 +765,10 @@ void ImportConfigurationDialog::
         );
 
     customFieldTable->setMinimumHeight(
-        130
+        InterfaceScale::pixels(
+            130,
+            customFieldTable
+            )
         );
 
     customFieldsLayout->addWidget(
@@ -824,7 +837,10 @@ void ImportConfigurationDialog::
         );
 
     severityAliasTable->setMinimumHeight(
-        120
+        InterfaceScale::pixels(
+            120,
+            severityAliasTable
+            )
         );
 
     severityAliasLayout->addWidget(
@@ -893,7 +909,10 @@ void ImportConfigurationDialog::
         );
 
     timestampRuleTable->setMinimumHeight(
-        120
+        InterfaceScale::pixels(
+            120,
+            timestampRuleTable
+            )
         );
 
     timestampRuleLayout->addWidget(
@@ -998,42 +1017,66 @@ void ImportConfigurationDialog::
         );
 
     previewHeader->setMinimumSectionSize(
-        70
+        InterfaceScale::pixels(
+            70,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         0,
-        180
+        InterfaceScale::pixels(
+            180,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         1,
-        80
+        InterfaceScale::pixels(
+            80,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         2,
-        120
+        InterfaceScale::pixels(
+            120,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         3,
-        140
+        InterfaceScale::pixels(
+            140,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         4,
-        120
+        InterfaceScale::pixels(
+            120,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         5,
-        300
+        InterfaceScale::pixels(
+            300,
+            previewTable
+            )
         );
 
     previewTable->setColumnWidth(
         6,
-        220
+        InterfaceScale::pixels(
+            220,
+            previewTable
+            )
         );
 
     auto *previewSplitter =
@@ -1057,7 +1100,10 @@ void ImportConfigurationDialog::
         );
 
     previewTable->setMinimumHeight(
-        120
+        InterfaceScale::pixels(
+            120,
+            previewTable
+            )
         );
 
     previewSplitter->addWidget(
@@ -1082,7 +1128,10 @@ void ImportConfigurationDialog::
         );
 
     rawSourceLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            rawSourcePanel
+            )
         );
 
     auto *rawSourceLabel =
@@ -1111,7 +1160,10 @@ void ImportConfigurationDialog::
         );
 
     rawSourcePreview->setMinimumHeight(
-        45
+        InterfaceScale::pixels(
+            45,
+            rawSourcePreview
+            )
         );
 
     rawSourceLayout->addWidget(
