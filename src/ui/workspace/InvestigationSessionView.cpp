@@ -5,6 +5,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QColor>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -12,6 +13,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPalette>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -20,6 +22,7 @@
 #include <QStringList>
 #include <QTextOption>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include "../InterfaceScale.h"
@@ -409,6 +412,90 @@ InvestigationSessionView::
         1
         );
 
+    m_timelineCollapseButton =
+        new QToolButton(this);
+
+    m_lowerRegionCollapseButton =
+        new QToolButton(this);
+
+    for (
+        QToolButton *button
+        : {
+            m_timelineCollapseButton,
+            m_lowerRegionCollapseButton
+        }
+        ) {
+        button->setAutoRaise(
+            true
+            );
+
+        button->setToolButtonStyle(
+            Qt::ToolButtonIconOnly
+            );
+
+        button->setCursor(
+            Qt::PointingHandCursor
+            );
+
+        button->raise();
+    }
+
+    QPalette sectionControlPalette =
+        palette();
+
+    sectionControlPalette.setColor(
+        QPalette::ButtonText,
+        QColor(128, 128, 128)
+        );
+
+    sectionControlPalette.setColor(
+        QPalette::WindowText,
+        QColor(128, 128, 128)
+        );
+
+    for (
+        QToolButton *button
+        : {
+            m_timelineCollapseButton,
+            m_lowerRegionCollapseButton
+        }
+        ) {
+        button->setPalette(
+            sectionControlPalette
+            );
+    }
+
+    connect(
+        m_timelineCollapseButton,
+        &QToolButton::clicked,
+        this,
+        [this]() {
+            setTimelineCollapsed(
+                !m_timelineCollapsed
+                );
+        }
+        );
+
+    connect(
+        m_lowerRegionCollapseButton,
+        &QToolButton::clicked,
+        this,
+        [this]() {
+            setLowerRegionCollapsed(
+                !m_lowerRegionCollapsed
+                );
+        }
+        );
+
+    connect(
+        m_mainSplitter,
+        &QSplitter::splitterMoved,
+        this,
+        [this](int, int) {
+            updateSectionCollapseControlGeometry();
+        }
+        );
+
     /*
      * ---------------------------------------------------------
      * Filter surface
@@ -619,6 +706,8 @@ InvestigationSessionView::
         &InvestigationSessionView::
         refreshLiveSessionPresentation
         );
+
+    updateSectionCollapseControls();
 
     refreshSession();
 }
@@ -1401,6 +1490,37 @@ void InvestigationSessionView::
                 m_reviewPanel
                     ->currentTab()
                 );
+        }
+        );
+
+    const int sectionButtonSize =
+        InterfaceScale::pixels(
+            18,
+            this
+            );
+
+    for (
+        QToolButton *button
+        : {
+            m_timelineCollapseButton,
+            m_lowerRegionCollapseButton
+        }
+        ) {
+        if (button != nullptr) {
+            button->setFixedSize(
+                sectionButtonSize,
+                sectionButtonSize
+                );
+        }
+    }
+
+    updateSectionCollapseControls();
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            updateSectionCollapseControlGeometry();
         }
         );
 }
@@ -2388,16 +2508,17 @@ void InvestigationSessionView::
         this,
         [this]() {
             if (
-                m_reviewPanel == nullptr
-                || m_bottomSplitter == nullptr
+                m_reviewPanel != nullptr
+                && m_bottomSplitter != nullptr
+                && !m_lowerRegionCollapsed
                 ) {
-                return;
+                updateReviewSplitter(
+                    m_reviewPanel
+                        ->currentTab()
+                    );
             }
 
-            updateReviewSplitter(
-                m_reviewPanel
-                    ->currentTab()
-                );
+            updateSectionCollapseControlGeometry();
         }
         );
 }
@@ -2618,4 +2739,398 @@ void InvestigationSessionView::
 
     m_eventPanel
         ->refreshPresentation();
+}
+
+void InvestigationSessionView::
+    updateSectionCollapseControls()
+{
+    if (m_timelineCollapseButton != nullptr) {
+        m_timelineCollapseButton
+            ->setArrowType(
+                m_timelineCollapsed
+                    ? Qt::LeftArrow
+                    : Qt::DownArrow
+                );
+
+        m_timelineCollapseButton
+            ->setToolTip(
+                m_timelineCollapsed
+                    ? tr("Expand timeline")
+                    : tr("Collapse timeline")
+                );
+
+        m_timelineCollapseButton
+            ->setAccessibleName(
+                m_timelineCollapsed
+                    ? tr("Expand timeline")
+                    : tr("Collapse timeline")
+                );
+    }
+
+    if (m_lowerRegionCollapseButton != nullptr) {
+        m_lowerRegionCollapseButton
+            ->setArrowType(
+                m_lowerRegionCollapsed
+                    ? Qt::LeftArrow
+                    : Qt::DownArrow
+                );
+
+        m_lowerRegionCollapseButton
+            ->setToolTip(
+                m_lowerRegionCollapsed
+                    ? tr(
+                          "Expand lower investigation panels"
+                          )
+                    : tr(
+                          "Collapse lower investigation panels"
+                          )
+                );
+
+        m_lowerRegionCollapseButton
+            ->setAccessibleName(
+                m_lowerRegionCollapsed
+                    ? tr(
+                          "Expand lower investigation panels"
+                          )
+                    : tr(
+                          "Collapse lower investigation panels"
+                          )
+                );
+    }
+}
+
+void InvestigationSessionView::
+    updateSectionCollapseControlGeometry()
+{
+    if (
+        m_timelineCollapseButton == nullptr
+        || m_lowerRegionCollapseButton == nullptr
+        || m_timelinePanel == nullptr
+        || m_bottomSplitter == nullptr
+        || m_reviewPanel == nullptr
+        ) {
+        return;
+    }
+
+    const int buttonSize =
+        InterfaceScale::pixels(
+            18,
+            this
+            );
+
+    const int rightInset =
+        InterfaceScale::pixels(
+            8,
+            this
+            );
+
+    const QRect documentRect =
+        contentsRect();
+
+    const int buttonX =
+        documentRect.right()
+        - rightInset
+        - buttonSize
+        + 1;
+
+    /*
+     * Timeline control:
+     * center it vertically in the existing
+     * QGroupBox title band.
+     */
+    const QPoint timelineTopLeft =
+        m_timelinePanel->mapTo(
+            this,
+            QPoint(0, 0)
+            );
+
+    const int timelineTitleBandHeight =
+        std::max(
+            buttonSize,
+            m_timelinePanel
+                    ->fontMetrics()
+                    .height()
+                + InterfaceScale::pixels(
+                    4,
+                    m_timelinePanel
+                    )
+            );
+
+    const int timelineButtonY =
+        timelineTopLeft.y()
+        + std::max(
+            0,
+            (
+                timelineTitleBandHeight
+                - buttonSize
+                )
+                / 2
+            )
+        + (
+            m_timelineCollapsed
+                ? -InterfaceScale::pixels(
+                      1,
+                      this
+                      )
+                : InterfaceScale::pixels(
+                      2,
+                      this
+                      )
+            );
+
+    /*
+     * Lower-region control:
+     * line it up with the existing Review tab band.
+     *
+     * This same button controls both Review and
+     * Selected Event Details, so it remains owned
+     * by InvestigationSessionView rather than by
+     * either child surface.
+     */
+    const QPoint lowerTopLeft =
+        m_bottomSplitter->mapTo(
+            this,
+            QPoint(0, 0)
+            );
+
+    const int lowerTitleBandHeight =
+        std::max(
+            buttonSize,
+            m_reviewPanel
+                ->collapsedHeight()
+            );
+
+    const int lowerButtonY =
+        lowerTopLeft.y()
+        + std::max(
+            0,
+            (
+                lowerTitleBandHeight
+                - buttonSize
+                )
+                / 2
+            )
+        + (
+            m_lowerRegionCollapsed
+                ? -InterfaceScale::pixels(
+                      2,
+                      this
+                      )
+                : InterfaceScale::pixels(
+                      1,
+                      this
+                      )
+            );
+
+    m_timelineCollapseButton->setGeometry(
+        buttonX,
+        timelineButtonY,
+        buttonSize,
+        buttonSize
+        );
+
+    m_lowerRegionCollapseButton->setGeometry(
+        buttonX,
+        lowerButtonY,
+        buttonSize,
+        buttonSize
+        );
+
+    /*
+     * They intentionally overlay existing chrome
+     * rather than consuming layout space.
+     */
+    m_timelineCollapseButton->raise();
+    m_lowerRegionCollapseButton->raise();
+}
+
+void InvestigationSessionView::
+    setTimelineCollapsed(
+        bool collapsed
+        )
+{
+    if (
+        m_timelineCollapsed == collapsed
+        || m_mainSplitter == nullptr
+        || m_timelinePanel == nullptr
+        ) {
+        return;
+    }
+
+    if (collapsed) {
+        const QList<int> sizes =
+            m_mainSplitter->sizes();
+
+        if (sizes.size() >= 3) {
+            m_timelineExpandedHeight =
+                sizes.at(0);
+        }
+    }
+
+    m_timelineCollapsed =
+        collapsed;
+
+    m_timelinePanel->setCollapsed(
+        collapsed
+        );
+
+    updateSectionCollapseControls();
+
+    if (!collapsed) {
+        QTimer::singleShot(
+            0,
+            this,
+            [this]() {
+                restoreMainSplitterSectionHeight(
+                    0,
+                    m_timelineExpandedHeight
+                    );
+            }
+            );
+    }
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            updateSectionCollapseControlGeometry();
+        }
+        );
+}
+
+void InvestigationSessionView::
+    setLowerRegionCollapsed(
+        bool collapsed
+        )
+{
+    if (
+        m_lowerRegionCollapsed == collapsed
+        || m_mainSplitter == nullptr
+        || m_reviewPanel == nullptr
+        || m_eventDetailPanel == nullptr
+        ) {
+        return;
+    }
+
+    if (collapsed) {
+        const QList<int> sizes =
+            m_mainSplitter->sizes();
+
+        if (sizes.size() >= 3) {
+            m_lowerRegionExpandedHeight =
+                sizes.at(2);
+        }
+    }
+
+    m_lowerRegionCollapsed =
+        collapsed;
+
+    /*
+     * Both children retain their existing chrome:
+     *
+     * Review retains its tab bar.
+     * Selected Event Details retains its group-box
+     * title.
+     *
+     * The horizontal bottom splitter therefore
+     * becomes one compact title/tab strip.
+     */
+    m_reviewPanel->setCollapsed(
+        collapsed
+        );
+
+    m_eventDetailPanel->setCollapsed(
+        collapsed
+        );
+
+    m_bottomSplitter->updateGeometry();
+    m_mainSplitter->updateGeometry();
+
+    updateSectionCollapseControls();
+
+    if (!collapsed) {
+        QTimer::singleShot(
+            0,
+            this,
+            [this]() {
+                restoreMainSplitterSectionHeight(
+                    2,
+                    m_lowerRegionExpandedHeight
+                    );
+
+                updateReviewSplitter(
+                    m_reviewPanel
+                        ->currentTab()
+                    );
+            }
+            );
+    }
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            updateSectionCollapseControlGeometry();
+        }
+        );
+}
+
+void InvestigationSessionView::
+    restoreMainSplitterSectionHeight(
+        int sectionIndex,
+        int preferredHeight
+        )
+{
+    if (
+        m_mainSplitter == nullptr
+        || preferredHeight <= 0
+        || sectionIndex < 0
+        || sectionIndex >= 3
+        ) {
+        return;
+    }
+
+    QList<int> sizes =
+        m_mainSplitter->sizes();
+
+    if (sizes.size() != 3) {
+        return;
+    }
+
+    const int currentHeight =
+        sizes.at(
+            sectionIndex
+            );
+
+    const int increase =
+        preferredHeight
+        - currentHeight;
+
+    if (increase <= 0) {
+        return;
+    }
+
+    /*
+     * Events is the stable central investigation
+     * surface. Give restored auxiliary height back
+     * primarily from that section.
+     *
+     * QWidget/QSplitter minimums remain authoritative
+     * if the requested preferred height cannot fit.
+     */
+    const int eventIndex = 1;
+
+    sizes[sectionIndex] +=
+        increase;
+
+    sizes[eventIndex] =
+        std::max(
+            1,
+            sizes.at(eventIndex)
+                - increase
+            );
+
+    m_mainSplitter->setSizes(
+        sizes
+        );
 }

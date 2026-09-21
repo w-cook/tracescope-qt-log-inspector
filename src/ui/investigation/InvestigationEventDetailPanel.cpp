@@ -679,8 +679,128 @@ void InvestigationEventDetailPanel::
         m_detailText->viewport()->update();
     }
 
+    if (m_collapsed) {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int height =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    }
+
     updateGeometry();
     update();
+}
+
+void InvestigationEventDetailPanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    /*
+     * Preserve the native QGroupBox title while
+     * removing all lower-section contents.
+     */
+    for (
+        QWidget *control
+        : {
+            static_cast<QWidget *>(
+                m_findingStatusLabel
+                ),
+            static_cast<QWidget *>(
+                m_findingStatusCombo
+                ),
+            static_cast<QWidget *>(
+                m_noteButton
+                ),
+            static_cast<QWidget *>(
+                m_bookmarkButton
+                ),
+            static_cast<QWidget *>(
+                m_detailText
+                )
+        }
+        ) {
+        if (control != nullptr) {
+            control->setVisible(
+                !collapsed
+                );
+        }
+    }
+
+    if (collapsed) {
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int height =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        updateResponsiveControls();
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationEventDetailPanel::
+    isCollapsed() const
+{
+    return m_collapsed;
+}
+
+int InvestigationEventDetailPanel::
+    collapsedHeight() const
+{
+    if (m_collapsed) {
+        return maximumHeight();
+    }
+
+    /*
+     * This is only needed by the surrounding
+     * lower-region coordinator after collapse, so
+     * the expanded fallback is deliberately zero.
+     */
+    return 0;
 }
 
 void InvestigationEventDetailPanel::

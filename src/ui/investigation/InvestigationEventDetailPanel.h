@@ -46,6 +46,14 @@ public:
 
     void refreshInterfaceScale();
 
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
+    int collapsedHeight() const;
+
 signals:
     void findingStatusChangeRequested();
     void noteEditRequested();
@@ -79,4 +87,7 @@ private:
 
     QPushButton *m_noteButton = nullptr;
     QPushButton *m_bookmarkButton = nullptr;
+
+    bool m_collapsed =
+        false;
 };

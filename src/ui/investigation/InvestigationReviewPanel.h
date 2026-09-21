@@ -61,6 +61,14 @@ public:
 
     void refreshInterfaceScale();
 
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
+    int collapsedHeight() const;
+
 signals:
     /*
      * Emitted for both user-driven tab changes and
@@ -100,4 +108,7 @@ private:
 
     InvestigationAnalyticsPanel
         *m_analyticsPanel = nullptr;
+
+    bool m_collapsed =
+        false;
 };

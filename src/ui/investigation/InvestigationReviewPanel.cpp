@@ -1,6 +1,7 @@
 #include "InvestigationReviewPanel.h"
 
 #include <QSignalBlocker>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -392,8 +393,80 @@ void InvestigationReviewPanel::
         m_tabs->update();
     }
 
+    if (m_collapsed) {
+        const int height =
+            collapsedHeight();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    }
+
     updateGeometry();
     update();
+}
+
+int InvestigationReviewPanel::
+    collapsedHeight() const
+{
+    if (
+        m_tabs == nullptr
+        || m_tabs->tabBar() == nullptr
+        ) {
+        return 0;
+    }
+
+    return m_tabs
+        ->tabBar()
+        ->sizeHint()
+        .height();
+}
+
+void InvestigationReviewPanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    if (collapsed) {
+        const int height =
+            collapsedHeight();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationReviewPanel::
+    isCollapsed() const
+{
+    return m_collapsed;
 }
 
 QWidget *

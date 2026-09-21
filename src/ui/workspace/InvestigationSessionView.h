@@ -21,6 +21,7 @@ class InvestigationTimelinePanel;
 class QSplitter;
 class QResizeEvent;
 class QTimer;
+class QToolButton;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
@@ -159,6 +160,23 @@ private:
 
     void refreshLiveSessionPresentation();
 
+    void setTimelineCollapsed(
+        bool collapsed
+        );
+
+    void setLowerRegionCollapsed(
+        bool collapsed
+        );
+
+    void updateSectionCollapseControls();
+
+    void updateSectionCollapseControlGeometry();
+
+    void restoreMainSplitterSectionHeight(
+        int sectionIndex,
+        int preferredHeight
+        );
+
     InvestigationSession *m_session =
         nullptr;
 
@@ -203,4 +221,22 @@ private:
 
     bool m_followNewest =
         false;
+
+    QToolButton *m_timelineCollapseButton =
+        nullptr;
+
+    QToolButton *m_lowerRegionCollapseButton =
+        nullptr;
+
+    bool m_timelineCollapsed =
+        false;
+
+    bool m_lowerRegionCollapsed =
+        false;
+
+    int m_timelineExpandedHeight =
+        0;
+
+    int m_lowerRegionExpandedHeight =
+        0;
 };

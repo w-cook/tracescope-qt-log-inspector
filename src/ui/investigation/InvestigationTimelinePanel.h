@@ -62,6 +62,12 @@ public:
 
     void refreshInterfaceScale();
 
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
 signals:
     /*
      * The timeline determines exactly what the
@@ -174,4 +180,7 @@ private:
 
     QSpacerItem *m_rangeSpacing =
         nullptr;
+
+    bool m_collapsed =
+        false;
 };

@@ -1469,6 +1469,31 @@ void InvestigationTimelinePanel::
             )
         );
 
+    if (m_collapsed) {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int collapsedHeight =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            collapsedHeight
+            );
+
+        setMaximumHeight(
+            collapsedHeight
+            );
+    }
+
     updateGeometry();
     update();
 
@@ -1491,6 +1516,114 @@ void InvestigationTimelinePanel::
             }
         }
         );
+}
+
+void InvestigationTimelinePanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    /*
+     * The title belongs to QGroupBox itself. Hide
+     * only the contents so "Event Counts Over Time"
+     * remains as the collapsed section identity.
+     */
+    if (m_controlsLayout != nullptr) {
+        for (
+            int index = 0;
+            index < m_controlsLayout->count();
+            ++index
+            ) {
+            QLayoutItem *item =
+                m_controlsLayout->itemAt(
+                    index
+                    );
+
+            if (
+                item != nullptr
+                && item->widget() != nullptr
+                ) {
+                item->widget()->setVisible(
+                    !collapsed
+                    );
+            }
+        }
+    }
+
+    if (m_chartView != nullptr) {
+        m_chartView->setVisible(
+            !collapsed
+            );
+    }
+
+    if (collapsed) {
+        /*
+         * Horizontal navigation belongs to the
+         * timeline contents and must disappear with
+         * them.
+         */
+        m_scrollBar->setVisible(
+            false
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        /*
+         * With all content hidden, minimumSizeHint()
+         * describes the native QGroupBox title strip
+         * plus its required frame/margins.
+         */
+        const int collapsedHeight =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            collapsedHeight
+            );
+
+        setMaximumHeight(
+            collapsedHeight
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        /*
+         * The generic controls loop made every
+         * controls-layout widget visible. Restore
+         * source-dependent Breakdown/Subsystem
+         * visibility afterward.
+         */
+        rebuildBreakdownControls();
+
+        if (m_session != nullptr) {
+            render();
+        } else {
+            showEmptyTimeline();
+        }
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationTimelinePanel::
+    isCollapsed() const
+{
+    return m_collapsed;
 }
 
 void InvestigationTimelinePanel::
