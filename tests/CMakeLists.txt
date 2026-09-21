@@ -1821,11 +1821,10 @@ qt_add_executable(
 
     ../src/ui/CustomFieldFilterEditor.h
     ../src/ui/CustomFieldFilterEditor.cpp
-    ../src/ui/DevicePixelAlignedWidgetHost.h
-    ../src/ui/DevicePixelAlignedWidgetHost.cpp
     ../src/ui/MultiSelectFilterComboBox.h
     ../src/ui/MultiSelectFilterComboBox.cpp
-
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
     ../src/ui/investigation/InvestigationAnalyticsPanel.h
     ../src/ui/investigation/InvestigationAnalyticsPanel.cpp
     ../src/ui/investigation/InvestigationEventDetailPanel.h

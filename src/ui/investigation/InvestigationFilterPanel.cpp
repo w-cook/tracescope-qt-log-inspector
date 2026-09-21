@@ -25,7 +25,7 @@
 #include <QResizeEvent>
 
 #include "../CustomFieldFilterEditor.h"
-#include "../DevicePixelAlignedWidgetHost.h"
+#include "../InterfaceScale.h"
 #include "../MultiSelectFilterComboBox.h"
 #include "../../domain/RecordSeverity.h"
 #include "../../preferences/FilterPresetStore.h"
@@ -127,7 +127,10 @@ InvestigationFilterPanel::
         );
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     /*
@@ -159,7 +162,10 @@ InvestigationFilterPanel::
     }
 
     m_levelFilterCombo->setMinimumWidth(
-        150
+        InterfaceScale::pixels(
+            150,
+            this
+            )
         );
 
     m_subsystemFilterCombo
@@ -168,7 +174,10 @@ InvestigationFilterPanel::
             );
 
     m_subsystemFilterCombo->setMinimumWidth(
-        190
+        InterfaceScale::pixels(
+            190,
+            this
+            )
         );
 
     m_subsystemFilterCombo
@@ -180,20 +189,6 @@ InvestigationFilterPanel::
     m_subsystemFilterCombo
         ->setMinimumContentsLength(
             18
-            );
-
-    m_levelFilterHost =
-        new DevicePixelAlignedWidgetHost(
-            m_levelFilterCombo,
-            Qt::RightEdge,
-            this
-            );
-
-    m_subsystemFilterHost =
-        new DevicePixelAlignedWidgetHost(
-            m_subsystemFilterCombo,
-            Qt::RightEdge,
-            this
             );
 
     /*
@@ -212,7 +207,10 @@ InvestigationFilterPanel::
         );
 
     eventCodeLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_eventCodeFilterCombo
@@ -222,18 +220,14 @@ InvestigationFilterPanel::
 
     m_eventCodeFilterCombo
         ->setMinimumWidth(
-            170
-            );
-
-    auto *eventCodeFilterHost =
-        new DevicePixelAlignedWidgetHost(
-            m_eventCodeFilterCombo,
-            Qt::RightEdge,
-            m_eventCodeFilterWidget
+            InterfaceScale::pixels(
+                170,
+                this
+                )
             );
 
     eventCodeLayout->addWidget(
-        eventCodeFilterHost
+        m_eventCodeFilterCombo
         );
 
     /*
@@ -252,7 +246,10 @@ InvestigationFilterPanel::
         );
 
     entityLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_entityFilterCombo
@@ -262,18 +259,14 @@ InvestigationFilterPanel::
 
     m_entityFilterCombo
         ->setMinimumWidth(
-            170
-            );
-
-    auto *entityFilterHost =
-        new DevicePixelAlignedWidgetHost(
-            m_entityFilterCombo,
-            Qt::RightEdge,
-            m_entityFilterWidget
+            InterfaceScale::pixels(
+                170,
+                this
+                )
             );
 
     entityLayout->addWidget(
-        entityFilterHost
+        m_entityFilterCombo
         );
 
     auto *primaryFilterLayout =
@@ -288,16 +281,19 @@ InvestigationFilterPanel::
             );
 
     primaryFilterLayout->setSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            this
+            )
         );
 
     primaryFilterLayout->addWidget(
-        m_levelFilterHost,
+        m_levelFilterCombo,
         1
         );
 
     primaryFilterLayout->addWidget(
-        m_subsystemFilterHost,
+        m_subsystemFilterCombo,
         1
         );
 
@@ -319,10 +315,10 @@ InvestigationFilterPanel::
         QWidget *filterWidget
         : {
             static_cast<QWidget *>(
-                m_levelFilterHost
+                m_levelFilterCombo
                 ),
             static_cast<QWidget *>(
-                m_subsystemFilterHost
+                m_subsystemFilterCombo
                 ),
             m_eventCodeFilterWidget,
             m_entityFilterWidget
@@ -347,27 +343,6 @@ InvestigationFilterPanel::
         );
 
     m_searchInput->setSizePolicy(
-        QSizePolicy::Expanding,
-        QSizePolicy::Fixed
-        );
-
-    /*
-     * At fractional device-pixel ratios the native
-     * line-edit frame can also lose its right edge when
-     * that edge lands between physical pixels.
-     *
-     * Preserve the layout's normal allocation while
-     * allowing the actual QLineEdit to inset slightly
-     * when spare space is available.
-     */
-    m_searchInputHost =
-        new DevicePixelAlignedWidgetHost(
-            m_searchInput,
-            Qt::RightEdge,
-            this
-            );
-
-    m_searchInputHost->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Fixed
         );
@@ -410,7 +385,10 @@ InvestigationFilterPanel::
 
     m_findingStatusFilterCombo
         ->setMinimumWidth(
-            130
+            InterfaceScale::pixels(
+                130,
+                this
+                )
             );
 
     m_findingStatusFilterCombo
@@ -425,19 +403,6 @@ InvestigationFilterPanel::
                 "Filter events by investigation "
                 "finding status"
                 )
-            );
-
-    m_findingStatusFilterHost =
-        new DevicePixelAlignedWidgetHost(
-            m_findingStatusFilterCombo,
-            Qt::RightEdge,
-            this
-            );
-
-    m_findingStatusFilterHost
-        ->setSizePolicy(
-            QSizePolicy::Fixed,
-            QSizePolicy::Fixed
             );
 
     /*
@@ -481,7 +446,10 @@ InvestigationFilterPanel::
         );
 
     timeRangeLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     auto *timeRangeLabel =
@@ -538,7 +506,10 @@ InvestigationFilterPanel::
             );
 
         edit->setMinimumWidth(
-            210
+            InterfaceScale::pixels(
+                210,
+                m_timeRangeFilterWidget
+                )
             );
     }
 
@@ -555,7 +526,10 @@ InvestigationFilterPanel::
         );
 
     timeRangeLayout->addSpacing(
-        12
+        InterfaceScale::pixels(
+            12,
+            m_timeRangeFilterWidget
+            )
         );
 
     timeRangeLayout->addWidget(
@@ -622,7 +596,10 @@ InvestigationFilterPanel::
 
     m_customFiltersDialog
         ->setMinimumWidth(
-            600
+            InterfaceScale::pixels(
+                600,
+                m_customFiltersDialog
+                )
             );
 
     auto *customDialogLayout =
@@ -664,12 +641,18 @@ InvestigationFilterPanel::
 
     m_secondaryFilterLayout
         ->setHorizontalSpacing(
-            8
+            InterfaceScale::pixels(
+                8,
+                this
+                )
             );
 
     m_secondaryFilterLayout
         ->setVerticalSpacing(
-            4
+            InterfaceScale::pixels(
+                4,
+                this
+                )
             );
 
     m_filterPresetsButton->setMenu(
@@ -687,13 +670,13 @@ InvestigationFilterPanel::
      * narrow.
      */
     m_secondaryFilterLayout->addWidget(
-        m_searchInputHost,
+        m_searchInput,
         0,
         0
         );
 
     m_secondaryFilterLayout->addWidget(
-        m_findingStatusFilterHost,
+        m_findingStatusFilterCombo,
         0,
         1
         );
@@ -1274,11 +1257,11 @@ void InvestigationFilterPanel::
                     );
         }
 
-        m_levelFilterHost->setVisible(
+        m_levelFilterCombo->setVisible(
             false
             );
 
-        m_subsystemFilterHost->setVisible(
+        m_subsystemFilterCombo->setVisible(
             false
             );
 
@@ -1294,7 +1277,7 @@ void InvestigationFilterPanel::
             false
             );
 
-        m_findingStatusFilterHost
+        m_findingStatusFilterCombo
             ->setVisible(
                 false
                 );
@@ -1565,11 +1548,11 @@ void InvestigationFilterPanel::
     /*
      * Capability-driven presentation.
      */
-    m_levelFilterHost->setVisible(
+    m_levelFilterCombo->setVisible(
         m_session->hasSeverityData()
         );
 
-    m_subsystemFilterHost->setVisible(
+    m_subsystemFilterCombo->setVisible(
         m_session->hasSubsystemData()
         );
 
@@ -1597,7 +1580,7 @@ void InvestigationFilterPanel::
         true
         );
 
-    m_findingStatusFilterHost->setVisible(
+    m_findingStatusFilterCombo->setVisible(
         true
         );
 
@@ -1679,13 +1662,32 @@ void InvestigationFilterPanel::
                 );
     }
 
+    const int popupPadding =
+        InterfaceScale::pixels(
+            40,
+            m_subsystemFilterCombo
+            );
+
+    const int minimumPopupWidth =
+        InterfaceScale::pixels(
+            240,
+            m_subsystemFilterCombo
+            );
+
+    const int maximumPopupWidth =
+        InterfaceScale::pixels(
+            650,
+            m_subsystemFilterCombo
+            );
+
     m_subsystemFilterCombo
         ->view()
         ->setMinimumWidth(
             std::clamp(
-                widestTextWidth + 40,
-                240,
-                650
+                widestTextWidth
+                    + popupPadding,
+                minimumPopupWidth,
+                maximumPopupWidth
                 )
             );
 
@@ -1735,13 +1737,32 @@ void InvestigationFilterPanel::
                         );
             }
 
+            const int popupPadding =
+                InterfaceScale::pixels(
+                    50,
+                    combo
+                    );
+
+            const int minimumPopupWidth =
+                InterfaceScale::pixels(
+                    220,
+                    combo
+                    );
+
+            const int maximumPopupWidth =
+                InterfaceScale::pixels(
+                    700,
+                    combo
+                    );
+
             combo
                 ->view()
                 ->setMinimumWidth(
                     std::clamp(
-                        widestTextWidth + 50,
-                        220,
-                        700
+                        widestTextWidth
+                            + popupPadding,
+                        minimumPopupWidth,
+                        maximumPopupWidth
                         )
                     );
 
@@ -3388,11 +3409,11 @@ void InvestigationFilterPanel::
      * Live records can introduce capabilities that
      * were absent from the static baseline.
      */
-    m_levelFilterHost->setVisible(
+    m_levelFilterCombo->setVisible(
         m_session->hasSeverityData()
         );
 
-    m_subsystemFilterHost->setVisible(
+    m_subsystemFilterCombo->setVisible(
         m_session->hasSubsystemData()
         );
 
@@ -3441,8 +3462,11 @@ int InvestigationFilterPanel::
      * switching layouts only once it has collapsed
      * to an impractically tiny field.
      */
-    constexpr int PreferredSearchWidth =
-        260;
+    const int preferredSearchWidth =
+        InterfaceScale::pixels(
+            260,
+            this
+            );
 
     const int spacing =
         m_secondaryFilterLayout != nullptr
@@ -3451,11 +3475,14 @@ int InvestigationFilterPanel::
                   m_secondaryFilterLayout
                       ->horizontalSpacing()
                   )
-            : 8;
+            : InterfaceScale::pixels(
+                8,
+                this
+                );
 
-    return PreferredSearchWidth
+    return preferredSearchWidth
            + controlWidth(
-               m_findingStatusFilterHost
+               m_findingStatusFilterCombo
                )
            + controlWidth(
                m_bookmarksOnlyCheckBox
@@ -3496,8 +3523,8 @@ void InvestigationFilterPanel::
         compact;
 
     const QList<QWidget *> controls = {
-        m_searchInputHost,
-        m_findingStatusFilterHost,
+        m_searchInput,
+        m_findingStatusFilterCombo,
         m_bookmarksOnlyCheckBox,
         m_timeRangeButton,
         m_customFiltersButton,
@@ -3520,13 +3547,13 @@ void InvestigationFilterPanel::
          * Search | Status | Bookmarks | actions...
          */
         m_secondaryFilterLayout->addWidget(
-            m_searchInputHost,
+            m_searchInput,
             0,
             0
             );
 
         m_secondaryFilterLayout->addWidget(
-            m_findingStatusFilterHost,
+            m_findingStatusFilterCombo,
             0,
             1
             );
@@ -3568,7 +3595,7 @@ void InvestigationFilterPanel::
          * Time | Custom | Presets | Reset
          */
         m_secondaryFilterLayout->addWidget(
-            m_searchInputHost,
+            m_searchInput,
             0,
             0,
             1,
@@ -3576,7 +3603,7 @@ void InvestigationFilterPanel::
             );
 
         m_secondaryFilterLayout->addWidget(
-            m_findingStatusFilterHost,
+            m_findingStatusFilterCombo,
             0,
             2
             );

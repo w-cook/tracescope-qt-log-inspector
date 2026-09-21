@@ -49,6 +49,7 @@
 #include "persistence/InvestigationSessionSnapshotFile.h"
 #include "sources/RotatedSourceDiscoveryService.h"
 #include "ui/ImportConfigurationDialog.h"
+#include "ui/InterfaceScale.h"
 #include "ui/InvestigationComparisonDialog.h"
 #include "ui/InvestigationReportExportDialog.h"
 #include "ui/workspace/DetachedWorkspaceDocumentWindow.h"
@@ -508,10 +509,20 @@ MainWindow::MainWindow(QWidget *parent)
             "TraceScope — Unsaved Workspace"
             )
         );
-    resize(1100, 760);
+
+    resize(
+        InterfaceScale::size(
+            1100,
+            760,
+            this
+            )
+        );
 
     setMinimumWidth(
-        720
+        InterfaceScale::pixels(
+            720,
+            this
+            )
         );
 
     setAcceptDrops(true);

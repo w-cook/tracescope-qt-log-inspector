@@ -11,7 +11,6 @@
 #include "../../models/InvestigationFilterProxyModel.h"
 
 class CustomFieldFilterEditor;
-class DevicePixelAlignedWidgetHost;
 class FilterPresetStore;
 class InvestigationSession;
 class MultiSelectFilterComboBox;
@@ -145,14 +144,8 @@ private:
     MultiSelectFilterComboBox
         *m_levelFilterCombo = nullptr;
 
-    DevicePixelAlignedWidgetHost
-        *m_levelFilterHost = nullptr;
-
     MultiSelectFilterComboBox
         *m_subsystemFilterCombo = nullptr;
-
-    DevicePixelAlignedWidgetHost
-        *m_subsystemFilterHost = nullptr;
 
     MultiSelectFilterComboBox
         *m_eventCodeFilterCombo = nullptr;
@@ -163,14 +156,8 @@ private:
     MultiSelectFilterComboBox
         *m_findingStatusFilterCombo = nullptr;
 
-    DevicePixelAlignedWidgetHost
-        *m_findingStatusFilterHost = nullptr;
-
     QLineEdit *m_searchInput =
         nullptr;
-
-    DevicePixelAlignedWidgetHost
-        *m_searchInputHost = nullptr;
 
     QCheckBox *m_bookmarksOnlyCheckBox =
         nullptr;
