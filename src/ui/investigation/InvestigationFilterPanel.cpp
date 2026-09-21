@@ -346,7 +346,44 @@ InvestigationFilterPanel::
             )
         );
 
+    /*
+     * QWindowsVistaStyle renders the line-edit frame
+     * through native state transitions. At fractional
+     * device-pixel ratios those transition buffers can
+     * temporarily lose a one-pixel frame edge during
+     * hover/focus changes.
+     *
+     * Search has been manually verified to exhibit that
+     * behavior at 125% Windows scaling, so disable the
+     * native transition animation for this control.
+     */
+    m_searchInput->setProperty(
+        "_q_no_animation",
+        true
+        );
+
     m_searchInput->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Fixed
+        );
+
+    /*
+     * At fractional device-pixel ratios the native
+     * line-edit frame can also lose its right edge when
+     * that edge lands between physical pixels.
+     *
+     * Preserve the layout's normal allocation while
+     * allowing the actual QLineEdit to inset slightly
+     * when spare space is available.
+     */
+    m_searchInputHost =
+        new DevicePixelAlignedWidgetHost(
+            m_searchInput,
+            Qt::RightEdge,
+            this
+            );
+
+    m_searchInputHost->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Fixed
         );
@@ -666,7 +703,7 @@ InvestigationFilterPanel::
      * narrow.
      */
     m_secondaryFilterLayout->addWidget(
-        m_searchInput,
+        m_searchInputHost,
         0,
         0
         );
@@ -3475,7 +3512,7 @@ void InvestigationFilterPanel::
         compact;
 
     const QList<QWidget *> controls = {
-        m_searchInput,
+        m_searchInputHost,
         m_findingStatusFilterHost,
         m_bookmarksOnlyCheckBox,
         m_timeRangeButton,
@@ -3499,7 +3536,7 @@ void InvestigationFilterPanel::
          * Search | Status | Bookmarks | actions...
          */
         m_secondaryFilterLayout->addWidget(
-            m_searchInput,
+            m_searchInputHost,
             0,
             0
             );
@@ -3547,7 +3584,7 @@ void InvestigationFilterPanel::
          * Time | Custom | Presets | Reset
          */
         m_secondaryFilterLayout->addWidget(
-            m_searchInput,
+            m_searchInputHost,
             0,
             0,
             1,

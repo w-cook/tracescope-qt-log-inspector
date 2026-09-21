@@ -169,6 +169,9 @@ private:
     QLineEdit *m_searchInput =
         nullptr;
 
+    DevicePixelAlignedWidgetHost
+        *m_searchInputHost = nullptr;
+
     QCheckBox *m_bookmarksOnlyCheckBox =
         nullptr;
 
