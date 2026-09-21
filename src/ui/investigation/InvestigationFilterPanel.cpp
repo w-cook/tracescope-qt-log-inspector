@@ -346,22 +346,6 @@ InvestigationFilterPanel::
             )
         );
 
-    /*
-     * QWindowsVistaStyle renders the line-edit frame
-     * through native state transitions. At fractional
-     * device-pixel ratios those transition buffers can
-     * temporarily lose a one-pixel frame edge during
-     * hover/focus changes.
-     *
-     * Search has been manually verified to exhibit that
-     * behavior at 125% Windows scaling, so disable the
-     * native transition animation for this control.
-     */
-    m_searchInput->setProperty(
-        "_q_no_animation",
-        true
-        );
-
     m_searchInput->setSizePolicy(
         QSizePolicy::Expanding,
         QSizePolicy::Fixed

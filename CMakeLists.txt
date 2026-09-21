@@ -270,6 +270,8 @@ qt_add_executable(TraceScope
     src/workspace/WorkspaceSavePackageService.cpp
     src/ui/DevicePixelAlignedWidgetHost.h
     src/ui/DevicePixelAlignedWidgetHost.cpp
+    src/ui/NativeStyleAnimationSuppressor.h
+    src/ui/NativeStyleAnimationSuppressor.cpp
 
 )
 
