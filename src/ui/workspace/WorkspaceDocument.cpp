@@ -119,3 +119,10 @@ QWidget *WorkspaceDocument::
 
     return nullptr;
 }
+
+void WorkspaceDocument::
+    refreshInterfaceScale()
+{
+    updateGeometry();
+    update();
+}

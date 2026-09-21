@@ -1,12 +1,13 @@
 #include <QApplication>
 #include <QCoreApplication>
-#include <QFont>
 #include <QGuiApplication>
+#include <QSettings>
 
-#include <algorithm>
 #include <memory>
 
 #include "MainWindow.h"
+
+#include "preferences/InterfaceScaleSettingsStore.h"
 #include "ui/InterfaceScale.h"
 #include "ui/InterfaceScaleStyle.h"
 
@@ -30,16 +31,8 @@ int main(int argc, char *argv[])
         QStringLiteral("TraceScope")
         );
 
-    /*
-     * Temporary Phase 16 test value.
-     *
-     * 1.00 means "match the operating system".
-     *
-     * We will replace this with the persisted user
-     * preference after validating the architecture.
-     */
-    InterfaceScale::setUserFactor(
-        1.0
+    InterfaceScale::initializeApplication(
+        &app
         );
 
 #ifdef Q_OS_WIN
@@ -59,44 +52,18 @@ int main(int argc, char *argv[])
     interfaceScaleStyle.release();
 #endif
 
-    /*
-     * Qt already scales the base font according to
-     * the operating system's logical DPI. Apply only
-     * the user's relative TraceScope adjustment.
-     */
-    const qreal nativeScaleFactor =
-        InterfaceScale::nativeFactor();
+    QSettings startupSettings;
 
-    if (!qFuzzyCompare(
-            nativeScaleFactor,
-            1.0
-            )) {
-        QFont scaledFont =
-            app.font();
-
-        if (scaledFont.pointSizeF() > 0.0) {
-            scaledFont.setPointSizeF(
-                scaledFont.pointSizeF()
-                * nativeScaleFactor
-                );
-        } else if (
-            scaledFont.pixelSize() > 0
-            ) {
-            scaledFont.setPixelSize(
-                std::max(
-                    1,
-                    qRound(
-                        scaledFont.pixelSize()
-                        * nativeScaleFactor
-                        )
-                    )
-                );
-        }
-
-        app.setFont(
-            scaledFont
+    InterfaceScaleSettingsStore
+        interfaceScaleSettingsStore(
+            startupSettings
             );
-    }
+
+    InterfaceScale::applyUserFactor(
+        &app,
+        interfaceScaleSettingsStore
+            .userFactor()
+        );
 
     MainWindow window;
     window.show();

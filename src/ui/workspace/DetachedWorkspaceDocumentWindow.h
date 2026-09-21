@@ -97,6 +97,10 @@ signals:
 
     void applicationCloseRequested();
 
+    void interfaceScaleRequested(
+        qreal factor
+        );
+
 protected:
     void closeEvent(
         QCloseEvent *event
@@ -104,6 +108,8 @@ protected:
 
 private:
     void createMenus();
+
+    void updateInterfaceScaleGeometry();
 
     WorkspaceDocumentHost *m_documentHost =
         nullptr;

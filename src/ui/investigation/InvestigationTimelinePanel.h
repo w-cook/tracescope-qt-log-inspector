@@ -15,8 +15,10 @@
 class InvestigationSession;
 class QChartView;
 class QComboBox;
+class QHBoxLayout;
 class QLabel;
 class QScrollBar;
+class QSpacerItem;
 class QWidget;
 class QResizeEvent;
 class QTimer;
@@ -57,6 +59,8 @@ public:
     void restorePresentationState(
         const InvestigationTimelinePresentationState &state
         );
+
+    void refreshInterfaceScale();
 
 signals:
     /*
@@ -160,5 +164,14 @@ private:
         1;
 
     QTimer *m_resizeRenderTimer =
+        nullptr;
+
+    QHBoxLayout *m_controlsLayout =
+        nullptr;
+
+    QSpacerItem *m_intervalBreakdownSpacing =
+        nullptr;
+
+    QSpacerItem *m_rangeSpacing =
         nullptr;
 };

@@ -1,9 +1,11 @@
 #include "MainWindow.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDragEnterEvent>
@@ -530,6 +532,7 @@ struct MainWindow::WorkspaceOpenOperation
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     settings(),
+    interfaceScaleSettingsStore(settings),
     recentItemsStore(settings),
     filterPresetStore(settings),
     rotatedSourceSettingsStore(settings),
@@ -560,6 +563,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     createMenus();
     buildLayout();
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+            userFactorChanged,
+        this,
+        [this](qreal) {
+            setMinimumWidth(
+                InterfaceScale::pixels(
+                    720,
+                    this
+                    )
+                );
+        }
+        );
 
     connect(
         workspaceDocumentHost,
@@ -1282,6 +1300,121 @@ void MainWindow::createMenus()
         saveWorkspaceAsAction
         );
 
+    auto *viewMenu =
+        menuBar()->addMenu(
+            tr("&View")
+            );
+
+    auto *interfaceScaleMenu =
+        viewMenu->addMenu(
+            tr("Interface &Scale")
+            );
+
+    auto *interfaceScaleGroup =
+        new QActionGroup(
+            interfaceScaleMenu
+            );
+
+    interfaceScaleGroup->setExclusive(
+        true
+        );
+
+    for (
+        const qreal factor
+        : InterfaceScale::presetUserFactors()
+        ) {
+        const int percentage =
+            qRound(
+                factor * 100.0
+                );
+
+        const QString label =
+            qFuzzyCompare(
+                factor,
+                1.0
+                )
+                ? tr("%1% (System)")
+                      .arg(
+                          percentage
+                          )
+                : tr("%1%")
+                      .arg(
+                          percentage
+                          );
+
+        QAction *action =
+            interfaceScaleMenu->addAction(
+                label
+                );
+
+        action->setCheckable(
+            true
+            );
+
+        action->setData(
+            factor
+            );
+
+        action->setChecked(
+            qFuzzyCompare(
+                factor,
+                InterfaceScale::userFactor()
+                )
+            );
+
+        interfaceScaleGroup->addAction(
+            action
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [this, factor](
+                bool checked
+                ) {
+                if (!checked) {
+                    return;
+                }
+
+                applyInterfaceScale(
+                    factor
+                    );
+            }
+            );
+    }
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+            userFactorChanged,
+        interfaceScaleMenu,
+        [
+            interfaceScaleGroup
+        ](
+            qreal factor
+            ) {
+            for (
+                QAction *action
+                : interfaceScaleGroup
+                      ->actions()
+                ) {
+                if (action == nullptr) {
+                    continue;
+                }
+
+                action->setChecked(
+                    qFuzzyCompare(
+                        action
+                            ->data()
+                            .toDouble(),
+                        factor
+                        )
+                    );
+            }
+        }
+        );
+
     auto *exportingMenu =
         menuBar()->addMenu(
             tr("&Exporting")
@@ -1582,6 +1715,18 @@ void MainWindow::configureDetachedWindow(
             ) {
             reloadActiveSession(
                 targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+            interfaceScaleRequested,
+        this,
+        [this](qreal factor) {
+            applyInterfaceScale(
+                factor
                 );
         }
         );
@@ -8865,4 +9010,28 @@ void MainWindow::resetWorkspaceIdentity()
 
     updateComparisonActionState();
     updateReloadActionState();
+}
+
+void MainWindow::applyInterfaceScale(
+    qreal factor
+    )
+{
+    QApplication *application =
+        qobject_cast<QApplication *>(
+            QCoreApplication::instance()
+            );
+
+    if (application == nullptr) {
+        return;
+    }
+
+    InterfaceScale::applyUserFactor(
+        application,
+        factor
+        );
+
+    interfaceScaleSettingsStore
+        .setUserFactor(
+            InterfaceScale::userFactor()
+            );
 }

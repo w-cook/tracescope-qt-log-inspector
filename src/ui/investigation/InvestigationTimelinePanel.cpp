@@ -16,6 +16,7 @@
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QSpacerItem>
 #include <QTimeZone>
 #include <QVariant>
 #include <QVBoxLayout>
@@ -520,17 +521,17 @@ InvestigationTimelinePanel::
             )
         );
 
-    auto *controlsLayout =
+    m_controlsLayout =
         new QHBoxLayout();
 
-    controlsLayout->setContentsMargins(
+    m_controlsLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    controlsLayout->setSpacing(
+    m_controlsLayout->setSpacing(
         InterfaceScale::pixels(
             6,
             this
@@ -704,19 +705,27 @@ InvestigationTimelinePanel::
             )
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         intervalLabel
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_intervalCombo
         );
 
-    controlsLayout->addSpacing(
-        InterfaceScale::pixels(
-            12,
-            this
-            )
+    m_intervalBreakdownSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                12,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    m_controlsLayout->addItem(
+        m_intervalBreakdownSpacing
         );
 
     /*
@@ -769,7 +778,7 @@ InvestigationTimelinePanel::
         m_breakdownCombo
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_breakdownWidget
         );
 
@@ -821,7 +830,7 @@ InvestigationTimelinePanel::
         m_subsystemLimitCombo
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_subsystemShowWidget
         );
 
@@ -843,20 +852,28 @@ InvestigationTimelinePanel::
         QSizePolicy::Preferred
         );
 
-    controlsLayout->addSpacing(
-        InterfaceScale::pixels(
-            12,
-            this
-            )
+    m_rangeSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                12,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    m_controlsLayout->addItem(
+        m_rangeSpacing
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_rangeLabel,
         1
         );
 
     timelineLayout->addLayout(
-        controlsLayout
+        m_controlsLayout
         );
 
     /*
@@ -1303,6 +1320,177 @@ void InvestigationTimelinePanel::
      * Re-render using the restored starting bucket.
      */
     render();
+}
+
+void InvestigationTimelinePanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setContentsMargins(
+            InterfaceScale::margins(
+                4,
+                2,
+                4,
+                2,
+                this
+                )
+            );
+
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                2,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_controlsLayout != nullptr) {
+        m_controlsLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_controlsLayout->invalidate();
+    }
+
+    if (m_intervalBreakdownSpacing != nullptr) {
+        m_intervalBreakdownSpacing
+            ->changeSize(
+                InterfaceScale::pixels(
+                    12,
+                    this
+                    ),
+                0,
+                QSizePolicy::Fixed,
+                QSizePolicy::Minimum
+                );
+    }
+
+    if (
+        m_breakdownWidget != nullptr
+        && m_breakdownWidget->layout()
+               != nullptr
+        ) {
+        m_breakdownWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    m_breakdownWidget
+                    )
+                );
+
+        m_breakdownWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (
+        m_subsystemShowWidget != nullptr
+        && m_subsystemShowWidget->layout()
+               != nullptr
+        ) {
+        m_subsystemShowWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    m_subsystemShowWidget
+                    )
+                );
+
+        m_subsystemShowWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (m_rangeSpacing != nullptr) {
+        m_rangeSpacing->changeSize(
+            InterfaceScale::pixels(
+                12,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+    }
+
+    /*
+     * These widths combine current font metrics
+     * with TraceScope-authored padding, so both
+     * portions must be recalculated after the
+     * application font changes.
+     */
+    int intervalPopupWidth = 0;
+
+    for (
+        int index = 0;
+        index < m_intervalCombo->count();
+        ++index
+        ) {
+        intervalPopupWidth =
+            std::max(
+                intervalPopupWidth,
+                m_intervalCombo
+                    ->fontMetrics()
+                    .horizontalAdvance(
+                        m_intervalCombo
+                            ->itemText(
+                                index
+                                )
+                        )
+                );
+    }
+
+    m_intervalCombo
+        ->view()
+        ->setMinimumWidth(
+            intervalPopupWidth
+            + InterfaceScale::pixels(
+                40,
+                m_intervalCombo
+                )
+            );
+
+    m_breakdownCombo->setMinimumWidth(
+        m_breakdownCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Subsystem")
+                )
+        + InterfaceScale::pixels(
+            40,
+            m_breakdownCombo
+            )
+        );
+
+    updateGeometry();
+    update();
+
+    /*
+     * Recreate the chart after layout/font changes.
+     * Existing QChart/QAxis objects were constructed
+     * under the previous application presentation.
+     *
+     * Defer until layouts have settled so responsive
+     * bucket calculations see the new viewport size.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_session != nullptr) {
+                render();
+            } else {
+                showEmptyTimeline();
+            }
+        }
+        );
 }
 
 void InvestigationTimelinePanel::

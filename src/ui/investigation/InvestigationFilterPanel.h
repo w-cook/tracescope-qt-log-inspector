@@ -17,9 +17,11 @@ class MultiSelectFilterComboBox;
 class QCheckBox;
 class QDateTimeEdit;
 class QDialog;
+class QHBoxLayout;
 class QLineEdit;
 class QMenu;
 class QPushButton;
+class QSpacerItem;
 class QTimer;
 class QGridLayout;
 class QResizeEvent;
@@ -92,6 +94,8 @@ public:
     bool bookmarksOnly() const;
 
     void refreshAvailableOptions();
+
+    void refreshInterfaceScale();
 
 signals:
     /*
@@ -215,4 +219,10 @@ private:
 
     bool m_secondaryLayoutCompact =
         false;
+
+    QHBoxLayout *m_primaryFilterLayout =
+        nullptr;
+
+    QSpacerItem *m_timeRangeSpacing =
+        nullptr;
 };

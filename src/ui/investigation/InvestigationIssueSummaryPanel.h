@@ -41,6 +41,8 @@ public:
         const InvestigationTablePresentationState &state
         );
 
+    void refreshInterfaceScale();
+
 signals:
     void drillDownRequested(
         const QString &subsystem,

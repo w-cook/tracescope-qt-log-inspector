@@ -369,6 +369,33 @@ void InvestigationReviewPanel::
     }
 }
 
+void InvestigationReviewPanel::
+    refreshInterfaceScale()
+{
+    if (m_issueSummaryPanel != nullptr) {
+        m_issueSummaryPanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_findingsPanel != nullptr) {
+        m_findingsPanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_analyticsPanel != nullptr) {
+        m_analyticsPanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_tabs != nullptr) {
+        m_tabs->updateGeometry();
+        m_tabs->update();
+    }
+
+    updateGeometry();
+    update();
+}
+
 QWidget *
 InvestigationReviewPanel::pageForTab(
     InvestigationReviewTab tab

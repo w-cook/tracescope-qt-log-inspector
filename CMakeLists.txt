@@ -272,6 +272,8 @@ qt_add_executable(TraceScope
     src/ui/InterfaceScale.cpp
     src/ui/InterfaceScaleStyle.h
     src/ui/InterfaceScaleStyle.cpp
+    src/preferences/InterfaceScaleSettingsStore.h
+    src/preferences/InterfaceScaleSettingsStore.cpp
 
 )
 

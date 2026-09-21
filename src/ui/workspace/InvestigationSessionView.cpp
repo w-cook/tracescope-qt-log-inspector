@@ -1321,6 +1321,91 @@ QWidget *InvestigationSessionView::
 }
 
 void InvestigationSessionView::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setContentsMargins(
+            InterfaceScale::margins(
+                6,
+                4,
+                6,
+                6,
+                this
+                )
+            );
+
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_filterPanel != nullptr) {
+        m_filterPanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_timelinePanel != nullptr) {
+        m_timelinePanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_eventPanel != nullptr) {
+        m_eventPanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_reviewPanel != nullptr) {
+        m_reviewPanel
+            ->refreshInterfaceScale();
+    }
+
+    if (m_eventDetailPanel != nullptr) {
+        m_eventDetailPanel
+            ->refreshInterfaceScale();
+    }
+
+    /*
+     * The remaining persistent panels will be added
+     * here as their live-scale refresh methods are
+     * implemented.
+     */
+
+    WorkspaceDocument::
+        refreshInterfaceScale();
+
+    /*
+     * Interface scale changes can move the responsive
+     * review/detail breakpoints even though the outer
+     * window rectangle is intentionally preserved.
+     *
+     * Wait until Qt has processed the new font/style
+     * and layout geometry before recalculating.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (
+                m_reviewPanel == nullptr
+                || m_bottomSplitter == nullptr
+                ) {
+                return;
+            }
+
+            updateReviewSplitter(
+                m_reviewPanel
+                    ->currentTab()
+                );
+        }
+        );
+}
+
+void InvestigationSessionView::
     applyFilters()
 {
     if (m_session == nullptr) {

@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QSpacerItem>
 #include <QTimeZone>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -269,10 +270,10 @@ InvestigationFilterPanel::
         m_entityFilterCombo
         );
 
-    auto *primaryFilterLayout =
+    m_primaryFilterLayout =
         new QHBoxLayout();
 
-    primaryFilterLayout
+    m_primaryFilterLayout
         ->setContentsMargins(
             0,
             0,
@@ -280,35 +281,35 @@ InvestigationFilterPanel::
             0
             );
 
-    primaryFilterLayout->setSpacing(
+    m_primaryFilterLayout->setSpacing(
         InterfaceScale::pixels(
             8,
             this
             )
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_levelFilterCombo,
         1
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_subsystemFilterCombo,
         1
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_eventCodeFilterWidget,
         1
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_entityFilterWidget,
         1
         );
 
     layout->addLayout(
-        primaryFilterLayout
+        m_primaryFilterLayout
         );
 
     for (
@@ -525,11 +526,19 @@ InvestigationFilterPanel::
         m_timeRangeStartEdit
         );
 
-    timeRangeLayout->addSpacing(
-        InterfaceScale::pixels(
-            12,
-            m_timeRangeFilterWidget
-            )
+    m_timeRangeSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                12,
+                m_timeRangeFilterWidget
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    timeRangeLayout->addItem(
+        m_timeRangeSpacing
         );
 
     timeRangeLayout->addWidget(
@@ -3438,6 +3447,228 @@ void InvestigationFilterPanel::
 
     resizeCustomFiltersDialogToContents();
     updateResponsiveLayout();
+}
+
+void InvestigationFilterPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * Main vertical filter layout.
+     */
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    /*
+     * Primary categorical filters.
+     */
+    m_levelFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            150,
+            this
+            )
+        );
+
+    m_subsystemFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            190,
+            this
+            )
+        );
+
+    m_eventCodeFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            170,
+            this
+            )
+        );
+
+    m_entityFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            170,
+            this
+            )
+        );
+
+    if (
+        m_eventCodeFilterWidget != nullptr
+        && m_eventCodeFilterWidget->layout()
+               != nullptr
+        ) {
+        m_eventCodeFilterWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    this
+                    )
+                );
+
+        m_eventCodeFilterWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (
+        m_entityFilterWidget != nullptr
+        && m_entityFilterWidget->layout()
+               != nullptr
+        ) {
+        m_entityFilterWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    this
+                    )
+                );
+
+        m_entityFilterWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (m_primaryFilterLayout != nullptr) {
+        m_primaryFilterLayout->setSpacing(
+            InterfaceScale::pixels(
+                8,
+                this
+                )
+            );
+
+        m_primaryFilterLayout->invalidate();
+    }
+
+    /*
+     * Secondary/state filters.
+     */
+    m_findingStatusFilterCombo
+        ->setMinimumWidth(
+            InterfaceScale::pixels(
+                130,
+                this
+                )
+            );
+
+    if (m_secondaryFilterLayout != nullptr) {
+        m_secondaryFilterLayout
+            ->setHorizontalSpacing(
+                InterfaceScale::pixels(
+                    8,
+                    this
+                    )
+                );
+
+        m_secondaryFilterLayout
+            ->setVerticalSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    this
+                    )
+                );
+
+        m_secondaryFilterLayout
+            ->invalidate();
+    }
+
+    /*
+     * Time-range dialog.
+     */
+    if (
+        m_timeRangeFilterWidget != nullptr
+        && m_timeRangeFilterWidget
+                   ->layout()
+               != nullptr
+        ) {
+        m_timeRangeFilterWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    6,
+                    m_timeRangeFilterWidget
+                    )
+                );
+
+        m_timeRangeFilterWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    for (
+        QDateTimeEdit *edit
+        : {
+            m_timeRangeStartEdit,
+            m_timeRangeEndEdit
+        }
+        ) {
+        if (edit != nullptr) {
+            edit->setMinimumWidth(
+                InterfaceScale::pixels(
+                    210,
+                    m_timeRangeFilterWidget
+                    )
+                );
+        }
+    }
+
+    if (m_timeRangeSpacing != nullptr) {
+        m_timeRangeSpacing->changeSize(
+            InterfaceScale::pixels(
+                12,
+                m_timeRangeFilterWidget
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+    }
+
+    /*
+     * Custom-field dialog.
+     */
+    if (m_customFiltersDialog != nullptr) {
+        m_customFiltersDialog
+            ->setMinimumWidth(
+                InterfaceScale::pixels(
+                    600,
+                    m_customFiltersDialog
+                    )
+                );
+    }
+
+    if (m_customFieldFilterEditor != nullptr) {
+        m_customFieldFilterEditor
+            ->refreshInterfaceScale();
+    }
+
+    /*
+     * Popup widths combine font-derived measurements
+     * with explicit scaled padding/bounds. Recalculate
+     * them now that the application font has changed.
+     */
+    if (m_session != nullptr) {
+        refreshSubsystemOptions();
+        refreshCanonicalOptions();
+    }
+
+    resizeCustomFiltersDialogToContents();
+
+    /*
+     * The new scale can move the responsive breakpoint
+     * even though this widget's physical width did not
+     * change.
+     */
+    updateResponsiveLayout();
+
+    updateGeometry();
+    update();
 }
 
 int InvestigationFilterPanel::

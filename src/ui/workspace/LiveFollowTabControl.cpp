@@ -476,6 +476,16 @@ LiveFollowTabControl::
         }
         );
 
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        this,
+        [this](qreal) {
+            refreshInterfaceScale();
+        }
+        );
+
     /*
      * If this tab accessory is being recreated after
      * a tear-out or redock, reconnect to the existing
@@ -1086,4 +1096,72 @@ void LiveFollowTabControl::
     tabBar->refreshTabAccessoryLayout(
         this
         );
+}
+
+void LiveFollowTabControl::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                ControlSpacing,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    const int controlButtonSize =
+        InterfaceScale::pixels(
+            ControlButtonSize,
+            this
+            );
+
+    const int controlIconDisplaySize =
+        InterfaceScale::pixels(
+            ControlIconDisplaySize,
+            this
+            );
+
+    m_statusBadge->setFixedHeight(
+        controlButtonSize
+        );
+
+    for (
+        QToolButton *button
+        : {
+            m_primaryButton,
+            m_stopButton,
+            m_followNewestButton
+        }
+        ) {
+        if (button == nullptr) {
+            continue;
+        }
+
+        button->setFixedSize(
+            controlButtonSize,
+            controlButtonSize
+            );
+
+        button->setIconSize(
+            QSize(
+                controlIconDisplaySize,
+                controlIconDisplaySize
+                )
+            );
+    }
+
+    /*
+     * Rebuild all state-dependent presentation
+     * using the new Interface Scale:
+     *
+     * - status-badge width
+     * - badge padding/radius
+     * - action icons and their logical canvases
+     * - follow-newest styling
+     * - final tab-accessory geometry
+     */
+    refreshPresentation();
 }

@@ -59,6 +59,8 @@ public:
         const InvestigationReviewPresentationState &state
         );
 
+    void refreshInterfaceScale();
+
 signals:
     /*
      * Emitted for both user-driven tab changes and

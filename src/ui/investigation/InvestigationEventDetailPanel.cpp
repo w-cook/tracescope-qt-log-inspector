@@ -636,6 +636,54 @@ void InvestigationEventDetailPanel::
 }
 
 void InvestigationEventDetailPanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_stateLayout != nullptr) {
+        m_stateLayout->setHorizontalSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_stateLayout->setVerticalSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        m_stateLayout->invalidate();
+    }
+
+    /*
+     * Recalculate content-derived minimum widths and
+     * the compact/wide breakpoint using the new font,
+     * style metrics, and Interface Scale.
+     */
+    updateResponsiveControls();
+
+    if (m_detailText != nullptr) {
+        m_detailText->updateGeometry();
+        m_detailText->viewport()->update();
+    }
+
+    updateGeometry();
+    update();
+}
+
+void InvestigationEventDetailPanel::
     updateResponsiveControls()
 {
     if (m_stateLayout == nullptr) {

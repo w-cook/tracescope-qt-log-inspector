@@ -44,6 +44,8 @@ public:
         const InvestigationFindingExportCounts &counts
         );
 
+    void refreshInterfaceScale();
+
 signals:
     void findingActivated(
         const QString &recordId

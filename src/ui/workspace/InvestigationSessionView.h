@@ -69,6 +69,9 @@ public:
         QWidget *parent
         ) override;
 
+    void refreshInterfaceScale()
+        override;
+
 signals:
     void liveFollowStateChanged();
 

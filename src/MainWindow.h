@@ -13,6 +13,7 @@
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
 #include "preferences/FilterPresetStore.h"
+#include "preferences/InterfaceScaleSettingsStore.h"
 #include "preferences/RecentItemsStore.h"
 #include "preferences/RotatedSourceSettingsStore.h"
 #include "sources/SourceFamilyConfiguration.h"
@@ -76,6 +77,7 @@ protected:
 
 private:
     QSettings settings;
+    InterfaceScaleSettingsStore interfaceScaleSettingsStore;
     RecentItemsStore recentItemsStore;
     FilterPresetStore filterPresetStore;
     RotatedSourceSettingsStore rotatedSourceSettingsStore;
@@ -352,4 +354,8 @@ private:
         );
 
     void resetWorkspaceIdentity();
+
+    void applyInterfaceScale(
+        qreal factor
+        );
 };

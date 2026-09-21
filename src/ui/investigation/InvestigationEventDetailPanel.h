@@ -44,6 +44,8 @@ public:
         const InvestigationScrollState &state
         );
 
+    void refreshInterfaceScale();
+
 signals:
     void findingStatusChangeRequested();
     void noteEditRequested();

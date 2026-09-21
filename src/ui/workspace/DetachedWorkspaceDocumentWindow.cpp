@@ -1,6 +1,7 @@
 #include "DetachedWorkspaceDocumentWindow.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QCloseEvent>
 #include <QKeySequence>
 #include <QMenu>
@@ -54,6 +55,16 @@ DetachedWorkspaceDocumentWindow::
         );
 
     createMenus();
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        this,
+        [this](qreal) {
+            updateInterfaceScaleGeometry();
+        }
+        );
 }
 
 void DetachedWorkspaceDocumentWindow::
@@ -323,6 +334,124 @@ void DetachedWorkspaceDocumentWindow::
         m_saveWorkspaceAsAction
         );
 
+    QMenu *viewMenu =
+        menuBar()->addMenu(
+            tr("&View")
+            );
+
+    QMenu *interfaceScaleMenu =
+        viewMenu->addMenu(
+            tr("Interface &Scale")
+            );
+
+    auto *interfaceScaleGroup =
+        new QActionGroup(
+            interfaceScaleMenu
+            );
+
+    interfaceScaleGroup->setExclusive(
+        true
+        );
+
+    for (
+        const qreal factor
+        : InterfaceScale::presetUserFactors()
+        ) {
+        const int percentage =
+            qRound(
+                factor * 100.0
+                );
+
+        const QString label =
+            qFuzzyCompare(
+                factor,
+                1.0
+                )
+                ? tr("%1% (System)")
+                      .arg(
+                          percentage
+                          )
+                : tr("%1%")
+                      .arg(
+                          percentage
+                          );
+
+        QAction *action =
+            interfaceScaleMenu->addAction(
+                label
+                );
+
+        action->setCheckable(
+            true
+            );
+
+        action->setData(
+            factor
+            );
+
+        action->setChecked(
+            qFuzzyCompare(
+                factor,
+                InterfaceScale::userFactor()
+                )
+            );
+
+        interfaceScaleGroup->addAction(
+            action
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [
+                this,
+                factor
+            ](
+                bool checked
+                ) {
+                if (!checked) {
+                    return;
+                }
+
+                emit interfaceScaleRequested(
+                    factor
+                    );
+            }
+            );
+    }
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        interfaceScaleMenu,
+        [
+            interfaceScaleGroup
+        ](
+            qreal factor
+            ) {
+            for (
+                QAction *action
+                : interfaceScaleGroup
+                      ->actions()
+                ) {
+                if (action == nullptr) {
+                    continue;
+                }
+
+                action->setChecked(
+                    qFuzzyCompare(
+                        action
+                            ->data()
+                            .toDouble(),
+                        factor
+                        )
+                    );
+            }
+        }
+        );
+
     /*
      * Export actions belong to WorkspaceDocument
      * itself, so this menu requires no coordinator
@@ -582,5 +711,20 @@ void DetachedWorkspaceDocumentWindow::
 
     emit closeAllRequested(
         this
+        );
+}
+
+void DetachedWorkspaceDocumentWindow::
+    updateInterfaceScaleGeometry()
+{
+    /*
+     * Preserve the user's current peer-window
+     * rectangle. Only the scaled minimum changes.
+     */
+    setMinimumWidth(
+        InterfaceScale::pixels(
+            720,
+            this
+            )
         );
 }

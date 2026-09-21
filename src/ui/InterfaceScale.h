@@ -1,15 +1,45 @@
 #pragma once
 
+#include <QObject>
 #include <QMargins>
 #include <QSize>
 #include <QtGlobal>
+#include <QVector>
 
+class QApplication;
 class QScreen;
 class QWidget;
 
 class InterfaceScale
+    : public QObject
 {
+    Q_OBJECT
+
 public:
+    static InterfaceScale *instance();
+
+    /*
+     * Capture the unmodified QApplication font before
+     * any TraceScope-relative scaling is applied.
+     *
+     * This gives every later scale change the same
+     * stable OS-derived baseline instead of repeatedly
+     * scaling an already-scaled font.
+     */
+    static void initializeApplication(
+        QApplication *application
+        );
+
+    /*
+     * Apply a new user multiplier immediately.
+     *
+     * Returns true when the effective factor changed.
+     */
+    static bool applyUserFactor(
+        QApplication *application,
+        qreal factor
+        );
+
     /*
      * User-selected multiplier relative to the
      * operating system's recommended UI size.
@@ -20,43 +50,14 @@ public:
      */
     static qreal userFactor();
 
-    static void setUserFactor(
-        qreal factor
-        );
-
-    /*
-     * Fraction of the OS scale that remains after
-     * Qt's raster DPR has been rounded down.
-     *
-     * Windows 125%:
-     *     raster DPR 1
-     *     residual   1.25
-     *
-     * Windows 200%:
-     *     raster DPR 2
-     *     residual   1.00
-     *
-     * Windows 250%:
-     *     raster DPR 2
-     *     residual   1.25
-     */
     static qreal systemResidualFactor(
         const QWidget *widget = nullptr
         );
 
-    /*
-     * Factor for TraceScope-owned logical-pixel
-     * constants.
-     */
     static qreal geometryFactor(
         const QWidget *widget = nullptr
         );
 
-    /*
-     * Qt already applies the OS DPI to fonts and
-     * native style metrics. These therefore need
-     * only the user's relative adjustment.
-     */
     static qreal nativeFactor();
 
     static int pixels(
@@ -78,9 +79,36 @@ public:
         const QWidget *widget = nullptr
         );
 
+    static const QVector<qreal> &
+    presetUserFactors();
+
+signals:
+    /*
+     * Persistent UI surfaces listen to this and
+     * recompute their TraceScope-authored geometry.
+     *
+     * Qt-native font/style metrics have already been
+     * updated before this signal is emitted.
+     */
+    void userFactorChanged(
+        qreal factor
+        );
+
 private:
+    explicit InterfaceScale(
+        QObject *parent = nullptr
+        );
+
     static QScreen *screenFor(
         const QWidget *widget
+        );
+
+    static qreal normalizedUserFactor(
+        qreal factor
+        );
+
+    static void refreshApplicationPresentation(
+        QApplication *application
         );
 
     static qreal s_userFactor;

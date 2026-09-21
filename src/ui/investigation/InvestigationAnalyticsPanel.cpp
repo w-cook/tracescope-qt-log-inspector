@@ -12,6 +12,7 @@
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLayout>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
@@ -457,17 +458,17 @@ InvestigationAnalyticsPanel::
             )
         );
 
-    auto *burstToolbar =
+    m_burstToolbarLayout =
         new QHBoxLayout();
 
-    burstToolbar->setContentsMargins(
+    m_burstToolbarLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    burstToolbar->setSpacing(
+    m_burstToolbarLayout->setSpacing(
         InterfaceScale::pixels(
             4,
             m_burstsPage
@@ -498,18 +499,18 @@ InvestigationAnalyticsPanel::
         }
         );
 
-    burstToolbar->addWidget(
+    m_burstToolbarLayout->addWidget(
         burstHeading
         );
 
-    burstToolbar->addStretch();
+    m_burstToolbarLayout->addStretch();
 
-    burstToolbar->addWidget(
+    m_burstToolbarLayout->addWidget(
         m_burstSettingsButton
         );
 
     burstsLayout->addLayout(
-        burstToolbar
+        m_burstToolbarLayout
         );
 
     m_burstSplitter =
@@ -1079,6 +1080,152 @@ void InvestigationAnalyticsPanel::
                 );
         }
     }
+}
+
+void InvestigationAnalyticsPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * Overview page.
+     */
+    if (
+        m_overviewPage != nullptr
+        && m_overviewPage->layout()
+               != nullptr
+        ) {
+        QLayout *overviewLayout =
+            m_overviewPage->layout();
+
+        overviewLayout->setContentsMargins(
+            InterfaceScale::margins(
+                4,
+                2,
+                4,
+                4,
+                m_overviewPage
+                )
+            );
+
+        overviewLayout->setSpacing(
+            InterfaceScale::pixels(
+                2,
+                m_overviewPage
+                )
+            );
+
+        overviewLayout->invalidate();
+    }
+
+    /*
+     * Bursts page.
+     */
+    if (
+        m_burstsPage != nullptr
+        && m_burstsPage->layout()
+               != nullptr
+        ) {
+        QLayout *burstsLayout =
+            m_burstsPage->layout();
+
+        burstsLayout->setContentsMargins(
+            InterfaceScale::margins(
+                4,
+                2,
+                4,
+                4,
+                m_burstsPage
+                )
+            );
+
+        burstsLayout->setSpacing(
+            InterfaceScale::pixels(
+                2,
+                m_burstsPage
+                )
+            );
+
+        burstsLayout->invalidate();
+    }
+
+    if (m_burstToolbarLayout != nullptr) {
+        m_burstToolbarLayout->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                m_burstsPage
+                )
+            );
+
+        m_burstToolbarLayout->invalidate();
+    }
+
+    /*
+     * The two burst splitter children are the
+     * Detected Bursts and Burst Explanation groups.
+     * Their layouts own the explicit 4px margins
+     * and 2px spacing from construction.
+     */
+    if (m_burstSplitter != nullptr) {
+        for (
+            int index = 0;
+            index < m_burstSplitter->count();
+            ++index
+            ) {
+            QWidget *child =
+                m_burstSplitter->widget(
+                    index
+                    );
+
+            if (
+                child == nullptr
+                || child->layout() == nullptr
+                ) {
+                continue;
+            }
+
+            child->layout()
+                ->setContentsMargins(
+                    InterfaceScale::margins(
+                        4,
+                        4,
+                        4,
+                        4,
+                        child
+                        )
+                    );
+
+            child->layout()->setSpacing(
+                InterfaceScale::pixels(
+                    2,
+                    child
+                    )
+                );
+
+            child->layout()->invalidate();
+        }
+    }
+
+    /*
+     * Frequency and burst tables use Qt-native
+     * ResizeToContents / Stretch behavior, so a
+     * geometry refresh is sufficient after the
+     * global style/font repolish.
+     */
+    for (
+        QTableWidget *table
+        : {
+            m_eventCodeTable,
+            m_entityTable,
+            m_burstTable
+        }
+        ) {
+        if (table != nullptr) {
+            table->updateGeometry();
+            table->viewport()->update();
+        }
+    }
+
+    updateGeometry();
+    update();
 }
 
 void InvestigationAnalyticsPanel::

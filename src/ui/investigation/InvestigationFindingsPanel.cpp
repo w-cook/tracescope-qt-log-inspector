@@ -1085,6 +1085,87 @@ void InvestigationFindingsPanel::
 }
 
 void InvestigationFindingsPanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_headerLayout != nullptr) {
+        m_headerLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_headerLayout->invalidate();
+    }
+
+    m_table
+        ->verticalHeader()
+        ->setMinimumSectionSize(
+            m_table
+                ->fontMetrics()
+                .height()
+            + InterfaceScale::pixels(
+                8,
+                m_table
+                )
+            );
+
+    /*
+     * The event-number column is intentionally a
+     * fixed design width and therefore participates
+     * directly in Interface Scale.
+     */
+    m_table->setColumnWidth(
+        1,
+        InterfaceScale::pixels(
+            58,
+            m_table
+            )
+        );
+
+    /*
+     * Status and timestamp are content-sized.
+     * Recalculate them after the application font
+     * changes while leaving Finding as the stretch
+     * column.
+     */
+    m_table->resizeColumnToContents(
+        0
+        );
+
+    m_table->resizeColumnToContents(
+        2
+        );
+
+    /*
+     * FindingTextDelegate already reads
+     * InterfaceScale dynamically from paint() and
+     * sizeHint(). Recalculate row heights so those
+     * new size hints are actually applied.
+     */
+    m_table->resizeRowsToContents();
+
+    updateMinimumUsableWidth();
+
+    m_table->updateGeometry();
+    m_table->viewport()->update();
+
+    updateGeometry();
+    update();
+}
+
+void InvestigationFindingsPanel::
     updateMinimumUsableWidth()
 {
     if (

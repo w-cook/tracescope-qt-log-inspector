@@ -14,6 +14,7 @@
 class InvestigationSession;
 class QLabel;
 class QGroupBox;
+class QHBoxLayout;
 class QPlainTextEdit;
 class QPushButton;
 class QTableWidget;
@@ -48,6 +49,8 @@ public:
     void restorePresentationState(
         const InvestigationAnalyticsPresentationState &state
         );
+
+    void refreshInterfaceScale();
 
 signals:
     void burstDrillDownRequested(
@@ -129,5 +132,8 @@ private:
         nullptr;
 
     QSplitter *m_burstSplitter =
+        nullptr;
+
+    QHBoxLayout *m_burstToolbarLayout =
         nullptr;
 };

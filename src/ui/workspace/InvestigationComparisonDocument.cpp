@@ -2252,3 +2252,56 @@ void InvestigationComparisonDocument::
         }
         );
 }
+
+void InvestigationComparisonDocument::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setContentsMargins(
+            InterfaceScale::margins(
+                6,
+                4,
+                6,
+                6,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (
+        m_scrollArea != nullptr
+        && m_scrollArea->widget()
+               != nullptr
+        ) {
+        QWidget *content =
+            m_scrollArea->widget();
+
+        if (QLayout *contentLayout =
+            content->layout();
+            contentLayout != nullptr) {
+            contentLayout->setContentsMargins(
+                InterfaceScale::margins(
+                    4,
+                    4,
+                    4,
+                    4,
+                    content
+                    )
+                );
+
+            contentLayout->setSpacing(
+                InterfaceScale::pixels(
+                    8,
+                    content
+                    )
+                );
+
+            contentLayout->invalidate();
+        }
+    }
+
+    WorkspaceDocument::
+        refreshInterfaceScale();
+}

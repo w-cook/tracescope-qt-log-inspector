@@ -4,12 +4,14 @@
 #include <QCursor>
 #include <QDrag>
 #include <QLabel>
+#include <QLayout>
 #include <QMenu>
 #include <QPushButton>
 #include <QPoint>
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QSpacerItem>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -287,11 +289,19 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         instructionLabel
         );
 
-    emptyStateLayout->addSpacing(
-        InterfaceScale::pixels(
-            14,
-            m_emptyStateWidget
-            )
+    m_emptyStateActionSpacing =
+        new QSpacerItem(
+            0,
+            InterfaceScale::pixels(
+                14,
+                m_emptyStateWidget
+                ),
+            QSizePolicy::Minimum,
+            QSizePolicy::Fixed
+            );
+
+    emptyStateLayout->addItem(
+        m_emptyStateActionSpacing
         );
 
     /*
@@ -627,6 +637,16 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             ) {
             emit m_rootHost
                 ->workspaceLayoutChanged();
+        }
+        );
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        this,
+        [this](qreal) {
+            refreshInterfaceScale();
         }
         );
 
@@ -2510,4 +2530,66 @@ void WorkspaceDocumentHost::
                 enabled
                 );
     }
+}
+
+void WorkspaceDocumentHost::
+    refreshInterfaceScale()
+{
+    if (m_emptyStateWidget != nullptr) {
+        if (QLayout *emptyLayout =
+            m_emptyStateWidget->layout();
+            emptyLayout != nullptr) {
+            emptyLayout->setContentsMargins(
+                InterfaceScale::margins(
+                    20,
+                    24,
+                    20,
+                    24,
+                    m_emptyStateWidget
+                    )
+                );
+
+            emptyLayout->invalidate();
+        }
+    }
+
+    if (m_emptyStateActionSpacing != nullptr) {
+        m_emptyStateActionSpacing->changeSize(
+            0,
+            InterfaceScale::pixels(
+                14,
+                m_emptyStateWidget
+                ),
+            QSizePolicy::Minimum,
+            QSizePolicy::Fixed
+            );
+    }
+
+    if (m_tabs != nullptr) {
+        WorkspaceTabBar *tabBar =
+            m_tabs->workspaceTabBar();
+
+        if (tabBar != nullptr) {
+            /*
+             * WorkspaceTabBar calculates its scaled
+             * empty-target dimensions dynamically in
+             * sizeHint()/paintEvent(), so it only needs
+             * geometry invalidation and repainting.
+             */
+            tabBar->updateGeometry();
+            tabBar->update();
+        }
+    }
+
+    for (
+        WorkspaceDocument *document
+        : localDocuments()
+        ) {
+        if (document != nullptr) {
+            document->refreshInterfaceScale();
+        }
+    }
+
+    updateGeometry();
+    update();
 }

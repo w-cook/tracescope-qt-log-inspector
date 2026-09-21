@@ -8,6 +8,7 @@
 
 class InvestigationRecord;
 class InvestigationSession;
+class QHBoxLayout;
 class QLabel;
 class QPushButton;
 class QTableView;
@@ -58,6 +59,8 @@ public:
         const InvestigationEventTablePresentationState &state
         );
 
+    void refreshInterfaceScale();
+
 signals:
     void selectedRecordChanged();
 
@@ -107,4 +110,10 @@ private:
 
     bool m_followNewest =
         false;
+
+    QHBoxLayout *m_navigationLayout =
+        nullptr;
+
+    qreal m_columnWidthScaleFactor =
+        1.0;
 };

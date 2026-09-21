@@ -8,6 +8,7 @@
 
 class QMenu;
 class QPushButton;
+class QSpacerItem;
 
 class DetachedWorkspaceDocumentWindow;
 class WorkspaceDocument;
@@ -107,6 +108,8 @@ public:
     void setFileOperationsEnabled(
         bool enabled
         );
+
+    void refreshInterfaceScale();
 
 signals:
     void currentDocumentChanged(
@@ -295,4 +298,7 @@ private:
         false;
 
     QString m_activeDocumentId;
+
+    QSpacerItem *m_emptyStateActionSpacing =
+        nullptr;
 };

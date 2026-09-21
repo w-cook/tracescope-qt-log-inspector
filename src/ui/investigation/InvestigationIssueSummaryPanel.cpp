@@ -389,6 +389,23 @@ void InvestigationIssueSummaryPanel::
 }
 
 void InvestigationIssueSummaryPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * The table columns are content-sized, so
+     * recalculate them using the new application
+     * font/style metrics.
+     */
+    updateMinimumTableWidth();
+
+    m_table->updateGeometry();
+    m_table->viewport()->update();
+
+    updateGeometry();
+    update();
+}
+
+void InvestigationIssueSummaryPanel::
     handleCellDoubleClicked(
         int row,
         int column

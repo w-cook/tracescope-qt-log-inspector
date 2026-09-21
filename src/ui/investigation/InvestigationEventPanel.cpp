@@ -79,17 +79,17 @@ InvestigationEventPanel::
      * ---------------------------------------------------------
      */
 
-    auto *navigationLayout =
+    m_navigationLayout =
         new QHBoxLayout();
 
-    navigationLayout->setContentsMargins(
+    m_navigationLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    navigationLayout->setSpacing(
+    m_navigationLayout->setSpacing(
         InterfaceScale::pixels(
             6,
             this
@@ -122,17 +122,17 @@ InvestigationEventPanel::
             )
         );
 
-    navigationLayout->addStretch();
+    m_navigationLayout->addStretch();
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_previousEventButton
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_nextEventButton
         );
 
-    navigationLayout->addStretch(
+    m_navigationLayout->addStretch(
         1
         );
 
@@ -140,24 +140,24 @@ InvestigationEventPanel::
         Qt::AlignCenter
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_eventPositionLabel
         );
 
-    navigationLayout->addStretch(
+    m_navigationLayout->addStretch(
         1
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_previousIssueButton
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_nextIssueButton
         );
 
     layout->addLayout(
-        navigationLayout
+        m_navigationLayout
         );
 
     /*
@@ -497,6 +497,11 @@ InvestigationEventPanel::
                     );
         }
         );
+
+    m_columnWidthScaleFactor =
+        InterfaceScale::geometryFactor(
+            m_table
+            );
 
     refreshPresentation();
 }
@@ -1093,6 +1098,132 @@ void InvestigationEventPanel::
     }
 
     refreshNavigationState();
+}
+
+void InvestigationEventPanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_navigationLayout != nullptr) {
+        m_navigationLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_navigationLayout->invalidate();
+    }
+
+    updateRowHeaderWidth();
+
+    /*
+     * Preserve the user's existing column-width
+     * proportions while scaling those widths with
+     * the rest of the interface.
+     *
+     * Do not resize-to-contents here: that would
+     * discard deliberate user adjustments.
+     */
+    const qreal newScaleFactor =
+        InterfaceScale::geometryFactor(
+            m_table
+            );
+
+    if (
+        m_table != nullptr
+        && m_table->model() != nullptr
+        && m_columnWidthScaleFactor > 0.0
+        && !qFuzzyCompare(
+            newScaleFactor,
+            m_columnWidthScaleFactor
+            )
+        ) {
+        const qreal widthRatio =
+            newScaleFactor
+            / m_columnWidthScaleFactor;
+
+        QHeaderView *header =
+            m_table->horizontalHeader();
+
+        if (header != nullptr) {
+            const QSignalBlocker blocker(
+                header
+                );
+
+            QVector<int> scaledWidths;
+
+            const int columnCount =
+                header->count();
+
+            scaledWidths.reserve(
+                columnCount
+                );
+
+            for (
+                int column = 0;
+                column < columnCount;
+                ++column
+                ) {
+                const int currentWidth =
+                    m_table->columnWidth(
+                        column
+                        );
+
+                const int scaledWidth =
+                    std::max(
+                        1,
+                        qRound(
+                            static_cast<qreal>(
+                                currentWidth
+                                )
+                            * widthRatio
+                            )
+                        );
+
+                m_table->setColumnWidth(
+                    column,
+                    scaledWidth
+                    );
+
+                scaledWidths.append(
+                    scaledWidth
+                    );
+            }
+
+            /*
+             * Keep the session's persisted
+             * presentation state synchronized with
+             * what is actually displayed.
+             */
+            if (m_session != nullptr) {
+                m_session->setColumnWidths(
+                    std::move(
+                        scaledWidths
+                        )
+                    );
+            }
+        }
+    }
+
+    m_columnWidthScaleFactor =
+        newScaleFactor;
+
+    m_table->updateGeometry();
+    m_table->viewport()->update();
+
+    updateGeometry();
+    update();
 }
 
 void InvestigationEventPanel::
