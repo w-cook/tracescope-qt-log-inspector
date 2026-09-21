@@ -31,6 +31,7 @@
 #include <QtCharts/QLegend>
 #include <QtCharts/QValueAxis>
 
+#include "../InterfaceScale.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../workspace/InvestigationSession.h"
 
@@ -503,14 +504,20 @@ InvestigationTimelinePanel::
         new QVBoxLayout(this);
 
     timelineLayout->setContentsMargins(
-        4,
-        2,
-        4,
-        2
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            2,
+            this
+            )
         );
 
     timelineLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            this
+            )
         );
 
     auto *controlsLayout =
@@ -524,7 +531,10 @@ InvestigationTimelinePanel::
         );
 
     controlsLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     /*
@@ -677,7 +687,11 @@ InvestigationTimelinePanel::
     m_intervalCombo
         ->view()
         ->setMinimumWidth(
-            intervalPopupWidth + 40
+            intervalPopupWidth
+            + InterfaceScale::pixels(
+                40,
+                m_intervalCombo
+                )
             );
 
     m_intervalCombo->setToolTip(
@@ -699,7 +713,10 @@ InvestigationTimelinePanel::
         );
 
     controlsLayout->addSpacing(
-        12
+        InterfaceScale::pixels(
+            12,
+            this
+            )
         );
 
     /*
@@ -720,7 +737,10 @@ InvestigationTimelinePanel::
         );
 
     breakdownLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            m_breakdownWidget
+            )
         );
 
     auto *breakdownLabel =
@@ -735,7 +755,10 @@ InvestigationTimelinePanel::
             .horizontalAdvance(
                 tr("Subsystem")
                 )
-        + 40
+        + InterfaceScale::pixels(
+            40,
+            m_breakdownCombo
+            )
         );
 
     breakdownLayout->addWidget(
@@ -768,7 +791,10 @@ InvestigationTimelinePanel::
         );
 
     subsystemShowLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            m_subsystemShowWidget
+            )
         );
 
     auto *subsystemShowLabel =
@@ -818,7 +844,10 @@ InvestigationTimelinePanel::
         );
 
     controlsLayout->addSpacing(
-        12
+        InterfaceScale::pixels(
+            12,
+            this
+            )
         );
 
     controlsLayout->addWidget(
@@ -849,7 +878,8 @@ InvestigationTimelinePanel::
         );
 
     m_chartView->setRenderHint(
-        QPainter::Antialiasing
+        QPainter::Antialiasing,
+        false
         );
 
     m_chartView

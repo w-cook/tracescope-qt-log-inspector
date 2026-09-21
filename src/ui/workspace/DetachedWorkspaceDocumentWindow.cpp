@@ -7,6 +7,8 @@
 #include <QMenuBar>
 #include <QMessageBox>
 
+#include "../InterfaceScale.h"
+
 #include "WorkspaceDocument.h"
 #include "WorkspaceDocumentHost.h"
 
@@ -27,12 +29,18 @@ DetachedWorkspaceDocumentWindow::
         );
 
     resize(
-        1100,
-        760
+        InterfaceScale::size(
+            1100,
+            760,
+            this
+            )
         );
 
     setMinimumWidth(
-        720
+        InterfaceScale::pixels(
+            720,
+            this
+            )
         );
 
     m_documentHost =

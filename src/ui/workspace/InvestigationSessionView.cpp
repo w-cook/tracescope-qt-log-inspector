@@ -22,6 +22,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include "../InterfaceScale.h"
 #include "../investigation/InvestigationAnalyticsPanel.h"
 #include "../investigation/InvestigationEventDetailPanel.h"
 #include "../investigation/InvestigationEventPanel.h"
@@ -280,14 +281,20 @@ InvestigationSessionView::
         new QVBoxLayout(this);
 
     layout->setContentsMargins(
-        6,
-        4,
-        6,
-        6
+        InterfaceScale::margins(
+            6,
+            4,
+            6,
+            6,
+            this
+            )
         );
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     layout->addWidget(
@@ -1764,8 +1771,11 @@ void InvestigationSessionView::
         );
 
     dialog->resize(
-        520,
-        300
+        InterfaceScale::size(
+            520,
+            300,
+            dialog
+            )
         );
 
     auto *layout =
@@ -2181,6 +2191,18 @@ void InvestigationSessionView::
         || tab
                == InvestigationReviewTab::Analytics;
 
+    const int narrowReviewBreakpoint =
+        InterfaceScale::pixels(
+            750,
+            this
+            );
+
+    const int mediumReviewBreakpoint =
+        InterfaceScale::pixels(
+            1100,
+            this
+            );
+
     if (wideReviewSelected) {
         /*
          * Findings and Analytics carry more
@@ -2191,11 +2213,15 @@ void InvestigationSessionView::
         double reviewFraction =
             0.60;
 
-        if (availableWidth < 750) {
+        if (
+            availableWidth
+            < narrowReviewBreakpoint
+            ) {
             reviewFraction =
                 0.72;
         } else if (
-            availableWidth < 1100
+            availableWidth
+            < mediumReviewBreakpoint
             ) {
             reviewFraction =
                 0.68;

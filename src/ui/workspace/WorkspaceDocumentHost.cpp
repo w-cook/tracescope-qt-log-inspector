@@ -16,6 +16,8 @@
 
 #include <utility>
 
+#include "../InterfaceScale.h"
+
 #include "DetachedWorkspaceDocumentWindow.h"
 #include "WorkspaceDocument.h"
 #include "WorkspaceTabBar.h"
@@ -205,10 +207,13 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             );
 
     emptyStateLayout->setContentsMargins(
-        20,
-        24,
-        20,
-        24
+        InterfaceScale::margins(
+            20,
+            24,
+            20,
+            24,
+            m_emptyStateWidget
+            )
         );
 
     emptyStateLayout->addStretch(
@@ -283,7 +288,10 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         );
 
     emptyStateLayout->addSpacing(
-        14
+        InterfaceScale::pixels(
+            14,
+            m_emptyStateWidget
+            )
         );
 
     /*
@@ -1482,8 +1490,14 @@ WorkspaceDocumentHost::createDetachedWindow(
     window->move(
         globalPosition
         - QPoint(
-            80,
-            20
+            InterfaceScale::pixels(
+                80,
+                this
+                ),
+            InterfaceScale::pixels(
+                20,
+                this
+                )
             )
         );
 

@@ -24,6 +24,7 @@
 #include <QVBoxLayout>
 #include <QScrollBar>
 
+#include "../InterfaceScale.h"
 #include "../../analysis/BurstDetectionSettings.h"
 #include "../../analysis/InvestigationCadence.h"
 #include "../../analysis/InvestigationValueFrequency.h"
@@ -235,14 +236,20 @@ InvestigationAnalyticsPanel::
             );
 
     overviewLayout->setContentsMargins(
-        4,
-        2,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            4,
+            m_overviewPage
+            )
         );
 
     overviewLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            m_overviewPage
+            )
         );
 
     m_overviewEmptyLabel =
@@ -434,14 +441,20 @@ InvestigationAnalyticsPanel::
             );
 
     burstsLayout->setContentsMargins(
-        4,
-        2,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            4,
+            m_burstsPage
+            )
         );
 
     burstsLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            m_burstsPage
+            )
         );
 
     auto *burstToolbar =
@@ -455,7 +468,10 @@ InvestigationAnalyticsPanel::
         );
 
     burstToolbar->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            m_burstsPage
+            )
         );
 
     auto *burstHeading =
@@ -518,14 +534,20 @@ InvestigationAnalyticsPanel::
             );
 
     burstListLayout->setContentsMargins(
-        4,
-        4,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            4,
+            4,
+            4,
+            burstListGroup
+            )
         );
 
     burstListLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            burstListGroup
+            )
         );
 
     m_burstTable =
@@ -629,14 +651,20 @@ InvestigationAnalyticsPanel::
             );
 
     burstDetailLayout->setContentsMargins(
-        4,
-        4,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            4,
+            4,
+            4,
+            burstDetailGroup
+            )
         );
 
     burstDetailLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            burstDetailGroup
+            )
         );
 
     m_burstDetailText =
@@ -1911,7 +1939,10 @@ void InvestigationAnalyticsPanel::
             );
 
     layout->setSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            &dialog
+            )
         );
 
     /*
@@ -2073,10 +2104,13 @@ void InvestigationAnalyticsPanel::
             );
 
     manualLayout->setContentsMargins(
-        20,
-        0,
-        0,
-        0
+        InterfaceScale::margins(
+            20,
+            0,
+            0,
+            0,
+            manualWidget
+            )
         );
 
     auto *windowSpin =

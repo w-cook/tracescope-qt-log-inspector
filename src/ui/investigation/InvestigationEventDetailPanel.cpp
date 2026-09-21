@@ -17,6 +17,7 @@
 #include <QMenu>
 #include <QMargins>
 
+#include "../InterfaceScale.h"
 #include "../../domain/RecordSeverity.h"
 
 InvestigationEventDetailPanel::
@@ -138,7 +139,10 @@ InvestigationEventDetailPanel::
         new QVBoxLayout(this);
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     /*
@@ -157,11 +161,17 @@ InvestigationEventDetailPanel::
         );
 
     m_stateLayout->setHorizontalSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     m_stateLayout->setVerticalSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_findingStatusLabel =
@@ -634,6 +644,18 @@ void InvestigationEventDetailPanel::
 
     updateMinimumUsableWidth();
 
+    const int horizontalSpacing =
+        InterfaceScale::pixels(
+            6,
+            this
+            );
+
+    const int wideLayoutPadding =
+        InterfaceScale::pixels(
+            20,
+            this
+            );
+
     const int requiredWideWidth =
         m_findingStatusLabel
             ->sizeHint()
@@ -647,8 +669,8 @@ void InvestigationEventDetailPanel::
         + m_bookmarkButton
               ->sizeHint()
               .width()
-        + 6 * 3
-        + 20;
+        + horizontalSpacing * 3
+        + wideLayoutPadding;
 
     const bool compact =
         contentsRect().width()

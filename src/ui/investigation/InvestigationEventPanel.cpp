@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 #include <QScrollBar>
 
+#include "../InterfaceScale.h"
 #include "../../controllers/InvestigationController.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../models/InvestigationTableModel.h"
@@ -66,7 +67,10 @@ InvestigationEventPanel::
         new QVBoxLayout(this);
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     /*
@@ -86,7 +90,10 @@ InvestigationEventPanel::
         );
 
     navigationLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     m_previousEventButton->setToolTip(
@@ -1262,7 +1269,11 @@ void InvestigationEventPanel::
                 );
 
     header->setFixedWidth(
-        textWidth + 8
+        textWidth
+        + InterfaceScale::pixels(
+            8,
+            header
+            )
         );
 }
 

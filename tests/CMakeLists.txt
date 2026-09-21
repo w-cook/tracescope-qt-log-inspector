@@ -2303,6 +2303,9 @@ qt_add_executable(
 
     WorkspaceDocumentHostTests.cpp
 
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
+
     ../src/ui/workspace/DetachedWorkspaceDocumentWindow.h
     ../src/ui/workspace/DetachedWorkspaceDocumentWindow.cpp
     ../src/ui/workspace/WorkspaceDocument.h

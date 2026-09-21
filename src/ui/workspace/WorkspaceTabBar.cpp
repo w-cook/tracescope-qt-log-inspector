@@ -19,6 +19,8 @@
 
 #include <utility>
 
+#include "../InterfaceScale.h"
+
 namespace
 {
 constexpr auto WorkspaceDocumentMimeType =
@@ -891,11 +893,17 @@ void WorkspaceTabBar::paintEvent(
                     )
                 );
 
+            const int horizontalPadding =
+                InterfaceScale::pixels(
+                    12,
+                    this
+                    );
+
             painter.drawText(
                 rect().adjusted(
-                    12,
+                    horizontalPadding,
                     0,
-                    -12,
+                    -horizontalPadding,
                     0
                     ),
                 Qt::AlignLeft
@@ -1192,14 +1200,20 @@ int WorkspaceTabBar::
             QStyle::CT_TabBarTab,
             &option,
             QSize(
-                120,
+                InterfaceScale::pixels(
+                    120,
+                    this
+                    ),
                 fontMetrics().height()
                 ),
             this
             );
 
     return qMax(
-        28,
+        InterfaceScale::pixels(
+            28,
+            this
+            ),
         styledSize.height()
         );
 }
@@ -1221,7 +1235,10 @@ QSize WorkspaceTabBar::sizeHint()
 
         result.setWidth(
             qMax(
-                180,
+                InterfaceScale::pixels(
+                    180,
+                    this
+                    ),
                 result.width()
                 )
             );
@@ -1254,7 +1271,10 @@ QSize WorkspaceTabBar::minimumSizeHint()
 
         result.setWidth(
             qMax(
-                180,
+                InterfaceScale::pixels(
+                    180,
+                    this
+                    ),
                 result.width()
                 )
             );

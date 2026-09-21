@@ -22,6 +22,7 @@
 #include <QMenu>
 #include <QPushButton>
 
+#include "../InterfaceScale.h"
 #include "../../domain/InvestigationRecord.h"
 #include "../../domain/InvestigationRecordState.h"
 #include "../../workspace/InvestigationSession.h"
@@ -119,8 +120,17 @@ public:
             text
             );
 
-        constexpr int horizontalPadding = 8;
-        constexpr int verticalPadding = 4;
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                4,
+                itemOption.widget
+                );
 
         document.setTextWidth(
             std::max(
@@ -193,8 +203,16 @@ public:
         painter->save();
 
         painter->translate(
-            option.rect.left() + 4,
-            option.rect.top() + 2
+            option.rect.left()
+                + InterfaceScale::pixels(
+                    4,
+                    itemOption.widget
+                    ),
+            option.rect.top()
+                + InterfaceScale::pixels(
+                    2,
+                    itemOption.widget
+                    )
             );
 
         document
@@ -246,10 +264,23 @@ public:
             itemOption.text
             );
 
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                6,
+                itemOption.widget
+                );
+
         document.setTextWidth(
             std::max(
                 1,
-                itemOption.rect.width() - 8
+                itemOption.rect.width()
+                    - horizontalPadding
                 )
             );
 
@@ -257,7 +288,8 @@ public:
             itemOption.rect.width(),
             static_cast<int>(
                 document.size().height()
-                ) + 6
+                )
+                + verticalPadding
             );
     }
 };
@@ -326,7 +358,10 @@ InvestigationFindingsPanel::
         );
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_summaryLabel->setToolTip(
@@ -344,7 +379,10 @@ InvestigationFindingsPanel::
         );
 
     m_headerLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     m_headerLayout->addWidget(
@@ -521,7 +559,10 @@ InvestigationFindingsPanel::
             m_table
                 ->fontMetrics()
                 .height()
-            + 8
+            + InterfaceScale::pixels(
+                8,
+                m_table
+                )
             );
 
     m_table
@@ -540,7 +581,10 @@ InvestigationFindingsPanel::
 
     m_table->setColumnWidth(
         1,
-        58
+        InterfaceScale::pixels(
+            58,
+            m_table
+            )
         );
 
     m_table

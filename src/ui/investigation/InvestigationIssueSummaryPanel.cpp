@@ -10,6 +10,7 @@
 
 #include <algorithm>
 
+#include "../InterfaceScale.h"
 #include "../../analysis/TelemetryIssueGroup.h"
 
 InvestigationIssueSummaryPanel::
@@ -287,10 +288,16 @@ int InvestigationIssueSummaryPanel::
               ->verticalScrollBar()
               ->sizeHint()
               .width()
-        + 8;
+        + InterfaceScale::pixels(
+            8,
+            this
+            );
 
     return preferredTableWidth
-           + 30;
+           + InterfaceScale::pixels(
+               30,
+               this
+               );
 }
 
 InvestigationTablePresentationState
