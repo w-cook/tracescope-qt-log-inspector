@@ -272,6 +272,24 @@ private:
 
     void applySectionCapacityPolicy();
 
+    void captureConstrainedRestorePriority();
+
+    void rebuildConstrainedRestorePriorityFromCurrentState();
+
+    void updateConstrainedRecoveryCompletion();
+
+    void resetConstrainedRestoreState();
+
+    bool sectionHasRecoveredPreferredHeight(
+        InvestigationSection section
+        ) const;
+
+    bool canRestoreConstrainedSection(
+        InvestigationSection candidate
+        ) const;
+
+    void applyConstrainedRecoveryLayout();
+
     InvestigationSession *m_session =
         nullptr;
 
@@ -389,4 +407,25 @@ private:
 
     bool m_sectionCollapseGeometryUpdatePending =
         false;
+
+    QList<InvestigationSection>
+        m_constrainedRestorePriority;
+
+    bool m_hasConstrainedRestoreSnapshot =
+        false;
+
+    bool m_constrainedRecoveryComplete =
+        false;
+
+    int m_constrainedTimelinePreferredHeight =
+        0;
+
+    int m_constrainedEventPreferredHeight =
+        0;
+
+    int m_constrainedLowerPreferredHeight =
+        0;
+
+    int m_lastAvailableMainSplitterHeight =
+        -1;
 };
