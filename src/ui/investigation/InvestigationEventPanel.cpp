@@ -738,16 +738,20 @@ void InvestigationEventPanel::
         m_session != nullptr
         && m_table->model() != nullptr;
 
-    m_previousEventButton->setVisible(
+    const bool showNavigation =
         hasInvestigation
+        && !m_collapsed;
+
+    m_previousEventButton->setVisible(
+        showNavigation
         );
 
     m_nextEventButton->setVisible(
-        hasInvestigation
+        showNavigation
         );
 
     m_eventPositionLabel->setVisible(
-        hasInvestigation
+        showNavigation
         );
 
     const bool hasIssueNavigation =
@@ -755,11 +759,13 @@ void InvestigationEventPanel::
         && m_session->hasSeverityData();
 
     m_previousIssueButton->setVisible(
-        hasIssueNavigation
+        showNavigation
+        && hasIssueNavigation
         );
 
     m_nextIssueButton->setVisible(
-        hasIssueNavigation
+        showNavigation
+        && hasIssueNavigation
         );
 
     if (!hasInvestigation) {
@@ -1222,8 +1228,153 @@ void InvestigationEventPanel::
     m_table->updateGeometry();
     m_table->viewport()->update();
 
+    if (m_collapsed) {
+        /*
+         * Release the old scale's collapsed-height
+         * constraint before asking Qt for the new native
+         * QGroupBox title-strip height.
+         */
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int height =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    }
+
     updateGeometry();
     update();
+}
+
+void InvestigationEventPanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    /*
+     * Telemetry Events is a QGroupBox, so preserve
+     * its existing title as the collapsed section
+     * identity and remove only its contents.
+     */
+    if (m_table != nullptr) {
+        m_table->setVisible(
+            !collapsed
+            );
+    }
+
+    if (collapsed) {
+        m_previousEventButton->setVisible(
+            false
+            );
+
+        m_nextEventButton->setVisible(
+            false
+            );
+
+        m_eventPositionLabel->setVisible(
+            false
+            );
+
+        m_previousIssueButton->setVisible(
+            false
+            );
+
+        m_nextIssueButton->setVisible(
+            false
+            );
+
+        /*
+         * Remove any previous height constraint while
+         * the hidden-content layout settles. The native
+         * minimum size then describes only the
+         * QGroupBox title/frame presentation.
+         */
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int height =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (m_table != nullptr) {
+            m_table->setVisible(
+                true
+                );
+        }
+
+        /*
+         * Restore source/session-dependent navigation
+         * visibility rather than blindly showing every
+         * control.
+         */
+        refreshNavigationState();
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationEventPanel::
+    isCollapsed() const
+{
+    return m_collapsed;
+}
+
+int InvestigationEventPanel::
+    collapsedHeight() const
+{
+    if (m_collapsed) {
+        return maximumHeight();
+    }
+
+    return 0;
 }
 
 void InvestigationEventPanel::

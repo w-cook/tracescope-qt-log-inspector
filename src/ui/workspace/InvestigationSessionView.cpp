@@ -1,6 +1,7 @@
 #include "InvestigationSessionView.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <QAction>
 #include <QApplication>
@@ -354,6 +355,45 @@ InvestigationSessionView::
 
     /*
      * ---------------------------------------------------------
+     * Event-section container
+     * ---------------------------------------------------------
+     *
+     * Telemetry Events normally fills this container.
+     *
+     * The container exists separately from the Event panel
+     * so a collapsed Event title strip can later be centered
+     * in spare vertical space when all three investigation
+     * sections are voluntarily collapsed.
+     */
+    m_eventSectionContainer =
+        new QWidget(this);
+
+    m_eventSectionLayout =
+        new QVBoxLayout(
+            m_eventSectionContainer
+            );
+
+    m_eventSectionLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    m_eventSectionLayout->setSpacing(
+        0
+        );
+
+    m_eventPanel->setParent(
+        m_eventSectionContainer
+        );
+
+    m_eventSectionLayout->addWidget(
+        m_eventPanel
+        );
+
+    /*
+     * ---------------------------------------------------------
      * Primary document splitter
      * ---------------------------------------------------------
      */
@@ -362,7 +402,7 @@ InvestigationSessionView::
         );
 
     m_mainSplitter->addWidget(
-        m_eventPanel
+        m_eventSectionContainer
         );
 
     m_mainSplitter->addWidget(
@@ -415,6 +455,9 @@ InvestigationSessionView::
     m_timelineCollapseButton =
         new QToolButton(this);
 
+    m_eventCollapseButton =
+        new QToolButton(this);
+
     m_lowerRegionCollapseButton =
         new QToolButton(this);
 
@@ -422,6 +465,7 @@ InvestigationSessionView::
         QToolButton *button
         : {
             m_timelineCollapseButton,
+            m_eventCollapseButton,
             m_lowerRegionCollapseButton
         }
         ) {
@@ -457,6 +501,7 @@ InvestigationSessionView::
         QToolButton *button
         : {
             m_timelineCollapseButton,
+            m_eventCollapseButton,
             m_lowerRegionCollapseButton
         }
         ) {
@@ -477,6 +522,17 @@ InvestigationSessionView::
         );
 
     connect(
+        m_eventCollapseButton,
+        &QToolButton::clicked,
+        this,
+        [this]() {
+            setEventSectionCollapsed(
+                !m_eventCollapsed
+                );
+        }
+        );
+
+    connect(
         m_lowerRegionCollapseButton,
         &QToolButton::clicked,
         this,
@@ -491,8 +547,67 @@ InvestigationSessionView::
         m_mainSplitter,
         &QSplitter::splitterMoved,
         this,
-        [this](int, int) {
+        [this](
+            int,
+            int handleIndex
+            ) {
             updateSectionCollapseControlGeometry();
+
+            if (
+                !m_eventCollapsed
+                || m_mainSplitter == nullptr
+                ) {
+                return;
+            }
+
+            const QList<int> sizes =
+                m_mainSplitter->sizes();
+
+            if (sizes.size() != 3) {
+                return;
+            }
+
+            /*
+             * With Events collapsed:
+             *
+             * handle 1 is the boundary associated with
+             * Timeline.
+             *
+             * handle 2 is the boundary associated with
+             * Lower Details.
+             *
+             * Moving either handle necessarily causes the
+             * other open auxiliary section to compensate,
+             * but that compensating resize is NOT a new
+             * user preference.
+             */
+            if (
+                handleIndex == 1
+                && !m_timelineCollapsed
+                ) {
+                m_timelineExpandedHeight =
+                    sizes.at(0);
+
+                m_timelineManuallyResizedWhileEventCollapsed =
+                    true;
+
+                /*
+                 * The old exact three-way snapshot is no
+                 * longer authoritative.
+                 */
+                m_eventPreCollapseSizes.clear();
+            } else if (
+                handleIndex == 2
+                && !m_lowerRegionCollapsed
+                ) {
+                m_lowerRegionExpandedHeight =
+                    sizes.at(2);
+
+                m_lowerRegionManuallyResizedWhileEventCollapsed =
+                    true;
+
+                m_eventPreCollapseSizes.clear();
+            }
         }
         );
 
@@ -1446,6 +1561,8 @@ void InvestigationSessionView::
     if (m_eventPanel != nullptr) {
         m_eventPanel
             ->refreshInterfaceScale();
+
+        updateEventSectionPresentation();
     }
 
     if (m_reviewPanel != nullptr) {
@@ -1503,6 +1620,7 @@ void InvestigationSessionView::
         QToolButton *button
         : {
             m_timelineCollapseButton,
+            m_eventCollapseButton,
             m_lowerRegionCollapseButton
         }
         ) {
@@ -2767,6 +2885,29 @@ void InvestigationSessionView::
                 );
     }
 
+    if (m_eventCollapseButton != nullptr) {
+        m_eventCollapseButton
+            ->setArrowType(
+                m_eventCollapsed
+                    ? Qt::LeftArrow
+                    : Qt::DownArrow
+                );
+
+        m_eventCollapseButton
+            ->setToolTip(
+                m_eventCollapsed
+                    ? tr("Expand telemetry events")
+                    : tr("Collapse telemetry events")
+                );
+
+        m_eventCollapseButton
+            ->setAccessibleName(
+                m_eventCollapsed
+                    ? tr("Expand telemetry events")
+                    : tr("Collapse telemetry events")
+                );
+    }
+
     if (m_lowerRegionCollapseButton != nullptr) {
         m_lowerRegionCollapseButton
             ->setArrowType(
@@ -2804,8 +2945,10 @@ void InvestigationSessionView::
 {
     if (
         m_timelineCollapseButton == nullptr
+        || m_eventCollapseButton == nullptr
         || m_lowerRegionCollapseButton == nullptr
         || m_timelinePanel == nullptr
+        || m_eventPanel == nullptr
         || m_bottomSplitter == nullptr
         || m_reviewPanel == nullptr
         ) {
@@ -2879,6 +3022,57 @@ void InvestigationSessionView::
             );
 
     /*
+     * Event control:
+     * center it against the Telemetry Events QGroupBox
+     * title band.
+     *
+     * When all three sections are collapsed, Event may
+     * itself be vertically centered inside a flexible
+     * middle container. Mapping from m_eventPanel rather
+     * than from that container keeps the chevron attached
+     * to the actual visible title strip.
+     */
+    const QPoint eventTopLeft =
+        m_eventPanel->mapTo(
+            this,
+            QPoint(0, 0)
+            );
+
+    const int eventTitleBandHeight =
+        std::max(
+            buttonSize,
+            m_eventPanel
+                    ->fontMetrics()
+                    .height()
+                + InterfaceScale::pixels(
+                    4,
+                    m_eventPanel
+                    )
+            );
+
+    const int eventButtonY =
+        eventTopLeft.y()
+        + std::max(
+            0,
+            (
+                eventTitleBandHeight
+                - buttonSize
+                )
+                / 2
+            )
+        + (
+            m_eventCollapsed
+                ? -InterfaceScale::pixels(
+                      1,
+                      this
+                      )
+                : InterfaceScale::pixels(
+                      2,
+                      this
+                      )
+            );
+
+    /*
      * Lower-region control:
      * line it up with the existing Review tab band.
      *
@@ -2929,6 +3123,13 @@ void InvestigationSessionView::
         buttonSize
         );
 
+    m_eventCollapseButton->setGeometry(
+        buttonX,
+        eventButtonY,
+        buttonSize,
+        buttonSize
+        );
+
     m_lowerRegionCollapseButton->setGeometry(
         buttonX,
         lowerButtonY,
@@ -2941,7 +3142,129 @@ void InvestigationSessionView::
      * rather than consuming layout space.
      */
     m_timelineCollapseButton->raise();
+    m_eventCollapseButton->raise();
     m_lowerRegionCollapseButton->raise();
+}
+
+void InvestigationSessionView::
+    updateEventSectionPresentation()
+{
+    if (
+        m_eventSectionContainer == nullptr
+        || m_eventSectionLayout == nullptr
+        || m_eventPanel == nullptr
+        ) {
+        return;
+    }
+
+    const bool allSectionsCollapsed =
+        m_timelineCollapsed
+        && m_eventCollapsed
+        && m_lowerRegionCollapsed;
+
+    if (!m_eventCollapsed) {
+        /*
+         * Normal expanded behavior: Telemetry Events
+         * fills the middle splitter section.
+         */
+        m_eventSectionContainer->setMinimumHeight(
+            0
+            );
+
+        m_eventSectionContainer->setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        m_eventSectionContainer->setSizePolicy(
+            QSizePolicy::Preferred,
+            QSizePolicy::Expanding
+            );
+
+        m_eventSectionLayout->setAlignment(
+            m_eventPanel,
+            Qt::Alignment()
+            );
+
+        m_eventPanel->setSizePolicy(
+            QSizePolicy::Preferred,
+            QSizePolicy::Expanding
+            );
+
+        m_eventSectionContainer
+            ->updateGeometry();
+
+        return;
+    }
+
+    const int eventCollapsedHeight =
+        m_eventPanel->collapsedHeight();
+
+    if (allSectionsCollapsed) {
+        /*
+         * This is the deliberately spacious manual
+         * all-collapsed presentation.
+         *
+         * Timeline remains pinned to the top.
+         * Lower Details remains pinned to the bottom.
+         * The middle container absorbs spare space,
+         * while the fixed-height Telemetry Events
+         * title strip is centered inside it.
+         *
+         * A future severely-constrained layout tier
+         * will override this and pack all three title
+         * strips tightly instead.
+         */
+        m_eventSectionContainer->setMinimumHeight(
+            eventCollapsedHeight
+            );
+
+        m_eventSectionContainer->setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        m_eventSectionContainer->setSizePolicy(
+            QSizePolicy::Preferred,
+            QSizePolicy::Expanding
+            );
+
+        m_eventSectionLayout->setAlignment(
+            m_eventPanel,
+            Qt::AlignVCenter
+            );
+    } else {
+        /*
+         * Event is collapsed while at least one other
+         * section remains open. Consume only the
+         * native Telemetry Events title-strip height
+         * so usable space remains available to the
+         * expanded sections.
+         */
+        m_eventSectionContainer->setMinimumHeight(
+            eventCollapsedHeight
+            );
+
+        m_eventSectionContainer->setMaximumHeight(
+            eventCollapsedHeight
+            );
+
+        m_eventSectionContainer->setSizePolicy(
+            QSizePolicy::Preferred,
+            QSizePolicy::Fixed
+            );
+
+        m_eventSectionLayout->setAlignment(
+            m_eventPanel,
+            Qt::AlignVCenter
+            );
+    }
+
+    m_eventPanel->setSizePolicy(
+        QSizePolicy::Preferred,
+        QSizePolicy::Fixed
+        );
+
+    m_eventSectionContainer
+        ->updateGeometry();
 }
 
 void InvestigationSessionView::
@@ -2955,6 +3278,15 @@ void InvestigationSessionView::
         || m_timelinePanel == nullptr
         ) {
         return;
+    }
+
+    if (m_eventCollapsed) {
+        /*
+         * The section configuration has changed since
+         * Events was collapsed, so its exact pre-collapse
+         * splitter snapshot is no longer authoritative.
+         */
+        m_eventPreCollapseSizes.clear();
     }
 
     /*
@@ -2981,6 +3313,8 @@ void InvestigationSessionView::
     m_timelinePanel->setCollapsed(
         collapsed
         );
+
+    updateEventSectionPresentation();
 
     m_mainSplitter->updateGeometry();
 
@@ -3030,6 +3364,144 @@ void InvestigationSessionView::
 }
 
 void InvestigationSessionView::
+    setEventSectionCollapsed(
+        bool collapsed
+        )
+{
+    if (
+        m_eventCollapsed == collapsed
+        || m_mainSplitter == nullptr
+        || m_eventPanel == nullptr
+        || m_eventSectionContainer == nullptr
+        ) {
+        return;
+    }
+
+    const QList<int> previousSizes =
+        m_mainSplitter->sizes();
+
+    if (
+        collapsed
+        && previousSizes.size() == 3
+        ) {
+        /*
+         * This is the exact layout Events should return
+         * to if it is reopened without an intervening
+         * change to the other section states.
+         *
+         * Do not try to reconstruct this later from
+         * remembered individual heights. The complete
+         * splitter allocation is already known here.
+         */
+        m_eventPreCollapseSizes =
+            previousSizes;
+
+        m_eventExpandedHeight =
+            previousSizes.at(1);
+
+        /*
+         * At the moment Events closes, the currently visible
+         * auxiliary heights become our baseline preferred
+         * heights for this transaction.
+         *
+         * A later manual splitter drag may update exactly one
+         * of these preferences without changing the other.
+         */
+        if (!m_timelineCollapsed) {
+            m_timelineExpandedHeight =
+                previousSizes.at(0);
+        }
+
+        if (!m_lowerRegionCollapsed) {
+            m_lowerRegionExpandedHeight =
+                previousSizes.at(2);
+        }
+
+        m_timelineManuallyResizedWhileEventCollapsed =
+            false;
+
+        m_lowerRegionManuallyResizedWhileEventCollapsed =
+            false;
+    }
+
+    m_eventCollapsed =
+        collapsed;
+
+    m_eventPanel->setCollapsed(
+        collapsed
+        );
+
+    updateEventSectionPresentation();
+
+    m_mainSplitter->updateGeometry();
+
+    updateSectionCollapseControls();
+
+    if (collapsed) {
+        allocateCollapsedEventSpace(
+            previousSizes
+            );
+    } else {
+        const bool hasManualResizePreference =
+            m_timelineManuallyResizedWhileEventCollapsed
+            || m_lowerRegionManuallyResizedWhileEventCollapsed;
+
+        if (hasManualResizePreference) {
+            /*
+             * A splitter drag while Events was closed
+             * superseded the old exact layout.
+             *
+             * Preserve the manually changed preference,
+             * restore the unaffected preference, and let
+             * Events consume the remaining height.
+             */
+            restoreEventSectionAfterManualResize(
+                previousSizes
+                );
+        } else if (
+            m_eventPreCollapseSizes.size() == 3
+            ) {
+            /*
+             * No intervening preference/state change:
+             * collapse -> reopen remains an exact reversible
+             * transaction.
+             */
+            m_mainSplitter->setSizes(
+                m_eventPreCollapseSizes
+                );
+        } else {
+            /*
+             * Another section changed state while Events
+             * was closed, so the old snapshot is no longer
+             * valid.
+             */
+            restoreMainSplitterSectionHeight(
+                1,
+                m_eventExpandedHeight,
+                previousSizes
+                );
+        }
+
+        m_eventPreCollapseSizes.clear();
+
+        m_timelineManuallyResizedWhileEventCollapsed =
+            false;
+
+        m_lowerRegionManuallyResizedWhileEventCollapsed =
+            false;
+    }
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            updateEventSectionPresentation();
+            updateSectionCollapseControlGeometry();
+        }
+        );
+}
+
+void InvestigationSessionView::
     setLowerRegionCollapsed(
         bool collapsed
         )
@@ -3041,6 +3513,10 @@ void InvestigationSessionView::
         || m_eventDetailPanel == nullptr
         ) {
         return;
+    }
+
+    if (m_eventCollapsed) {
+        m_eventPreCollapseSizes.clear();
     }
 
     /*
@@ -3070,6 +3546,8 @@ void InvestigationSessionView::
         collapsed
         );
 
+    updateEventSectionPresentation();
+
     m_bottomSplitter->updateGeometry();
     m_mainSplitter->updateGeometry();
 
@@ -3093,19 +3571,19 @@ void InvestigationSessionView::
             }
             );
     } else {
+        restoreMainSplitterSectionHeight(
+            2,
+            m_lowerRegionExpandedHeight,
+            previousSizes
+            );
+
         QTimer::singleShot(
             0,
             this,
-            [this, previousSizes]() {
+            [this]() {
                 if (m_lowerRegionCollapsed) {
                     return;
                 }
-
-                restoreMainSplitterSectionHeight(
-                    2,
-                    m_lowerRegionExpandedHeight,
-                    previousSizes
-                    );
 
                 updateReviewSplitter(
                     m_reviewPanel
@@ -3135,6 +3613,23 @@ void InvestigationSessionView::
         return;
     }
 
+    /*
+     * If this transition has produced the special
+     * all-three-collapsed state, do not force the
+     * released space into another compact section.
+     *
+     * The Event container owns it for the centered
+     * Telemetry Events presentation.
+     */
+    if (
+        m_timelineCollapsed
+        && m_eventCollapsed
+        && m_lowerRegionCollapsed
+        ) {
+        updateEventSectionPresentation();
+        return;
+    }
+
     const QList<int> settledSizes =
         m_mainSplitter->sizes();
 
@@ -3142,21 +3637,6 @@ void InvestigationSessionView::
         return;
     }
 
-    /*
-     * The collapsed child has already imposed its
-     * fixed compact height by the time this helper
-     * runs.
-     *
-     * Preserve the other auxiliary section exactly
-     * as it was before the collapse and donate the
-     * entire released height to Telemetry Events.
-     *
-     * Section layout:
-     *
-     *   0 — Timeline
-     *   1 — Telemetry Events
-     *   2 — Review / Selected Event Details
-     */
     const int previousSectionHeight =
         previousSizes.at(
             sectionIndex
@@ -3183,9 +3663,115 @@ void InvestigationSessionView::
     targetSizes[sectionIndex] =
         collapsedSectionHeight;
 
+    /*
+     * Global open-section priority:
+     *
+     *   Events
+     *   Lower Details
+     *   Timeline
+     *
+     * Therefore an auxiliary section normally donates
+     * its released height to Events. If Events is
+     * closed, use whichever remaining auxiliary
+     * section is still open.
+     */
+    if (!m_eventCollapsed) {
+        targetSizes[1] +=
+            releasedHeight;
+    } else if (
+        sectionIndex != 2
+        && !m_lowerRegionCollapsed
+        ) {
+        targetSizes[2] +=
+            releasedHeight;
+    } else if (
+        sectionIndex != 0
+        && !m_timelineCollapsed
+        ) {
+        targetSizes[0] +=
+            releasedHeight;
+    }
+
+    m_mainSplitter->setSizes(
+        targetSizes
+        );
+}
+
+void InvestigationSessionView::
+    allocateCollapsedEventSpace(
+        const QList<int> &previousSizes
+        )
+{
+    if (
+        m_mainSplitter == nullptr
+        || m_eventPanel == nullptr
+        || previousSizes.size() != 3
+        ) {
+        return;
+    }
+
+    /*
+     * When all three sections are collapsed, the
+     * Event container deliberately owns the flexible
+     * middle space so its title strip can be centered.
+     */
+    if (
+        m_timelineCollapsed
+        && m_eventCollapsed
+        && m_lowerRegionCollapsed
+        ) {
+        updateEventSectionPresentation();
+        return;
+    }
+
+    /*
+     * Do not measure splitter index 1 here.
+     *
+     * It is now the Event section container and may
+     * intentionally be larger than the collapsed
+     * Event panel.
+     *
+     * The Event panel itself knows its true fixed
+     * collapsed title-strip height.
+     */
+    const int collapsedEventHeight =
+        m_eventPanel->collapsedHeight();
+
+    if (collapsedEventHeight <= 0) {
+        return;
+    }
+
+    const int previousEventHeight =
+        previousSizes.at(1);
+
+    const int releasedHeight =
+        std::max(
+            0,
+            previousEventHeight
+                - collapsedEventHeight
+            );
+
+    QList<int> targetSizes =
+        previousSizes;
+
     targetSizes[1] =
-        previousSizes.at(1)
-        + releasedHeight;
+        collapsedEventHeight;
+
+    /*
+     * Recipient priority when Events closes:
+     *
+     *   1. Lower Details
+     *   2. Timeline
+     *
+     * Events itself is the section being closed.
+     */
+    if (!m_lowerRegionCollapsed) {
+        targetSizes[2] +=
+            releasedHeight;
+    } else if (!m_timelineCollapsed) {
+        targetSizes[0] +=
+            releasedHeight;
+    }
 
     m_mainSplitter->setSizes(
         targetSizes
@@ -3201,98 +3787,567 @@ void InvestigationSessionView::
 {
     if (
         m_mainSplitter == nullptr
-        || m_eventPanel == nullptr
-        || preferredHeight <= 0
         || previousSizes.size() != 3
-        || (
-            sectionIndex != 0
-            && sectionIndex != 2
-            )
+        || sectionIndex < 0
+        || sectionIndex > 2
+        || preferredHeight <= 0
         ) {
         return;
     }
 
+    QList<int> targetSizes =
+        previousSizes;
+
     /*
-     * Restore from the splitter state captured before
-     * the auxiliary section was reopened.
-     *
-     * Removing the collapsed height constraint lets
-     * QSplitter redistribute space immediately, so
-     * reading sizes() here would already include that
-     * automatic redistribution.
-     *
-     * Instead:
-     *
-     *   - preserve the untouched auxiliary section
-     *   - restore this section only from Events
-     *   - never make the other auxiliary section pay
-     *     for the restoration
+     * ---------------------------------------------------------
+     * Section-state helpers
+     * ---------------------------------------------------------
      */
-    const int eventIndex = 1;
 
-    const int collapsedSectionHeight =
-        previousSizes.at(
-            sectionIndex
-            );
+    const auto isCollapsed =
+        [this](
+            int index
+            ) {
+            switch (index) {
+            case 0:
+                return m_timelineCollapsed;
 
-    const int desiredIncrease =
+            case 1:
+                return m_eventCollapsed;
+
+            case 2:
+                return m_lowerRegionCollapsed;
+
+            default:
+                return true;
+            }
+        };
+
+    const auto rememberedHeight =
+        [this, &targetSizes](
+            int index
+            ) {
+            int remembered = 0;
+
+            switch (index) {
+            case 0:
+                remembered =
+                    m_timelineExpandedHeight;
+                break;
+
+            case 1:
+                remembered =
+                    m_eventExpandedHeight;
+                break;
+
+            case 2:
+                remembered =
+                    m_lowerRegionExpandedHeight;
+                break;
+
+            default:
+                break;
+            }
+
+            /*
+             * If the user has never collapsed this
+             * section, we have no explicit remembered
+             * preference yet. Treat its current height
+             * as its preference.
+             */
+            if (remembered <= 0) {
+                remembered =
+                    targetSizes.at(index);
+            }
+
+            return remembered;
+        };
+
+    /*
+     * ---------------------------------------------------------
+     * Recover spare space from the centered Event container
+     * ---------------------------------------------------------
+     *
+     * When Events is collapsed and all sections were
+     * previously collapsed, splitter index 1 may be
+     * very large even though the visible Event strip
+     * is only a few pixels high.
+     *
+     * Once another section is being opened, that
+     * centering space becomes genuinely available.
+     */
+    int freeSpace = 0;
+
+    if (
+        sectionIndex != 1
+        && m_eventCollapsed
+        && m_eventPanel != nullptr
+        ) {
+        const int compactEventHeight =
+            m_eventPanel->collapsedHeight();
+
+        if (
+            compactEventHeight > 0
+            && targetSizes.at(1)
+                   > compactEventHeight
+            ) {
+            freeSpace =
+                targetSizes.at(1)
+                - compactEventHeight;
+
+            targetSizes[1] =
+                compactEventHeight;
+        }
+    }
+
+    /*
+     * Do not shrink a target that already has more
+     * than its remembered preferred height.
+     */
+    int remainingNeeded =
         std::max(
             0,
             preferredHeight
-                - collapsedSectionHeight
+                - targetSizes.at(
+                    sectionIndex
+                    )
             );
 
     /*
-     * Respect the Events panel's real minimum.
+     * First consume genuinely unowned spare space.
+     */
+    if (
+        remainingNeeded > 0
+        && freeSpace > 0
+        ) {
+        const int amount =
+            std::min(
+                remainingNeeded,
+                freeSpace
+                );
+
+        targetSizes[sectionIndex] +=
+            amount;
+
+        remainingNeeded -=
+            amount;
+
+        freeSpace -=
+            amount;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Donor ordering
+     * ---------------------------------------------------------
      *
-     * If there is not enough Events height available
-     * to restore the complete remembered auxiliary
-     * height, restore only what fits. This is preferable
-     * to allowing QSplitter to reclaim the remainder
-     * from the other auxiliary section.
+     * When a section still needs room:
+     *
+     * Event expansion:
+     *   Timeline, then Lower
+     *
+     * Lower expansion:
+     *   Timeline, then Events
+     *
+     * Timeline expansion:
+     *   Lower, then Events
+     *
+     * This is the priority ordering:
+     *
+     *   Events > Lower > Timeline
+     */
+    QList<int> donors;
+
+    switch (sectionIndex) {
+    case 0:
+        donors = {
+            2,
+            1
+        };
+        break;
+
+    case 1:
+        donors = {
+            0,
+            2
+        };
+        break;
+
+    case 2:
+        donors = {
+            0,
+            1
+        };
+        break;
+
+    default:
+        return;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Pass 1:
+     * consume only surplus above remembered preferences
+     * ---------------------------------------------------------
+     *
+     * This is the important behavior for the sequence:
+     *
+     * all collapsed
+     *   -> Lower opens and becomes oversized
+     *   -> Timeline opens
+     *   -> Events opens
+     *
+     * Lower's surplus is consumed before Timeline is
+     * pushed below its remembered size.
+     */
+    for (
+        const int donorIndex
+        : std::as_const(donors)
+        ) {
+        if (
+            remainingNeeded <= 0
+            || isCollapsed(
+                donorIndex
+                )
+            ) {
+            continue;
+        }
+
+        const int donorPreferred =
+            rememberedHeight(
+                donorIndex
+                );
+
+        const int donorSurplus =
+            std::max(
+                0,
+                targetSizes.at(
+                    donorIndex
+                    )
+                    - donorPreferred
+                );
+
+        const int amount =
+            std::min(
+                remainingNeeded,
+                donorSurplus
+                );
+
+        targetSizes[donorIndex] -=
+            amount;
+
+        targetSizes[sectionIndex] +=
+            amount;
+
+        remainingNeeded -=
+            amount;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Pass 2:
+     * only if necessary, compress below preference
+     * ---------------------------------------------------------
+     *
+     * This maintains the same priority ordering, but
+     * only after all currently available preferred-size
+     * surplus has been exhausted.
+     */
+    for (
+        const int donorIndex
+        : std::as_const(donors)
+        ) {
+        if (
+            remainingNeeded <= 0
+            || isCollapsed(
+                donorIndex
+                )
+            ) {
+            continue;
+        }
+
+        QWidget *donorWidget =
+            m_mainSplitter->widget(
+                donorIndex
+                );
+
+        if (donorWidget == nullptr) {
+            continue;
+        }
+
+        const int donorMinimum =
+            std::max(
+                1,
+                std::max(
+                    donorWidget
+                        ->minimumHeight(),
+                    donorWidget
+                        ->minimumSizeHint()
+                        .height()
+                    )
+                );
+
+        const int available =
+            std::max(
+                0,
+                targetSizes.at(
+                    donorIndex
+                    )
+                    - donorMinimum
+                );
+
+        const int amount =
+            std::min(
+                remainingNeeded,
+                available
+                );
+
+        targetSizes[donorIndex] -=
+            amount;
+
+        targetSizes[sectionIndex] +=
+            amount;
+
+        remainingNeeded -=
+            amount;
+    }
+
+    /*
+     * Any centering space left after restoring the
+     * requested section still has to belong somewhere.
+     *
+     * Give it to the highest-priority currently-open
+     * section:
+     *
+     *   Events
+     *   Lower
+     *   Timeline
+     */
+    if (freeSpace > 0) {
+        int recipientIndex =
+            -1;
+
+        if (!m_eventCollapsed) {
+            recipientIndex = 1;
+        } else if (!m_lowerRegionCollapsed) {
+            recipientIndex = 2;
+        } else if (!m_timelineCollapsed) {
+            recipientIndex = 0;
+        }
+
+        if (recipientIndex >= 0) {
+            targetSizes[recipientIndex] +=
+                freeSpace;
+        }
+    }
+
+    m_mainSplitter->setSizes(
+        targetSizes
+        );
+}
+
+void InvestigationSessionView::
+    restoreEventSectionAfterManualResize(
+        const QList<int> &previousSizes
+        )
+{
+    if (
+        m_mainSplitter == nullptr
+        || m_eventPanel == nullptr
+        || previousSizes.size() != 3
+        ) {
+        return;
+    }
+
+    QList<int> targetSizes =
+        previousSizes;
+
+    const int totalHeight =
+        previousSizes.at(0)
+        + previousSizes.at(1)
+        + previousSizes.at(2);
+
+    /*
+     * ---------------------------------------------------------
+     * Restore auxiliary preferences
+     * ---------------------------------------------------------
+     *
+     * The manually changed section's remembered height
+     * was updated by splitterMoved().
+     *
+     * The compensating section's remembered height was
+     * deliberately left untouched.
+     *
+     * Therefore both values below now represent exactly
+     * what we want after Events reopens.
+     */
+    if (
+        !m_timelineCollapsed
+        && m_timelineExpandedHeight > 0
+        ) {
+        targetSizes[0] =
+            m_timelineExpandedHeight;
+    }
+
+    if (
+        !m_lowerRegionCollapsed
+        && m_lowerRegionExpandedHeight > 0
+        ) {
+        targetSizes[2] =
+            m_lowerRegionExpandedHeight;
+    }
+
+    /*
+     * Collapsed auxiliary sections retain their compact
+     * current allocation.
+     */
+
+    int eventHeight =
+        totalHeight
+        - targetSizes.at(0)
+        - targetSizes.at(2);
+
+    /*
+     * Events receives whatever remains after honoring
+     * the current Timeline and Lower preferences.
+     *
+     * The user's newest manual size preference is more
+     * important than restoring Events to the exact
+     * height it had before it was collapsed.
      */
     const int eventMinimumHeight =
         std::max(
-            m_eventPanel->minimumHeight(),
+            1,
             m_eventPanel
                 ->minimumSizeHint()
                 .height()
             );
 
-    const int availableEventHeight =
+    if (eventHeight < eventMinimumHeight) {
+        int deficit =
+            eventMinimumHeight
+            - eventHeight;
+
+        /*
+         * If ordinary geometry constraints make all
+         * requested preferences impossible at once,
+         * protect the manually resized section first.
+         *
+         * Global priority remains:
+         *
+         *   Events > Lower > Timeline
+         *
+         * but an explicit manual resize during this
+         * transaction is treated as the freshest user
+         * intent.
+         */
+        QList<int> donors;
+
+        if (
+            m_timelineManuallyResizedWhileEventCollapsed
+            && !m_lowerRegionManuallyResizedWhileEventCollapsed
+            ) {
+            donors = {
+                2,
+                0
+            };
+        } else if (
+            m_lowerRegionManuallyResizedWhileEventCollapsed
+            && !m_timelineManuallyResizedWhileEventCollapsed
+            ) {
+            donors = {
+                0,
+                2
+            };
+        } else {
+            /*
+             * If both were manually adjusted, or we
+             * somehow reach this path without a unique
+             * manual target, compress the lower-priority
+             * Timeline first.
+             */
+            donors = {
+                0,
+                2
+            };
+        }
+
+        for (
+            const int donorIndex
+            : donors
+            ) {
+            if (deficit <= 0) {
+                break;
+            }
+
+            if (
+                donorIndex == 0
+                && m_timelineCollapsed
+                ) {
+                continue;
+            }
+
+            if (
+                donorIndex == 2
+                && m_lowerRegionCollapsed
+                ) {
+                continue;
+            }
+
+            QWidget *donor =
+                m_mainSplitter->widget(
+                    donorIndex
+                    );
+
+            if (donor == nullptr) {
+                continue;
+            }
+
+            const int minimumHeight =
+                std::max(
+                    1,
+                    std::max(
+                        donor->minimumHeight(),
+                        donor
+                            ->minimumSizeHint()
+                            .height()
+                        )
+                    );
+
+            const int available =
+                std::max(
+                    0,
+                    targetSizes.at(
+                        donorIndex
+                        )
+                        - minimumHeight
+                    );
+
+            const int amount =
+                std::min(
+                    deficit,
+                    available
+                    );
+
+            targetSizes[donorIndex] -=
+                amount;
+
+            deficit -=
+                amount;
+        }
+
+        eventHeight =
+            totalHeight
+            - targetSizes.at(0)
+            - targetSizes.at(2);
+    }
+
+    targetSizes[1] =
         std::max(
-            0,
-            previousSizes.at(eventIndex)
-                - eventMinimumHeight
+            1,
+            eventHeight
             );
 
-    const int actualIncrease =
-        std::min(
-            desiredIncrease,
-            availableEventHeight
-            );
-
-    QList<int> targetSizes =
-        previousSizes;
-
-    targetSizes[sectionIndex] =
-        collapsedSectionHeight
-        + actualIncrease;
-
-    targetSizes[eventIndex] =
-        previousSizes.at(eventIndex)
-        - actualIncrease;
-
-    /*
-     * The third entry is deliberately left exactly
-     * equal to previousSizes.
-     *
-     * That is the key invariant:
-     *
-     * restoring Timeline cannot resize the lower
-     * region, and restoring the lower region cannot
-     * resize Timeline.
-     */
     m_mainSplitter->setSizes(
         targetSizes
         );

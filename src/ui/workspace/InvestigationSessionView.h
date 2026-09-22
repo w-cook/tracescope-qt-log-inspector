@@ -23,6 +23,8 @@ class QSplitter;
 class QResizeEvent;
 class QTimer;
 class QToolButton;
+class QVBoxLayout;
+class QWidget;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
@@ -165,9 +167,15 @@ private:
         bool collapsed
         );
 
+    void setEventSectionCollapsed(
+        bool collapsed
+        );
+
     void setLowerRegionCollapsed(
         bool collapsed
         );
+
+    void updateEventSectionPresentation();
 
     void updateSectionCollapseControls();
 
@@ -178,9 +186,17 @@ private:
         const QList<int> &previousSizes
         );
 
+    void allocateCollapsedEventSpace(
+        const QList<int> &previousSizes
+        );
+
     void restoreMainSplitterSectionHeight(
         int sectionIndex,
         int preferredHeight,
+        const QList<int> &previousSizes
+        );
+
+    void restoreEventSectionAfterManualResize(
         const QList<int> &previousSizes
         );
 
@@ -201,6 +217,12 @@ private:
 
     InvestigationEventPanel
         *m_eventPanel = nullptr;
+
+    QWidget *m_eventSectionContainer =
+        nullptr;
+
+    QVBoxLayout *m_eventSectionLayout =
+        nullptr;
 
     InvestigationReviewPanel
         *m_reviewPanel = nullptr;
@@ -232,10 +254,16 @@ private:
     QToolButton *m_timelineCollapseButton =
         nullptr;
 
+    QToolButton *m_eventCollapseButton =
+        nullptr;
+
     QToolButton *m_lowerRegionCollapseButton =
         nullptr;
 
     bool m_timelineCollapsed =
+        false;
+
+    bool m_eventCollapsed =
         false;
 
     bool m_lowerRegionCollapsed =
@@ -244,6 +272,17 @@ private:
     int m_timelineExpandedHeight =
         0;
 
+    int m_eventExpandedHeight =
+        0;
+
+    QList<int> m_eventPreCollapseSizes;
+
     int m_lowerRegionExpandedHeight =
         0;
+
+    bool m_timelineManuallyResizedWhileEventCollapsed =
+        false;
+
+    bool m_lowerRegionManuallyResizedWhileEventCollapsed =
+        false;
 };

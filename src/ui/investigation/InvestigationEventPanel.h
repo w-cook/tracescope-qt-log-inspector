@@ -61,6 +61,14 @@ public:
 
     void refreshInterfaceScale();
 
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
+    int collapsedHeight() const;
+
 signals:
     void selectedRecordChanged();
 
@@ -116,4 +124,7 @@ private:
 
     qreal m_columnWidthScaleFactor =
         1.0;
+
+    bool m_collapsed =
+        false;
 };
