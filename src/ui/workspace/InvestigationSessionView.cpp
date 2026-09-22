@@ -58,15 +58,15 @@ constexpr int
 
 constexpr int
     TimelineMinimumUsefulLogicalHeight =
-    150;
+    130;
 
 constexpr int
     EventMinimumUsefulLogicalHeight =
-    180;
+    130;
 
 constexpr int
     LowerDetailsMinimumUsefulLogicalHeight =
-    170;
+    160;
 
 constexpr int
     SectionCapacityHysteresisLogicalHeight =
@@ -5332,17 +5332,20 @@ void InvestigationSessionView::
         return;
     }
 
-    /*
-     * When collapsed, the two lower panels establish
-     * their own compact fixed heights.
-     *
-     * Do not let the expanded usability minimum prevent
-     * the lower region from reaching that collapsed
-     * presentation.
-     */
     if (m_lowerRegionCollapsed) {
+        /*
+         * The expanded usability floor no longer applies,
+         * but the lower region must still reserve enough
+         * height for its collapsed identity strip.
+         *
+         * Without this minimum, the main QSplitter may
+         * compress the entire lower splitter to zero at
+         * the document's native minimum height.
+         */
         m_bottomSplitter->setMinimumHeight(
-            0
+            sectionCompactHeight(
+                InvestigationSection::LowerDetails
+                )
             );
 
         return;
