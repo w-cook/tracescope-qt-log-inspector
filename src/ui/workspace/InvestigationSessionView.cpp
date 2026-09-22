@@ -274,10 +274,13 @@ InvestigationSessionView::
             this
             )
         ),
+    m_lowerRegionContainer(
+        new QWidget(this)
+        ),
     m_bottomSplitter(
         new QSplitter(
             Qt::Horizontal,
-            this
+            m_lowerRegionContainer
             )
         ),
     m_mainSplitter(
@@ -287,6 +290,9 @@ InvestigationSessionView::
             )
         ),
     m_liveRefreshTimer(
+        new QTimer(this)
+        ),
+    m_constrainedResizeSettleTimer(
         new QTimer(this)
         )
 {
@@ -415,6 +421,43 @@ InvestigationSessionView::
         );
 
     /*
+     * The horizontal Review / Selected Event Details splitter
+     * manages its own internal sizing and may recalculate its
+     * own minimum/maximum size constraints.
+     *
+     * Therefore it must not also serve as the vertically
+     * constrained child of m_mainSplitter.
+     *
+     * This plain container owns the lower region's vertical
+     * constraints while m_bottomSplitter remains free to
+     * manage only the horizontal Review/Details relationship.
+     */
+    auto *lowerRegionLayout =
+        new QVBoxLayout(
+            m_lowerRegionContainer
+            );
+
+    lowerRegionLayout->setContentsMargins(
+        0,
+        0,
+        0,
+        0
+        );
+
+    lowerRegionLayout->setSpacing(
+        0
+        );
+
+    lowerRegionLayout->addWidget(
+        m_bottomSplitter
+        );
+
+    m_lowerRegionContainer->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Ignored
+        );
+
+    /*
      * ---------------------------------------------------------
      * Event-section container
      * ---------------------------------------------------------
@@ -467,7 +510,7 @@ InvestigationSessionView::
         );
 
     m_mainSplitter->addWidget(
-        m_bottomSplitter
+        m_lowerRegionContainer
         );
 
     m_mainSplitter->setStretchFactor(
@@ -543,6 +586,8 @@ InvestigationSessionView::
         QSizePolicy::Expanding,
         QSizePolicy::Ignored
         );
+
+    updateTimelineMinimumHeight();
 
     updateLowerRegionMinimumHeight();
 
@@ -737,23 +782,85 @@ InvestigationSessionView::
                 if (!m_timelineCollapsed) {
                     m_timelineExpandedHeight =
                         sizes.at(0);
+
+                    if (
+                        m_hasConstrainedRestoreSnapshot
+                        && m_constrainedRecoveryComplete
+                        ) {
+                        m_constrainedTimelinePreferredHeight =
+                            sizes.at(0);
+                    }
                 }
 
                 if (!m_eventCollapsed) {
                     m_eventExpandedHeight =
                         sizes.at(1);
+
+                    if (
+                        m_hasConstrainedRestoreSnapshot
+                        && m_constrainedRecoveryComplete
+                        ) {
+                        m_constrainedEventPreferredHeight =
+                            sizes.at(1);
+                    }
                 }
             } else if (handleIndex == 2) {
                 if (!m_eventCollapsed) {
                     m_eventExpandedHeight =
                         sizes.at(1);
+
+                    if (
+                        m_hasConstrainedRestoreSnapshot
+                        && m_constrainedRecoveryComplete
+                        ) {
+                        m_constrainedEventPreferredHeight =
+                            sizes.at(1);
+                    }
                 }
 
                 if (!m_lowerRegionCollapsed) {
                     m_lowerRegionExpandedHeight =
                         sizes.at(2);
+
+                    if (
+                        m_hasConstrainedRestoreSnapshot
+                        && m_constrainedRecoveryComplete
+                        ) {
+                        m_constrainedLowerPreferredHeight =
+                            sizes.at(2);
+
+                        m_constrainedLowerPreferredHeightRecovered =
+                            true;
+                    }
                 }
             }
+        }
+        );
+
+    m_constrainedResizeSettleTimer->setSingleShot(
+        true
+        );
+
+    m_constrainedResizeSettleTimer->setInterval(
+        120
+        );
+
+    connect(
+        m_constrainedResizeSettleTimer,
+        &QTimer::timeout,
+        this,
+        [this]() {
+            m_constrainedWindowResizeActive =
+                false;
+
+            /*
+             * The native window resize has settled.
+             *
+             * Release temporary anti-jitter ceilings so
+             * direct splitter manipulation is unrestricted.
+             */
+            updateTimelineMinimumHeight();
+            updateLowerRegionMinimumHeight();
         }
         );
 
@@ -1702,6 +1809,10 @@ void InvestigationSessionView::
     if (m_timelinePanel != nullptr) {
         m_timelinePanel
             ->refreshInterfaceScale();
+
+        if (!m_timelineCollapsed) {
+            updateTimelineMinimumHeight();
+        }
     }
 
     if (m_eventPanel != nullptr) {
@@ -2765,47 +2876,21 @@ void InvestigationSessionView::
         );
 
     /*
-     * Force the outer layout to consume the new native
-     * window geometry before calculating constrained
-     * splitter sizes.
+     * Native outer-window resizing temporarily owns the
+     * automatic vertical redistribution.
      *
-     * Without this synchronous pass, QSplitter first
-     * distributes the new height according to its
-     * ordinary stretch factors and our queued recovery
-     * pass corrects it one event-loop turn later. That
-     * produces the visible grow/shrink oscillation.
+     * Keep recovered auxiliary sections from accepting
+     * stray QSplitter growth while those resize events
+     * are arriving.
      */
-    if (layout() != nullptr) {
-        layout()->activate();
-    }
+    m_constrainedWindowResizeActive =
+        true;
 
-    const int currentAvailableHeight =
-        availableMainSplitterHeight();
+    updateTimelineMinimumHeight();
+    updateLowerRegionMinimumHeight();
 
-    const bool growing =
-        m_lastAvailableMainSplitterHeight >= 0
-        && currentAvailableHeight
-               > m_lastAvailableMainSplitterHeight;
-
-    /*
-     * Synchronous recovery is only needed after capacity
-     * has actually forced a section closed.
-     *
-     * That path prevents Qt from painting an intermediate
-     * splitter distribution while a section is reopened.
-     *
-     * During an ordinary partial shrink/reverse, however,
-     * no section is changing visibility. Let QSplitter
-     * perform its normal gradual resize first; the queued
-     * capacity-policy pass will only clamp auxiliary
-     * sections when they reach their frozen preferences.
-     */
-    if (
-        growing
-        && m_hasConstrainedRestoreSnapshot
-        && m_constrainedSectionCollapsedDuringCycle
-        ) {
-        applyConstrainedRecoveryLayout();
+    if (m_constrainedResizeSettleTimer != nullptr) {
+        m_constrainedResizeSettleTimer->start();
     }
 
     scheduleSectionCapacityUpdate();
@@ -3793,6 +3878,10 @@ void InvestigationSessionView::
         collapsed
         );
 
+    if (!collapsed) {
+        updateTimelineMinimumHeight();
+    }
+
     updateEventSectionPresentation();
 
     m_mainSplitter->updateGeometry();
@@ -3828,20 +3917,24 @@ void InvestigationSessionView::
         }
     } else {
         /*
-         * Expansion is different: we already know both
-         * the remembered expanded Timeline height and
-         * the complete pre-expansion splitter state.
+         * Manual expansion restores Timeline directly to
+         * its remembered preferred height.
          *
-         * Restore immediately so QSplitter never gets
-         * an event-loop turn in which it can visibly
-         * redistribute height into/out of the lower
-         * auxiliary region.
+         * Automatic constrained recovery is different.
+         * In that case the capacity coordinator has opened
+         * Timeline because its minimum useful height now
+         * fits. Let applyConstrainedRecoveryLayout() assign
+         * that initial minimum and grow Timeline gradually
+         * toward its frozen preferred height as additional
+         * space becomes available.
          */
-        restoreMainSplitterSectionHeight(
-            0,
-            m_timelineExpandedHeight,
-            previousSizes
-            );
+        if (!m_applyingSectionCapacityPolicy) {
+            restoreMainSplitterSectionHeight(
+                0,
+                m_timelineExpandedHeight,
+                previousSizes
+                );
+        }
 
         scheduleSectionCollapseControlGeometryUpdate();
     }
@@ -3888,6 +3981,9 @@ void InvestigationSessionView::
     m_eventPanel->setCollapsed(
         collapsed
         );
+
+    updateTimelineMinimumHeight();
+    updateLowerRegionMinimumHeight();
 
     updateEventSectionPresentation();
 
@@ -4020,6 +4116,7 @@ void InvestigationSessionView::
     updateEventSectionPresentation();
 
     m_bottomSplitter->updateGeometry();
+    m_lowerRegionContainer->updateGeometry();
     m_mainSplitter->updateGeometry();
 
     updateSectionCollapseControls();
@@ -4136,13 +4233,39 @@ void InvestigationSessionView::
             sectionIndex
             );
 
-    const int collapsedSectionHeight =
-        std::min(
-            previousSectionHeight,
-            settledSizes.at(
-                sectionIndex
-                )
-            );
+    int collapsedSectionHeight = 0;
+
+    if (sectionIndex == 2) {
+        /*
+         * Lower Details now lives inside a plain wrapper.
+         *
+         * Its outer splitter slot may still report the old
+         * allocation briefly after the wrapper has already
+         * been constrained to its collapsed height.
+         *
+         * Use the authoritative compact height directly
+         * instead of relying on transient QSplitter geometry.
+         */
+        collapsedSectionHeight =
+            std::min(
+                previousSectionHeight,
+                sectionCompactHeight(
+                    InvestigationSection::LowerDetails
+                    )
+                );
+    } else {
+        /*
+         * Timeline retains its existing settled-geometry
+         * behavior.
+         */
+        collapsedSectionHeight =
+            std::min(
+                previousSectionHeight,
+                settledSizes.at(
+                    sectionIndex
+                    )
+                );
+    }
 
     const int releasedHeight =
         std::max(
@@ -5323,50 +5446,187 @@ void InvestigationSessionView::
 }
 
 void InvestigationSessionView::
+    updateTimelineMinimumHeight()
+{
+    if (
+        m_timelinePanel == nullptr
+        || m_timelineCollapsed
+        ) {
+        return;
+    }
+
+    const int minimumHeight =
+        minimumUsefulExpandedHeight(
+            InvestigationSection::Timeline
+            );
+
+    m_timelinePanel->setMinimumHeight(
+        minimumHeight
+        );
+
+    /*
+     * During constrained recovery, Timeline grows from
+     * its useful minimum toward the frozen preferred
+     * height.
+     *
+     * Once that preferred height has been recovered,
+     * prevent QSplitter from continuing to give Timeline
+     * pieces of subsequent native-window growth. Events
+     * owns that elastic surplus.
+     *
+     * Without this cap, QSplitter repeatedly moves
+     * Timeline a few pixels above its preferred height
+     * while the window grows, producing visible jitter.
+     */
+    int maximumHeight =
+        QWIDGETSIZE_MAX;
+
+    if (
+        m_hasConstrainedRestoreSnapshot
+        && m_constrainedSectionCollapsedDuringCycle
+        && m_constrainedWindowResizeActive
+        && !m_eventCollapsed
+        && m_constrainedTimelinePreferredHeight > 0
+        && sectionHasRecoveredPreferredHeight(
+            InvestigationSection::Timeline
+            )
+        ) {
+        maximumHeight =
+            std::max(
+                minimumHeight,
+                m_constrainedTimelinePreferredHeight
+                );
+    }
+
+    m_timelinePanel->setMaximumHeight(
+        maximumHeight
+        );
+}
+
+void InvestigationSessionView::
     updateLowerRegionMinimumHeight()
 {
     if (
-        m_bottomSplitter == nullptr
+        m_lowerRegionContainer == nullptr
         || m_reviewPanel == nullptr
         ) {
         return;
     }
 
+    int desiredMinimumHeight = 0;
+    int desiredMaximumHeight =
+        QWIDGETSIZE_MAX;
+
     if (m_lowerRegionCollapsed) {
-        /*
-         * The expanded usability floor no longer applies,
-         * but the lower region must still reserve enough
-         * height for its collapsed identity strip.
-         *
-         * Without this minimum, the main QSplitter may
-         * compress the entire lower splitter to zero at
-         * the document's native minimum height.
-         */
-        m_bottomSplitter->setMinimumHeight(
+        const int compactHeight =
             sectionCompactHeight(
                 InvestigationSection::LowerDetails
-                )
-            );
+                );
 
-        return;
+        /*
+         * A collapsed lower region is a fixed-height
+         * identity strip from the perspective of the
+         * outer vertical splitter.
+         *
+         * m_bottomSplitter remains responsible only for
+         * the horizontal Review/Details relationship.
+         */
+        desiredMinimumHeight =
+            compactHeight;
+
+        desiredMaximumHeight =
+            compactHeight;
+    } else {
+        const int hardMinimumHeight =
+            m_reviewPanel
+                ->minimumUsefulExpandedHeight();
+
+        desiredMinimumHeight =
+            hardMinimumHeight;
+
+        const bool constrainedRecoveryActive =
+            m_hasConstrainedRestoreSnapshot
+            && m_constrainedSectionCollapsedDuringCycle
+            && m_constrainedLowerPreferredHeight > 0;
+
+        /*
+         * Reaching the frozen preferred height is a
+         * one-way milestone for the current constrained
+         * recovery cycle.
+         */
+        if (
+            constrainedRecoveryActive
+            && !m_constrainedLowerPreferredHeightRecovered
+            && sectionHasRecoveredPreferredHeight(
+                InvestigationSection::LowerDetails
+                )
+            ) {
+            m_constrainedLowerPreferredHeightRecovered =
+                true;
+        }
+
+        /*
+         * Once recovered, prevent ordinary native-window
+         * growth from enlarging Lower Details beyond its
+         * frozen preference. Events owns that surplus.
+         *
+         * Release the ceiling while Events is collapsed,
+         * because an open auxiliary region may then
+         * legitimately absorb released Event-table space.
+         */
+        if (
+            constrainedRecoveryActive
+            && m_constrainedWindowResizeActive
+            && m_constrainedLowerPreferredHeightRecovered
+            && !m_eventCollapsed
+            ) {
+            desiredMaximumHeight =
+                std::max(
+                    hardMinimumHeight,
+                    m_constrainedLowerPreferredHeight
+                    );
+        }
     }
 
     /*
-     * Expanded hard floor:
-     *
-     * enough room for Analytics -> Bursts to expose
-     * the Detected Bursts table header and first row.
+     * Relax an existing ceiling before increasing the
+     * minimum, if necessary.
      */
-    const int minimumHeight =
-        m_reviewPanel
-            ->minimumUsefulExpandedHeight();
+    if (
+        desiredMaximumHeight
+        > m_lowerRegionContainer
+              ->maximumHeight()
+        ) {
+        m_lowerRegionContainer
+            ->setMaximumHeight(
+                desiredMaximumHeight
+                );
+    }
 
-    m_bottomSplitter->setMinimumHeight(
-        std::max(
-            0,
-            minimumHeight
-            )
-        );
+    if (
+        m_lowerRegionContainer
+            ->minimumHeight()
+        != desiredMinimumHeight
+        ) {
+        m_lowerRegionContainer
+            ->setMinimumHeight(
+                desiredMinimumHeight
+                );
+    }
+
+    /*
+     * Tighten the ceiling last.
+     */
+    if (
+        m_lowerRegionContainer
+            ->maximumHeight()
+        != desiredMaximumHeight
+        ) {
+        m_lowerRegionContainer
+            ->setMaximumHeight(
+                desiredMaximumHeight
+                );
+    }
 }
 
 int InvestigationSessionView::
@@ -5496,31 +5756,135 @@ InvestigationSessionView::
         + handleSpace;
 
     /*
-     * Downward capacity thresholds.
-     *
-     * These remain the exact points at which sections
-     * become too constrained to stay open.
+ * Capacity priority follows user intent first.
+ *
+ * Sections the user wants open participate in threshold
+ * calculations before sections the user has explicitly
+ * chosen to keep collapsed.
+ *
+ * Normal priority is still:
+ *
+ *   Events
+ *   Lower Details
+ *   Timeline
+ *
+ * Examples:
+ *
+ *   all preferred open:
+ *       Events, Lower, Timeline
+ *
+ *   Lower manually closed:
+ *       Events, Timeline, Lower
+ *
+ *   Timeline manually closed:
+ *       Events, Lower, Timeline
+ *
+ *   Events manually closed:
+ *       Lower, Timeline, Events
+ *
+ * This keeps manually closed sections from delaying the
+ * restoration of sections the user actually wants open.
+ */
+    const QList<InvestigationSection>
+        normalPriority{
+            InvestigationSection::Events,
+            InvestigationSection::LowerDetails,
+            InvestigationSection::Timeline
+        };
+
+    QList<InvestigationSection>
+        capacityPriority;
+
+    /*
+ * User-preferred open sections first.
+ */
+    for (
+        const InvestigationSection section
+        : normalPriority
+        ) {
+        if (
+            !isSectionPreferredCollapsed(
+                section
+                )
+            ) {
+            capacityPriority.append(
+                section
+                );
+        }
+    }
+
+    /*
+     * Manually closed sections remain part of the eventual
+     * physical three-section capacity calculation, but only
+     * after every section the user currently wants open.
      */
+    for (
+        const InvestigationSection section
+        : normalPriority
+        ) {
+        if (
+            isSectionPreferredCollapsed(
+                section
+                )
+            ) {
+            capacityPriority.append(
+                section
+                );
+        }
+    }
+
+    const auto compactHeightForSection =
+        [timelineCompact,
+         eventCompact,
+         lowerCompact](
+            InvestigationSection section
+            ) {
+            switch (section) {
+            case InvestigationSection::Timeline:
+                return timelineCompact;
+
+            case InvestigationSection::Events:
+                return eventCompact;
+
+            case InvestigationSection::LowerDetails:
+                return lowerCompact;
+            }
+
+            return 0;
+        };
+
+    const auto expandedDelta =
+        [this, &compactHeightForSection](
+            InvestigationSection section
+            ) {
+            return std::max(
+                0,
+                minimumUsefulExpandedHeight(
+                    section
+                    )
+                    - compactHeightForSection(
+                        section
+                        )
+                );
+        };
+
     const int oneSectionHeight =
         allCollapsedHeight
-        + minimumUsefulExpandedHeight(
-            InvestigationSection::Events
-            )
-        - eventCompact;
+        + expandedDelta(
+            capacityPriority.at(0)
+            );
 
     const int twoSectionHeight =
         oneSectionHeight
-        + minimumUsefulExpandedHeight(
-            InvestigationSection::LowerDetails
-            )
-        - lowerCompact;
+        + expandedDelta(
+            capacityPriority.at(1)
+            );
 
     const int threeSectionHeight =
         twoSectionHeight
-        + minimumUsefulExpandedHeight(
-            InvestigationSection::Timeline
-            )
-        - timelineCompact;
+        + expandedDelta(
+            capacityPriority.at(2)
+            );
 
     /*
      * Growing requires a little more room than
@@ -5962,7 +6326,12 @@ void InvestigationSessionView::
                     m_constrainedRestorePriority
                     )
                 ) {
-                if (isSectionCollapsed(section)) {
+                if (
+                    isSectionCollapsed(section)
+                    && !isSectionPreferredCollapsed(
+                        section
+                        )
+                    ) {
                     candidate =
                         section;
 
@@ -6047,6 +6416,11 @@ void InvestigationSessionView::
     }
 
     updateConstrainedRecoveryCompletion();
+
+    updateConstrainedRecoveryStretchFactors();
+
+    updateTimelineMinimumHeight();
+    updateLowerRegionMinimumHeight();
 
     const bool sectionStateChanged =
         openSectionCount()
@@ -6179,6 +6553,9 @@ void InvestigationSessionView::
     m_constrainedLowerPreferredHeight =
         m_lowerRegionExpandedHeight;
 
+    m_constrainedLowerPreferredHeightRecovered =
+        false;
+
     m_hasConstrainedRestoreSnapshot =
         true;
 
@@ -6193,38 +6570,197 @@ void InvestigationSessionView::
         return;
     }
 
+    /*
+     * Timeline and Lower Details have true constrained
+     * recovery targets.
+     *
+     * Events is different: it is the elastic remainder
+     * section. Once it has been reopened, its exact height
+     * is allowed to differ from its pre-resize preference.
+     *
+     * Therefore Events participates in recovery completion
+     * only through its open/collapsed state, not through
+     * exact preferred-height recovery.
+     */
+
+    if (!m_timelinePreferredCollapsed) {
+        if (m_timelineCollapsed) {
+            return;
+        }
+
+        if (
+            !sectionHasRecoveredPreferredHeight(
+                InvestigationSection::Timeline
+                )
+            ) {
+            return;
+        }
+    }
+
+    if (!m_lowerRegionPreferredCollapsed) {
+        if (m_lowerRegionCollapsed) {
+            return;
+        }
+
+        if (
+            !sectionHasRecoveredPreferredHeight(
+                InvestigationSection::LowerDetails
+                )
+            ) {
+            return;
+        }
+    }
+
+    /*
+     * Events must be open when the user prefers it open,
+     * but its exact restored height is intentionally not
+     * part of recovery completion.
+     */
     if (
-        m_sectionCapacity
-            != InvestigationSectionCapacity::Three
-        || openSectionCount() != 3
+        !m_eventPreferredCollapsed
+        && m_eventCollapsed
         ) {
         return;
     }
 
+    m_constrainedRecoveryComplete =
+        true;
+}
+
+void InvestigationSessionView::
+    updateConstrainedRecoveryStretchFactors()
+{
+    if (m_mainSplitter == nullptr) {
+        return;
+    }
+
     /*
-     * Do not destroy the recovery snapshot merely
-     * because the original preferred layout has been
-     * recovered.
-     *
-     * We continue using the constrained allocator
-     * while the window keeps growing so Timeline and
-     * Lower Details stay at their preferred heights
-     * and Events remains the elastic section.
+     * Outside an active constrained recovery cycle,
+     * preserve TraceScope's normal splitter behavior.
      */
     if (
-        sectionHasRecoveredPreferredHeight(
+        !m_hasConstrainedRestoreSnapshot
+        || !m_constrainedSectionCollapsedDuringCycle
+        ) {
+        m_mainSplitter->setStretchFactor(
+            0,
+            2
+            );
+
+        m_mainSplitter->setStretchFactor(
+            1,
+            5
+            );
+
+        m_mainSplitter->setStretchFactor(
+            2,
+            2
+            );
+
+        return;
+    }
+
+    /*
+     * Once an auxiliary section has recovered its
+     * preferred height, it must stop participating in
+     * automatic window-growth distribution.
+     *
+     * Otherwise QSplitter gives it extra pixels and
+     * applyConstrainedRecoveryLayout() immediately takes
+     * them back, causing visible shaking.
+     */
+    const bool timelineRecovering =
+        !m_timelineCollapsed
+        && !sectionHasRecoveredPreferredHeight(
             InvestigationSection::Timeline
-            )
-        && sectionHasRecoveredPreferredHeight(
-            InvestigationSection::Events
-            )
-        && sectionHasRecoveredPreferredHeight(
+            );
+
+    const bool lowerRecovering =
+        !m_lowerRegionCollapsed
+        && !sectionHasRecoveredPreferredHeight(
             InvestigationSection::LowerDetails
+            );
+
+    /*
+     * Recovery order still owns which auxiliary should
+     * consume growth first.
+     */
+    InvestigationSection activeRecoverySection =
+        InvestigationSection::Events;
+
+    for (
+        const InvestigationSection section
+        : std::as_const(
+            m_constrainedRestorePriority
             )
         ) {
-        m_constrainedRecoveryComplete =
-            true;
+        if (
+            section
+                == InvestigationSection::Timeline
+            && timelineRecovering
+            ) {
+            activeRecoverySection =
+                InvestigationSection::Timeline;
+
+            break;
+        }
+
+        if (
+            section
+                == InvestigationSection::LowerDetails
+            && lowerRecovering
+            ) {
+            activeRecoverySection =
+                InvestigationSection::LowerDetails;
+
+            break;
+        }
     }
+
+    /*
+     * Default: Events owns automatic growth.
+     */
+    int timelineStretch = 0;
+    int eventStretch = 1;
+    int lowerStretch = 0;
+
+    /*
+     * While an auxiliary section is still recovering,
+     * let that section own native window-growth instead.
+     *
+     * This makes QSplitter's intermediate geometry agree
+     * with the constrained allocator instead of fighting
+     * it between queued policy passes.
+     */
+    switch (activeRecoverySection) {
+    case InvestigationSection::Timeline:
+        timelineStretch = 1;
+        eventStretch = 0;
+        break;
+
+    case InvestigationSection::LowerDetails:
+        lowerStretch = 1;
+        eventStretch = 0;
+        break;
+
+    case InvestigationSection::Events:
+        break;
+    }
+
+    m_mainSplitter->setStretchFactor(
+        0,
+        timelineStretch
+        );
+
+    m_mainSplitter->setStretchFactor(
+        1,
+        eventStretch
+        );
+
+    m_mainSplitter->setStretchFactor(
+        2,
+        lowerStretch
+        );
 }
 
 void InvestigationSessionView::
@@ -6244,11 +6780,31 @@ void InvestigationSessionView::
     m_hasConstrainedRestoreSnapshot =
         false;
 
+    m_constrainedLowerPreferredHeightRecovered =
+        false;
+
     m_constrainedRecoveryComplete =
         false;
 
     m_constrainedSectionCollapsedDuringCycle =
         false;
+
+    /*
+     * Restore normal splitter ownership only after the
+     * constrained-cycle state has been cleared.
+     *
+     * updateConstrainedRecoveryStretchFactors() examines
+     * those flags to decide whether recovery-specific
+     * stretch factors are still required.
+     */
+    updateConstrainedRecoveryStretchFactors();
+
+    /*
+     * Clearing the constrained snapshot also releases any
+     * temporary preferred-height ceilings.
+     */
+    updateTimelineMinimumHeight();
+    updateLowerRegionMinimumHeight();
 }
 
 bool InvestigationSessionView::
@@ -6309,6 +6865,29 @@ bool InvestigationSessionView::
         return true;
     }
 
+    /*
+     * Lower Details has a stable plain-widget outer
+     * container, so its frozen preferred height can and
+     * should be restored exactly.
+     *
+     * Do not apply the normal recovery tolerance here.
+     * Declaring Lower Details recovered a few pixels early
+     * causes the stretch policy to hand subsequent growth
+     * to Events before the user's actual preferred height
+     * has been reached.
+     */
+    if (
+        section
+        == InvestigationSection::LowerDetails
+        ) {
+        return sizes.at(sectionIndex)
+        >= preferredHeight;
+    }
+
+    /*
+     * Timeline and Events retain the small tolerance used
+     * to avoid pixel-level recovery churn.
+     */
     const int tolerance =
         std::max(
             1,
@@ -6506,6 +7085,8 @@ void InvestigationSessionView::
         applyMainSplitterSizes(
             targetSizes
             );
+
+        updateConstrainedRecoveryStretchFactors();
 
         return;
     }

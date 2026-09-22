@@ -266,6 +266,8 @@ private:
 
     void updateMinimumConstrainedHeight();
 
+    void updateTimelineMinimumHeight();
+
     void updateLowerRegionMinimumHeight();
 
     int constrainedPreferredHeight(
@@ -287,6 +289,8 @@ private:
     void rebuildConstrainedRestorePriorityFromCurrentState();
 
     void updateConstrainedRecoveryCompletion();
+
+    void updateConstrainedRecoveryStretchFactors();
 
     void resetConstrainedRestoreState();
 
@@ -338,6 +342,9 @@ private:
 
     InvestigationEventDetailPanel
         *m_eventDetailPanel = nullptr;
+
+    QWidget *m_lowerRegionContainer =
+        nullptr;
 
     QSplitter *m_bottomSplitter =
         nullptr;
@@ -438,6 +445,15 @@ private:
 
     int m_constrainedLowerPreferredHeight =
         0;
+
+    bool m_constrainedLowerPreferredHeightRecovered =
+        false;
+
+    bool m_constrainedWindowResizeActive =
+        false;
+
+    QTimer *m_constrainedResizeSettleTimer =
+        nullptr;
 
     int m_lastAvailableMainSplitterHeight =
         -1;
