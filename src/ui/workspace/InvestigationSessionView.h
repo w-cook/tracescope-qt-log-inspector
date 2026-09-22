@@ -101,6 +101,14 @@ private:
         LowerDetails
     };
 
+    enum class InvestigationSectionCapacity
+    {
+        None = 0,
+        One = 1,
+        Two = 2,
+        Three = 3
+    };
+
     void applyFilters();
 
     void updateEventDetailFromSelection();
@@ -210,6 +218,8 @@ private:
 
     void updateSectionCollapseControlGeometry();
 
+    void scheduleSectionCollapseControlGeometryUpdate();
+
     void allocateCollapsedSectionSpaceToEvents(
         int sectionIndex,
         const QList<int> &previousSizes
@@ -217,6 +227,10 @@ private:
 
     void allocateCollapsedEventSpace(
         const QList<int> &previousSizes
+        );
+
+    void allocateSingleOpenSection(
+        InvestigationSection openSection
         );
 
     void restoreMainSplitterSectionHeight(
@@ -234,6 +248,29 @@ private:
     void applyMainSplitterSizes(
         const QList<int> &sizes
         );
+
+    InvestigationSectionCapacity
+    sectionCapacityForAvailableHeight() const;
+
+    int availableMainSplitterHeight() const;
+
+    int sectionCompactHeight(
+        InvestigationSection section
+        ) const;
+
+    int minimumUsefulExpandedHeight(
+        InvestigationSection section
+        ) const;
+
+    int minimumCollapsedMainSplitterHeight() const;
+
+    void updateMinimumConstrainedHeight();
+
+    int openSectionCount() const;
+
+    void scheduleSectionCapacityUpdate();
+
+    void applySectionCapacityPolicy();
 
     InvestigationSession *m_session =
         nullptr;
@@ -339,5 +376,17 @@ private:
         false;
 
     bool m_lowerRegionManuallyResizedWhileEventCollapsed =
+        false;
+
+    InvestigationSectionCapacity m_sectionCapacity =
+        InvestigationSectionCapacity::Three;
+
+    bool m_sectionCapacityUpdatePending =
+        false;
+
+    bool m_applyingSectionCapacityPolicy =
+        false;
+
+    bool m_sectionCollapseGeometryUpdatePending =
         false;
 };

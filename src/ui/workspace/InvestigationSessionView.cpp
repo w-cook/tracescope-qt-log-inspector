@@ -52,6 +52,22 @@
 
 namespace
 {
+constexpr int
+    CollapsedSectionFallbackLogicalHeight =
+    28;
+
+constexpr int
+    TimelineMinimumUsefulLogicalHeight =
+    150;
+
+constexpr int
+    EventMinimumUsefulLogicalHeight =
+    180;
+
+constexpr int
+    LowerDetailsMinimumUsefulLogicalHeight =
+    170;
+
 QString documentIdFor(
     const InvestigationSession *session
     )
@@ -453,7 +469,35 @@ InvestigationSessionView::
         this,
         [this]() {
             ensureSectionPreferredHeightsInitialized();
+
+            updateMinimumConstrainedHeight();
+
+            scheduleSectionCapacityUpdate();
         }
+        );
+
+    /*
+     * The investigation splitter must never impose its
+     * transient child-derived height requirements on the
+     * outer workspace window.
+     *
+     * Section collapse/expansion changes child size hints
+     * during an active native window resize. If those
+     * hints are allowed to propagate upward, Windows can
+     * temporarily treat the new layout requirement as the
+     * resize boundary until the user releases the mouse.
+     *
+     * The surrounding document layout owns the available
+     * vertical slot; the section-capacity coordinator
+     * decides what can fit inside it.
+     */
+    m_mainSplitter->setMaximumHeight(
+        QWIDGETSIZE_MAX
+        );
+
+    m_mainSplitter->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Ignored
         );
 
     layout->addWidget(
@@ -462,13 +506,19 @@ InvestigationSessionView::
         );
 
     m_timelineCollapseButton =
-        new QToolButton(this);
+        new QToolButton(
+            m_timelinePanel
+            );
 
     m_eventCollapseButton =
-        new QToolButton(this);
+        new QToolButton(
+            m_eventPanel
+            );
 
     m_lowerRegionCollapseButton =
-        new QToolButton(this);
+        new QToolButton(
+            m_eventDetailPanel
+            );
 
     for (
         QToolButton *button
@@ -1691,6 +1741,15 @@ void InvestigationSessionView::
             updateSectionCollapseControlGeometry();
         }
         );
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            updateMinimumConstrainedHeight();
+            scheduleSectionCapacityUpdate();
+        }
+        );
 }
 
 void InvestigationSessionView::
@@ -2658,6 +2717,8 @@ void InvestigationSessionView::
         event
         );
 
+    scheduleSectionCapacityUpdate();
+
     if (m_reviewPanel == nullptr) {
         return;
     }
@@ -2912,6 +2973,10 @@ void InvestigationSessionView::
 void InvestigationSessionView::
     updateSectionCollapseControls()
 {
+    const bool sectionExpansionAvailable =
+        m_sectionCapacity
+        != InvestigationSectionCapacity::None;
+
     if (m_timelineCollapseButton != nullptr) {
         m_timelineCollapseButton
             ->setArrowType(
@@ -2933,6 +2998,10 @@ void InvestigationSessionView::
                     ? tr("Expand timeline")
                     : tr("Collapse timeline")
                 );
+
+        m_timelineCollapseButton->setEnabled(
+            sectionExpansionAvailable
+            );
     }
 
     if (m_eventCollapseButton != nullptr) {
@@ -2956,6 +3025,10 @@ void InvestigationSessionView::
                     ? tr("Expand telemetry events")
                     : tr("Collapse telemetry events")
                 );
+
+        m_eventCollapseButton->setEnabled(
+            sectionExpansionAvailable
+            );
     }
 
     if (m_lowerRegionCollapseButton != nullptr) {
@@ -2987,6 +3060,10 @@ void InvestigationSessionView::
                           "Collapse lower investigation panels"
                           )
                 );
+
+        m_lowerRegionCollapseButton->setEnabled(
+            sectionExpansionAvailable
+            );
     }
 }
 
@@ -3017,26 +3094,15 @@ void InvestigationSessionView::
             this
             );
 
-    const QRect documentRect =
-        contentsRect();
-
-    const int buttonX =
-        documentRect.right()
-        - rightInset
-        - buttonSize
-        + 1;
-
     /*
-     * Timeline control:
-     * center it vertically in the existing
-     * QGroupBox title band.
+     * ---------------------------------------------------------
+     * Timeline
+     * ---------------------------------------------------------
+     *
+     * The button is a child of the Timeline panel, so
+     * its coordinates are completely local. Moving the
+     * splitter section automatically moves the button.
      */
-    const QPoint timelineTopLeft =
-        m_timelinePanel->mapTo(
-            this,
-            QPoint(0, 0)
-            );
-
     const int timelineTitleBandHeight =
         std::max(
             buttonSize,
@@ -3049,9 +3115,16 @@ void InvestigationSessionView::
                     )
             );
 
+    const int timelineButtonX =
+        std::max(
+            0,
+            m_timelinePanel->width()
+                - rightInset
+                - buttonSize
+            );
+
     const int timelineButtonY =
-        timelineTopLeft.y()
-        + std::max(
+        std::max(
             0,
             (
                 timelineTitleBandHeight
@@ -3072,22 +3145,15 @@ void InvestigationSessionView::
             );
 
     /*
-     * Event control:
-     * center it against the Telemetry Events QGroupBox
-     * title band.
+     * ---------------------------------------------------------
+     * Telemetry Events
+     * ---------------------------------------------------------
      *
-     * When all three sections are collapsed, Event may
-     * itself be vertically centered inside a flexible
-     * middle container. Mapping from m_eventPanel rather
-     * than from that container keeps the chevron attached
-     * to the actual visible title strip.
+     * Parenting directly to m_eventPanel also handles
+     * the special all-collapsed centered presentation:
+     * when the panel moves inside its flexible
+     * container, its chevron moves with it.
      */
-    const QPoint eventTopLeft =
-        m_eventPanel->mapTo(
-            this,
-            QPoint(0, 0)
-            );
-
     const int eventTitleBandHeight =
         std::max(
             buttonSize,
@@ -3100,9 +3166,16 @@ void InvestigationSessionView::
                     )
             );
 
+    const int eventButtonX =
+        std::max(
+            0,
+            m_eventPanel->width()
+                - rightInset
+                - buttonSize
+            );
+
     const int eventButtonY =
-        eventTopLeft.y()
-        + std::max(
+        std::max(
             0,
             (
                 eventTitleBandHeight
@@ -3123,30 +3196,37 @@ void InvestigationSessionView::
             );
 
     /*
-     * Lower-region control:
-     * line it up with the existing Review tab band.
+     * ---------------------------------------------------------
+     * Lower Details
+     * ---------------------------------------------------------
      *
-     * This same button controls both Review and
-     * Selected Event Details, so it remains owned
-     * by InvestigationSessionView rather than by
-     * either child surface.
+     * The lower control represents the complete
+     * horizontal Review / Selected Event Details
+     * region, so parent it to m_bottomSplitter rather
+     * than either individual child.
      */
-    const QPoint lowerTopLeft =
-        m_bottomSplitter->mapTo(
-            this,
-            QPoint(0, 0)
-            );
-
     const int lowerTitleBandHeight =
         std::max(
             buttonSize,
-            m_reviewPanel
-                ->collapsedHeight()
+            m_eventDetailPanel
+                    ->fontMetrics()
+                    .height()
+                + InterfaceScale::pixels(
+                    4,
+                    m_eventDetailPanel
+                    )
+            );
+
+    const int lowerButtonX =
+        std::max(
+            0,
+            m_eventDetailPanel->width()
+                - rightInset
+                - buttonSize
             );
 
     const int lowerButtonY =
-        lowerTopLeft.y()
-        + std::max(
+        std::max(
             0,
             (
                 lowerTitleBandHeight
@@ -3164,36 +3244,86 @@ void InvestigationSessionView::
                       1,
                       this
                       )
-            );
+            )
+        + 1;
 
     m_timelineCollapseButton->setGeometry(
-        buttonX,
+        timelineButtonX,
         timelineButtonY,
         buttonSize,
         buttonSize
         );
 
     m_eventCollapseButton->setGeometry(
-        buttonX,
+        eventButtonX,
         eventButtonY,
         buttonSize,
         buttonSize
         );
 
     m_lowerRegionCollapseButton->setGeometry(
-        buttonX,
+        lowerButtonX,
         lowerButtonY,
         buttonSize,
         buttonSize
         );
 
-    /*
-     * They intentionally overlay existing chrome
-     * rather than consuming layout space.
-     */
     m_timelineCollapseButton->raise();
     m_eventCollapseButton->raise();
     m_lowerRegionCollapseButton->raise();
+}
+
+void InvestigationSessionView::
+    scheduleSectionCollapseControlGeometryUpdate()
+{
+    if (m_sectionCollapseGeometryUpdatePending) {
+        return;
+    }
+
+    m_sectionCollapseGeometryUpdatePending =
+        true;
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            m_sectionCollapseGeometryUpdatePending =
+                false;
+
+            /*
+             * A section switch can change multiple
+             * child minimum/maximum heights during one
+             * operation.
+             *
+             * Make sure the outer document layout and
+             * vertical splitter have consumed those
+             * new constraints before mapping child
+             * coordinates for the overlay chevrons.
+             */
+            if (layout() != nullptr) {
+                layout()->activate();
+            }
+
+            if (m_mainSplitter != nullptr) {
+                m_mainSplitter->updateGeometry();
+
+                if (
+                    m_mainSplitter
+                            ->parentWidget() != nullptr
+                    && m_mainSplitter
+                               ->parentWidget()
+                               ->layout() != nullptr
+                    ) {
+                    m_mainSplitter
+                        ->parentWidget()
+                        ->layout()
+                        ->activate();
+                }
+            }
+
+            updateSectionCollapseControlGeometry();
+        }
+        );
 }
 
 void InvestigationSessionView::
@@ -3324,28 +3454,116 @@ void InvestigationSessionView::
 {
     ensureSectionPreferredHeightsInitialized();
 
-    const bool collapsed =
-        !isSectionCollapsed(
+    const bool currentlyCollapsed =
+        isSectionCollapsed(
             section
             );
 
     /*
-     * A manual chevron operation updates the user's
-     * preference first.
-     *
-     * Future automatic constrained-height transitions
-     * will call setSectionCollapsed() directly and
-     * therefore will not alter this preference.
+     * Manual collapse is always permitted.
+     */
+    if (!currentlyCollapsed) {
+        setSectionPreferredCollapsed(
+            section,
+            true
+            );
+
+        setSectionCollapsed(
+            section,
+            true
+            );
+
+        scheduleSectionCollapseControlGeometryUpdate();
+
+        return;
+    }
+
+    /*
+     * Capacity 0 deliberately forbids expansion.
+     */
+    const int maximumOpenSections =
+        static_cast<int>(
+            m_sectionCapacity
+            );
+
+    if (maximumOpenSections <= 0) {
+        return;
+    }
+
+    /*
+     * The user explicitly wants this section open.
      */
     setSectionPreferredCollapsed(
         section,
-        collapsed
+        false
         );
+
+    /*
+     * If the tier is already full, evict the
+     * lowest-priority currently open section.
+     *
+     * This is effective-state eviction only. Its user
+     * preference remains open, allowing it to return
+     * when capacity later increases.
+     */
+    const bool wasApplyingPolicy =
+        m_applyingSectionCapacityPolicy;
+
+    m_applyingSectionCapacityPolicy =
+        true;
+
+    while (
+        openSectionCount()
+        >= maximumOpenSections
+        ) {
+        if (!m_timelineCollapsed) {
+            setSectionCollapsed(
+                InvestigationSection::Timeline,
+                true
+                );
+
+            continue;
+        }
+
+        if (!m_lowerRegionCollapsed) {
+            setSectionCollapsed(
+                InvestigationSection::LowerDetails,
+                true
+                );
+
+            continue;
+        }
+
+        if (!m_eventCollapsed) {
+            setSectionCollapsed(
+                InvestigationSection::Events,
+                true
+                );
+
+            continue;
+        }
+
+        break;
+    }
+
+    m_applyingSectionCapacityPolicy =
+        wasApplyingPolicy;
 
     setSectionCollapsed(
         section,
-        collapsed
+        false
         );
+
+    if (
+        m_sectionCapacity
+        == InvestigationSectionCapacity::One
+        ) {
+        allocateSingleOpenSection(
+            section
+            );
+    } else {
+        scheduleSectionCollapseControlGeometryUpdate();
+    }
 }
 
 void InvestigationSessionView::
@@ -3483,27 +3701,32 @@ void InvestigationSessionView::
     updateSectionCollapseControls();
 
     if (collapsed) {
-        /*
-         * Collapse height is derived from Timeline's
-         * newly constrained native title strip, so let
-         * that geometry settle before measuring it.
-         */
-        QTimer::singleShot(
-            0,
-            this,
-            [this, previousSizes]() {
-                if (!m_timelineCollapsed) {
-                    return;
+        if (m_applyingSectionCapacityPolicy) {
+            QTimer::singleShot(
+                0,
+                this,
+                [this]() {
+                    scheduleSectionCollapseControlGeometryUpdate();
                 }
+                );
+        } else {
+            QTimer::singleShot(
+                0,
+                this,
+                [this, previousSizes]() {
+                    if (!m_timelineCollapsed) {
+                        return;
+                    }
 
-                allocateCollapsedSectionSpaceToEvents(
-                    0,
-                    previousSizes
-                    );
+                    allocateCollapsedSectionSpaceToEvents(
+                        0,
+                        previousSizes
+                        );
 
-                updateSectionCollapseControlGeometry();
-            }
-            );
+                    scheduleSectionCollapseControlGeometryUpdate();
+                }
+                );
+        }
     } else {
         /*
          * Expansion is different: we already know both
@@ -3521,7 +3744,7 @@ void InvestigationSessionView::
             previousSizes
             );
 
-        updateSectionCollapseControlGeometry();
+        scheduleSectionCollapseControlGeometryUpdate();
     }
 }
 
@@ -3546,17 +3769,13 @@ void InvestigationSessionView::
         collapsed
         && previousSizes.size() == 3
         ) {
-        m_eventPreCollapseSizes =
-            previousSizes;
+        if (m_applyingSectionCapacityPolicy) {
+            m_eventPreCollapseSizes.clear();
+        } else {
+            m_eventPreCollapseSizes =
+                previousSizes;
+        }
 
-        /*
-         * Collapsing Events does not redefine anybody's
-         * preferred height.
-         *
-         * The complete splitter vector is retained only as
-         * the reversible transaction snapshot for an
-         * immediate reopen.
-         */
         m_timelineManuallyResizedWhileEventCollapsed =
             false;
 
@@ -3578,9 +3797,11 @@ void InvestigationSessionView::
     updateSectionCollapseControls();
 
     if (collapsed) {
-        allocateCollapsedEventSpace(
-            previousSizes
-            );
+        if (!m_applyingSectionCapacityPolicy) {
+            allocateCollapsedEventSpace(
+                previousSizes
+                );
+        }
     } else {
         const bool hasManualResizePreference =
             m_timelineManuallyResizedWhileEventCollapsed
@@ -3653,7 +3874,7 @@ void InvestigationSessionView::
         this,
         [this]() {
             updateEventSectionPresentation();
-            updateSectionCollapseControlGeometry();
+            scheduleSectionCollapseControlGeometryUpdate();
         }
         );
 }
@@ -3703,22 +3924,32 @@ void InvestigationSessionView::
     updateSectionCollapseControls();
 
     if (collapsed) {
-        QTimer::singleShot(
-            0,
-            this,
-            [this, previousSizes]() {
-                if (!m_lowerRegionCollapsed) {
-                    return;
+        if (m_applyingSectionCapacityPolicy) {
+            QTimer::singleShot(
+                0,
+                this,
+                [this]() {
+                    scheduleSectionCollapseControlGeometryUpdate();
                 }
+                );
+        } else {
+            QTimer::singleShot(
+                0,
+                this,
+                [this, previousSizes]() {
+                    if (!m_lowerRegionCollapsed) {
+                        return;
+                    }
 
-                allocateCollapsedSectionSpaceToEvents(
-                    2,
-                    previousSizes
-                    );
+                    allocateCollapsedSectionSpaceToEvents(
+                        2,
+                        previousSizes
+                        );
 
-                updateSectionCollapseControlGeometry();
-            }
-            );
+                    scheduleSectionCollapseControlGeometryUpdate();
+                }
+                );
+        }
     } else {
         restoreMainSplitterSectionHeight(
             2,
@@ -3739,7 +3970,7 @@ void InvestigationSessionView::
                         ->currentTab()
                     );
 
-                updateSectionCollapseControlGeometry();
+                scheduleSectionCollapseControlGeometryUpdate();
             }
             );
     }
@@ -3925,6 +4156,108 @@ void InvestigationSessionView::
     applyMainSplitterSizes(
         targetSizes
         );
+}
+
+void InvestigationSessionView::
+    allocateSingleOpenSection(
+        InvestigationSection openSection
+        )
+{
+    if (m_mainSplitter == nullptr) {
+        return;
+    }
+
+    const QList<int> currentSizes =
+        m_mainSplitter->sizes();
+
+    if (currentSizes.size() != 3) {
+        return;
+    }
+
+    /*
+     * QSplitter::sizes() excludes the handles, so its
+     * sum is exactly the child-space budget we need to
+     * redistribute.
+     *
+     * This remains useful even if the current
+     * proportions came from an intermediate
+     * all-collapsed state.
+     */
+    const int availableChildHeight =
+        currentSizes.at(0)
+        + currentSizes.at(1)
+        + currentSizes.at(2);
+
+    QList<int> targetSizes{
+        sectionCompactHeight(
+            InvestigationSection::Timeline
+            ),
+        sectionCompactHeight(
+            InvestigationSection::Events
+            ),
+        sectionCompactHeight(
+            InvestigationSection::LowerDetails
+            )
+    };
+
+    int openIndex =
+        -1;
+
+    switch (openSection) {
+    case InvestigationSection::Timeline:
+        openIndex = 0;
+        break;
+
+    case InvestigationSection::Events:
+        openIndex = 1;
+        break;
+
+    case InvestigationSection::LowerDetails:
+        openIndex = 2;
+        break;
+    }
+
+    if (openIndex < 0) {
+        return;
+    }
+
+    int collapsedHeightTotal = 0;
+
+    for (
+        int index = 0;
+        index < targetSizes.size();
+        ++index
+        ) {
+        if (index == openIndex) {
+            continue;
+        }
+
+        collapsedHeightTotal +=
+            targetSizes.at(index);
+    }
+
+    /*
+     * At capacity 1 the open section deliberately owns
+     * every remaining pixel.
+     *
+     * Preferred height is still retained separately;
+     * this oversized presentation must never become a
+     * new preference.
+     */
+    targetSizes[openIndex] =
+        std::max(
+            1,
+            availableChildHeight
+                - collapsedHeightTotal
+            );
+
+    applyMainSplitterSizes(
+        targetSizes
+        );
+
+    updateEventSectionPresentation();
+
+    scheduleSectionCollapseControlGeometryUpdate();
 }
 
 void InvestigationSessionView::
@@ -4628,4 +4961,667 @@ void InvestigationSessionView::
         );
 
     updateSectionCollapseControlGeometry();
+}
+
+int InvestigationSessionView::
+    sectionCompactHeight(
+        InvestigationSection section
+        ) const
+{
+    const int fallback =
+        InterfaceScale::pixels(
+            CollapsedSectionFallbackLogicalHeight,
+            this
+            );
+
+    switch (section) {
+    case InvestigationSection::Timeline:
+        if (
+            m_timelineCollapsed
+            && m_timelinePanel != nullptr
+            ) {
+            return std::max(
+                fallback,
+                m_timelinePanel->height()
+                );
+        }
+
+        return fallback;
+
+    case InvestigationSection::Events:
+        if (
+            m_eventCollapsed
+            && m_eventPanel != nullptr
+            ) {
+            return std::max(
+                fallback,
+                m_eventPanel->collapsedHeight()
+                );
+        }
+
+        return fallback;
+
+    case InvestigationSection::LowerDetails:
+    {
+        int height =
+            fallback;
+
+        if (m_reviewPanel != nullptr) {
+            height =
+                std::max(
+                    height,
+                    m_reviewPanel->collapsedHeight()
+                    );
+        }
+
+        if (
+            m_lowerRegionCollapsed
+            && m_eventDetailPanel != nullptr
+            ) {
+            height =
+                std::max(
+                    height,
+                    m_eventDetailPanel
+                        ->collapsedHeight()
+                    );
+        }
+
+        return height;
+    }
+    }
+
+    return fallback;
+}
+
+int InvestigationSessionView::
+    minimumUsefulExpandedHeight(
+        InvestigationSection section
+        ) const
+{
+    int logicalHeight = 0;
+
+    switch (section) {
+    case InvestigationSection::Timeline:
+        logicalHeight =
+            TimelineMinimumUsefulLogicalHeight;
+        break;
+
+    case InvestigationSection::Events:
+        logicalHeight =
+            EventMinimumUsefulLogicalHeight;
+        break;
+
+    case InvestigationSection::LowerDetails:
+        logicalHeight =
+            LowerDetailsMinimumUsefulLogicalHeight;
+        break;
+    }
+
+    return std::max(
+        sectionCompactHeight(section) + 1,
+        InterfaceScale::pixels(
+            logicalHeight,
+            this
+            )
+        );
+}
+
+int InvestigationSessionView::
+    minimumCollapsedMainSplitterHeight() const
+{
+    if (m_mainSplitter == nullptr) {
+        return 0;
+    }
+
+    const int timelineHeight =
+        sectionCompactHeight(
+            InvestigationSection::Timeline
+            );
+
+    const int eventHeight =
+        sectionCompactHeight(
+            InvestigationSection::Events
+            );
+
+    const int lowerHeight =
+        sectionCompactHeight(
+            InvestigationSection::LowerDetails
+            );
+
+    const int handleSpace =
+        std::max(
+            0,
+            m_mainSplitter->count() - 1
+            )
+        * m_mainSplitter->handleWidth();
+
+    return timelineHeight
+           + eventHeight
+           + lowerHeight
+           + handleSpace;
+}
+
+void InvestigationSessionView::
+    updateMinimumConstrainedHeight()
+{
+    if (
+        m_mainSplitter == nullptr
+        || layout() == nullptr
+        ) {
+        return;
+    }
+
+    const int minimumSplitterHeight =
+        minimumCollapsedMainSplitterHeight();
+
+    /*
+     * The splitter remains vertically Ignored so its
+     * changing expanded-content size hints cannot
+     * create intermediate native resize barriers.
+     *
+     * But it does have one real minimum: enough room
+     * to display all three collapsed section identities
+     * and the splitter handles.
+     */
+    m_mainSplitter->setMinimumHeight(
+        minimumSplitterHeight
+        );
+
+    /*
+     * Also give the document itself an explicit
+     * minimum derived from its non-splitter surfaces.
+     *
+     * This gives the containing workspace/window a
+     * stable native floor rather than allowing the
+     * collapsed section strips to be clipped.
+     */
+    const QMargins margins =
+        layout()->contentsMargins();
+
+    int minimumDocumentHeight =
+        margins.top()
+        + margins.bottom()
+        + minimumSplitterHeight;
+
+    int visibleItemCount = 1;
+
+    const auto requiredHeight =
+        [](
+            const QWidget *widget
+            ) {
+            if (
+                widget == nullptr
+                || widget->isHidden()
+                ) {
+                return 0;
+            }
+
+            return std::max(
+                0,
+                std::max(
+                    widget
+                        ->minimumSizeHint()
+                        .height(),
+                    widget
+                        ->sizeHint()
+                        .height()
+                    )
+                );
+        };
+
+    if (
+        m_summaryPanel != nullptr
+        && !m_summaryPanel->isHidden()
+        ) {
+        minimumDocumentHeight +=
+            requiredHeight(
+                m_summaryPanel
+                );
+
+        ++visibleItemCount;
+    }
+
+    if (
+        m_filterPanel != nullptr
+        && !m_filterPanel->isHidden()
+        ) {
+        minimumDocumentHeight +=
+            requiredHeight(
+                m_filterPanel
+                );
+
+        ++visibleItemCount;
+    }
+
+    minimumDocumentHeight +=
+        std::max(
+            0,
+            visibleItemCount - 1
+            )
+        * std::max(
+            0,
+            layout()->spacing()
+            );
+
+    setMinimumHeight(
+        minimumDocumentHeight
+        );
+}
+
+InvestigationSessionView::
+    InvestigationSectionCapacity
+        InvestigationSessionView::
+    sectionCapacityForAvailableHeight() const
+{
+    if (m_mainSplitter == nullptr) {
+        return m_sectionCapacity;
+    }
+
+    const int availableHeight =
+        availableMainSplitterHeight();
+
+    if (availableHeight <= 0) {
+        return m_sectionCapacity;
+    }
+
+    const int timelineCompact =
+        sectionCompactHeight(
+            InvestigationSection::Timeline
+            );
+
+    const int eventCompact =
+        sectionCompactHeight(
+            InvestigationSection::Events
+            );
+
+    const int lowerCompact =
+        sectionCompactHeight(
+            InvestigationSection::LowerDetails
+            );
+
+    const int handleSpace =
+        std::max(
+            0,
+            m_mainSplitter->count() - 1
+            )
+        * m_mainSplitter->handleWidth();
+
+    const int allCollapsedHeight =
+        timelineCompact
+        + eventCompact
+        + lowerCompact
+        + handleSpace;
+
+    /*
+     * Capacity thresholds follow retention priority:
+     *
+     *   Events
+     *   Lower Details
+     *   Timeline
+     *
+     * Each threshold therefore represents enough room
+     * for that priority set plus compact chrome for
+     * every remaining section.
+     */
+    const int oneSectionHeight =
+        allCollapsedHeight
+        + minimumUsefulExpandedHeight(
+            InvestigationSection::Events
+            )
+        - eventCompact;
+
+    const int twoSectionHeight =
+        oneSectionHeight
+        + minimumUsefulExpandedHeight(
+            InvestigationSection::LowerDetails
+            )
+        - lowerCompact;
+
+    const int threeSectionHeight =
+        twoSectionHeight
+        + minimumUsefulExpandedHeight(
+            InvestigationSection::Timeline
+            )
+        - timelineCompact;
+
+    if (availableHeight < oneSectionHeight) {
+        return InvestigationSectionCapacity::None;
+    }
+
+    if (availableHeight < twoSectionHeight) {
+        return InvestigationSectionCapacity::One;
+    }
+
+    if (availableHeight < threeSectionHeight) {
+        return InvestigationSectionCapacity::Two;
+    }
+
+    return InvestigationSectionCapacity::Three;
+}
+
+int InvestigationSessionView::
+    availableMainSplitterHeight() const
+{
+    if (layout() == nullptr) {
+        return m_mainSplitter != nullptr
+                   ? m_mainSplitter->height()
+                   : 0;
+    }
+
+    const QMargins margins =
+        layout()->contentsMargins();
+
+    int availableHeight =
+        contentsRect().height()
+        - margins.top()
+        - margins.bottom();
+
+    int visibleItemCount = 1; // main splitter
+
+    const auto preferredWidgetHeight =
+        [](
+            const QWidget *widget
+            ) {
+            if (
+                widget == nullptr
+                || widget->isHidden()
+                ) {
+                return 0;
+            }
+
+            const int sizeHintHeight =
+                widget
+                    ->sizeHint()
+                    .height();
+
+            const int minimumSizeHintHeight =
+                widget
+                    ->minimumSizeHint()
+                    .height();
+
+            /*
+             * Use the widget's requested/preferred
+             * vertical requirement, not its current
+             * geometry.
+             *
+             * Current geometry may contain surplus
+             * distributed by QVBoxLayout while the
+             * investigation splitter is compact.
+             */
+            return std::max(
+                0,
+                std::max(
+                    sizeHintHeight,
+                    minimumSizeHintHeight
+                    )
+                );
+        };
+
+    if (
+        m_summaryPanel != nullptr
+        && !m_summaryPanel->isHidden()
+        ) {
+        availableHeight -=
+            preferredWidgetHeight(
+                m_summaryPanel
+                );
+
+        ++visibleItemCount;
+    }
+
+    if (
+        m_filterPanel != nullptr
+        && !m_filterPanel->isHidden()
+        ) {
+        availableHeight -=
+            preferredWidgetHeight(
+                m_filterPanel
+                );
+
+        ++visibleItemCount;
+    }
+
+    const int spacing =
+        std::max(
+            0,
+            layout()->spacing()
+            );
+
+    availableHeight -=
+        std::max(
+            0,
+            visibleItemCount - 1
+            )
+        * spacing;
+
+    return std::max(
+        0,
+        availableHeight
+        );
+}
+
+int InvestigationSessionView::
+    openSectionCount() const
+{
+    int count = 0;
+
+    if (!m_timelineCollapsed) {
+        ++count;
+    }
+
+    if (!m_eventCollapsed) {
+        ++count;
+    }
+
+    if (!m_lowerRegionCollapsed) {
+        ++count;
+    }
+
+    return count;
+}
+
+void InvestigationSessionView::
+    scheduleSectionCapacityUpdate()
+{
+    if (m_sectionCapacityUpdatePending) {
+        return;
+    }
+
+    m_sectionCapacityUpdatePending =
+        true;
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            m_sectionCapacityUpdatePending =
+                false;
+
+            applySectionCapacityPolicy();
+        }
+        );
+}
+
+void InvestigationSessionView::
+    applySectionCapacityPolicy()
+{
+    if (m_mainSplitter == nullptr) {
+        return;
+    }
+
+    const InvestigationSectionCapacity
+        previousCapacity =
+        m_sectionCapacity;
+
+    const InvestigationSectionCapacity
+        newCapacity =
+        sectionCapacityForAvailableHeight();
+
+    if (newCapacity == previousCapacity) {
+        return;
+    }
+
+    m_sectionCapacity =
+        newCapacity;
+
+    const int maximumOpenSections =
+        static_cast<int>(
+            newCapacity
+            );
+
+    const bool wasApplyingPolicy =
+        m_applyingSectionCapacityPolicy;
+
+    m_applyingSectionCapacityPolicy =
+        true;
+
+    /*
+     * ---------------------------------------------------------
+     * Resize downward
+     * ---------------------------------------------------------
+     *
+     * Collapse lowest retention priority first:
+     *
+     *   Timeline
+     *   Lower Details
+     *   Events
+     *
+     * Preferred/manual state is deliberately untouched.
+     */
+    while (
+        openSectionCount()
+        > maximumOpenSections
+        ) {
+        if (!m_timelineCollapsed) {
+            setSectionCollapsed(
+                InvestigationSection::Timeline,
+                true
+                );
+
+            continue;
+        }
+
+        if (!m_lowerRegionCollapsed) {
+            setSectionCollapsed(
+                InvestigationSection::LowerDetails,
+                true
+                );
+
+            continue;
+        }
+
+        if (!m_eventCollapsed) {
+            setSectionCollapsed(
+                InvestigationSection::Events,
+                true
+                );
+
+            continue;
+        }
+
+        break;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Resize upward
+     * ---------------------------------------------------------
+     *
+     * Only a genuine capacity increase automatically
+     * restores sections.
+     *
+     * Sections explicitly closed by the user remain
+     * closed because PreferredCollapsed remains true.
+     */
+    if (newCapacity > previousCapacity) {
+        while (
+            openSectionCount()
+            < maximumOpenSections
+            ) {
+            InvestigationSection candidate =
+                InvestigationSection::Timeline;
+
+            bool foundCandidate =
+                false;
+
+            /*
+             * Reopen in retention priority:
+             *
+             *   Events
+             *   Lower Details
+             *   Timeline
+             */
+            for (
+                const InvestigationSection section
+                : {
+                    InvestigationSection::Events,
+                    InvestigationSection::LowerDetails,
+                    InvestigationSection::Timeline
+                }
+                ) {
+                if (
+                    isSectionCollapsed(section)
+                    && !isSectionPreferredCollapsed(
+                        section
+                        )
+                    ) {
+                    candidate =
+                        section;
+
+                    foundCandidate =
+                        true;
+
+                    break;
+                }
+            }
+
+            if (!foundCandidate) {
+                break;
+            }
+
+            setSectionCollapsed(
+                candidate,
+                false
+                );
+        }
+    }
+
+    if (
+        maximumOpenSections == 1
+        && openSectionCount() == 1
+        ) {
+        if (!m_eventCollapsed) {
+            allocateSingleOpenSection(
+                InvestigationSection::Events
+                );
+        } else if (!m_lowerRegionCollapsed) {
+            allocateSingleOpenSection(
+                InvestigationSection::LowerDetails
+                );
+        } else if (!m_timelineCollapsed) {
+            allocateSingleOpenSection(
+                InvestigationSection::Timeline
+                );
+        }
+    }
+
+    m_applyingSectionCapacityPolicy =
+        wasApplyingPolicy;
+
+    updateEventSectionPresentation();
+    updateSectionCollapseControls();
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            updateEventSectionPresentation();
+
+            updateMinimumConstrainedHeight();
+
+            updateSectionCollapseControlGeometry();
+
+            scheduleSectionCapacityUpdate();
+        }
+        );
 }
