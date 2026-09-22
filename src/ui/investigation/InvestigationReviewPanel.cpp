@@ -1,6 +1,7 @@
 #include "InvestigationReviewPanel.h"
 
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -424,6 +425,37 @@ int InvestigationReviewPanel::
         ->tabBar()
         ->sizeHint()
         .height();
+}
+
+int InvestigationReviewPanel::
+    minimumUsefulExpandedHeight() const
+{
+    if (
+        m_tabs == nullptr
+        || m_tabs->tabBar() == nullptr
+        || m_analyticsPanel == nullptr
+        ) {
+        return 0;
+    }
+
+    const int reviewTabHeight =
+        m_tabs
+            ->tabBar()
+            ->sizeHint()
+            .height();
+
+    const int tabFrameHeight =
+        2
+        * style()->pixelMetric(
+            QStyle::PM_DefaultFrameWidth,
+            nullptr,
+            m_tabs
+            );
+
+    return reviewTabHeight
+           + tabFrameHeight
+           + m_analyticsPanel
+                 ->minimumUsefulBurstHeight();
 }
 
 void InvestigationReviewPanel::

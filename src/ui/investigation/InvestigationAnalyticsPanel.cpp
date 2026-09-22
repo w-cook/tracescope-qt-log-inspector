@@ -19,6 +19,8 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStyle>
+#include <QTabBar>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTabWidget>
@@ -523,7 +525,7 @@ InvestigationAnalyticsPanel::
      * Detected burst list.
      */
 
-    auto *burstListGroup =
+    m_burstListGroup =
         new QGroupBox(
             tr("Detected Bursts"),
             m_burstSplitter
@@ -531,7 +533,7 @@ InvestigationAnalyticsPanel::
 
     auto *burstListLayout =
         new QVBoxLayout(
-            burstListGroup
+            m_burstListGroup
             );
 
     burstListLayout->setContentsMargins(
@@ -540,14 +542,14 @@ InvestigationAnalyticsPanel::
             4,
             4,
             4,
-            burstListGroup
+            m_burstListGroup
             )
         );
 
     burstListLayout->setSpacing(
         InterfaceScale::pixels(
             2,
-            burstListGroup
+            m_burstListGroup
             )
         );
 
@@ -555,7 +557,7 @@ InvestigationAnalyticsPanel::
         new QTableWidget(
             0,
             4,
-            burstListGroup
+            m_burstListGroup
             );
 
     m_burstTable
@@ -689,7 +691,7 @@ InvestigationAnalyticsPanel::
         );
 
     m_burstSplitter->addWidget(
-        burstListGroup
+        m_burstListGroup
         );
 
     m_burstSplitter->addWidget(
@@ -1226,6 +1228,115 @@ void InvestigationAnalyticsPanel::
 
     updateGeometry();
     update();
+}
+
+int InvestigationAnalyticsPanel::
+    minimumUsefulBurstHeight() const
+{
+    if (
+        m_tabs == nullptr
+        || m_tabs->tabBar() == nullptr
+        || m_burstsPage == nullptr
+        || m_burstToolbarLayout == nullptr
+        || m_burstListGroup == nullptr
+        || m_burstTable == nullptr
+        || m_burstTable->horizontalHeader() == nullptr
+        || m_burstTable->verticalHeader() == nullptr
+        ) {
+        return 0;
+    }
+
+    /*
+     * The minimum useful Analytics height is defined
+     * by the Bursts surface:
+     *
+     *   Analytics tab strip
+     *   burst toolbar
+     *   Detected Bursts group
+     *   table header
+     *   first burst row
+     *
+     * This deliberately does not preserve the complete
+     * content-derived minimumSizeHint() of the tables.
+     */
+    const int analyticsTabHeight =
+        m_tabs
+            ->tabBar()
+            ->sizeHint()
+            .height();
+
+    const int tabFrameHeight =
+        2
+        * style()->pixelMetric(
+            QStyle::PM_DefaultFrameWidth,
+            nullptr,
+            m_tabs
+            );
+
+    QLayout *burstsLayout =
+        m_burstsPage->layout();
+
+    const QMargins pageMargins =
+        burstsLayout != nullptr
+            ? burstsLayout->contentsMargins()
+            : QMargins();
+
+    const int pageSpacing =
+        burstsLayout != nullptr
+            ? std::max(
+                  0,
+                  burstsLayout->spacing()
+                  )
+            : 0;
+
+    const int toolbarHeight =
+        m_burstToolbarLayout
+            ->sizeHint()
+            .height();
+
+    const int rowHeight =
+        m_burstTable->rowCount() > 0
+            ? m_burstTable->rowHeight(0)
+            : m_burstTable
+                  ->verticalHeader()
+                  ->defaultSectionSize();
+
+    const int tableHeight =
+        m_burstTable
+            ->horizontalHeader()
+            ->sizeHint()
+            .height()
+        + rowHeight
+        + 2 * m_burstTable->frameWidth();
+
+    /*
+     * Let QGroupBox tell us how much title/frame/layout
+     * chrome surrounds the table, then substitute our
+     * deliberate one-row table height for the table's
+     * ordinary minimumSizeHint().
+     */
+    const int groupOverhead =
+        std::max(
+            0,
+            m_burstListGroup
+                    ->minimumSizeHint()
+                    .height()
+                - m_burstTable
+                      ->minimumSizeHint()
+                      .height()
+            );
+
+    const int burstListHeight =
+        groupOverhead
+        + tableHeight;
+
+    return analyticsTabHeight
+           + tabFrameHeight
+           + pageMargins.top()
+           + pageMargins.bottom()
+           + toolbarHeight
+           + pageSpacing
+           + burstListHeight;
 }
 
 void InvestigationAnalyticsPanel::

@@ -69,6 +69,8 @@ public:
 
     int collapsedHeight() const;
 
+    int minimumUsefulExpandedHeight() const;
+
 signals:
     /*
      * Emitted for both user-driven tab changes and

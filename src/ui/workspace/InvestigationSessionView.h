@@ -266,6 +266,16 @@ private:
 
     void updateMinimumConstrainedHeight();
 
+    void updateLowerRegionMinimumHeight();
+
+    int constrainedPreferredHeight(
+        InvestigationSection section
+        ) const;
+
+    int constrainedRecoveryMinimumHeight(
+        InvestigationSection section
+        ) const;
+
     int openSectionCount() const;
 
     void scheduleSectionCapacityUpdate();
@@ -415,6 +425,9 @@ private:
         false;
 
     bool m_constrainedRecoveryComplete =
+        false;
+
+    bool m_constrainedSectionCollapsedDuringCycle =
         false;
 
     int m_constrainedTimelinePreferredHeight =

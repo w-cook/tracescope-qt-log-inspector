@@ -52,6 +52,8 @@ public:
 
     void refreshInterfaceScale();
 
+    int minimumUsefulBurstHeight() const;
+
 signals:
     void burstDrillDownRequested(
         const QDateTime &startTimestamp,
@@ -135,5 +137,8 @@ private:
         nullptr;
 
     QHBoxLayout *m_burstToolbarLayout =
+        nullptr;
+
+    QGroupBox *m_burstListGroup =
         nullptr;
 };
