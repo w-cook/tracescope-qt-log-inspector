@@ -94,6 +94,13 @@ protected:
         ) override;
 
 private:
+    enum class InvestigationSection
+    {
+        Timeline,
+        Events,
+        LowerDetails
+    };
+
     void applyFilters();
 
     void updateEventDetailFromSelection();
@@ -175,6 +182,28 @@ private:
         bool collapsed
         );
 
+    void toggleSectionFromUser(
+        InvestigationSection section
+        );
+
+    void setSectionPreferredCollapsed(
+        InvestigationSection section,
+        bool collapsed
+        );
+
+    bool isSectionPreferredCollapsed(
+        InvestigationSection section
+        ) const;
+
+    bool isSectionCollapsed(
+        InvestigationSection section
+        ) const;
+
+    void setSectionCollapsed(
+        InvestigationSection section,
+        bool collapsed
+        );
+
     void updateEventSectionPresentation();
 
     void updateSectionCollapseControls();
@@ -196,8 +225,14 @@ private:
         const QList<int> &previousSizes
         );
 
-    void restoreEventSectionAfterManualResize(
+    void restoreEventSectionUsingAuxiliaryPreferences(
         const QList<int> &previousSizes
+        );
+
+    void ensureSectionPreferredHeightsInitialized();
+
+    void applyMainSplitterSizes(
+        const QList<int> &sizes
         );
 
     InvestigationSession *m_session =
@@ -269,6 +304,23 @@ private:
     bool m_lowerRegionCollapsed =
         false;
 
+    /*
+     * User-preferred section state.
+     *
+     * These values describe what the user explicitly
+     * requested with the section chevrons. Automatic
+     * constrained-height behavior must never overwrite
+     * them.
+     */
+    bool m_timelinePreferredCollapsed =
+        false;
+
+    bool m_eventPreferredCollapsed =
+        false;
+
+    bool m_lowerRegionPreferredCollapsed =
+        false;
+
     int m_timelineExpandedHeight =
         0;
 
@@ -279,6 +331,9 @@ private:
 
     int m_lowerRegionExpandedHeight =
         0;
+
+    bool m_sectionPreferredHeightsInitialized =
+        false;
 
     bool m_timelineManuallyResizedWhileEventCollapsed =
         false;
