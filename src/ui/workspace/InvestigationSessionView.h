@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QList>
 
 #include "WorkspaceDocument.h"
 
@@ -172,9 +173,15 @@ private:
 
     void updateSectionCollapseControlGeometry();
 
+    void allocateCollapsedSectionSpaceToEvents(
+        int sectionIndex,
+        const QList<int> &previousSizes
+        );
+
     void restoreMainSplitterSectionHeight(
         int sectionIndex,
-        int preferredHeight
+        int preferredHeight,
+        const QList<int> &previousSizes
         );
 
     InvestigationSession *m_session =
