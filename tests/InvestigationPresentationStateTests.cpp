@@ -1534,6 +1534,34 @@ void InvestigationPresentationStateTests::
             .verticalValue
         > 0
         );
+
+    QCOMPARE(
+        restored.overviewSplitterSizes.size(),
+        2
+        );
+
+    for (
+        const int size
+        : restored.overviewSplitterSizes
+        ) {
+        QVERIFY(
+            size > 0
+            );
+    }
+
+    QCOMPARE(
+        restored.burstSplitterSizes.size(),
+        2
+        );
+
+    for (
+        const int size
+        : restored.burstSplitterSizes
+        ) {
+        QVERIFY(
+            size > 0
+            );
+    }
 }
 
 void InvestigationPresentationStateTests::

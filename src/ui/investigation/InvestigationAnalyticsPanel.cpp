@@ -473,6 +473,16 @@ InvestigationAnalyticsPanel::
         1
         );
 
+    m_overviewSplitter->setCollapsible(
+        0,
+        false
+        );
+
+    m_overviewSplitter->setCollapsible(
+        1,
+        false
+        );
+
     overviewLayout->addWidget(
         m_overviewSplitter
         );
@@ -772,6 +782,16 @@ InvestigationAnalyticsPanel::
     m_burstSplitter->setStretchFactor(
         1,
         2
+        );
+
+    m_burstSplitter->setCollapsible(
+        0,
+        false
+        );
+
+    m_burstSplitter->setCollapsible(
+        1,
+        false
         );
 
     burstsLayout->addWidget(
