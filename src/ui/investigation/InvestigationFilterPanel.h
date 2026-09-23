@@ -105,6 +105,16 @@ public:
 
     void refreshInterfaceScale();
 
+    bool toggleEventTableValueFilter(
+        const QString &columnKey,
+        const QString &value
+        );
+
+    bool toggleEventTableTimeBoundary(
+        const QDateTime &timestamp,
+        bool startBoundary
+        );
+
 signals:
     /*
      * User interaction inside the filter surface

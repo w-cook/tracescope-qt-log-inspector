@@ -895,17 +895,38 @@ InvestigationSessionView::
     connect(
         m_eventPanel,
         &InvestigationEventPanel::
-        customFieldFilterRequested,
+        eventTableValueFilterToggleRequested,
         this,
         [this](
-            const QString &fieldName,
+            const QString &columnKey,
             const QString &value
             ) {
             if (
                 m_filterPanel
-                    ->addCustomFieldFilter(
-                        fieldName,
+                    ->toggleEventTableValueFilter(
+                        columnKey,
                         value
+                        )
+                ) {
+                applyFilters();
+            }
+        }
+        );
+
+    connect(
+        m_eventPanel,
+        &InvestigationEventPanel::
+        eventTableTimeBoundaryToggleRequested,
+        this,
+        [this](
+            const QDateTime &timestamp,
+            bool startBoundary
+            ) {
+            if (
+                m_filterPanel
+                    ->toggleEventTableTimeBoundary(
+                        timestamp,
+                        startBoundary
                         )
                 ) {
                 applyFilters();

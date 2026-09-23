@@ -3735,6 +3735,259 @@ void InvestigationFilterPanel::
     update();
 }
 
+bool InvestigationFilterPanel::
+    toggleEventTableValueFilter(
+        const QString &columnKey,
+        const QString &value
+        )
+{
+    if (
+        m_session == nullptr
+        || columnKey.isEmpty()
+        || value.isEmpty()
+        ) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    auto toggleValue =
+        [](
+            MultiSelectFilterComboBox *combo,
+            const QString &targetValue
+            ) {
+            if (combo == nullptr) {
+                return false;
+            }
+
+            QStringList selected =
+                combo->selectedValues();
+
+            if (selected.contains(
+                    targetValue
+                    )) {
+                selected.removeAll(
+                    targetValue
+                    );
+            } else {
+                selected.append(
+                    targetValue
+                    );
+            }
+
+            const QSignalBlocker blocker(
+                combo
+                );
+
+            combo->setSelectedValues(
+                selected
+                );
+
+            return true;
+        };
+
+    if (
+        columnKey
+        == QStringLiteral("severity")
+        ) {
+        return toggleValue(
+            m_levelFilterCombo,
+            value.trimmed().toUpper()
+            );
+    }
+
+    if (
+        columnKey
+        == QStringLiteral("subsystem")
+        ) {
+        return toggleValue(
+            m_subsystemFilterCombo,
+            value
+            );
+    }
+
+    if (
+        columnKey
+        == QStringLiteral("eventCode")
+        ) {
+        return toggleValue(
+            m_eventCodeFilterCombo,
+            value
+            );
+    }
+
+    if (
+        columnKey
+        == QStringLiteral("entityId")
+        ) {
+        return toggleValue(
+            m_entityFilterCombo,
+            value
+            );
+    }
+
+    /*
+     * Everything else reaching this method is a
+     * dynamic custom-field column.
+     */
+    CustomFieldFilterMap filters =
+        m_customFieldFilterEditor
+            ->filters();
+
+    QStringList values =
+        filters.value(
+            columnKey
+            );
+
+    if (values.contains(value)) {
+        values.removeAll(
+            value
+            );
+
+        if (values.isEmpty()) {
+            filters.remove(
+                columnKey
+                );
+        } else {
+            filters.insert(
+                columnKey,
+                values
+                );
+        }
+    } else {
+        values.append(
+            value
+            );
+
+        filters.insert(
+            columnKey,
+            values
+            );
+    }
+
+    {
+        const QSignalBlocker blocker(
+            m_customFieldFilterEditor
+            );
+
+        m_customFieldFilterEditor
+            ->setFilters(
+                filters
+                );
+    }
+
+    updateCustomFiltersButton();
+    resizeCustomFiltersDialogToContents();
+
+    return true;
+}
+
+bool InvestigationFilterPanel::
+    toggleEventTableTimeBoundary(
+        const QDateTime &timestamp,
+        bool startBoundary
+        )
+{
+    if (
+        m_session == nullptr
+        || !timestamp.isValid()
+        ) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    QCheckBox *checkBox =
+        startBoundary
+            ? m_timeRangeStartCheckBox
+            : m_timeRangeEndCheckBox;
+
+    QDateTimeEdit *edit =
+        startBoundary
+            ? m_timeRangeStartEdit
+            : m_timeRangeEndEdit;
+
+    if (
+        checkBox == nullptr
+        || edit == nullptr
+        ) {
+        return false;
+    }
+
+    const bool removing =
+        checkBox->isChecked()
+        && edit->dateTime()
+               == timestamp;
+
+    {
+        const QSignalBlocker checkBlocker(
+            checkBox
+            );
+
+        const QSignalBlocker editBlocker(
+            edit
+            );
+
+        if (removing) {
+            checkBox->setChecked(
+                false
+                );
+
+            edit->setEnabled(
+                false
+                );
+        } else {
+            checkBox->setChecked(
+                true
+                );
+
+            edit->setEnabled(
+                true
+                );
+
+            edit->setDateTime(
+                timestamp
+                );
+        }
+    }
+
+    if (
+        !removing
+        && startBoundary
+        && m_timeRangeEndCheckBox->isChecked()
+        && timestamp
+               > m_timeRangeEndEdit->dateTime()
+        ) {
+        const QSignalBlocker blocker(
+            m_timeRangeEndEdit
+            );
+
+        m_timeRangeEndEdit->setDateTime(
+            timestamp
+            );
+    }
+
+    if (
+        !removing
+        && !startBoundary
+        && m_timeRangeStartCheckBox->isChecked()
+        && timestamp
+               < m_timeRangeStartEdit->dateTime()
+        ) {
+        const QSignalBlocker blocker(
+            m_timeRangeStartEdit
+            );
+
+        m_timeRangeStartEdit->setDateTime(
+            timestamp
+            );
+    }
+
+    updateTimeRangeButton();
+
+    return true;
+}
+
 int InvestigationFilterPanel::
     secondaryWideLayoutMinimumWidth() const
 {

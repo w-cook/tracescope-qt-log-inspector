@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDateTime>
 #include <QGroupBox>
 #include <QMetaObject>
 #include <QString>
@@ -77,6 +78,16 @@ signals:
     void customFieldFilterRequested(
         const QString &fieldName,
         const QString &value
+        );
+
+    void eventTableValueFilterToggleRequested(
+        const QString &columnKey,
+        const QString &value
+        );
+
+    void eventTableTimeBoundaryToggleRequested(
+        const QDateTime &timestamp,
+        bool startBoundary
         );
 
 private:

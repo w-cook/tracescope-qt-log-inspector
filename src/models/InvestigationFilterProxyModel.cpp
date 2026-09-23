@@ -961,6 +961,149 @@ QVariant InvestigationFilterProxyModel::
     return defaultValue;
 }
 
+QVariant InvestigationFilterProxyModel::
+    data(
+        const QModelIndex &index,
+        int role
+        ) const
+{
+    if (
+        role
+        != ActiveFilterValueRole
+        ) {
+        return QSortFilterProxyModel::data(
+            index,
+            role
+            );
+    }
+
+    if (!index.isValid()) {
+        return false;
+    }
+
+    const InvestigationTableModel *model =
+        investigationModel();
+
+    if (model == nullptr) {
+        return false;
+    }
+
+    const QModelIndex sourceIndex =
+        mapToSource(
+            index
+            );
+
+    if (!sourceIndex.isValid()) {
+        return false;
+    }
+
+    const InvestigationRecord *record =
+        model->recordAt(
+            sourceIndex.row()
+            );
+
+    if (record == nullptr) {
+        return false;
+    }
+
+    const QString columnKey =
+        model->columnKey(
+            sourceIndex.column()
+            );
+
+    if (
+        columnKey
+            == QStringLiteral("severity")
+        && record->severity.has_value()
+        ) {
+        return m_severityFilters.contains(
+            recordSeverityToString(
+                record->severity.value()
+                )
+            );
+    }
+
+    if (
+        columnKey
+            == QStringLiteral("subsystem")
+        && record->subsystem.has_value()
+        ) {
+        return m_subsystemFilters.contains(
+            record->subsystem.value()
+            );
+    }
+
+    if (
+        columnKey
+            == QStringLiteral("eventCode")
+        && record->eventCode.has_value()
+        ) {
+        return m_eventCodeFilters.contains(
+            record->eventCode.value()
+            );
+    }
+
+    if (
+        columnKey
+            == QStringLiteral("entityId")
+        && record->entityId.has_value()
+        ) {
+        return m_entityFilters.contains(
+            record->entityId.value()
+            );
+    }
+
+    if (
+        columnKey
+            == QStringLiteral("timestamp")
+        && record->timestamp.has_value()
+        ) {
+        return
+            (
+                m_timeRangeStart.has_value()
+                && record->timestamp.value()
+                       == m_timeRangeStart.value()
+                )
+            || (
+                m_timeRangeEnd.has_value()
+                && record->timestamp.value()
+                       == m_timeRangeEnd.value()
+                );
+    }
+
+    if (
+        model->isCustomColumn(
+            sourceIndex.column()
+            )
+        ) {
+        const auto iterator =
+            m_customFieldFilters.constFind(
+                columnKey
+                );
+
+        if (
+            iterator
+            == m_customFieldFilters.constEnd()
+            ) {
+            return false;
+        }
+
+        const QString fieldValue =
+            record
+                ->customAttributes
+                .value(columnKey)
+                .toString();
+
+        return iterator
+            .value()
+            .contains(
+                fieldValue
+                );
+    }
+
+    return false;
+}
+
 QStringList
 InvestigationFilterProxyModel::severityFilters() const
 {

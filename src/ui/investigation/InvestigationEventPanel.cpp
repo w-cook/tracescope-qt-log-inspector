@@ -212,7 +212,9 @@ InvestigationEventPanel::
     m_table->setItemDelegate(
         new ItemViewFocusDelegate(
             m_table,
-            true
+            true,
+            InvestigationFilterProxyModel::
+            ActiveFilterValueRole
             )
         );
 
@@ -350,8 +352,7 @@ InvestigationEventPanel::
 
     connect(
         m_table,
-        &QTableView::
-        customContextMenuRequested,
+        &QTableView::customContextMenuRequested,
         this,
         [this](
             const QPoint &position
@@ -377,23 +378,16 @@ InvestigationEventPanel::
                 return;
             }
 
-            const QString value =
-                proxyIndex
-                    .data(
-                        Qt::DisplayRole
-                        )
-                    .toString();
-
-            InvestigationFilterProxyModel
-                *proxyModel =
+            InvestigationFilterProxyModel *proxyModel =
                 controller->proxyModel();
 
-            InvestigationTableModel
-                *sourceModel =
+            InvestigationTableModel *sourceModel =
                 controller->sourceModel();
 
-            if (proxyModel == nullptr
-                || sourceModel == nullptr) {
+            if (
+                proxyModel == nullptr
+                || sourceModel == nullptr
+                ) {
                 return;
             }
 
@@ -402,20 +396,93 @@ InvestigationEventPanel::
                     proxyIndex
                     );
 
-            const bool customColumn =
-                sourceIndex.isValid()
-                && sourceModel
-                       ->isCustomColumn(
-                           sourceIndex.column()
-                           );
+            if (!sourceIndex.isValid()) {
+                return;
+            }
 
-            const QString customField =
-                customColumn
-                    ? sourceModel
-                          ->columnKey(
-                              sourceIndex.column()
-                              )
-                    : QString();
+            const QString value =
+                proxyIndex
+                    .data(
+                        Qt::DisplayRole
+                        )
+                    .toString();
+
+            const QString columnKey =
+                sourceModel->columnKey(
+                    sourceIndex.column()
+                    );
+
+            const bool customColumn =
+                sourceModel->isCustomColumn(
+                    sourceIndex.column()
+                    );
+
+            const InvestigationRecord *record =
+                sourceModel->recordAt(
+                    sourceIndex.row()
+                    );
+
+            /*
+             * Determine whether the clicked exact value
+             * already participates in its column's active
+             * categorical/custom filter.
+             */
+            bool activeValueFilter =
+                false;
+
+            if (
+                columnKey
+                == QStringLiteral("severity")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->severityFilters()
+                        .contains(
+                            value
+                                .trimmed()
+                                .toUpper()
+                            );
+            } else if (
+                columnKey
+                == QStringLiteral("subsystem")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->subsystemFilters()
+                        .contains(
+                            value
+                            );
+            } else if (
+                columnKey
+                == QStringLiteral("eventCode")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->eventCodeFilters()
+                        .contains(
+                            value
+                            );
+            } else if (
+                columnKey
+                == QStringLiteral("entityId")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->entityFilters()
+                        .contains(
+                            value
+                            );
+            } else if (customColumn) {
+                activeValueFilter =
+                    proxyModel
+                        ->customFieldFilters()
+                        .value(
+                            columnKey
+                            )
+                        .contains(
+                            value
+                            );
+            }
 
             QMenu menu(
                 m_table
@@ -429,16 +496,94 @@ InvestigationEventPanel::
             QAction *filterValueAction =
                 nullptr;
 
-            if (customColumn
-                && !customField.isEmpty()
-                && !value.isEmpty()) {
+            QAction *startTimeAction =
+                nullptr;
+
+            QAction *endTimeAction =
+                nullptr;
+
+            /*
+             * Canonical exact-value filters plus dynamic
+             * custom-field filters.
+             *
+             * Timestamp has its own range-boundary actions
+             * below. Message remains copy-only.
+             */
+            const bool categoricalFilterable =
+                !value.isEmpty()
+                && (
+                    columnKey
+                        == QStringLiteral("severity")
+                    || columnKey
+                           == QStringLiteral("subsystem")
+                    || columnKey
+                           == QStringLiteral("eventCode")
+                    || columnKey
+                           == QStringLiteral("entityId")
+                    || customColumn
+                    );
+
+            if (categoricalFilterable) {
                 menu.addSeparator();
 
                 filterValueAction =
                     menu.addAction(
-                        tr(
-                            "Filter by This Value"
-                            )
+                        activeValueFilter
+                            ? tr("Remove This Filter")
+                            : tr("Filter by This Value")
+                        );
+            }
+
+            /*
+             * Timestamp filtering maps naturally to the
+             * existing inclusive From / To time-range
+             * boundaries rather than an exact-value filter.
+             */
+            if (
+                columnKey
+                    == QStringLiteral("timestamp")
+                && record != nullptr
+                && record->timestamp.has_value()
+                ) {
+                menu.addSeparator();
+
+                const QDateTime timestamp =
+                    record->timestamp.value();
+
+                const bool activeStart =
+                    proxyModel
+                        ->timeRangeStart()
+                        .has_value()
+                    && proxyModel
+                               ->timeRangeStart()
+                               .value()
+                           == timestamp;
+
+                const bool activeEnd =
+                    proxyModel
+                        ->timeRangeEnd()
+                        .has_value()
+                    && proxyModel
+                               ->timeRangeEnd()
+                               .value()
+                           == timestamp;
+
+                startTimeAction =
+                    menu.addAction(
+                        activeStart
+                            ? tr("Remove From Filter")
+                            : tr(
+                                  "Filter From This Timestamp"
+                                  )
+                        );
+
+                endTimeAction =
+                    menu.addAction(
+                        activeEnd
+                            ? tr("Remove Through Filter")
+                            : tr(
+                                  "Filter Through This Timestamp"
+                                  )
                         );
             }
 
@@ -451,8 +596,10 @@ InvestigationEventPanel::
                             )
                     );
 
-            if (selectedAction
-                == copyValueAction) {
+            if (
+                selectedAction
+                == copyValueAction
+                ) {
                 QApplication::clipboard()
                 ->setText(
                     value
@@ -461,13 +608,48 @@ InvestigationEventPanel::
                 return;
             }
 
-            if (filterValueAction != nullptr
+            if (
+                filterValueAction != nullptr
                 && selectedAction
-                       == filterValueAction) {
-                emit customFieldFilterRequested(
-                    customField,
-                    value
-                    );
+                       == filterValueAction
+                ) {
+                emit
+                    eventTableValueFilterToggleRequested(
+                        columnKey,
+                        value
+                        );
+
+                return;
+            }
+
+            if (
+                startTimeAction != nullptr
+                && selectedAction
+                       == startTimeAction
+                && record != nullptr
+                && record->timestamp.has_value()
+                ) {
+                emit
+                    eventTableTimeBoundaryToggleRequested(
+                        record->timestamp.value(),
+                        true
+                        );
+
+                return;
+            }
+
+            if (
+                endTimeAction != nullptr
+                && selectedAction
+                       == endTimeAction
+                && record != nullptr
+                && record->timestamp.has_value()
+                ) {
+                emit
+                    eventTableTimeBoundaryToggleRequested(
+                        record->timestamp.value(),
+                        false
+                        );
             }
         }
         );

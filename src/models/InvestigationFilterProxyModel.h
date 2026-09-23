@@ -127,6 +127,17 @@ public:
         int role = Qt::DisplayRole
         ) const override;
 
+    enum DataRole
+    {
+        ActiveFilterValueRole =
+        Qt::UserRole + 100
+    };
+
+    QVariant data(
+        const QModelIndex &index,
+        int role = Qt::DisplayRole
+        ) const override;
+
     QStringList eventCodeFilters() const;
     QStringList entityFilters() const;
 

@@ -22,11 +22,15 @@ class ItemViewFocusDelegate
 public:
     explicit ItemViewFocusDelegate(
         QObject *parent = nullptr,
-        bool preserveContextSelection = false
+        bool preserveContextSelection = false,
+        int boldWhenTrueRole = -1
         )
         : QStyledItemDelegate(parent),
         m_preserveContextSelection(
             preserveContextSelection
+            ),
+        m_boldWhenTrueRole(
+            boldWhenTrueRole
             )
     {
     }
@@ -40,6 +44,19 @@ public:
         QStyleOptionViewItem itemOption(
             option
             );
+
+        if (
+            m_boldWhenTrueRole >= 0
+            && index
+                   .data(
+                       m_boldWhenTrueRole
+                       )
+                   .toBool()
+            ) {
+            itemOption.font.setBold(
+                true
+                );
+        }
 
         /*
          * Some tables act as the master side of a visible
@@ -212,4 +229,7 @@ protected:
 private:
     bool m_preserveContextSelection =
         false;
+
+    int m_boldWhenTrueRole =
+        -1;
 };
