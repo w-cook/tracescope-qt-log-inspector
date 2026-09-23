@@ -42,6 +42,7 @@
 #include "../preferences/RotatedSourceSettingsStore.h"
 
 #include "InterfaceScale.h"
+#include "ItemViewFocusDelegate.h"
 #include "RotatedSourceConfigurationDialog.h"
 
 namespace
@@ -1008,6 +1009,22 @@ void ImportConfigurationDialog::
     previewTable->setWordWrap(
         false
         );
+
+    for (
+        QTableWidget *table
+        : {
+            customFieldTable,
+            severityAliasTable,
+            timestampRuleTable,
+            previewTable
+        }
+        ) {
+        table->setItemDelegate(
+            new ItemViewFocusDelegate(
+                table
+                )
+            );
+    }
 
     QHeaderView *previewHeader =
         previewTable->horizontalHeader();

@@ -28,6 +28,7 @@
 #include <QScrollBar>
 
 #include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../analysis/BurstDetectionSettings.h"
 #include "../../analysis/InvestigationCadence.h"
 #include "../../analysis/InvestigationValueFrequency.h"
@@ -647,6 +648,21 @@ InvestigationAnalyticsPanel::
             "to its contributing elevated events."
             )
         );
+
+    for (
+        QTableWidget *table
+        : {
+            m_eventCodeTable,
+            m_entityTable,
+            m_burstTable
+        }
+        ) {
+        table->setItemDelegate(
+            new ItemViewFocusDelegate(
+                table
+                )
+            );
+    }
 
     connect(
         m_burstTable,

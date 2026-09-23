@@ -23,6 +23,7 @@
 #include <QPushButton>
 
 #include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../domain/InvestigationRecord.h"
 #include "../../domain/InvestigationRecordState.h"
 #include "../../workspace/InvestigationSession.h"
@@ -53,13 +54,13 @@ QString findingStatusDisplayText(
 }
 
 class FindingTextDelegate
-    : public QStyledItemDelegate
+    : public ItemViewFocusDelegate
 {
 public:
     explicit FindingTextDelegate(
         QObject *parent = nullptr
         )
-        : QStyledItemDelegate(parent)
+        : ItemViewFocusDelegate(parent)
     {
     }
 
@@ -77,6 +78,13 @@ public:
             &itemOption,
             index
             );
+
+        const bool hasFocus =
+            itemOption.state
+            & QStyle::State_HasFocus;
+
+        itemOption.state &=
+            ~QStyle::State_HasFocus;
 
         QStyle *style =
             itemOption.widget != nullptr
@@ -223,6 +231,13 @@ public:
                 );
 
         painter->restore();
+
+        if (hasFocus) {
+            drawCurrentCellIndicator(
+                painter,
+                option
+                );
+        }
     }
 
     QSize sizeHint(
@@ -605,6 +620,12 @@ InvestigationFindingsPanel::
         tr(
             "Review conclusions recorded during "
             "this investigation"
+            )
+        );
+
+    m_table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_table
             )
         );
 

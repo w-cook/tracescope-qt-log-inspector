@@ -20,6 +20,7 @@
 #include <QTimer>
 
 #include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../domain/RecordSeverity.h"
 
 namespace
@@ -506,6 +507,12 @@ QTableWidget *makeTable(
             QHeaderView::Stretch
             );
     }
+
+    table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            table
+            )
+        );
 
     return table;
 }

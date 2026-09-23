@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../analysis/TelemetryIssueGroup.h"
 
 InvestigationIssueSummaryPanel::
@@ -73,6 +74,12 @@ InvestigationIssueSummaryPanel::
             "Double-click a summary value to filter "
             "the investigation to the represented "
             "issues."
+            )
+        );
+
+    m_table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_table
             )
         );
 

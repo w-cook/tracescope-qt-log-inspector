@@ -19,6 +19,7 @@
 #include <QScrollBar>
 
 #include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../controllers/InvestigationController.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../models/InvestigationTableModel.h"
@@ -207,6 +208,12 @@ InvestigationEventPanel::
         ->setStretchLastSection(
             true
             );
+
+    m_table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_table
+            )
+        );
 
     layout->addWidget(
         m_table
