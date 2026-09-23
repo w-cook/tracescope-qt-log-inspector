@@ -12,6 +12,7 @@
 #include <QPainter>
 #include <QStyle>
 #include <QStyleOptionTab>
+#include <QPixmap>
 #include <QPointer>
 #include <QLabel>
 #include <QSizePolicy>
@@ -98,7 +99,8 @@ void WorkspaceTabBar::paintDocumentTint(
     ) const
 {
     if (index < 0
-        || index >= count()) {
+        || index >= count()
+        || rectangle.isEmpty()) {
         return;
     }
 
@@ -131,32 +133,93 @@ void WorkspaceTabBar::paintDocumentTint(
             : 30
         );
 
-    painter.save();
+    /*
+     * tabRect() is only the bounding rectangle for the
+     * native tab. In particular, an inactive tab may
+     * occupy less than that rectangle vertically.
+     *
+     * Build the tint from Qt's own native tab shape
+     * instead of filling the bounding rectangle. This
+     * keeps semantic document color inside the actual
+     * styled tab at every selection state, DPI, and
+     * platform style.
+     */
+    QStyleOptionTab shapeOption;
 
-    painter.fillRect(
-        rectangle,
-        tint
+    initStyleOption(
+        &shapeOption,
+        index
         );
 
-    painter.restore();
+    shapeOption.rect =
+        QRect(
+            QPoint(0, 0),
+            rectangle.size()
+            );
+
+    QPixmap tintLayer(
+        rectangle.size()
+        );
+
+    tintLayer.fill(
+        Qt::transparent
+        );
+
+    {
+        QPainter tintLayerPainter(
+            &tintLayer
+            );
+
+        /*
+         * First render the real native tab shape into
+         * the transparent layer. Pixels outside that
+         * shape remain transparent.
+         */
+        style()->drawControl(
+            QStyle::CE_TabBarTabShape,
+            &shapeOption,
+            &tintLayerPainter,
+            this
+            );
+
+        /*
+         * Replace the rendered shape's color while
+         * retaining its alpha coverage. The resulting
+         * pixmap is therefore a translucent semantic
+         * tint clipped precisely to the native tab.
+         */
+        tintLayerPainter.setCompositionMode(
+            QPainter::CompositionMode_SourceIn
+            );
+
+        tintLayerPainter.fillRect(
+            tintLayer.rect(),
+            tint
+            );
+    }
+
+    painter.drawPixmap(
+        rectangle.topLeft(),
+        tintLayer
+        );
 
     /*
      * The tint is drawn after Qt's normal tab, so
      * redraw the label over it for crisp text/icons.
      */
-    QStyleOptionTab option;
+    QStyleOptionTab labelOption;
 
     initStyleOption(
-        &option,
+        &labelOption,
         index
         );
 
-    option.rect =
+    labelOption.rect =
         rectangle;
 
     style()->drawControl(
         QStyle::CE_TabBarTabLabel,
-        &option,
+        &labelOption,
         &painter,
         this
         );
