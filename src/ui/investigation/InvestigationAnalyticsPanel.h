@@ -55,6 +55,14 @@ public:
     int minimumUsefulBurstHeight() const;
 
 signals:
+    void eventCodeDrillDownRequested(
+        const QString &eventCode
+        );
+
+    void entityDrillDownRequested(
+        const QString &entity
+        );
+
     void burstDrillDownRequested(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp
@@ -74,6 +82,14 @@ private:
         );
 
     void showBurstSettingsDialog();
+
+    void requestEventCodeDrillDown(
+        int row
+        );
+
+    void requestEntityDrillDown(
+        int row
+        );
 
     void requestBurstDrillDown(
         int row

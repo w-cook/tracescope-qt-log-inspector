@@ -2799,6 +2799,70 @@ bool InvestigationFilterPanel::
 }
 
 bool InvestigationFilterPanel::
+    configureEventCodeDrillDown(
+        const QString &eventCode
+        )
+{
+    if (m_session == nullptr
+        || eventCode.trimmed().isEmpty()
+        || !m_session->hasEventCodeData()
+        || !m_session
+                ->availableEventCodes()
+                .contains(
+                    eventCode
+                    )) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    const QSignalBlocker blocker(
+        m_eventCodeFilterCombo
+        );
+
+    m_eventCodeFilterCombo
+        ->setSelectedValues(
+            QStringList {
+                eventCode
+            }
+            );
+
+    return true;
+}
+
+bool InvestigationFilterPanel::
+    configureEntityDrillDown(
+        const QString &entity
+        )
+{
+    if (m_session == nullptr
+        || entity.trimmed().isEmpty()
+        || !m_session->hasEntityData()
+        || !m_session
+                ->availableEntities()
+                .contains(
+                    entity
+                    )) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    const QSignalBlocker blocker(
+        m_entityFilterCombo
+        );
+
+    m_entityFilterCombo
+        ->setSelectedValues(
+            QStringList {
+                entity
+            }
+            );
+
+    return true;
+}
+
+bool InvestigationFilterPanel::
     configureBurstDrillDown(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp

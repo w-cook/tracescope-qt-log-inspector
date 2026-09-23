@@ -342,6 +342,27 @@ InvestigationAnalyticsPanel::
             false
             );
 
+    m_eventCodeTable->setToolTip(
+        tr(
+            "Double-click an event code to filter the "
+            "investigation to that event code."
+            )
+        );
+
+    connect(
+        m_eventCodeTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            requestEventCodeDrillDown(
+                row
+                );
+        }
+        );
+
     eventCodeLayout->addWidget(
         m_eventCodeTable
         );
@@ -405,6 +426,27 @@ InvestigationAnalyticsPanel::
         ->setVisible(
             false
             );
+
+    m_entityTable->setToolTip(
+        tr(
+            "Double-click an entity to filter the "
+            "investigation to that entity."
+            )
+        );
+
+    connect(
+        m_entityTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            requestEntityDrillDown(
+                row
+                );
+        }
+        );
 
     entityLayout->addWidget(
         m_entityTable
@@ -2648,6 +2690,58 @@ void InvestigationAnalyticsPanel::
     }
 
     updateBursts();
+}
+
+void InvestigationAnalyticsPanel::
+    requestEventCodeDrillDown(
+        int row
+        )
+{
+    if (row < 0
+        || row >= m_eventCodeTable->rowCount()) {
+        return;
+    }
+
+    QTableWidgetItem *item =
+        m_eventCodeTable->item(
+            row,
+            0
+            );
+
+    if (item == nullptr
+        || item->text().trimmed().isEmpty()) {
+        return;
+    }
+
+    emit eventCodeDrillDownRequested(
+        item->text()
+        );
+}
+
+void InvestigationAnalyticsPanel::
+    requestEntityDrillDown(
+        int row
+        )
+{
+    if (row < 0
+        || row >= m_entityTable->rowCount()) {
+        return;
+    }
+
+    QTableWidgetItem *item =
+        m_entityTable->item(
+            row,
+            0
+            );
+
+    if (item == nullptr
+        || item->text().trimmed().isEmpty()) {
+        return;
+    }
+
+    emit entityDrillDownRequested(
+        item->text()
+        );
 }
 
 void InvestigationAnalyticsPanel::

@@ -958,6 +958,24 @@ InvestigationSessionView::
     connect(
         m_analyticsPanel,
         &InvestigationAnalyticsPanel::
+        eventCodeDrillDownRequested,
+        this,
+        &InvestigationSessionView::
+        drillDownEventCode
+        );
+
+    connect(
+        m_analyticsPanel,
+        &InvestigationAnalyticsPanel::
+        entityDrillDownRequested,
+        this,
+        &InvestigationSessionView::
+        drillDownEntity
+        );
+
+    connect(
+        m_analyticsPanel,
+        &InvestigationAnalyticsPanel::
         burstDrillDownRequested,
         this,
         &InvestigationSessionView::
@@ -2595,6 +2613,44 @@ void InvestigationSessionView::
         ) {
         applyFilters();
     }
+}
+
+void InvestigationSessionView::
+    drillDownEventCode(
+        const QString &eventCode
+        )
+{
+    if (
+        !m_filterPanel
+             ->configureEventCodeDrillDown(
+                 eventCode
+                 )
+        ) {
+        return;
+    }
+
+    applyFilters();
+
+    m_eventPanel->focusTable();
+}
+
+void InvestigationSessionView::
+    drillDownEntity(
+        const QString &entity
+        )
+{
+    if (
+        !m_filterPanel
+             ->configureEntityDrillDown(
+                 entity
+                 )
+        ) {
+        return;
+    }
+
+    applyFilters();
+
+    m_eventPanel->focusTable();
 }
 
 void InvestigationSessionView::

@@ -78,6 +78,14 @@ public:
         const QString &subsystem
         );
 
+    bool configureEventCodeDrillDown(
+        const QString &eventCode
+        );
+
+    bool configureEntityDrillDown(
+        const QString &entity
+        );
+
     bool configureBurstDrillDown(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp

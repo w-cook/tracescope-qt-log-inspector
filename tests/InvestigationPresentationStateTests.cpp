@@ -1,11 +1,13 @@
 #include <QtTest>
 
-#include <QCoreApplication>
-#include <QPushButton>
 #include <QBarCategoryAxis>
 #include <QChartView>
-#include <QScrollBar>
+#include <QCoreApplication>
+#include <QGroupBox>
 #include <QMenu>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QTableWidget>
 
 #include <memory>
 #include <utility>
@@ -287,6 +289,7 @@ private slots:
     void autoTimelineDensityAdaptsToWidth();
     void manualTimelineDensityAdaptsToWidth();
     void sessionViewPopulatesExportMenu();
+    void analyticsOverviewDrillDownFiltersInvestigation();
 };
 
 void InvestigationPresentationStateTests::
@@ -2608,6 +2611,217 @@ void InvestigationPresentationStateTests::
         arguments.at(0).toString(),
         view.documentId()
         );
+}
+
+void InvestigationPresentationStateTests::
+    analyticsOverviewDrillDownFiltersInvestigation()
+{
+    auto session =
+        makeAnalyticsSession();
+
+    InvestigationSessionView view(
+        session.get(),
+        nullptr
+        );
+
+    view.resize(
+        1000,
+        800
+        );
+
+    view.show();
+
+    processUi();
+
+    InvestigationAnalyticsPanel *analyticsPanel =
+        view.findChild<
+            InvestigationAnalyticsPanel *>();
+
+    QVERIFY(
+        analyticsPanel != nullptr
+        );
+
+    QGroupBox *eventCodeGroup =
+        nullptr;
+
+    QGroupBox *entityGroup =
+        nullptr;
+
+    const QList<QGroupBox *> groups =
+        analyticsPanel
+            ->findChildren<QGroupBox *>();
+
+    for (QGroupBox *group : groups) {
+        if (group == nullptr) {
+            continue;
+        }
+
+        if (group->title()
+            == QStringLiteral(
+                "Event Code Frequencies"
+                )) {
+            eventCodeGroup =
+                group;
+        } else if (
+            group->title()
+            == QStringLiteral(
+                "Top Entities"
+                )
+            ) {
+            entityGroup =
+                group;
+        }
+    }
+
+    QVERIFY(
+        eventCodeGroup != nullptr
+        );
+
+    QVERIFY(
+        entityGroup != nullptr
+        );
+
+    QTableWidget *eventCodeTable =
+        eventCodeGroup
+            ->findChild<QTableWidget *>();
+
+    QTableWidget *entityTable =
+        entityGroup
+            ->findChild<QTableWidget *>();
+
+    QVERIFY(
+        eventCodeTable != nullptr
+        );
+
+    QVERIFY(
+        entityTable != nullptr
+        );
+
+    QVERIFY(
+        eventCodeTable->rowCount() > 0
+        );
+
+    QVERIFY(
+        entityTable->rowCount() > 0
+        );
+
+    const QString eventCode =
+        eventCodeTable
+            ->item(
+                0,
+                0
+                )
+            ->text();
+
+    /*
+     * Exercise the same signal emitted by a real
+     * table double-click without depending on native
+     * mouse geometry under the minimal QPA backend.
+     */
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            eventCodeTable,
+            "cellDoubleClicked",
+            Qt::DirectConnection,
+            Q_ARG(int, 0),
+            Q_ARG(int, 0)
+            )
+        );
+
+    processUi();
+
+    InvestigationFilterProxyModel *proxy =
+        session
+            ->investigationController()
+            ->proxyModel();
+
+    QVERIFY(
+        proxy != nullptr
+        );
+
+    QCOMPARE(
+        proxy->eventCodeFilters(),
+        QStringList {
+            eventCode
+        }
+        );
+
+    /*
+     * Analytics is rebuilt from the newly filtered
+     * investigation, so reacquire the first entity
+     * from the refreshed table.
+     */
+    QVERIFY(
+        entityTable->rowCount() > 0
+        );
+
+    const QString entity =
+        entityTable
+            ->item(
+                0,
+                0
+                )
+            ->text();
+
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            entityTable,
+            "cellDoubleClicked",
+            Qt::DirectConnection,
+            Q_ARG(int, 0),
+            Q_ARG(int, 0)
+            )
+        );
+
+    processUi();
+
+    QCOMPARE(
+        proxy->eventCodeFilters(),
+        QStringList {
+            eventCode
+        }
+        );
+
+    QCOMPARE(
+        proxy->entityFilters(),
+        QStringList {
+            entity
+        }
+        );
+
+    /*
+     * Both canonical dimensions should now be active
+     * simultaneously rather than the second drilldown
+     * replacing the first one.
+     */
+    const QVector<InvestigationRecord>
+        visibleRecords =
+        session
+            ->investigationController()
+            ->visibleRecords();
+
+    QVERIFY(
+        !visibleRecords.isEmpty()
+        );
+
+    for (
+        const InvestigationRecord &record
+        : visibleRecords
+        ) {
+        QCOMPARE(
+            record.eventCode.value_or(
+                QString()
+                ),
+            eventCode
+            );
+
+        QCOMPARE(
+            record.entityId.value_or(
+                QString()
+                ),
+            entity
+            );
+    }
 }
 
 QTEST_MAIN(

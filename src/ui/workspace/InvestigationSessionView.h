@@ -168,6 +168,14 @@ private:
         const InvestigationRecord &record
         );
 
+    void drillDownEventCode(
+        const QString &eventCode
+        );
+
+    void drillDownEntity(
+        const QString &entity
+        );
+
     void drillDownBurst(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp
