@@ -58,6 +58,13 @@ public:
      */
     void refreshSession();
 
+    /*
+     * Rebuild tab-level presentation derived from the
+     * session backing without refreshing the complete
+     * investigation UI.
+     */
+    void refreshTabPresentation();
+
     InvestigationSessionPresentationState
     capturePresentationState() const;
 

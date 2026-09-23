@@ -2149,12 +2149,14 @@ void MainWindow::openInvestigationSnapshot(
             );
 
     /*
-     * Standalone snapshot opening intentionally uses
-     * the same SnapshotBacked restoration path used
-     * when restoring a saved workspace.
+     * The selected snapshot is an external input artifact,
+     * not permanent backing owned by this workspace.
      *
-     * The absolute snapshot reference means no
-     * workspace-relative resolution is required.
+     * Preparation may read it directly by absolute path.
+     * Once it has been loaded and validated successfully,
+     * completion will reserialize the prepared snapshot
+     * into this workspace's temporary working-artifact
+     * store before materializing the new session.
      */
     PersistedInvestigationSession
         persistedSession;
@@ -2321,6 +2323,95 @@ void MainWindow::openInvestigationSnapshot(
 
                 return;
             }
+
+            /*
+             * Snapshot preparation has already loaded and
+             * validated the external .tsinv.
+             *
+             * Before creating the live InvestigationSession,
+             * adopt that value into this workspace's own
+             * provisional storage. The session must never retain
+             * an operational dependency on the external snapshot
+             * selected by the user.
+             */
+            PreparedSnapshotBackedInvestigationSession
+                *preparedSnapshot =
+                preparation
+                        .preparedData
+                        .has_value()
+                    ? std::get_if<
+                          PreparedSnapshotBackedInvestigationSession>(
+                          &*preparation.preparedData
+                          )
+                    : nullptr;
+
+            if (preparedSnapshot == nullptr) {
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope loaded the selected snapshot, "
+                        "but the restoration result did not contain "
+                        "Snapshot-backed investigation data."
+                        )
+                    );
+
+                return;
+            }
+
+            const WorkspaceWorkingSnapshotSaveResult
+                adoptionResult =
+                workspaceWorkingArtifactStore
+                    .saveSnapshot(
+                        preparedSnapshot->snapshot
+                        );
+
+            if (!adoptionResult.isSuccess()) {
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope loaded the selected snapshot, "
+                        "but could not create an independent "
+                        "working copy for the current workspace."
+                        "\n\n"
+                        "Reason:\n%1"
+                        )
+                        .arg(
+                            adoptionResult
+                                    .errorMessage
+                                    .trimmed()
+                                    .isEmpty()
+                                ? tr(
+                                      "Temporary workspace storage "
+                                      "could not be created."
+                                      )
+                                : adoptionResult.errorMessage
+                            )
+                    );
+
+                return;
+            }
+
+            /*
+             * Materialization now binds the new session to the
+             * workspace-owned provisional artifact rather than
+             * to the external file that was selected for import.
+             */
+            preparedSnapshot->snapshotPath =
+                adoptionResult.snapshotPath;
 
             /*
              * InvestigationSession and its Qt model
@@ -6475,97 +6566,11 @@ MainWindow::captureWorkspaceState() const
 }
 
 bool MainWindow::saveWorkspaceToFile(
-    const QString &filePath,
-    const QString &snapshotOnlySessionId,
-    QString *snapshotOnlyPath
+    const QString &filePath
     )
 {
     WorkspacePersistenceState state =
         captureWorkspaceState();
-
-    if (snapshotOnlyPath != nullptr) {
-        snapshotOnlyPath->clear();
-    }
-
-    /*
-     * A source-lifecycle transition is being persisted
-     * atomically with this workspace save.
-     *
-     * Runtime backing has not changed yet. Only the staged
-     * persisted representation becomes SnapshotBacked.
-     */
-    if (!snapshotOnlySessionId.isEmpty()) {
-        bool targetFound = false;
-
-        for (PersistedInvestigationSession
-                 &persistedSession
-             : state.sessions) {
-            if (persistedSession.sessionId
-                != snapshotOnlySessionId) {
-                continue;
-            }
-
-            targetFound = true;
-
-            const auto mode =
-                persistedSession
-                    .backing
-                    .mode;
-
-            if (mode
-                    != PersistedInvestigationSessionBackingMode::
-                    SourceBacked
-                && mode
-                       != PersistedInvestigationSessionBackingMode::
-                       Hybrid) {
-                QMessageBox::warning(
-                    this,
-                    tr("Preserve Snapshot Failed"),
-                    tr(
-                        "The selected investigation is "
-                        "not currently source-backed."
-                        )
-                    );
-
-                return false;
-            }
-
-            /*
-             * Keep externalSourceBinding.
-             *
-             * In SnapshotBacked persistence it becomes the
-             * dormant reconnect hint rather than an active
-             * dependency.
-             */
-            persistedSession.backing.mode =
-                PersistedInvestigationSessionBackingMode::
-                SnapshotBacked;
-
-            /*
-             * SnapshotBacked uses the .tsinv import profile
-             * as authoritative.
-             */
-            persistedSession
-                .backing
-                .sourceImportProfile
-                .reset();
-
-            break;
-        }
-
-        if (!targetFound) {
-            QMessageBox::warning(
-                this,
-                tr("Preserve Snapshot Failed"),
-                tr(
-                    "The investigation could not be found "
-                    "in the workspace being saved."
-                    )
-                );
-
-            return false;
-        }
-    }
 
     QVector<WorkspaceSessionSnapshotSaveItem>
         sessionSnapshots;
@@ -6699,24 +6704,6 @@ bool MainWindow::saveWorkspaceToFile(
                 snapshotPathIterator.value();
 
             /*
-             * The target session's persisted backing has
-             * already been committed as SnapshotBacked.
-             *
-             * Do not change its runtime backing here.
-             * preserveSessionAsSnapshotOnly() will perform
-             * that transition after this save returns.
-             */
-            if (session->id()
-                == snapshotOnlySessionId) {
-                if (snapshotOnlyPath != nullptr) {
-                    *snapshotOnlyPath =
-                        newSnapshotPath;
-                }
-
-                continue;
-            }
-
-            /*
              * Existing SnapshotBacked / Hybrid sessions
              * follow the newly committed workspace-owned
              * snapshot as before.
@@ -6725,11 +6712,48 @@ bool MainWindow::saveWorkspaceToFile(
              * which is intentional: their saved snapshot
              * remains only a recovery fallback.
              */
-            session->updateSnapshotBackingPath(
-                newSnapshotPath
-                );
+            const bool backingPathUpdated =
+                session->updateSnapshotBackingPath(
+                    newSnapshotPath
+                    );
+
+            if (backingPathUpdated
+                && workspaceDocumentHost != nullptr) {
+                WorkspaceDocument *document =
+                    workspaceDocumentHost
+                        ->documentById(
+                            session->id()
+                            );
+
+                auto *sessionView =
+                    qobject_cast<
+                        InvestigationSessionView *>(
+                        document
+                        );
+
+                if (sessionView != nullptr) {
+                    sessionView
+                        ->refreshTabPresentation();
+                }
+            }
         }
     }
+
+    /*
+     * Every runtime SnapshotBacked / Hybrid investigation
+     * now points at the newly committed workspace-owned
+     * snapshot generation.
+     *
+     * No live session depends on provisional working
+     * artifacts anymore, so the complete temporary
+     * working store can now be garbage-collected.
+     *
+     * Cleanup failure does not invalidate the successful
+     * workspace save. WorkspaceWorkingArtifactStore keeps
+     * the directory alive so destruction or a later reset
+     * can retry removal.
+     */
+    workspaceWorkingArtifactStore.reset();
 
     currentWorkspacePath =
         QFileInfo(filePath)
@@ -8454,7 +8478,8 @@ void MainWindow::
     if (workspace == nullptr
         || importWatcher != nullptr
         || workspaceOpenInProgress
-        || sessionReloadInProgress) {
+        || sessionReloadInProgress
+        || snapshotOpenInProgress) {
         return;
     }
 
@@ -8488,49 +8513,6 @@ void MainWindow::
         return;
     }
 
-    QString standaloneSnapshotPath;
-
-    /*
-     * Without a saved workspace there is no
-     * application-owned sidecar directory.
-     *
-     * The user therefore owns this standalone .tsinv
-     * artifact and chooses where it lives.
-     */
-    if (currentWorkspacePath.isEmpty()) {
-        standaloneSnapshotPath =
-            QFileDialog::getSaveFileName(
-                this,
-                tr(
-                    "Save Investigation Snapshot"
-                    ),
-                QStringLiteral(
-                    "investigation.tsinv"
-                    ),
-                tr(
-                    "TraceScope Investigation Snapshot "
-                    "(*.tsinv);;All Files (*)"
-                    )
-                );
-
-        if (standaloneSnapshotPath.isEmpty()) {
-            return;
-        }
-
-        if (QFileInfo(
-                standaloneSnapshotPath
-                )
-                .suffix()
-                .compare(
-                    QStringLiteral("tsinv"),
-                    Qt::CaseInsensitive
-                    )
-            != 0) {
-            standaloneSnapshotPath +=
-                QStringLiteral(".tsinv");
-        }
-    }
-
     LiveSessionFollowCoordinator
         *liveCoordinator =
         session->liveFollowCoordinator();
@@ -8546,7 +8528,8 @@ void MainWindow::
      *
      * A live session must not admit records after the
      * snapshot has been captured but before that
-     * snapshot becomes authoritative.
+     * snapshot becomes authoritative for the working
+     * investigation.
      */
     if (wasFollowing
         && !liveCoordinator->pause()) {
@@ -8570,107 +8553,86 @@ void MainWindow::
         [
             liveCoordinator,
             wasFollowing
-    ]() {
+        ]() {
             if (wasFollowing
                 && liveCoordinator != nullptr) {
                 liveCoordinator->resume();
             }
         };
 
-    QString committedSnapshotPath;
+    /*
+     * Source-state transitions belong to the current
+     * unsaved working workspace.
+     *
+     * Never modify the committed .tsw or its sidecars
+     * merely because the user changes backing mode.
+     * The new SnapshotBacked state instead receives its
+     * own provisional workspace artifact.
+     */
+    const WorkspaceWorkingSnapshotSaveResult
+        saveResult =
+        workspaceWorkingArtifactStore
+            .saveSnapshot(
+                snapshot
+                );
 
-    if (!currentWorkspacePath.isEmpty()) {
-        /*
-         * The workspace package owns this snapshot.
-         *
-         * The staged manifest is written as
-         * SnapshotBacked before runtime state changes.
-         */
-        if (!saveWorkspaceToFile(
-                currentWorkspacePath,
-                sessionId,
-                &committedSnapshotPath
-                )) {
-            resumeAfterFailure();
-            return;
-        }
+    if (!saveResult.isSuccess()) {
+        resumeAfterFailure();
 
-        if (committedSnapshotPath.isEmpty()) {
-            resumeAfterFailure();
-
-            QMessageBox::warning(
-                this,
-                tr("Preserve Snapshot Failed"),
-                tr(
-                    "The workspace was saved, but "
-                    "TraceScope could not identify the "
-                    "new investigation snapshot."
+        QMessageBox::warning(
+            this,
+            tr("Preserve Snapshot Failed"),
+            tr(
+                "TraceScope could not create a "
+                "temporary investigation snapshot for "
+                "the current working workspace."
+                "\n\n"
+                "Reason:\n%1"
+                )
+                .arg(
+                    saveResult
+                            .errorMessage
+                            .trimmed()
+                            .isEmpty()
+                        ? tr(
+                              "Temporary workspace storage "
+                              "could not be created."
+                              )
+                        : saveResult.errorMessage
                     )
-                );
+            );
 
-            return;
-        }
-    } else {
-        /*
-         * Standalone snapshot ownership belongs to the
-         * user. TraceScope must never garbage-collect
-         * this path merely because a future workspace
-         * creates its own managed copy.
-         */
-        const InvestigationSessionSnapshotSaveResult
-            saveResult =
-            InvestigationSessionSnapshotFile()
-                .save(
-                    standaloneSnapshotPath,
-                    snapshot
-                    );
-
-        if (!saveResult.isSuccess()) {
-            resumeAfterFailure();
-
-            QMessageBox::warning(
-                this,
-                tr("Save Investigation Snapshot Failed"),
-                saveResult.errorMessage.isEmpty()
-                    ? tr(
-                          "TraceScope could not save "
-                          "the investigation snapshot."
-                          )
-                    : saveResult.errorMessage
-                );
-
-            return;
-        }
-
-        committedSnapshotPath =
-            QFileInfo(
-                standaloneSnapshotPath
-                ).absoluteFilePath();
+        return;
     }
 
     /*
-     * Persistence has succeeded.
+     * The provisional snapshot now exists durably for
+     * the lifetime of this working workspace.
      *
-     * This runtime mutation performs no I/O and is the
-     * final commit boundary for the open investigation.
+     * Switching runtime backing performs no additional
+     * file I/O.
      */
     if (!workspace
              ->applySnapshotOnlyTransition(
                  sessionId,
-                 committedSnapshotPath,
+                 saveResult.snapshotPath,
                  snapshot.sourceFidelity
                  )) {
         resumeAfterFailure();
 
-        markWorkspaceDirty();
-
+        /*
+         * Leave the unused provisional snapshot in the
+         * working-artifact store. Whole-workspace
+         * cleanup will safely remove it later.
+         */
         QMessageBox::critical(
             this,
             tr("Preserve Snapshot Failed"),
             tr(
-                "The snapshot was saved successfully, "
-                "but the open investigation could not "
-                "be switched to Snapshot-backed mode."
+                "The temporary snapshot was created "
+                "successfully, but the open "
+                "investigation could not be switched "
+                "to Snapshot-backed mode."
                 )
             );
 
@@ -8686,21 +8648,14 @@ void MainWindow::
     updateReloadActionState();
 
     /*
-     * When a saved workspace owns the snapshot, the
-     * SnapshotBacked transition was already persisted
-     * atomically by saveWorkspaceToFile().
+     * The source-state transition exists only in the
+     * current working workspace until the user
+     * explicitly saves.
      *
-     * For an unsaved workspace using a standalone
-     * snapshot, the runtime backing change still needs
-     * a future workspace save.
+     * The previously committed .tsw and all artifacts
+     * it references remain untouched.
      */
-    if (!currentWorkspacePath.isEmpty()) {
-        setWorkspaceDirty(
-            false
-            );
-    } else {
-        markWorkspaceDirty();
-    }
+    markWorkspaceDirty();
 }
 
 void MainWindow::populateRecentFilesMenu(

@@ -442,6 +442,46 @@ WorkspaceSavePackageService::save(
     }
 
     /*
+     * Never commit a workspace manifest that TraceScope
+     * itself cannot deserialize.
+     *
+     * This guards the package boundary against future
+     * disagreements between persistence capture,
+     * serialization, and backing-state validation.
+     */
+    const WorkspaceDeserializationResult
+        verificationResult =
+        WorkspaceSerializer()
+            .deserialize(
+                manifestJson
+                );
+
+    if (!verificationResult.isSuccess()) {
+        removeWrittenSnapshots(
+            writtenSnapshotPaths
+            );
+
+        return failure(
+            verificationResult
+                    .errorMessage
+                    .trimmed()
+                    .isEmpty()
+                ? QStringLiteral(
+                      "TraceScope produced a workspace "
+                      "manifest that failed its own "
+                      "persistence validation."
+                      )
+                : QStringLiteral(
+                      "TraceScope could not validate the "
+                      "workspace manifest before commit: %1"
+                      )
+                      .arg(
+                          verificationResult.errorMessage
+                          )
+            );
+    }
+
+    /*
      * Commit the manifest last.
      *
      * QSaveFile ensures that failure cannot partially

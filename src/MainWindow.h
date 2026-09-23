@@ -19,6 +19,7 @@
 #include "sources/SourceFamilyConfiguration.h"
 #include "workspace/InvestigationWorkspace.h"
 #include "workspace/WorkspacePersistenceState.h"
+#include "workspace/WorkspaceWorkingArtifactStore.h"
 
 using ImportCompletionHandler =
     std::function<
@@ -89,6 +90,9 @@ private:
 
     WorkspaceDocumentHost *workspaceDocumentHost =
         nullptr;
+
+    WorkspaceWorkingArtifactStore
+        workspaceWorkingArtifactStore;
 
     /*
      * InvestigationWorkspace::addSession() emits
@@ -264,11 +268,7 @@ private:
     captureWorkspaceState() const;
 
     bool saveWorkspaceToFile(
-        const QString &filePath,
-        const QString &snapshotOnlySessionId =
-        QString(),
-        QString *snapshotOnlyPath =
-        nullptr
+        const QString &filePath
         );
 
     bool saveWorkspace();

@@ -1385,6 +1385,12 @@ void InvestigationSessionView::
     emit documentTabPresentationChanged();
 }
 
+void InvestigationSessionView::
+    refreshTabPresentation()
+{
+    emit documentTabPresentationChanged();
+}
+
 InvestigationSessionPresentationState
     InvestigationSessionView::
     capturePresentationState() const

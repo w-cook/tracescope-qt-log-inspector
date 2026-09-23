@@ -2441,6 +2441,49 @@ add_test(
 )
 
 qt_add_executable(
+    WorkspaceWorkingArtifactStoreTests
+
+    WorkspaceWorkingArtifactStoreTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    ../src/persistence/InvestigationSnapshotContainer.h
+    ../src/persistence/InvestigationSnapshotContainer.cpp
+    ../src/persistence/InvestigationSessionSnapshotFile.h
+    ../src/persistence/InvestigationSessionSnapshotFile.cpp
+
+    ../src/workspace/WorkspaceWorkingArtifactStore.h
+    ../src/workspace/WorkspaceWorkingArtifactStore.cpp
+)
+
+target_link_libraries(
+    WorkspaceWorkingArtifactStoreTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME WorkspaceWorkingArtifactStoreTests
+    COMMAND WorkspaceWorkingArtifactStoreTests
+)
+
+qt_add_executable(
     InvestigationRecordSerializationTests
 
     InvestigationRecordSerializationTests.cpp
