@@ -52,6 +52,8 @@ public:
         bool enabled
         );
 
+    void handleLiveSessionUpdated();
+
     InvestigationEventTablePresentationState
     capturePresentationState() const;
 
@@ -92,6 +94,8 @@ private:
 
     void restoreColumnWidths();
 
+    void updateFollowNewestSelectionIntent();
+
     InvestigationSession *m_session =
         nullptr;
 
@@ -117,6 +121,12 @@ private:
         m_selectionConnection;
 
     bool m_followNewest =
+        false;
+
+    bool m_followNewestSelectionIntent =
+        false;
+
+    bool m_suppressFollowNewestSelectionIntentUpdate =
         false;
 
     QHBoxLayout *m_navigationLayout =

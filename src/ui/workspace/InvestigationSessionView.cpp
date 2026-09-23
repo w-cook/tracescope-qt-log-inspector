@@ -1770,6 +1770,20 @@ QWidget *InvestigationSessionView::
              */
             emit workspaceContentChanged();
 
+            /*
+             * Event-table rows have already reached the
+             * existing source/proxy model at this point.
+             *
+             * Advance selection immediately when the user
+             * explicitly chose to follow selection, rather
+             * than waiting for the slower coalesced refresh
+             * of derived investigation surfaces.
+             */
+            if (m_eventPanel != nullptr) {
+                m_eventPanel
+                    ->handleLiveSessionUpdated();
+            }
+
             scheduleLiveRefresh();
         }
         );

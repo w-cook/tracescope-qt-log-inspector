@@ -266,6 +266,24 @@ InvestigationEventPanel::
         }
         );
 
+    connect(
+        m_table,
+        &QTableView::clicked,
+        this,
+        [this](
+            const QModelIndex &
+            ) {
+            /*
+             * A click is explicit user selection intent.
+             *
+             * This also handles clicking an already-selected
+             * row, where QItemSelectionModel may not emit a
+             * new selectionChanged signal.
+             */
+            updateFollowNewestSelectionIntent();
+        }
+        );
+
     /*
      * ---------------------------------------------------------
      * Navigation actions
@@ -622,6 +640,9 @@ const InvestigationRecord *
 
 void InvestigationEventPanel::clearSelection()
 {
+    m_followNewestSelectionIntent =
+        false;
+
     if (m_table->selectionModel()
         != nullptr) {
         m_table->clearSelection();
@@ -685,12 +706,30 @@ void InvestigationEventPanel::selectProxyRow(
         return;
     }
 
+    /*
+     * This method is also used for restoration and
+     * automatic live-follow advancement.
+     *
+     * Those programmatic selections must not create or
+     * clear the user's selection-follow intent merely
+     * because the resulting row happens to be newest
+     * or older.
+     */
+    const bool previousSuppression =
+        m_suppressFollowNewestSelectionIntentUpdate;
+
+    m_suppressFollowNewestSelectionIntentUpdate =
+        true;
+
     selectionModel->setCurrentIndex(
         targetIndex,
         QItemSelectionModel::
             ClearAndSelect
             | QItemSelectionModel::Rows
         );
+
+    m_suppressFollowNewestSelectionIntentUpdate =
+        previousSuppression;
 
     m_table->scrollTo(
         targetIndex,
@@ -917,8 +956,23 @@ void InvestigationEventPanel::
     m_followNewest =
         enabled;
 
-    if (!m_followNewest
-        || m_table == nullptr
+    /*
+     * Turning Follow Newest off always abandons
+     * selection-follow intent.
+     *
+     * Turning it on does NOT infer selection-follow
+     * from the current selection. The user must
+     * explicitly select the newest visible event
+     * while Follow Newest is active.
+     */
+    if (!m_followNewest) {
+        m_followNewestSelectionIntent =
+            false;
+
+        return;
+    }
+
+    if (m_table == nullptr
         || m_table->verticalScrollBar()
                == nullptr) {
         return;
@@ -929,6 +983,42 @@ void InvestigationEventPanel::
 
     scrollBar->setValue(
         scrollBar->maximum()
+        );
+}
+
+void InvestigationEventPanel::
+    handleLiveSessionUpdated()
+{
+    if (!m_followNewest
+        || !m_followNewestSelectionIntent
+        || m_table == nullptr
+        || m_table->model() == nullptr) {
+        return;
+    }
+
+    const int rowCount =
+        m_table
+            ->model()
+            ->rowCount();
+
+    if (rowCount <= 0) {
+        return;
+    }
+
+    /*
+     * Follow the newest currently visible event.
+     *
+     * The proxy model already reflects the active
+     * filters and sort order by the time the live
+     * coordinator reports its completed update.
+     *
+     * selectProxyRow() deliberately suppresses intent
+     * recalculation, so this automatic advancement
+     * preserves the user's already-established
+     * selection-follow intent.
+     */
+    selectProxyRow(
+        rowCount - 1
         );
 }
 
@@ -1402,11 +1492,11 @@ void InvestigationEventPanel::
                 const QItemSelection &,
                 const QItemSelection &
                 ) {
-                if (m_session != nullptr) {
-                    const InvestigationRecord
-                        *record =
-                        selectedRecord();
+                const InvestigationRecord
+                    *record =
+                    selectedRecord();
 
+                if (m_session != nullptr) {
                     m_session
                         ->setSelectedRecordId(
                             record != nullptr
@@ -1416,11 +1506,69 @@ void InvestigationEventPanel::
                             );
                 }
 
+                /*
+                 * Ordinary user selection changes can
+                 * establish or clear selection-follow
+                 * intent.
+                 *
+                 * Do not treat an empty selection here
+                 * as user intent. A model reset caused
+                 * by a newly introduced dynamic column
+                 * can temporarily clear Qt's selection
+                 * during live ingestion.
+                 *
+                 * Explicit clearSelection() already
+                 * clears the intent directly.
+                 */
+                if (
+                    !m_suppressFollowNewestSelectionIntentUpdate
+                    && record != nullptr
+                    ) {
+                    updateFollowNewestSelectionIntent();
+                }
+
                 emit selectedRecordChanged();
 
                 refreshNavigationState();
             }
             );
+}
+
+void InvestigationEventPanel::
+    updateFollowNewestSelectionIntent()
+{
+    if (!m_followNewest
+        || m_table == nullptr
+        || m_table->model() == nullptr
+        || m_table->selectionModel()
+               == nullptr) {
+        m_followNewestSelectionIntent =
+            false;
+
+        return;
+    }
+
+    const QModelIndexList selectedRows =
+        m_table
+            ->selectionModel()
+            ->selectedRows();
+
+    if (selectedRows.isEmpty()) {
+        m_followNewestSelectionIntent =
+            false;
+
+        return;
+    }
+
+    const int rowCount =
+        m_table
+            ->model()
+            ->rowCount();
+
+    m_followNewestSelectionIntent =
+        rowCount > 0
+        && selectedRows.first().row()
+               == rowCount - 1;
 }
 
 void InvestigationEventPanel::
@@ -1460,6 +1608,8 @@ void InvestigationEventPanel::
     selectProxyRow(
         targetProxyRow
         );
+
+    updateFollowNewestSelectionIntent();
 }
 
 void InvestigationEventPanel::
@@ -1502,6 +1652,8 @@ void InvestigationEventPanel::
     selectProxyRow(
         targetProxyRow
         );
+
+    updateFollowNewestSelectionIntent();
 }
 
 void InvestigationEventPanel::
