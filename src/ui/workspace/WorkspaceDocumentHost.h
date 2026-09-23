@@ -66,6 +66,10 @@ public:
         const QWidget *excludedWindow
         ) const;
 
+    bool moveDocumentsToAnotherVisibleWindow(
+        WorkspaceDocumentHost *sourceHost
+        );
+
     void resetWindowLayout();
 
     bool isDocumentDetached(

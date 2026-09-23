@@ -119,6 +119,9 @@ private:
     bool workspaceMutationTrackingSuppressed =
         false;
 
+    bool applicationShutdownInProgress =
+        false;
+
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
 
@@ -343,9 +346,15 @@ private:
         WorkspaceDocumentHost *host
         );
 
+    void requestWorkspaceWindowClose(
+        WorkspaceDocumentHost *host
+        );
+
     bool confirmWorkspaceReplacement();
 
     void newWorkspace();
+
+    void beginApplicationShutdown();
 
     void requestApplicationClose();
 

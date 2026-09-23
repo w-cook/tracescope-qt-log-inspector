@@ -1,7 +1,6 @@
 #include <QtTest/QtTest>
 
 #include <QPointer>
-#include <QSet>
 
 #include <memory>
 
@@ -25,7 +24,8 @@ private slots:
     void rejectsDuplicateDocumentIdWhileDetached();
     void detachedWindowCanContainMultipleDocuments();
     void removeDetachedDocumentTransfersOwnershipWithoutDeleting();
-    void detachedWindowCloseRequestsAllDocuments();
+    void detachedWindowCloseRequestsDocumentDecision();
+    void movesWindowDocumentsToVisiblePeerPreservingSelection();
     void workspaceLayoutRoundTrips();
 };
 
@@ -768,7 +768,7 @@ void WorkspaceDocumentHostTests::
 }
 
 void WorkspaceDocumentHostTests::
-    detachedWindowCloseRequestsAllDocuments()
+    detachedWindowCloseRequestsDocumentDecision()
 {
     WorkspaceDocumentHost host;
 
@@ -788,9 +788,8 @@ void WorkspaceDocumentHostTests::
      * Keep an independent document in the root window.
      *
      * This ensures the detached window is not the final
-     * visible TraceScope window when its close button is
-     * exercised. Closing it should therefore request
-     * closure of only the documents in that window.
+     * visible TraceScope window when its frame close
+     * button is exercised.
      */
     auto *rootDocument =
         new WorkspaceDocument(
@@ -880,57 +879,42 @@ void WorkspaceDocumentHostTests::
         2
         );
 
+    QSignalSpy decisionSpy(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        workspaceWindowCloseRequested
+        );
+
     QSignalSpy closeSpy(
         &host,
         &WorkspaceDocumentHost::
         documentCloseRequested
         );
 
+    /*
+     * Closing a non-final window containing documents
+     * must request an explicit preserve-versus-close
+     * decision. The window itself must not infer that
+     * closing its frame means closing its documents.
+     */
     window->close();
 
     QCOMPARE(
-        closeSpy.count(),
-        2
-        );
-
-    QSet<QString> requestedIds;
-
-    for (int index = 0;
-         index < closeSpy.count();
-         ++index) {
-        requestedIds.insert(
-            closeSpy.at(index)
-                .at(0)
-                .toString()
-            );
-    }
-
-    QSet<QString> expectedIds;
-
-    expectedIds.insert(
-        QStringLiteral("session-1")
-        );
-
-    expectedIds.insert(
-        QStringLiteral("session-2")
+        decisionSpy.count(),
+        1
         );
 
     QCOMPARE(
-        requestedIds,
-        expectedIds
-        );
-
-    QVERIFY(
-        !requestedIds.contains(
-            QStringLiteral("root-session")
-            )
+        closeSpy.count(),
+        0
         );
 
     /*
-     * This test has no MainWindow/InvestigationWorkspace
-     * owner responding to documentCloseRequested.
-     * Close intent alone therefore must not remove or
-     * destroy the detached documents.
+     * This unit test intentionally has no MainWindow
+     * coordinator responding to the decision request.
+     *
+     * Requesting a decision alone therefore must not
+     * move, remove, or destroy any workspace document.
      */
     QCOMPARE(
         detachedHost->documentCount(),
@@ -961,6 +945,285 @@ void WorkspaceDocumentHostTests::
             QStringLiteral("root-session")
             ),
         rootDocument
+        );
+
+    /*
+     * The close event was ignored while ownership of
+     * the contained documents remains unresolved.
+     */
+    QVERIFY(
+        window->isVisible()
+        );
+}
+
+void WorkspaceDocumentHostTests::
+    movesWindowDocumentsToVisiblePeerPreservingSelection()
+{
+    WorkspaceDocumentHost host;
+
+    auto *sourceFirst =
+        new WorkspaceDocument(
+            QStringLiteral("source-1"),
+            QStringLiteral("Source One")
+            );
+
+    auto *rootFirst =
+        new WorkspaceDocument(
+            QStringLiteral("root-1"),
+            QStringLiteral("Root One")
+            );
+
+    auto *rootCurrent =
+        new WorkspaceDocument(
+            QStringLiteral("root-2"),
+            QStringLiteral("Root Two")
+            );
+
+    QVERIFY(
+        host.addDocument(
+            sourceFirst
+            )
+        );
+
+    QVERIFY(
+        host.addDocument(
+            rootFirst
+            )
+        );
+
+    QVERIFY(
+        host.addDocument(
+            rootCurrent
+            )
+        );
+
+    host.show();
+
+    QCoreApplication::processEvents();
+
+    /*
+     * Move one document into a secondary peer. The
+     * remaining root documents become the destination
+     * group for the later preserve operation.
+     */
+    QVERIFY(
+        host.detachDocument(
+            sourceFirst->documentId()
+            )
+        );
+
+    const auto windows =
+        host.detachedWindows();
+
+    QCOMPARE(
+        windows.size(),
+        1
+        );
+
+    if (windows.isEmpty()) {
+        QFAIL(
+            "Expected a detached workspace window."
+            );
+
+        return;
+    }
+
+    DetachedWorkspaceDocumentWindow *window =
+        windows.first();
+
+    if (window == nullptr) {
+        QFAIL(
+            "Detached workspace window was null."
+            );
+
+        return;
+    }
+
+    WorkspaceDocumentHost *sourceHost =
+        window->documentHost();
+
+    if (sourceHost == nullptr) {
+        QFAIL(
+            "Detached workspace window had no "
+            "document host."
+            );
+
+        return;
+    }
+
+    /*
+     * Give the source peer multiple documents so the
+     * preserve operation must retain both membership
+     * and local tab order.
+     */
+    auto *sourceSecond =
+        new WorkspaceDocument(
+            QStringLiteral("source-2"),
+            QStringLiteral("Source Two")
+            );
+
+    QVERIFY(
+        sourceHost->addDocument(
+            sourceSecond
+            )
+        );
+
+    QCOMPARE(
+        sourceHost->documentCount(),
+        2
+        );
+
+    QCOMPARE(
+        sourceHost->documentAt(0),
+        sourceFirst
+        );
+
+    QCOMPARE(
+        sourceHost->documentAt(1),
+        sourceSecond
+        );
+
+    /*
+     * Establish the receiving window's current tab
+     * explicitly.
+     *
+     * Preserving another window must append its
+     * documents without taking selection away from
+     * this existing current document.
+     */
+    QVERIFY(
+        host.setCurrentDocument(
+            rootCurrent->documentId()
+            )
+        );
+
+    QCOMPARE(
+        host.currentDocument(),
+        rootCurrent
+        );
+
+    QSignalSpy layoutSpy(
+        &host,
+        &WorkspaceDocumentHost::
+        workspaceLayoutChanged
+        );
+
+    QSignalSpy currentDocumentSpy(
+        &host,
+        &WorkspaceDocumentHost::
+        currentDocumentChanged
+        );
+
+    QVERIFY(
+        host.moveDocumentsToAnotherVisibleWindow(
+            sourceHost
+            )
+        );
+
+    /*
+     * The complete multi-document migration represents
+     * one workspace-layout mutation rather than one
+     * mutation per transferred tab.
+     */
+    QCOMPARE(
+        layoutSpy.count(),
+        1
+        );
+
+    /*
+     * Both documents from the closed-window candidate
+     * must remain part of the workspace and must arrive
+     * together in their original order.
+     */
+    QCOMPARE(
+        host.documentCount(),
+        4
+        );
+
+    QCOMPARE(
+        host.documentAt(0),
+        rootFirst
+        );
+
+    QCOMPARE(
+        host.documentAt(1),
+        rootCurrent
+        );
+
+    QCOMPARE(
+        host.documentAt(2),
+        sourceFirst
+        );
+
+    QCOMPARE(
+        host.documentAt(3),
+        sourceSecond
+        );
+
+    /*
+     * The destination window's existing active tab
+     * must remain selected after the incoming documents
+     * are appended.
+     */
+    QCOMPARE(
+        host.currentDocument(),
+        rootCurrent
+        );
+
+    /*
+     * The batch move explicitly re-synchronizes global
+     * document state once after transient tab-selection
+     * signals were suppressed during migration.
+     */
+    QCOMPARE(
+        currentDocumentSpy.count(),
+        1
+        );
+
+    QCOMPARE(
+        currentDocumentSpy.at(0)
+            .at(0)
+            .toString(),
+        rootCurrent->documentId()
+        );
+
+    /*
+     * The source host became empty, so its redundant
+     * peer window should be removed automatically.
+     */
+    QCOMPARE(
+        host.detachedWindows().size(),
+        0
+        );
+
+    /*
+     * Preservation changes presentation only. Neither
+     * source document may disappear from the workspace.
+     */
+    QCOMPARE(
+        host.documentById(
+            sourceFirst->documentId()
+            ),
+        sourceFirst
+        );
+
+    QCOMPARE(
+        host.documentById(
+            sourceSecond->documentId()
+            ),
+        sourceSecond
+        );
+
+    QVERIFY(
+        !host.isDocumentDetached(
+            sourceFirst->documentId()
+            )
+        );
+
+    QVERIFY(
+        !host.isDocumentDetached(
+            sourceSecond->documentId()
+            )
         );
 }
 

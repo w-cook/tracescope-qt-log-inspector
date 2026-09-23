@@ -334,6 +334,35 @@ void DetachedWorkspaceDocumentWindow::
         m_saveWorkspaceAsAction
         );
 
+    fileMenu->addSeparator();
+
+    auto *exitAction =
+        new QAction(
+            tr("E&xit TraceScope"),
+            this
+            );
+
+    exitAction->setShortcut(
+        QKeySequence::Quit
+        );
+
+    exitAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        exitAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit applicationCloseRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        exitAction
+        );
+
     QMenu *viewMenu =
         menuBar()->addMenu(
             tr("&View")
@@ -660,31 +689,46 @@ void DetachedWorkspaceDocumentWindow::
 }
 
 void DetachedWorkspaceDocumentWindow::
+    setApplicationShutdownInProgress(
+        bool inProgress
+        )
+{
+    m_applicationShutdownInProgress =
+        inProgress;
+}
+
+void DetachedWorkspaceDocumentWindow::
     closeEvent(
         QCloseEvent *event
         )
 {
+    if (m_applicationShutdownInProgress) {
+        /*
+         * The workspace-level exit decision has already
+         * been made. Close events delivered as part of
+         * application shutdown must not be reinterpreted
+         * as independent window-close requests.
+         */
+        QMainWindow::closeEvent(
+            event
+            );
+
+        return;
+    }
+
     /*
      * Closing the final visible TraceScope window is
-     * application closure, regardless of whether the
-     * internal coordinator happens to be the hidden
-     * root MainWindow.
+     * application closure.
      *
-     * QApplication's normal last-window behavior will
-     * terminate the event loop after this peer closes.
-     * Dirty-workspace interception will be added later
-     * at the shared application-close boundary.
+     * Route that through the shared coordinator so
+     * unsaved-workspace protection runs before the
+     * application exits.
      */
     if (m_documentHost == nullptr
         || !m_documentHost
                 ->hasOtherVisibleWorkspaceWindow(
                     this
                     )) {
-        /*
-         * The root coordinator may currently be hidden.
-         * Route final application closure through it so
-         * the shared dirty-workspace protection runs.
-         */
         event->ignore();
 
         emit applicationCloseRequested();
@@ -692,6 +736,10 @@ void DetachedWorkspaceDocumentWindow::
         return;
     }
 
+    /*
+     * An empty non-final peer contains no documents
+     * requiring a disposition decision.
+     */
     if (m_documentHost
             ->documentCount()
         == 0) {
@@ -703,15 +751,16 @@ void DetachedWorkspaceDocumentWindow::
     }
 
     /*
-     * Other TraceScope windows remain. Closing this
-     * window therefore means closing only the documents
-     * in this tab group.
+     * Closing a window is distinct from closing the
+     * documents presented in that window.
+     *
+     * Let the shared application coordinator ask the
+     * user whether those documents should be preserved
+     * in another peer or explicitly closed.
      */
     event->ignore();
 
-    emit closeAllRequested(
-        this
-        );
+    emit workspaceWindowCloseRequested();
 }
 
 void DetachedWorkspaceDocumentWindow::

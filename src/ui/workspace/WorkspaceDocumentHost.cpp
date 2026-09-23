@@ -863,6 +863,329 @@ bool WorkspaceDocumentHost::
     return false;
 }
 
+bool WorkspaceDocumentHost::
+    moveDocumentsToAnotherVisibleWindow(
+        WorkspaceDocumentHost *sourceHost
+        )
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    if (sourceHost == nullptr
+        || sourceHost->m_rootHost != root
+        || sourceHost->documentCount() <= 0) {
+        return false;
+    }
+
+    QWidget *sourceWindow =
+        sourceHost == root
+            ? root->window()
+            : static_cast<QWidget *>(
+                  root->windowForHost(
+                      sourceHost
+                      )
+                  );
+
+    if (sourceWindow == nullptr) {
+        return false;
+    }
+
+    /*
+     * Destination selection is intentionally simple
+     * and deterministic.
+     *
+     * Prefer the visible root peer when possible.
+     * Otherwise use the first other visible detached
+     * peer. All documents from the closing window go
+     * to the same destination.
+     */
+    WorkspaceDocumentHost *targetHost =
+        nullptr;
+
+    QWidget *rootWindow =
+        root->window();
+
+    if (rootWindow != nullptr
+        && rootWindow != sourceWindow
+        && rootWindow->isVisible()) {
+        targetHost =
+            root;
+    }
+
+    if (targetHost == nullptr) {
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : std::as_const(
+                root->m_detachedWindows
+                )
+            ) {
+            if (window == nullptr
+                || window == sourceWindow
+                || !window->isVisible()
+                || window->documentHost()
+                       == nullptr) {
+                continue;
+            }
+
+            targetHost =
+                window->documentHost();
+
+            break;
+        }
+    }
+
+    if (targetHost == nullptr
+        || targetHost == sourceHost) {
+        return false;
+    }
+
+    QVector<QString> documentIds;
+
+    documentIds.reserve(
+        sourceHost->documentCount()
+        );
+
+    for (
+        WorkspaceDocument *document
+        : sourceHost->localDocuments()
+        ) {
+        if (document == nullptr) {
+            return false;
+        }
+
+        documentIds.append(
+            document->documentId()
+            );
+    }
+
+    const QString sourceCurrentId =
+        sourceHost->currentDocument()
+                != nullptr
+            ? sourceHost
+                  ->currentDocument()
+                  ->documentId()
+            : QString();
+
+    const QString targetCurrentId =
+        targetHost->currentDocument()
+                != nullptr
+            ? targetHost
+                  ->currentDocument()
+                  ->documentId()
+            : QString();
+
+    QVector<QString> movedDocumentIds;
+
+    /*
+     * Suppress QTabWidget selection notifications
+     * during the batch operation.
+     *
+     * Removing the current tab from the source would
+     * otherwise walk the global active-session state
+     * through each remaining source tab. Likewise,
+     * insertion must not disturb the destination's
+     * current tab.
+     */
+    const QSignalBlocker sourceTabBlocker(
+        sourceHost->m_tabs
+        );
+
+    const QSignalBlocker targetTabBlocker(
+        targetHost->m_tabs
+        );
+
+    auto restoreOriginalState =
+        [&]() {
+            /*
+             * Put every document that was already moved
+             * back into the source host. A failure in
+             * this internal move operation should not
+             * leave a partially migrated window.
+             */
+            for (
+                const QString &documentId
+                : std::as_const(
+                    movedDocumentIds
+                    )
+                ) {
+                WorkspaceDocument *document =
+                    targetHost
+                        ->takeLocalDocument(
+                            documentId
+                            );
+
+                if (document != nullptr) {
+                    sourceHost
+                        ->insertLocalDocument(
+                            document,
+                            sourceHost
+                                ->documentCount(),
+                            false
+                            );
+                }
+            }
+
+            /*
+             * Restore the original source order after
+             * reinsertion.
+             */
+            for (
+                int index = 0;
+                index < documentIds.size();
+                ++index
+                ) {
+                sourceHost
+                    ->moveLocalDocumentToIndex(
+                        documentIds.at(index),
+                        index
+                        );
+            }
+
+            const int sourceCurrentIndex =
+                sourceHost->indexOfDocument(
+                    sourceCurrentId
+                    );
+
+            if (sourceCurrentIndex >= 0) {
+                sourceHost
+                    ->ensureLocalCurrentDocument(
+                        sourceCurrentIndex
+                        );
+            }
+
+            const int targetCurrentIndex =
+                targetHost->indexOfDocument(
+                    targetCurrentId
+                    );
+
+            if (targetCurrentIndex >= 0) {
+                targetHost
+                    ->ensureLocalCurrentDocument(
+                        targetCurrentIndex
+                        );
+            }
+        };
+
+    for (
+        const QString &documentId
+        : std::as_const(
+            documentIds
+            )
+        ) {
+        WorkspaceDocument *document =
+            sourceHost
+                ->takeLocalDocument(
+                    documentId
+                    );
+
+        if (document == nullptr) {
+            restoreOriginalState();
+            return false;
+        }
+
+        if (!targetHost
+                 ->insertLocalDocument(
+                     document,
+                     targetHost
+                         ->documentCount(),
+                     false
+                     )) {
+            /*
+             * The document has already been detached
+             * from the source but was not adopted by
+             * the destination. Return it before rolling
+             * back the documents moved earlier.
+             */
+            sourceHost
+                ->insertLocalDocument(
+                    document,
+                    sourceHost
+                        ->documentCount(),
+                    false
+                    );
+
+            restoreOriginalState();
+            return false;
+        }
+
+        movedDocumentIds.append(
+            documentId
+            );
+    }
+
+    /*
+     * Explicitly retain the destination's previously
+     * selected tab. If the destination was empty, its
+     * first inserted document naturally becomes current.
+     */
+    if (!targetCurrentId.isEmpty()) {
+        const int targetCurrentIndex =
+            targetHost->indexOfDocument(
+                targetCurrentId
+                );
+
+        if (targetCurrentIndex >= 0) {
+            targetHost
+                ->ensureLocalCurrentDocument(
+                    targetCurrentIndex
+                    );
+        }
+    }
+
+    /*
+     * The source is now empty. Normal workspace-window
+     * cleanup hides the root peer or destroys a
+     * redundant detached peer as appropriate.
+     */
+    root->cleanupEmptyHost(
+        sourceHost
+        );
+
+    /*
+     * Treat the entire migration as one user-visible
+     * workspace layout change.
+     */
+    emit root->workspaceLayoutChanged();
+
+    WorkspaceDocument *targetCurrent =
+        targetHost->currentDocument();
+
+    if (targetCurrent != nullptr) {
+        const QString targetDocumentId =
+            targetCurrent->documentId();
+
+        /*
+         * Selection signals were intentionally blocked
+         * during migration, so synchronize the global
+         * workspace selection once with the destination
+         * tab that actually remained selected.
+         */
+        root->m_activeDocumentId =
+            targetDocumentId;
+
+        emit root->currentDocumentChanged(
+            targetDocumentId
+            );
+
+        QWidget *targetWindow =
+            targetHost == root
+                ? root->window()
+                : static_cast<QWidget *>(
+                      root->windowForHost(
+                          targetHost
+                          )
+                      );
+
+        if (targetWindow != nullptr) {
+            targetWindow->show();
+            targetWindow->raise();
+            targetWindow->activateWindow();
+        }
+    }
+
+    return true;
+}
+
 void WorkspaceDocumentHost::
     resetWindowLayout()
 {
@@ -1448,58 +1771,6 @@ WorkspaceDocumentHost::createDetachedWindow(
      */
     emit root->detachedWindowCreated(
         window
-        );
-
-    connect(
-        window,
-        &DetachedWorkspaceDocumentWindow::
-        closeAllRequested,
-        root,
-        [root](
-            DetachedWorkspaceDocumentWindow
-                *requestedWindow
-            ) {
-            if (requestedWindow == nullptr
-                || requestedWindow
-                    ->documentHost()
-                        == nullptr) {
-                return;
-            }
-
-            const QVector<WorkspaceDocument *>
-                documents =
-                requestedWindow
-                    ->documentHost()
-                    ->localDocuments();
-
-            /*
-             * Snapshot IDs before emitting anything.
-             * Each close request may synchronously cause
-             * MainWindow/InvestigationWorkspace to remove
-             * that document from this tab group.
-             */
-            QVector<QString> documentIds;
-
-            documentIds.reserve(
-                documents.size()
-                );
-
-            for (WorkspaceDocument *document
-                 : documents) {
-                if (document != nullptr) {
-                    documentIds.push_back(
-                        document->documentId()
-                        );
-                }
-            }
-
-            for (const QString &documentId
-                 : documentIds) {
-                emit root->documentCloseRequested(
-                    documentId
-                    );
-            }
-        }
         );
 
     /*

@@ -1300,6 +1300,35 @@ void MainWindow::createMenus()
         saveWorkspaceAsAction
         );
 
+    fileMenu->addSeparator();
+
+    auto *exitAction =
+        new QAction(
+            tr("E&xit TraceScope"),
+            this
+            );
+
+    exitAction->setShortcut(
+        QKeySequence::Quit
+        );
+
+    exitAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        exitAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            requestApplicationClose();
+        }
+        );
+
+    fileMenu->addAction(
+        exitAction
+        );
+
     auto *viewMenu =
         menuBar()->addMenu(
             tr("&View")
@@ -1753,6 +1782,25 @@ void MainWindow::configureDetachedWindow(
         this,
         &MainWindow::
         requestApplicationClose
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+            workspaceWindowCloseRequested,
+        this,
+        [
+            this,
+            window
+        ]() {
+            if (window == nullptr) {
+                return;
+            }
+
+            requestWorkspaceWindowClose(
+                window->documentHost()
+                );
+        }
         );
 
     const bool fileOperationAvailable =
@@ -3138,38 +3186,64 @@ void MainWindow::closeEvent(
     QCloseEvent *event
     )
 {
+    if (applicationShutdownInProgress) {
+        /*
+         * Application shutdown has already been approved.
+         * Do not interpret teardown as another independent
+         * workspace-window close operation.
+         */
+        QMainWindow::closeEvent(
+            event
+            );
+
+        return;
+    }
+
     if (workspaceDocumentHost != nullptr
         && workspaceDocumentHost
                ->hasOtherVisibleWorkspaceWindow(
                    this
                    )) {
         /*
-         * This is only one of multiple visible
+         * This is one peer among multiple visible
          * TraceScope windows.
          *
-         * Close this window's documents, then hide the
-         * internally rooted shell. The application and
-         * documents in other windows remain open.
+         * An empty peer can simply disappear. A peer
+         * containing documents requires an explicit
+         * preserve-versus-close decision.
          */
-        requestCloseDocumentsInHost(
+        event->ignore();
+
+        if (workspaceDocumentHost
+                ->documentCount()
+            == 0) {
+            hide();
+            return;
+        }
+
+        requestWorkspaceWindowClose(
             workspaceDocumentHost
             );
 
-        hide();
-
-        event->ignore();
         return;
     }
 
     /*
-     * This is the final visible TraceScope window.
-     * Protect the complete workspace before allowing
-     * application shutdown.
+     * Closing the final visible TraceScope window is
+     * application closure. Protect the complete
+     * workspace before allowing shutdown.
      */
     if (!confirmWorkspaceReplacement()) {
         event->ignore();
         return;
     }
+
+    /*
+     * The workspace-level exit decision is complete.
+     * Mark all remaining TraceScope peers as shutdown
+     * participants before Qt begins tearing them down.
+     */
+    beginApplicationShutdown();
 
     QMainWindow::closeEvent(
         event
@@ -8855,6 +8929,128 @@ void MainWindow::
     }
 }
 
+void MainWindow::
+    requestWorkspaceWindowClose(
+        WorkspaceDocumentHost *host
+        )
+{
+    if (host == nullptr
+        || workspaceDocumentHost == nullptr
+        || host->documentCount() <= 0) {
+        return;
+    }
+
+    QWidget *dialogParent =
+        host->window();
+
+    const int documentCount =
+        host->documentCount();
+
+    QMessageBox prompt(
+        dialogParent
+        );
+
+    prompt.setIcon(
+        QMessageBox::Question
+        );
+
+    prompt.setWindowTitle(
+        tr("Close TraceScope Window")
+        );
+
+    if (documentCount == 1) {
+        prompt.setText(
+            tr(
+                "This window contains 1 open document."
+                )
+            );
+    } else {
+        prompt.setText(
+            tr(
+                "This window contains %1 open documents."
+                )
+                .arg(
+                    documentCount
+                    )
+            );
+    }
+
+    prompt.setInformativeText(
+        tr(
+            "Closing this window can either preserve "
+            "these documents by moving their tabs to "
+            "another open TraceScope window, or close "
+            "the documents themselves.\n\n"
+            "Preserve Open Documents keeps every "
+            "investigation or comparison in the current "
+            "workspace and only changes the window/tab "
+            "layout. The documents will be moved "
+            "together to another open TraceScope window, "
+            "and that window's currently selected tab "
+            "will remain selected.\n\n"
+            "Close Documents removes these documents "
+            "from the current workspace. If you later "
+            "save the workspace, the closed documents "
+            "will no longer be included."
+            )
+        );
+
+    QPushButton *preserveButton =
+        prompt.addButton(
+            tr("Preserve Open Documents"),
+            QMessageBox::AcceptRole
+            );
+
+    QPushButton *closeDocumentsButton =
+        prompt.addButton(
+            tr("Close Documents"),
+            QMessageBox::DestructiveRole
+            );
+
+    QPushButton *cancelButton =
+        prompt.addButton(
+            QMessageBox::Cancel
+            );
+
+    prompt.setDefaultButton(
+        preserveButton
+        );
+
+    prompt.setEscapeButton(
+        cancelButton
+        );
+
+    prompt.exec();
+
+    if (prompt.clickedButton()
+        == preserveButton) {
+        if (!workspaceDocumentHost
+                 ->moveDocumentsToAnotherVisibleWindow(
+                     host
+                     )) {
+            QMessageBox::warning(
+                dialogParent,
+                tr("Unable to Preserve Documents"),
+                tr(
+                    "TraceScope could not move the "
+                    "documents to another open window. "
+                    "No documents were intentionally "
+                    "closed."
+                    )
+                );
+        }
+
+        return;
+    }
+
+    if (prompt.clickedButton()
+        == closeDocumentsButton) {
+        requestCloseDocumentsInHost(
+            host
+            );
+    }
+}
+
 bool MainWindow::
     confirmWorkspaceReplacement()
 {
@@ -8971,18 +9167,67 @@ void MainWindow::newWorkspace()
 }
 
 void MainWindow::
+    beginApplicationShutdown()
+{
+    if (applicationShutdownInProgress) {
+        return;
+    }
+
+    /*
+     * Once the workspace-level exit decision has been
+     * completed, any subsequent top-level close events
+     * belong to application teardown rather than to
+     * ordinary user window-management behavior.
+     */
+    applicationShutdownInProgress =
+        true;
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (
+        DetachedWorkspaceDocumentWindow *window
+        : workspaceDocumentHost
+              ->detachedWindows()
+        ) {
+        if (window != nullptr) {
+            window
+                ->setApplicationShutdownInProgress(
+                    true
+                    );
+        }
+    }
+}
+
+void MainWindow::
     requestApplicationClose()
 {
+    /*
+     * Ignore duplicate shutdown requests that may
+     * arrive while Qt is already closing top-level
+     * windows.
+     */
+    if (applicationShutdownInProgress) {
+        return;
+    }
+
     if (!confirmWorkspaceReplacement()) {
         return;
     }
 
     /*
-     * The visible final window may be a peer while
-     * MainWindow itself is hidden. Exiting the event
-     * loop lets normal object destruction tear down
-     * the internal coordinator and all peer windows.
+     * The user has now made the one workspace-level
+     * decision required for application exit.
+     *
+     * Mark every TraceScope peer as participating in
+     * application shutdown before asking Qt to quit.
+     * Any close events generated during teardown must
+     * bypass ordinary per-window Preserve/Close
+     * Documents behavior.
      */
+    beginApplicationShutdown();
+
     QApplication::quit();
 }
 

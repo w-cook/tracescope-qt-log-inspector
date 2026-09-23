@@ -42,6 +42,10 @@ public:
         const QString &title
         );
 
+    void setApplicationShutdownInProgress(
+        bool inProgress
+        );
+
 signals:
     /*
      * Window-local commands carry this window's
@@ -91,9 +95,7 @@ signals:
         WorkspaceDocumentHost *targetHost
         );
 
-    void closeAllRequested(
-        DetachedWorkspaceDocumentWindow *window
-        );
+    void workspaceWindowCloseRequested();
 
     void applicationCloseRequested();
 
@@ -146,4 +148,7 @@ private:
 
     QMenu *m_recentWorkspacesMenu =
         nullptr;
+
+    bool m_applicationShutdownInProgress =
+        false;
 };
