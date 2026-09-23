@@ -868,6 +868,45 @@ void InvestigationPresentationStateTests::
 
     processUi();
 
+    QTableWidget *table =
+        panel.findChild<QTableWidget *>();
+
+    QVERIFY(
+        table != nullptr
+        );
+
+    if (table == nullptr) {
+        return;
+    }
+
+    const QModelIndex currentIndex =
+        table->currentIndex();
+
+    QCOMPARE(
+        currentIndex.row(),
+        40
+        );
+
+    QCOMPARE(
+        currentIndex.column(),
+        2
+        );
+
+    const QModelIndexList selectedRows =
+        table
+            ->selectionModel()
+            ->selectedRows();
+
+    QCOMPARE(
+        selectedRows.size(),
+        1
+        );
+
+    QCOMPARE(
+        selectedRows.first().row(),
+        40
+        );
+
     /*
      * Capture the effective state after Qt has applied
      * widget geometry. Scroll ranges can vary with the

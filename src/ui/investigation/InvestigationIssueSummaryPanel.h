@@ -32,6 +32,8 @@ public:
 
     void clear();
 
+    void clearSelection();
+
     int preferredCompactWidth() const;
 
     InvestigationTablePresentationState

@@ -124,6 +124,9 @@ private:
     const InvestigationRecord *
     selectedEventRecord() const;
 
+    const InvestigationRecord *
+    eventDetailRecord() const;
+
     void updateInvestigationStateControls();
 
     void updateSelectedEventFindingStatus();
@@ -161,6 +164,10 @@ private:
         );
 
     void navigateToFinding(
+        const QString &recordId
+        );
+
+    void previewFinding(
         const QString &recordId
         );
 
@@ -357,6 +364,11 @@ private:
 
     InvestigationEventDetailPanel
         *m_eventDetailPanel = nullptr;
+
+    QString m_eventDetailRecordId;
+
+    bool m_findingPreviewActive =
+        false;
 
     QWidget *m_lowerRegionContainer =
         nullptr;

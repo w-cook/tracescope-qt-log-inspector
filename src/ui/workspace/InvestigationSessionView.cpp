@@ -944,6 +944,15 @@ InvestigationSessionView::
     connect(
         m_findingsPanel,
         &InvestigationFindingsPanel::
+        findingSelected,
+        this,
+        &InvestigationSessionView::
+        previewFinding
+        );
+
+    connect(
+        m_findingsPanel,
+        &InvestigationFindingsPanel::
         exportRequested,
         this,
         &InvestigationSessionView::
@@ -1067,6 +1076,43 @@ InvestigationSessionView::
         this,
         &InvestigationSessionView::
         updateReviewSplitter
+        );
+
+    connect(
+        m_reviewPanel,
+        &InvestigationReviewPanel::
+        currentTabChanged,
+        this,
+        [this](
+            InvestigationReviewTab tab
+            ) {
+            if (
+                m_findingPreviewActive
+                && tab
+                       != InvestigationReviewTab::
+                       Findings
+                ) {
+                clearEventDetail();
+            }
+
+            if (
+                tab
+                != InvestigationReviewTab::
+                IssueSummary
+                ) {
+                m_issueSummaryPanel
+                    ->clearSelection();
+            }
+
+            if (
+                tab
+                != InvestigationReviewTab::
+                Analytics
+                ) {
+                m_analyticsPanel
+                    ->clearOverviewSelection();
+            }
+        }
         );
 
     if (m_session != nullptr) {
@@ -1963,9 +2009,57 @@ void InvestigationSessionView::
         return;
     }
 
+    /*
+     * Capture the current context before changing the
+     * proxy model.
+     *
+     * Applying filters can synchronously remove the
+     * selected Event row. That selection loss clears
+     * Event Details and the Findings highlight before
+     * this method regains control.
+     */
     const QString selectedRecordId =
         m_session
             ->selectedRecordId();
+
+    const QString detailRecordId =
+        m_eventDetailRecordId;
+
+    /*
+     * A Finding owns the detail context whenever:
+     *
+     * 1. it is already being previewed outside the
+     *    filtered Event Table, or
+     *
+     * 2. Findings is the active review surface and
+     *    the current detail record is a Finding.
+     *
+     * The second case matters when the Finding is
+     * currently visible in the Event Table but the
+     * new filter is about to exclude it.
+     */
+    bool preserveFindingContext =
+        m_findingPreviewActive;
+
+    if (
+        !preserveFindingContext
+        && !detailRecordId.isEmpty()
+        && m_reviewPanel != nullptr
+        && m_reviewPanel->currentTab()
+               == InvestigationReviewTab::
+               Findings
+        ) {
+        const InvestigationRecordState state =
+            m_session
+                ->investigationStateStore()
+                ->stateForRecord(
+                    detailRecordId
+                    );
+
+        preserveFindingContext =
+            state.findingStatus
+            != FindingStatus::None;
+    }
 
     /*
      * This is the user-driven path. Only here do we
@@ -1976,22 +2070,75 @@ void InvestigationSessionView::
 
     refreshDerivedViewsForCurrentFilter();
 
-    const int selectedProxyRow =
-        !selectedRecordId.isEmpty()
-            ? controller
-                  ->proxyRowForRecordId(
-                      selectedRecordId
-                      )
-            : -1;
+    if (
+        preserveFindingContext
+        && !detailRecordId.isEmpty()
+        ) {
+        const int findingProxyRow =
+            controller
+                ->proxyRowForRecordId(
+                    detailRecordId
+                    );
 
-    if (selectedProxyRow >= 0) {
-        m_eventPanel->selectProxyRow(
-            selectedProxyRow
-            );
+        if (findingProxyRow >= 0) {
+            /*
+             * The Finding event is visible under the
+             * new filters. It therefore becomes an
+             * ordinary Event Table selection again.
+             */
+            m_eventPanel->selectProxyRow(
+                findingProxyRow
+                );
+        } else {
+            /*
+             * The Finding event is excluded by the
+             * new filters.
+             *
+             * Findings still owns the context, so
+             * preserve the Finding highlight and
+             * Event Details while leaving the Event
+             * Table unselected.
+             */
+            previewFinding(
+                detailRecordId
+                );
+
+            m_findingsPanel
+                ->selectFindingForRecord(
+                    detailRecordId
+                    );
+
+            m_eventPanel
+                ->refreshNavigationState();
+
+            emit workspaceContentChanged();
+
+            return;
+        }
     } else {
-        m_eventPanel->clearSelection();
+        /*
+         * Ordinary Event Table context.
+         *
+         * Preserve the selected Event only if it
+         * remains visible under the new filters.
+         */
+        const int selectedProxyRow =
+            !selectedRecordId.isEmpty()
+                ? controller
+                      ->proxyRowForRecordId(
+                          selectedRecordId
+                          )
+                : -1;
 
-        clearEventDetail();
+        if (selectedProxyRow >= 0) {
+            m_eventPanel->selectProxyRow(
+                selectedProxyRow
+                );
+        } else {
+            m_eventPanel->clearSelection();
+
+            clearEventDetail();
+        }
     }
 
     m_eventPanel
@@ -2012,9 +2159,20 @@ void InvestigationSessionView::
         return;
     }
 
+    m_findingPreviewActive =
+        false;
+
+    m_eventDetailRecordId =
+        record->recordId;
+
     m_eventDetailPanel
         ->displayRecord(
             *record
+            );
+
+    m_findingsPanel
+        ->selectFindingForRecord(
+            record->recordId
             );
 
     updateInvestigationStateControls();
@@ -2023,8 +2181,18 @@ void InvestigationSessionView::
 void InvestigationSessionView::
     clearEventDetail()
 {
+    m_findingPreviewActive =
+        false;
+
+    m_eventDetailRecordId.clear();
+
     m_eventDetailPanel
         ->clearRecord();
+
+    m_findingsPanel
+        ->selectFindingForRecord(
+            QString()
+            );
 
     updateInvestigationStateControls();
 }
@@ -2041,11 +2209,47 @@ const InvestigationRecord *
         ->selectedRecord();
 }
 
+const InvestigationRecord *
+    InvestigationSessionView::
+    eventDetailRecord() const
+{
+    if (
+        m_session == nullptr
+        || m_eventDetailRecordId.isEmpty()
+        ) {
+        return nullptr;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return nullptr;
+    }
+
+    const QVector<InvestigationRecord>
+        &records =
+        controller->allRecords();
+
+    for (
+        const InvestigationRecord &record
+        : records
+        ) {
+        if (record.recordId
+            == m_eventDetailRecordId) {
+            return &record;
+        }
+    }
+
+    return nullptr;
+}
+
 void InvestigationSessionView::
     updateInvestigationStateControls()
 {
     const InvestigationRecord *record =
-        selectedEventRecord();
+        eventDetailRecord();
 
     if (
         m_session == nullptr
@@ -2075,7 +2279,7 @@ void InvestigationSessionView::
     updateSelectedEventFindingStatus()
 {
     const InvestigationRecord *record =
-        selectedEventRecord();
+        eventDetailRecord();
 
     if (
         m_session == nullptr
@@ -2127,7 +2331,7 @@ void InvestigationSessionView::
     toggleSelectedEventBookmark()
 {
     const InvestigationRecord *record =
-        selectedEventRecord();
+        eventDetailRecord();
 
     if (
         m_session == nullptr
@@ -2168,7 +2372,7 @@ void InvestigationSessionView::
     copySelectedEventAsStructuredJson()
 {
     const InvestigationRecord *record =
-        selectedEventRecord();
+        eventDetailRecord();
 
     if (record == nullptr) {
         return;
@@ -2195,7 +2399,7 @@ void InvestigationSessionView::
     copySelectedEventAsFormattedText()
 {
     const InvestigationRecord *record =
-        selectedEventRecord();
+        eventDetailRecord();
 
     if (record == nullptr) {
         return;
@@ -2250,6 +2454,16 @@ void InvestigationSessionView::
     updateFindingsPanel()
 {
     m_findingsPanel->refresh();
+
+    const InvestigationRecord *record =
+        eventDetailRecord();
+
+    m_findingsPanel
+        ->selectFindingForRecord(
+            record != nullptr
+                ? record->recordId
+                : QString()
+            );
 }
 
 void InvestigationSessionView::
@@ -2360,7 +2574,7 @@ void InvestigationSessionView::
     editSelectedEventNote()
 {
     const InvestigationRecord *record =
-        selectedEventRecord();
+        eventDetailRecord();
 
     if (
         record == nullptr
@@ -2756,6 +2970,122 @@ void InvestigationSessionView::
 }
 
 void InvestigationSessionView::
+    previewFinding(
+        const QString &recordId
+        )
+{
+    if (
+        m_session == nullptr
+        || recordId.isEmpty()
+        ) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    const QVector<InvestigationRecord>
+        &records =
+        controller->allRecords();
+
+    const InvestigationRecord *targetRecord =
+        nullptr;
+
+    for (
+        const InvestigationRecord &record
+        : records
+        ) {
+        if (record.recordId
+            == recordId) {
+            targetRecord =
+                &record;
+
+            break;
+        }
+    }
+
+    if (targetRecord == nullptr) {
+        return;
+    }
+
+    const int proxyRow =
+        controller
+            ->proxyRowForRecordId(
+                recordId
+                );
+
+    /*
+     * If the event is already visible under the
+     * current filters, synchronize the ordinary
+     * Event Table selection.
+     *
+     * Do not move keyboard focus out of Findings.
+     */
+    if (proxyRow >= 0) {
+        const InvestigationRecord *selectedRecord =
+            selectedEventRecord();
+
+        /*
+         * Event -> Finding synchronization can update the
+         * Findings current row programmatically. If that
+         * feeds back through findingSelected, do not
+         * re-select an Event that the user already selected:
+         * selectProxyRow() intentionally centers navigation
+         * targets and would make an ordinary click jump.
+         */
+        if (
+            selectedRecord == nullptr
+            || selectedRecord->recordId
+                   != recordId
+            ) {
+            m_eventPanel->selectProxyRow(
+                proxyRow
+                );
+        }
+
+        return;
+    }
+
+    /*
+     * The finding refers to an event outside the
+     * current filtered Event Table.
+     *
+     * Preserve the filters. Clear the table selection
+     * without allowing that transient empty selection
+     * to clear the Finding-driven detail context.
+     */
+    {
+        const QSignalBlocker blocker(
+            m_eventPanel
+            );
+
+        m_eventPanel->clearSelection();
+    }
+
+    m_findingPreviewActive =
+        true;
+
+    /*
+     * Findings may preview a record independently of
+     * the filtered Event Table.
+     */
+    m_eventDetailRecordId =
+        targetRecord->recordId;
+
+    m_eventDetailPanel
+        ->displayRecord(
+            *targetRecord
+            );
+
+    updateInvestigationStateControls();
+}
+
+void InvestigationSessionView::
     revealFindingRecord(
         const InvestigationRecord &record
         )
@@ -2834,7 +3164,7 @@ void InvestigationSessionView::
     }
 
     /*
-     * Selected Event Details has a content-derived
+     * Event Details has a content-derived
      * minimum width based on its actual controls.
      * Respect that constraint explicitly when
      * calculating adaptive splitter proportions.
@@ -2873,7 +3203,7 @@ void InvestigationSessionView::
         /*
          * Findings and Analytics carry more
          * investigation-oriented information than
-         * Selected Event Details and need additional
+         * Event Details and need additional
          * room in narrow detached workspaces.
          */
         double reviewFraction =

@@ -21,9 +21,13 @@ class ItemViewFocusDelegate
 {
 public:
     explicit ItemViewFocusDelegate(
-        QObject *parent = nullptr
+        QObject *parent = nullptr,
+        bool preserveContextSelection = false
         )
-        : QStyledItemDelegate(parent)
+        : QStyledItemDelegate(parent),
+        m_preserveContextSelection(
+            preserveContextSelection
+            )
     {
     }
 
@@ -35,6 +39,22 @@ public:
     {
         QStyleOptionViewItem itemOption(
             option
+            );
+
+        /*
+         * Some tables act as the master side of a visible
+         * master/detail relationship.
+         *
+         * For those tables, the selected row remains
+         * meaningful even after keyboard focus moves into
+         * the related detail surface. Opt-in tables therefore
+         * retain the active selection palette.
+         *
+         * Ordinary tables keep native inactive-selection
+         * presentation.
+         */
+        applyContextSelectionPresentation(
+            itemOption
             );
 
         const bool hasFocus =
@@ -50,7 +70,11 @@ public:
             index
             );
 
-        if (hasFocus) {
+        if (
+            hasFocus
+            && (option.state
+                & QStyle::State_Selected)
+            ) {
             drawCurrentCellIndicator(
                 painter,
                 option
@@ -64,9 +88,13 @@ protected:
         const QStyleOptionViewItem &option
         )
     {
-        if (painter == nullptr
+        if (
+            painter == nullptr
             || !(option.state
-                 & QStyle::State_HasFocus)) {
+                 & QStyle::State_HasFocus)
+            || !(option.state
+                 & QStyle::State_Selected)
+            ) {
             return;
         }
 
@@ -140,4 +168,48 @@ protected:
 
         painter->restore();
     }
+
+    void applyContextSelectionPresentation(
+        QStyleOptionViewItem &itemOption
+        ) const
+    {
+        if (
+            !m_preserveContextSelection
+            || !(itemOption.state
+                 & QStyle::State_Selected)
+            ) {
+            return;
+        }
+
+        const QBrush highlightBrush =
+            itemOption.palette.brush(
+                QPalette::Active,
+                QPalette::Highlight
+                );
+
+        const QBrush highlightedTextBrush =
+            itemOption.palette.brush(
+                QPalette::Active,
+                QPalette::HighlightedText
+                );
+
+        itemOption.palette.setBrush(
+            QPalette::Inactive,
+            QPalette::Highlight,
+            highlightBrush
+            );
+
+        itemOption.palette.setBrush(
+            QPalette::Inactive,
+            QPalette::HighlightedText,
+            highlightedTextBrush
+            );
+
+        itemOption.state |=
+            QStyle::State_Active;
+    }
+
+private:
+    bool m_preserveContextSelection =
+        false;
 };

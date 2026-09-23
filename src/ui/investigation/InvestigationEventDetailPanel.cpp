@@ -25,7 +25,7 @@ InvestigationEventDetailPanel::
         QWidget *parent
         )
     : QGroupBox(
-          tr("Selected Event Details"),
+          tr("Event Details"),
           parent
           ),
     m_detailText(
@@ -53,7 +53,7 @@ InvestigationEventDetailPanel::
 
     m_detailText->setPlaceholderText(
         tr(
-            "Select a telemetry event to "
+            "Select an event or finding to "
             "view its details."
             )
         );
@@ -211,20 +211,20 @@ InvestigationEventDetailPanel::
     m_findingStatusCombo->setToolTip(
         tr(
             "Set the investigation finding status "
-            "for the selected event"
+            "for this event"
             )
         );
 
     m_noteButton->setToolTip(
         tr(
             "Add an analyst note to "
-            "the selected event"
+            "this event"
             )
         );
 
     m_bookmarkButton->setToolTip(
         tr(
-            "Bookmark the selected event "
+            "Bookmark this event "
             "for later investigation"
             )
         );

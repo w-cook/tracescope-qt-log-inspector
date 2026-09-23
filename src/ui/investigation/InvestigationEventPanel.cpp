@@ -211,7 +211,8 @@ InvestigationEventPanel::
 
     m_table->setItemDelegate(
         new ItemViewFocusDelegate(
-            m_table
+            m_table,
+            true
             )
         );
 
@@ -780,9 +781,14 @@ void InvestigationEventPanel::selectRecordId(
 void InvestigationEventPanel::
     refreshNavigationState()
 {
+    const auto *model =
+        m_table != nullptr
+            ? m_table->model()
+            : nullptr;
+
     const bool hasInvestigation =
         m_session != nullptr
-        && m_table->model() != nullptr;
+        && model != nullptr;
 
     const bool showNavigation =
         hasInvestigation
@@ -837,9 +843,7 @@ void InvestigationEventPanel::
     }
 
     const int visibleCount =
-        m_table
-            ->model()
-            ->rowCount();
+        model->rowCount();
 
     const QModelIndex currentIndex =
         m_table->currentIndex();

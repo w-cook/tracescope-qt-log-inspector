@@ -46,8 +46,16 @@ public:
 
     void refreshInterfaceScale();
 
+    void selectFindingForRecord(
+        const QString &recordId
+        );
+
 signals:
     void findingActivated(
+        const QString &recordId
+        );
+
+    void findingSelected(
         const QString &recordId
         );
 

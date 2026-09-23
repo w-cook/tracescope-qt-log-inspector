@@ -11,8 +11,10 @@
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLayout>
+#include <QModelIndex>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
@@ -653,8 +655,7 @@ InvestigationAnalyticsPanel::
         QTableWidget *table
         : {
             m_eventCodeTable,
-            m_entityTable,
-            m_burstTable
+            m_entityTable
         }
         ) {
         table->setItemDelegate(
@@ -663,6 +664,13 @@ InvestigationAnalyticsPanel::
                 )
             );
     }
+
+    m_burstTable->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_burstTable,
+            true
+            )
+        );
 
     connect(
         m_burstTable,
@@ -791,17 +799,32 @@ InvestigationAnalyticsPanel::
         &QTabWidget::currentChanged,
         this,
         [this](int index) {
-            if (m_session == nullptr) {
-                return;
-            }
-
             QWidget *currentPage =
                 m_tabs->widget(
                     index
                     );
 
-            if (currentPage
-                == m_overviewPage) {
+            /*
+             * Overview selections are transient interaction
+             * cues only. They do not explain another visible
+             * surface, so do not retain them after leaving
+             * Overview.
+             */
+            if (
+                currentPage
+                != m_overviewPage
+                ) {
+                clearOverviewSelection();
+            }
+
+            if (m_session == nullptr) {
+                return;
+            }
+
+            if (
+                currentPage
+                == m_overviewPage
+                ) {
                 m_session->setAnalyticsTab(
                     InvestigationAnalyticsTab::
                     Overview
@@ -903,6 +926,33 @@ void InvestigationAnalyticsPanel::clear()
     setSession(
         nullptr
         );
+}
+
+void InvestigationAnalyticsPanel::
+    clearOverviewSelection()
+{
+    for (
+        QTableWidget *table
+        : {
+            m_eventCodeTable,
+            m_entityTable
+        }
+        ) {
+        if (table == nullptr) {
+            continue;
+        }
+
+        table->clearSelection();
+
+        if (table->selectionModel() != nullptr) {
+            table
+                ->selectionModel()
+                ->setCurrentIndex(
+                    QModelIndex(),
+                    QItemSelectionModel::NoUpdate
+                    );
+        }
+    }
 }
 
 InvestigationAnalyticsPresentationState

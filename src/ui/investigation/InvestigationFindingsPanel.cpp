@@ -4,23 +4,24 @@
 
 #include <QAbstractItemView>
 #include <QAbstractTextDocumentLayout>
+#include <QAction>
 #include <QApplication>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMargins>
+#include <QMenu>
 #include <QPainter>
-#include <QStyledItemDelegate>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStyle>
+#include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTextDocument>
 #include <QTextOption>
 #include <QVBoxLayout>
-#include <QScrollBar>
-#include <QAction>
-#include <QHBoxLayout>
-#include <QMargins>
-#include <QMenu>
-#include <QPushButton>
 
 #include "../InterfaceScale.h"
 #include "../ItemViewFocusDelegate.h"
@@ -58,9 +59,13 @@ class FindingTextDelegate
 {
 public:
     explicit FindingTextDelegate(
-        QObject *parent = nullptr
+        QObject *parent = nullptr,
+        bool preserveContextSelection = false
         )
-        : ItemViewFocusDelegate(parent)
+        : ItemViewFocusDelegate(
+              parent,
+              preserveContextSelection
+              )
     {
     }
 
@@ -77,6 +82,10 @@ public:
         initStyleOption(
             &itemOption,
             index
+            );
+
+        applyContextSelectionPresentation(
+            itemOption
             );
 
         const bool hasFocus =
@@ -544,7 +553,8 @@ InvestigationFindingsPanel::
     m_table->setItemDelegateForColumn(
         3,
         new FindingTextDelegate(
-            m_table
+            m_table,
+            true
             )
         );
 
@@ -618,14 +628,16 @@ InvestigationFindingsPanel::
 
     m_table->setToolTip(
         tr(
-            "Review conclusions recorded during "
-            "this investigation"
+            "Select a finding to preview its event. "
+            "Double-click to reveal and focus the event "
+            "in the Event Table."
             )
         );
 
     m_table->setItemDelegate(
         new ItemViewFocusDelegate(
-            m_table
+            m_table,
+            true
             )
         );
 
@@ -639,6 +651,50 @@ InvestigationFindingsPanel::
             ) {
             activateRow(
                 row
+                );
+        }
+        );
+
+    connect(
+        m_table,
+        &QTableWidget::currentCellChanged,
+        this,
+        [this](
+            int currentRow,
+            int,
+            int,
+            int
+            ) {
+            if (
+                currentRow < 0
+                || currentRow >= m_table->rowCount()
+                ) {
+                return;
+            }
+
+            QTableWidgetItem *item =
+                m_table->item(
+                    currentRow,
+                    0
+                    );
+
+            if (item == nullptr) {
+                return;
+            }
+
+            const QString recordId =
+                item
+                    ->data(
+                        Qt::UserRole
+                        )
+                    .toString();
+
+            if (recordId.isEmpty()) {
+                return;
+            }
+
+            emit findingSelected(
+                recordId
                 );
         }
         );
@@ -1184,6 +1240,71 @@ void InvestigationFindingsPanel::
 
     updateGeometry();
     update();
+}
+
+void InvestigationFindingsPanel::
+    selectFindingForRecord(
+        const QString &recordId
+        )
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    /*
+     * This is synchronization from another investigation
+     * surface, not a user-driven Findings selection.
+     *
+     * Prevent currentCellChanged from feeding the
+     * programmatic selection back through findingSelected.
+     */
+    const QSignalBlocker blocker(
+        m_table
+        );
+
+    m_table->clearSelection();
+
+    if (recordId.isEmpty()) {
+        return;
+    }
+
+    for (
+        int row = 0;
+        row < m_table->rowCount();
+        ++row
+        ) {
+        QTableWidgetItem *item =
+            m_table->item(
+                row,
+                0
+                );
+
+        if (item == nullptr) {
+            continue;
+        }
+
+        const QString rowRecordId =
+            item
+                ->data(
+                    Qt::UserRole
+                    )
+                .toString();
+
+        if (rowRecordId != recordId) {
+            continue;
+        }
+
+        m_table->setCurrentCell(
+            row,
+            0
+            );
+
+        m_table->selectRow(
+            row
+            );
+
+        return;
+    }
 }
 
 void InvestigationFindingsPanel::

@@ -2,11 +2,13 @@
 
 #include <QAbstractItemView>
 #include <QHeaderView>
+#include <QItemSelectionModel>
+#include <QModelIndex>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
-#include <QSignalBlocker>
 
 #include <algorithm>
 
@@ -54,7 +56,7 @@ InvestigationIssueSummaryPanel::
         );
 
     m_table->setSelectionBehavior(
-        QAbstractItemView::SelectItems
+        QAbstractItemView::SelectRows
         );
 
     m_table->setSelectionMode(
@@ -276,6 +278,25 @@ void InvestigationIssueSummaryPanel::clear()
         );
 
     updateMinimumTableWidth();
+}
+
+void InvestigationIssueSummaryPanel::
+    clearSelection()
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    m_table->clearSelection();
+
+    if (m_table->selectionModel() != nullptr) {
+        m_table
+            ->selectionModel()
+            ->setCurrentIndex(
+                QModelIndex(),
+                QItemSelectionModel::NoUpdate
+                );
+    }
 }
 
 int InvestigationIssueSummaryPanel::

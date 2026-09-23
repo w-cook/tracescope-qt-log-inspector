@@ -1015,8 +1015,7 @@ void ImportConfigurationDialog::
         : {
             customFieldTable,
             severityAliasTable,
-            timestampRuleTable,
-            previewTable
+            timestampRuleTable
         }
         ) {
         table->setItemDelegate(
@@ -1025,6 +1024,13 @@ void ImportConfigurationDialog::
                 )
             );
     }
+
+    previewTable->setItemDelegate(
+        new ItemViewFocusDelegate(
+            previewTable,
+            true
+            )
+        );
 
     QHeaderView *previewHeader =
         previewTable->horizontalHeader();
