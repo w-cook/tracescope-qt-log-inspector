@@ -3339,8 +3339,18 @@ void MainWindow::reloadActiveSession(
                 const bool cancelled =
                     watcher->isCanceled();
 
-                progressDialog->hide();
-                progressDialog->deleteLater();
+                /*
+                 * Destroy the progress dialog before opening any
+                 * modal completion/error dialog.
+                 *
+                 * deleteLater() is not sufficient here because a
+                 * following QMessageBox starts its own nested event
+                 * loop. Keeping the progress surface alive until that
+                 * deferred deletion can leave stale progress UI visible
+                 * during terminal reload handling.
+                 */
+                progressDialog->close();
+                delete progressDialog;
 
                 setSessionReloadInProgress(
                     false
@@ -3798,8 +3808,18 @@ void MainWindow::reloadActiveSession(
             const bool cancelled =
                 watcher->isCanceled();
 
-            progressDialog->hide();
-            progressDialog->deleteLater();
+            /*
+             * Destroy the progress dialog before opening any
+             * modal completion/error dialog.
+             *
+             * deleteLater() is not sufficient here because a
+             * following QMessageBox starts its own nested event
+             * loop. Keeping the progress surface alive until that
+             * deferred deletion can leave stale progress UI visible
+             * during terminal reload handling.
+             */
+            progressDialog->close();
+            delete progressDialog;
 
             setSessionReloadInProgress(
                 false
