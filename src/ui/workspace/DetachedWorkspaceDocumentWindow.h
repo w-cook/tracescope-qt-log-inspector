@@ -38,6 +38,10 @@ public:
         bool enabled
         );
 
+    void setWorkspaceSaveEnabled(
+        bool enabled
+        );
+
     void setWorkspaceWindowTitle(
         const QString &title
         );

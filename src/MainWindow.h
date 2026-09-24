@@ -224,6 +224,8 @@ private:
 
     void updateReloadActionState();
 
+    void updateWorkspaceSaveActionState();
+
     void refreshRecentFilesMenu();
 
     void refreshRecentWorkspacesMenu();

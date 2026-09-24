@@ -564,6 +564,8 @@ MainWindow::MainWindow(QWidget *parent)
     createMenus();
     buildLayout();
 
+    updateWorkspaceSaveActionState();
+
     connect(
         InterfaceScale::instance(),
         &InterfaceScale::
@@ -593,8 +595,10 @@ MainWindow::MainWindow(QWidget *parent)
         &WorkspaceDocumentHost::
         workspaceLayoutChanged,
         this,
-        &MainWindow::
-        markWorkspaceDirty
+        [this]() {
+            markWorkspaceDirty();
+            updateWorkspaceSaveActionState();
+        }
         );
 
     connect(
@@ -709,6 +713,13 @@ MainWindow::MainWindow(QWidget *parent)
              * so restored sessions still begin clean.
              */
             markWorkspaceDirty();
+
+            /*
+             * addDocument() ran while targetHost signals were
+             * intentionally blocked, so workspaceLayoutChanged()
+             * could not update the global workspace-save state.
+             */
+            updateWorkspaceSaveActionState();
         }
         );
 
@@ -782,6 +793,13 @@ MainWindow::MainWindow(QWidget *parent)
                     removed->deleteLater();
                 }
             }
+
+            /*
+             * removeDocument() above runs while root-host signals
+             * are intentionally blocked, so synchronize workspace
+             * save availability explicitly after removal.
+             */
+            updateWorkspaceSaveActionState();
         }
         );
 
@@ -1817,6 +1835,13 @@ void MainWindow::configureDetachedWindow(
         workspace != nullptr
         && workspace->sessionCount()
                >= 2
+        );
+
+    window->setWorkspaceSaveEnabled(
+        workspaceDocumentHost != nullptr
+        && !workspaceDocumentHost
+                ->documents()
+                .isEmpty()
         );
 
     /*
@@ -6363,6 +6388,44 @@ void MainWindow::updateReloadActionState()
                 session
                 )
             );
+    }
+}
+
+void MainWindow::
+    updateWorkspaceSaveActionState()
+{
+    const bool enabled =
+        workspaceDocumentHost != nullptr
+        && !workspaceDocumentHost
+                ->documents()
+                .isEmpty();
+
+    if (saveWorkspaceAction != nullptr) {
+        saveWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (saveWorkspaceAsAction != nullptr) {
+        saveWorkspaceAsAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (
+        DetachedWorkspaceDocumentWindow *window
+        : workspaceDocumentHost
+              ->detachedWindows()
+        ) {
+        if (window != nullptr) {
+            window->setWorkspaceSaveEnabled(
+                enabled
+                );
+        }
     }
 }
 

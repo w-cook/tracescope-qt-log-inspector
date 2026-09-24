@@ -679,6 +679,24 @@ void DetachedWorkspaceDocumentWindow::
 }
 
 void DetachedWorkspaceDocumentWindow::
+    setWorkspaceSaveEnabled(
+        bool enabled
+        )
+{
+    if (m_saveWorkspaceAction != nullptr) {
+        m_saveWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_saveWorkspaceAsAction != nullptr) {
+        m_saveWorkspaceAsAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
     setWorkspaceWindowTitle(
         const QString &title
         )
