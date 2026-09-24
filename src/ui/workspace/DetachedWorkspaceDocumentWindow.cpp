@@ -577,17 +577,26 @@ void DetachedWorkspaceDocumentWindow::
             /*
              * This text intentionally matches the
              * current root-window About dialog.
-             * Product-description cleanup belongs to
-             * the later v1 identity pass.
              */
             QMessageBox::about(
                 this,
                 tr("About TraceScope"),
                 tr(
-                    "TraceScope is a Qt/C++ telemetry "
-                    "log inspector for loading, filtering, "
-                    "visualizing, and exporting structured "
-                    "diagnostic log files."
+                    "TraceScope is a desktop log investigation "
+                    "tool for importing, normalizing, filtering, "
+                    "analyzing, and reviewing diagnostic data "
+                    "from multiple structured and text-based "
+                    "log formats.<br><br>"
+                    "Built with C++ and Qt, TraceScope supports "
+                    "interactive timelines, investigation findings, "
+                    "analytics, saved workspaces and snapshots, "
+                    "and live file following.<br><br>"
+                    "<div align=\"center\">"
+                    "<a href=\"https://github.com/w-cook/"
+                    "tracescope-qt-log-inspector\">"
+                    "View the TraceScope repository on GitHub"
+                    "</a>"
+                    "</div>"
                     )
                 );
         }
