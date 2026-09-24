@@ -755,11 +755,31 @@ void LiveFollowTabControl::
             == LiveFileFollowStatus::Following
         && !hasError;
 
+    /*
+     * Follow Newest represents user navigation intent.
+     *
+     * A transient polling/read error may temporarily make
+     * live following unavailable, but it does not itself
+     * transition the underlying follower away from the
+     * Following state. Preserve Follow Newest across that
+     * recoverable condition so normal polling can resume
+     * the user's existing navigation behavior.
+     *
+     * Real lifecycle transitions away from Following
+     * (Pause, Stop, failed Start, etc.) still abandon
+     * Follow Newest as before.
+     */
+    const bool shouldClearFollowNewest =
+        status
+        != LiveFileFollowStatus::Following;
+
     bool followNewestWasCleared =
         false;
 
-    if (!activelyFollowing
-        && m_followNewestButton->isChecked()) {
+    if (
+        shouldClearFollowNewest
+        && m_followNewestButton->isChecked()
+        ) {
         {
             const QSignalBlocker blocker(
                 m_followNewestButton

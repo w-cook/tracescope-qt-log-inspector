@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QScrollBar>
 #include <QTableWidget>
+#include <QTemporaryFile>
+#include <QToolButton>
 
 #include <memory>
 #include <utility>
@@ -15,6 +17,7 @@
 #include "../src/domain/InvestigationRecord.h"
 #include "../src/importing/ImportProfile.h"
 #include "../src/importing/ImportResult.h"
+#include "../src/live/LiveSessionFollowCoordinator.h"
 #include "../src/ui/investigation/InvestigationAnalyticsPanel.h"
 #include "../src/ui/investigation/InvestigationEventDetailPanel.h"
 #include "../src/ui/investigation/InvestigationEventPanel.h"
@@ -23,6 +26,7 @@
 #include "../src/ui/investigation/InvestigationReviewPanel.h"
 #include "../src/ui/investigation/InvestigationTimelinePanel.h"
 #include "../src/ui/workspace/InvestigationSessionView.h"
+#include "../src/ui/workspace/LiveFollowTabControl.h"
 #include "../src/workspace/InvestigationPresentationState.h"
 #include "../src/workspace/InvestigationSession.h"
 
@@ -291,6 +295,7 @@ private slots:
     void autoTimelineDensityAdaptsToWidth();
     void manualTimelineDensityAdaptsToWidth();
     void timelineFollowNewestAnchorsManualScroll();
+    void liveFollowTransientErrorPreservesFollowNewestIntent();
     void sessionViewPopulatesExportMenu();
     void analyticsOverviewDrillDownFiltersInvestigation();
 };
@@ -2734,6 +2739,235 @@ void InvestigationPresentationStateTests::
             .capturePresentationState()
             .horizontalScrollValue,
         0
+        );
+}
+
+void InvestigationPresentationStateTests::
+    liveFollowTransientErrorPreservesFollowNewestIntent()
+{
+    /*
+     * Use a real temporary source path so the normal
+     * session-owned live coordinator can enter its
+     * Following state without depending on an
+     * external test fixture.
+     */
+    QTemporaryFile sourceFile;
+
+    QVERIFY(
+        sourceFile.open()
+        );
+
+    const QString sourcePath =
+        sourceFile.fileName();
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "message"
+            );
+
+    profile.preserveUnmappedFields =
+        true;
+
+    ImportResult initialResult;
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    session.setInitialLiveFollowByteOffset(
+        0
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        coordinator != nullptr
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .status(),
+        LiveFileFollowStatus::Following
+        );
+
+    LiveFollowTabControl control(
+        &session
+        );
+
+    control.show();
+
+    processUi();
+
+    QToolButton *followNewestButton =
+        control.findChild<QToolButton *>(
+            QStringLiteral(
+                "liveFollowNewestButton"
+                )
+            );
+
+    if (followNewestButton == nullptr) {
+        QFAIL(
+            "Expected Follow Newest button was not found."
+            );
+    }
+
+    QVERIFY(
+        followNewestButton->isEnabled()
+        );
+
+    control.setFollowNewestEnabled(
+        true
+        );
+
+    QVERIFY(
+        followNewestButton->isChecked()
+        );
+
+    QSignalSpy followNewestSpy(
+        &control,
+        &LiveFollowTabControl::
+        followNewestChanged
+        );
+
+    /*
+     * Reproduce the presentation state caused by a
+     * recoverable polling/read failure.
+     *
+     * The underlying coordinator remains Following.
+     */
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            coordinator,
+            "pollError",
+            Qt::DirectConnection,
+            Q_ARG(
+                QString,
+                QStringLiteral(
+                    "Transient live-source read failure."
+                    )
+                )
+            )
+        );
+
+    processUi();
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .status(),
+        LiveFileFollowStatus::Following
+        );
+
+    /*
+     * The control is temporarily unavailable while
+     * the error is being presented, but the user's
+     * Follow Newest intent must survive.
+     */
+    QVERIFY(
+        followNewestButton->isChecked()
+        );
+
+    QVERIFY(
+        !followNewestButton->isEnabled()
+        );
+
+    QCOMPARE(
+        followNewestSpy.count(),
+        0
+        );
+
+    /*
+     * A subsequent successful live update clears the
+     * transient error. Follow Newest should resume
+     * automatically because its intent was preserved.
+     */
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            coordinator,
+            "sessionUpdated",
+            Qt::DirectConnection
+            )
+        );
+
+    processUi();
+
+    QVERIFY(
+        followNewestButton->isChecked()
+        );
+
+    QVERIFY(
+        followNewestButton->isEnabled()
+        );
+
+    QCOMPARE(
+        followNewestSpy.count(),
+        0
+        );
+
+    /*
+     * A genuine lifecycle transition away from
+     * Following remains different from a transient
+     * poll error. Pausing must still abandon Follow
+     * Newest exactly as before.
+     */
+    QVERIFY(
+        coordinator->pause()
+        );
+
+    processUi();
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .status(),
+        LiveFileFollowStatus::Paused
+        );
+
+    QVERIFY(
+        !followNewestButton->isChecked()
+        );
+
+    QCOMPARE(
+        followNewestSpy.count(),
+        1
+        );
+
+    const QList<QVariant> arguments =
+        followNewestSpy.takeFirst();
+
+    QCOMPARE(
+        arguments.at(0).toBool(),
+        false
+        );
+
+    QVERIFY(
+        coordinator->stop()
         );
 }
 
