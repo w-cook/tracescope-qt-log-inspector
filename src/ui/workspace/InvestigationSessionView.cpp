@@ -72,6 +72,10 @@ constexpr int
     SectionCapacityHysteresisLogicalHeight =
     12;
 
+constexpr int
+    LiveTimelineRefreshMinimumIntervalMilliseconds =
+    250;
+
 QString documentIdFor(
     const InvestigationSession *session
     )
@@ -290,6 +294,9 @@ InvestigationSessionView::
             )
         ),
     m_liveRefreshTimer(
+        new QTimer(this)
+        ),
+    m_liveTimelineRefreshTimer(
         new QTimer(this)
         ),
     m_constrainedResizeSettleTimer(
@@ -1160,6 +1167,56 @@ InvestigationSessionView::
         refreshLiveSessionPresentation
         );
 
+    /*
+     * Timeline presentation is substantially more visual
+     * than the other derived investigation surfaces.
+     *
+     * While Follow Newest is active and the Timeline is
+     * actually visible, allow it to track live ingestion
+     * at approximately the source-poll cadence without
+     * allowing arbitrarily frequent chart reconstruction.
+     *
+     * This timer acts as a cooldown for a leading-edge
+     * throttle: the first live update refreshes
+     * immediately, while additional updates during the
+     * cooldown are coalesced into one trailing refresh.
+     */
+    m_liveTimelineRefreshTimer->setSingleShot(
+        true
+        );
+
+    m_liveTimelineRefreshTimer->setInterval(
+        LiveTimelineRefreshMinimumIntervalMilliseconds
+        );
+
+    connect(
+        m_liveTimelineRefreshTimer,
+        &QTimer::timeout,
+        this,
+        [this]() {
+            if (!m_liveTimelineRefreshPending) {
+                return;
+            }
+
+            m_liveTimelineRefreshPending =
+                false;
+
+            if (!liveTimelineFastRefreshEligible()) {
+                return;
+            }
+
+            refreshLiveTimelinePresentation();
+
+            /*
+             * Start another cooldown window after the
+             * trailing refresh. Continuous live input can
+             * therefore never force chart reconstruction
+             * faster than this configured cadence.
+             */
+            m_liveTimelineRefreshTimer->start();
+        }
+        );
+
     updateSectionCollapseControls();
 
     refreshSession();
@@ -1429,6 +1486,13 @@ void InvestigationSessionView::
     if (m_liveRefreshTimer != nullptr) {
         m_liveRefreshTimer->stop();
     }
+
+    if (m_liveTimelineRefreshTimer != nullptr) {
+        m_liveTimelineRefreshTimer->stop();
+    }
+
+    m_liveTimelineRefreshPending =
+        false;
 
     m_filterPanel->setSession(
         m_session
@@ -1837,6 +1901,17 @@ QWidget *InvestigationSessionView::
             m_followNewest =
                 enabled;
 
+            if (
+                !enabled
+                && m_liveTimelineRefreshTimer
+                       != nullptr
+                ) {
+                m_liveTimelineRefreshTimer->stop();
+
+                m_liveTimelineRefreshPending =
+                    false;
+            }
+
             if (m_eventPanel != nullptr) {
                 m_eventPanel
                     ->setFollowNewestEnabled(
@@ -1888,6 +1963,14 @@ QWidget *InvestigationSessionView::
                 m_eventPanel
                     ->handleLiveSessionUpdated();
             }
+
+            /*
+             * Keep the actively watched Timeline visually close
+             * to the immediately updated Event Table while still
+             * retaining the slower coalesced cadence for heavier
+             * derived investigation surfaces.
+             */
+            scheduleLiveTimelineRefresh();
 
             scheduleLiveRefresh();
         }
@@ -3452,7 +3535,9 @@ void InvestigationSessionView::
 }
 
 void InvestigationSessionView::
-    refreshDerivedViewsForCurrentFilter()
+    refreshDerivedViewsForCurrentFilter(
+        bool includeTimeline
+        )
 {
     if (m_session == nullptr) {
         return;
@@ -3492,11 +3577,110 @@ void InvestigationSessionView::
         visibleRecords
         );
 
-    m_timelinePanel->updateRecords(
-        visibleRecords
-        );
+    /*
+     * During active Follow Newest presentation, the
+     * visible Timeline has its own faster live-refresh
+     * cadence. Normal filter changes, reloads, restored
+     * presentation state, and non-following live
+     * refreshes continue through this complete path.
+     */
+    if (
+        includeTimeline
+        && m_timelinePanel != nullptr
+        ) {
+        m_timelinePanel->updateRecords(
+            visibleRecords
+            );
+    }
 
     updateFindingsExportState();
+}
+
+bool InvestigationSessionView::
+    liveTimelineFastRefreshEligible() const
+{
+    return m_session != nullptr
+           && m_followNewest
+           && m_timelinePanel != nullptr
+           && !m_timelinePanel
+                   ->isCollapsed()
+           && m_timelinePanel
+                  ->isVisible();
+}
+
+void InvestigationSessionView::
+    scheduleLiveTimelineRefresh()
+{
+    if (
+        !liveTimelineFastRefreshEligible()
+        || m_liveTimelineRefreshTimer
+               == nullptr
+        ) {
+        return;
+    }
+
+    /*
+     * A cooldown is already active after a recent
+     * Timeline render. Remember that fresher evidence
+     * arrived and coalesce it into one trailing
+     * refresh rather than rebuilding the chart again
+     * immediately.
+     */
+    if (m_liveTimelineRefreshTimer
+            ->isActive()) {
+        m_liveTimelineRefreshPending =
+            true;
+
+        return;
+    }
+
+    /*
+     * Leading-edge refresh:
+     *
+     * synchronize the visual Timeline with the Event
+     * Table as soon as this live batch reaches the
+     * investigation, then begin the cooldown window.
+     */
+    m_liveTimelineRefreshPending =
+        false;
+
+    refreshLiveTimelinePresentation();
+
+    m_liveTimelineRefreshTimer->start();
+}
+
+void InvestigationSessionView::
+    refreshLiveTimelinePresentation()
+{
+    if (!liveTimelineFastRefreshEligible()) {
+        return;
+    }
+
+    InvestigationController *controller =
+        m_session
+            ->investigationController();
+
+    if (controller == nullptr) {
+        return;
+    }
+
+    /*
+     * Use exactly the same analysis population as the
+     * normal derived-view refresh.
+     *
+     * Do not approximate, append directly to chart
+     * buckets, or bypass active investigation filters.
+     * Timeline accuracy remains identical to the
+     * ordinary refresh path.
+     */
+    const QVector<InvestigationRecord>
+        analysisRecords =
+        controller
+            ->recordsForAnalysis();
+
+    m_timelinePanel->updateRecords(
+        analysisRecords
+        );
 }
 
 void InvestigationSessionView::
@@ -3549,7 +3733,18 @@ void InvestigationSessionView::
             issueSummaryAvailable
             );
 
-    refreshDerivedViewsForCurrentFilter();
+    /*
+     * When the visible Timeline is already following the
+     * faster live-presentation path, do not rebuild the
+     * same chart again as part of this slower coalesced
+     * refresh.
+     *
+     * All other derived surfaces retain their established
+     * 750 ms cadence.
+     */
+    refreshDerivedViewsForCurrentFilter(
+        !liveTimelineFastRefreshEligible()
+        );
 
     /*
      * Ordinary inserts preserve the current selection.

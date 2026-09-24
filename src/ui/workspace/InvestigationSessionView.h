@@ -194,7 +194,15 @@ private:
 
     void exportFilteredResults();
 
-    void refreshDerivedViewsForCurrentFilter();
+    void refreshDerivedViewsForCurrentFilter(
+        bool includeTimeline = true
+        );
+
+    bool liveTimelineFastRefreshEligible() const;
+
+    void scheduleLiveTimelineRefresh();
+
+    void refreshLiveTimelinePresentation();
 
     void scheduleLiveRefresh();
 
@@ -381,6 +389,12 @@ private:
 
     QTimer *m_liveRefreshTimer =
         nullptr;
+
+    QTimer *m_liveTimelineRefreshTimer =
+        nullptr;
+
+    bool m_liveTimelineRefreshPending =
+        false;
 
     bool m_followNewest =
         false;
