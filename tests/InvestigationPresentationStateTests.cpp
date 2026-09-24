@@ -2820,8 +2820,6 @@ void InvestigationPresentationStateTests::
         &session
         );
 
-    control.show();
-
     processUi();
 
     QToolButton *followNewestButton =
