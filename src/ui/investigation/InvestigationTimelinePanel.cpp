@@ -1164,6 +1164,36 @@ InvestigationTimelinePanel::session() const
     return m_session;
 }
 
+void InvestigationTimelinePanel::
+    setFollowNewestEnabled(
+        bool enabled
+        )
+{
+    if (m_followNewest == enabled) {
+        return;
+    }
+
+    m_followNewest =
+        enabled;
+
+    /*
+     * Follow Newest owns the live navigation position.
+     *
+     * Re-render immediately when it is enabled so an
+     * already scrollable manual-resolution timeline
+     * jumps to its newest visible window without
+     * waiting for the next live refresh.
+     *
+     * Auto resolution has no horizontal navigation
+     * position, so render() will simply retain its
+     * normal zero-range behavior there.
+     */
+    if (m_followNewest
+        && m_session != nullptr) {
+        render();
+    }
+}
+
 void InvestigationTimelinePanel::updateRecords(
     const QVector<InvestigationRecord> &records
     )
@@ -2115,12 +2145,22 @@ void InvestigationTimelinePanel::render()
                 visibleBucketCount
                 );
 
+        /*
+         * Follow Newest anchors a manually resolved timeline
+         * to the newest available bucket window.
+         *
+         * Without Follow Newest, preserve the user's existing
+         * horizontal navigation position as the timeline range
+         * grows or the viewport changes.
+         */
         int scrollValue =
-            std::clamp(
-                m_scrollBar->value(),
-                0,
-                scrollMaximum
-                );
+            m_followNewest
+                ? scrollMaximum
+                : std::clamp(
+                      m_scrollBar->value(),
+                      0,
+                      scrollMaximum
+                      );
 
         int pageStep =
             1;

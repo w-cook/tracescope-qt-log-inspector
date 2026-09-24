@@ -29,12 +29,14 @@
 namespace
 {
 
-InvestigationSession makeSession()
+InvestigationSession makeSession(
+    int recordCount = 100
+    )
 {
     ImportResult result;
 
     for (int index = 0;
-         index < 100;
+         index < recordCount;
          ++index) {
         InvestigationRecord record;
 
@@ -288,6 +290,7 @@ private slots:
     void newSessionKeepsEventDetailsVisible();
     void autoTimelineDensityAdaptsToWidth();
     void manualTimelineDensityAdaptsToWidth();
+    void timelineFollowNewestAnchorsManualScroll();
     void sessionViewPopulatesExportMenu();
     void analyticsOverviewDrillDownFiltersInvestigation();
 };
@@ -2526,6 +2529,215 @@ void InvestigationPresentationStateTests::
 }
 
 void InvestigationPresentationStateTests::
+    timelineFollowNewestAnchorsManualScroll()
+{
+    /*
+     * Begin with only the first 40 seconds actually
+     * belonging to the session. This matters because
+     * the timeline's overall time domain comes from
+     * the session's first/last timestamps, not merely
+     * from the records supplied to updateRecords().
+     */
+    InvestigationSession session =
+        makeSession(40);
+
+    InvestigationTimelinePanel panel;
+
+    /*
+     * Keep the viewport narrow enough that a
+     * one-second manual resolution requires
+     * horizontal navigation.
+     */
+    panel.resize(
+        320,
+        240
+        );
+
+    panel.setSession(
+        &session
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    InvestigationTimelinePresentationState
+        manualState;
+
+    manualState.intervalMilliseconds =
+        1000;
+
+    manualState.breakdown =
+        InvestigationTimelineBreakdown::
+        Severity;
+
+    manualState.subsystemTrendLimit =
+        5;
+
+    manualState.horizontalScrollValue =
+        0;
+
+    panel.restorePresentationState(
+        manualState
+        );
+
+    panel.show();
+
+    processUi();
+
+    QCOMPARE(
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue,
+        0
+        );
+
+    /*
+     * Enabling Follow Newest should immediately move
+     * the existing manual-resolution timeline to its
+     * newest visible bucket window.
+     */
+    panel.setFollowNewestEnabled(
+        true
+        );
+
+    processUi();
+
+    const int initialFollowPosition =
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue;
+
+    QVERIFY(
+        initialFollowPosition > 0
+        );
+
+    /*
+     * Simulate the next sixty records arriving through
+     * the same session-level path used by live following.
+     *
+     * This expands both the underlying record collection
+     * and the session's lastTimestamp(), which is what
+     * actually extends the timeline's navigable domain.
+     */
+    ImportResult appendedResult;
+
+    for (int index = 40;
+         index < 100;
+         ++index) {
+        InvestigationRecord record;
+
+        record.recordId =
+            QStringLiteral("record-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.timestamp =
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-28T12:00:00Z"
+                    ),
+                Qt::ISODate
+                )
+                .addSecs(index);
+
+        record.severity =
+            index % 10 == 0
+                ? RecordSeverity::Warning
+                : RecordSeverity::Info;
+
+        record.subsystem =
+            QStringLiteral("Backend");
+
+        record.message =
+            QStringLiteral("Event %1")
+                .arg(index);
+
+        record.source.sourcePath =
+            QStringLiteral(
+                "presentation-test.jsonl"
+                );
+
+        record.source.sourceName =
+            QStringLiteral(
+                "presentation-test.jsonl"
+                );
+
+        record.source.recordNumber =
+            index + 1;
+
+        appendedResult.records.append(
+            std::move(record)
+            );
+    }
+
+    appendedResult.processedRecordCount =
+        appendedResult.records.size();
+
+    session.appendLiveImportResult(
+        std::move(appendedResult)
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    processUi();
+
+    const int expandedFollowPosition =
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue;
+
+    /*
+     * The live append extended the session from a
+     * 40-second timeline to a 100-second timeline.
+     * Follow Newest must therefore have advanced to
+     * the newly expanded right edge.
+     */
+    QVERIFY(
+        expandedFollowPosition
+        > initialFollowPosition
+        );
+
+    /*
+     * Once Follow Newest is disabled, ordinary manual
+     * navigation must remain under user control.
+     */
+    panel.setFollowNewestEnabled(
+        false
+        );
+
+    InvestigationTimelinePresentationState
+        oldestState =
+        panel.capturePresentationState();
+
+    oldestState.horizontalScrollValue =
+        0;
+
+    panel.restorePresentationState(
+        oldestState
+        );
+
+    processUi();
+
+    QCOMPARE(
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue,
+        0
+        );
+}
+
+void InvestigationPresentationStateTests::
     sessionViewPopulatesExportMenu()
 {
     InvestigationSession session =
@@ -2749,20 +2961,23 @@ void InvestigationPresentationStateTests::
         );
 
     QTableWidget *eventCodeTable =
-        eventCodeGroup
-            ->findChild<QTableWidget *>();
+        eventCodeGroup != nullptr
+            ? eventCodeGroup
+                  ->findChild<QTableWidget *>()
+            : nullptr;
 
     QTableWidget *entityTable =
-        entityGroup
-            ->findChild<QTableWidget *>();
+        entityGroup != nullptr
+            ? entityGroup
+                  ->findChild<QTableWidget *>()
+            : nullptr;
 
-    QVERIFY(
-        eventCodeTable != nullptr
-        );
-
-    QVERIFY(
-        entityTable != nullptr
-        );
+    if (eventCodeTable == nullptr
+        || entityTable == nullptr) {
+        QFAIL(
+            "Expected Analytics overview tables were not found."
+            );
+    }
 
     QVERIFY(
         eventCodeTable->rowCount() > 0

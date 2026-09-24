@@ -39,6 +39,10 @@ public:
 
     InvestigationSession *session() const;
 
+    void setFollowNewestEnabled(
+        bool enabled
+        );
+
     /*
      * Replace the record collection represented by
      * the timeline.
@@ -182,5 +186,8 @@ private:
         nullptr;
 
     bool m_collapsed =
+        false;
+
+    bool m_followNewest =
         false;
 };

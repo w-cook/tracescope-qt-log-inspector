@@ -1001,20 +1001,20 @@ void LiveFollowTabControl::
     m_followNewestButton->setToolTip(
         followNewest
             ? tr(
-                  "Stop following newest events"
+                  "Stop following newest data"
                   )
             : tr(
-                  "Follow newest events"
+                  "Follow newest data"
                   )
         );
 
     m_followNewestButton->setAccessibleName(
         followNewest
             ? tr(
-                  "Stop following newest events"
+                  "Stop following newest data"
                   )
             : tr(
-                  "Follow newest events"
+                  "Follow newest data"
                   )
         );
 

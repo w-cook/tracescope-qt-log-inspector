@@ -1819,6 +1819,13 @@ QWidget *InvestigationSessionView::
                 );
     }
 
+    if (m_timelinePanel != nullptr) {
+        m_timelinePanel
+            ->setFollowNewestEnabled(
+                m_followNewest
+                );
+    }
+
     connect(
         control,
         &LiveFollowTabControl::
@@ -1832,6 +1839,13 @@ QWidget *InvestigationSessionView::
 
             if (m_eventPanel != nullptr) {
                 m_eventPanel
+                    ->setFollowNewestEnabled(
+                        enabled
+                        );
+            }
+
+            if (m_timelinePanel != nullptr) {
+                m_timelinePanel
                     ->setFollowNewestEnabled(
                         enabled
                         );
