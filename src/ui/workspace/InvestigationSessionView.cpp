@@ -1,6 +1,7 @@
 #include "InvestigationSessionView.h"
 
 #include <algorithm>
+#include <functional>
 #include <utility>
 
 #include <QAction>
@@ -48,10 +49,66 @@
 #include "../../workspace/InvestigationSession.h"
 #include "../../workspace/InvestigationStateStore.h"
 
+#include "InvestigationSectionResizePolicy.h"
 #include "LiveFollowTabControl.h"
 
 namespace
 {
+class ResizeAwareSplitter final
+    : public QSplitter
+{
+public:
+    using ResizeCompletedHandler =
+        std::function<void()>;
+
+    explicit ResizeAwareSplitter(
+        Qt::Orientation orientation,
+        QWidget *parent = nullptr
+        )
+        : QSplitter(
+              orientation,
+              parent
+              )
+    {
+    }
+
+    void setResizeCompletedHandler(
+        ResizeCompletedHandler handler
+        )
+    {
+        m_resizeCompletedHandler =
+            std::move(handler);
+    }
+
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override
+    {
+        /*
+         * Let QSplitter establish its real new physical
+         * height and perform its native child allocation
+         * first.
+         */
+        QSplitter::resizeEvent(
+            event
+            );
+
+        /*
+         * Correct the child allocation synchronously before
+         * this resize event returns to the event loop and
+         * before the temporary native allocation is painted.
+         */
+        if (m_resizeCompletedHandler) {
+            m_resizeCompletedHandler();
+        }
+    }
+
+private:
+    ResizeCompletedHandler
+        m_resizeCompletedHandler;
+};
+
 constexpr int
     CollapsedSectionFallbackLogicalHeight =
     28;
@@ -288,7 +345,7 @@ InvestigationSessionView::
             )
         ),
     m_mainSplitter(
-        new QSplitter(
+        new ResizeAwareSplitter(
             Qt::Vertical,
             this
             )
@@ -303,6 +360,18 @@ InvestigationSessionView::
         new QTimer(this)
         )
 {
+    auto *resizeAwareMainSplitter =
+        static_cast<ResizeAwareSplitter *>(
+            m_mainSplitter
+            );
+
+    resizeAwareMainSplitter
+        ->setResizeCompletedHandler(
+            [this]() {
+                handleAutomaticMainSplitterResize();
+            }
+            );
+
     m_issueSummaryPanel =
         m_reviewPanel
             ->issueSummaryPanel();
@@ -570,6 +639,46 @@ InvestigationSessionView::
         }
         );
 
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            ensureSectionPreferredHeightsInitialized();
+
+            updateMinimumConstrainedHeight();
+
+            scheduleSectionCapacityUpdate();
+
+            QTimer::singleShot(
+                0,
+                this,
+                [this]() {
+                    QTimer::singleShot(
+                        0,
+                        this,
+                        [this]() {
+                            if (m_mainSplitter == nullptr) {
+                                return;
+                            }
+
+                            m_lastAvailableMainSplitterHeight =
+                                availableMainSplitterHeight();
+
+                            m_automaticResizeCanonicalSizes =
+                                m_mainSplitter->sizes();
+
+                            m_automaticResizeCanonicalSplitterHeight =
+                                m_mainSplitter->height();
+
+                            m_automaticOuterResizeReady =
+                                true;
+                        }
+                        );
+                }
+                );
+        }
+        );
+
     /*
      * The investigation splitter must never impose its
      * transient child-derived height requirements on the
@@ -761,6 +870,26 @@ InvestigationSessionView::
                     m_eventPreCollapseSizes.clear();
                 }
 
+                /*
+                 * A genuine user splitter drag establishes a new
+                 * authoritative vertical layout.
+                 *
+                 * Keep the automatic outer-resize planner in sync
+                 * so the next window resize starts from exactly what
+                 * the user just chose rather than from stale geometry.
+                 */
+                if (
+                    m_automaticOuterResizeReady
+                    && !m_handlingAutomaticSplitterResize
+                    && !m_manualSectionTransitionActive
+                    ) {
+                    m_automaticResizeCanonicalSizes =
+                        sizes;
+
+                    m_automaticResizeCanonicalSplitterHeight =
+                        m_mainSplitter->height();
+                }
+
                 return;
             }
 
@@ -840,6 +969,31 @@ InvestigationSessionView::
                             true;
                     }
                 }
+            }
+
+            /*
+             * User-driven splitter movement becomes the new
+             * canonical automatic-resize state.
+             *
+             * Programmatic setSizes() calls made by the automatic
+             * planner are excluded by
+             * m_handlingAutomaticSplitterResize.
+             *
+             * Splitter movement caused while a manual
+             * collapse/expand transaction is still in progress is
+             * also excluded; finishManualSectionTransition() will
+             * capture the final settled geometry instead.
+             */
+            if (
+                m_automaticOuterResizeReady
+                && !m_handlingAutomaticSplitterResize
+                && !m_manualSectionTransitionActive
+                ) {
+                m_automaticResizeCanonicalSizes =
+                    sizes;
+
+                m_automaticResizeCanonicalSplitterHeight =
+                    m_mainSplitter->height();
             }
         }
         );
@@ -3399,38 +3553,17 @@ void InvestigationSessionView::
         event
         );
 
-    /*
-     * Native outer-window resizing temporarily owns the
-     * automatic vertical redistribution.
-     *
-     * Keep recovered auxiliary sections from accepting
-     * stray QSplitter growth while those resize events
-     * are arriving.
-     */
-    m_constrainedWindowResizeActive =
-        true;
-
-    updateTimelineMinimumHeight();
-    updateLowerRegionMinimumHeight();
-
-    if (m_constrainedResizeSettleTimer != nullptr) {
-        m_constrainedResizeSettleTimer->start();
-    }
-
-    scheduleSectionCapacityUpdate();
-
     if (m_reviewPanel == nullptr) {
         return;
     }
 
     /*
-     * QWidget receives its resize before the child
-     * layout necessarily finishes assigning geometry
-     * to the nested splitter.
+     * Vertical investigation-section sizing is handled
+     * synchronously by ResizeAwareSplitter after
+     * QSplitter::resizeEvent().
      *
-     * Defer the adaptive split until the current
-     * event-loop turn has completed so calculations
-     * use the splitter's settled width.
+     * This deferred work is only for the independent
+     * horizontal Review / Selected Event Details splitter.
      */
     QTimer::singleShot(
         0,
@@ -4266,6 +4399,9 @@ void InvestigationSessionView::
 {
     ensureSectionPreferredHeightsInitialized();
 
+    m_manualSectionTransitionActive =
+        true;
+
     const bool currentlyCollapsed =
         isSectionCollapsed(
             section
@@ -4291,6 +4427,20 @@ void InvestigationSessionView::
 
         scheduleSectionCollapseControlGeometryUpdate();
 
+        /*
+         * Timeline and Lower Details collapse allocation is
+         * completed by a queued helper inside their existing
+         * collapse methods. Queue this afterward so the final
+         * settled manual result becomes canonical.
+         */
+        QTimer::singleShot(
+            0,
+            this,
+            [this]() {
+                finishManualSectionTransition();
+            }
+            );
+
         return;
     }
 
@@ -4303,6 +4453,9 @@ void InvestigationSessionView::
             );
 
     if (maximumOpenSections <= 0) {
+        m_manualSectionTransitionActive =
+            false;
+
         return;
     }
 
@@ -4384,6 +4537,14 @@ void InvestigationSessionView::
     if (m_hasConstrainedRestoreSnapshot) {
         rebuildConstrainedRestorePriorityFromCurrentState();
     }
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            finishManualSectionTransition();
+        }
+        );
 }
 
 void InvestigationSessionView::
@@ -5296,20 +5457,22 @@ void InvestigationSessionView::
      * Donor ordering
      * ---------------------------------------------------------
      *
-     * When a section still needs room:
-     *
-     * Event expansion:
-     *   Timeline, then Lower
-     *
-     * Lower expansion:
-     *   Timeline, then Events
+     * Manual expansion uses transaction-specific donor rules.
      *
      * Timeline expansion:
-     *   Lower, then Events
+     *   Lower Details surplus, then Events surplus.
+     *   Timeline does not force another open section below
+     *   its remembered preference.
      *
-     * This is the priority ordering:
+     * Events expansion:
+     *   Timeline, then Lower Details.
      *
-     *   Events > Lower > Timeline
+     * Lower Details expansion:
+     *   Events first, then Timeline.
+     *
+     * Events is the elastic section for ordinary Lower
+     * expansion, so reopening Lower must not disturb Timeline
+     * while Events can still supply the required height.
      */
     QList<int> donors;
 
@@ -5329,9 +5492,19 @@ void InvestigationSessionView::
         break;
 
     case 2:
+        /*
+         * Lower Details opens against Events first.
+         *
+         * Events is the elastic vertical section, so it should
+         * absorb the cost of restoring Lower before Timeline is
+         * disturbed.
+         *
+         * If Events is collapsed it will be skipped below and
+         * Timeline naturally becomes the available donor.
+         */
         donors = {
-            0,
-            1
+            1,
+            0
         };
         break;
 
@@ -5401,37 +5574,18 @@ void InvestigationSessionView::
     /*
      * ---------------------------------------------------------
      * Pass 2:
-     * compress below preference only from lower-priority
-     * sections
+     * consume below-preference donor capacity
      * ---------------------------------------------------------
      *
-     * Priority:
+     * Timeline expansion:
+     *   no below-preference donors.
      *
-     *   Events
-     *   Lower Details
-     *   Timeline
+     * Events expansion:
+     *   Timeline, then Lower Details.
      *
-     * Surplus above preference is always available and was
-     * already consumed in Pass 1.
-     *
-     * Below a section's preference, however, its space is
-     * protected from lower-priority sections.
-     *
-     * Therefore:
-     *
-     * Opening Events may compress:
-     *   Timeline, then Lower Details
-     *
-     * Opening Lower Details may compress:
-     *   Timeline only
-     *
-     * Opening Timeline may compress:
-     *   nobody
-     *
-     * If insufficient room remains, the newly opened
-     * section simply receives less than its preferred
-     * height. The future constrained-height coordinator
-     * will handle that condition explicitly.
+     * Lower Details expansion:
+     *   Events down to its useful minimum first, then
+     *   Timeline if additional room is still required.
      */
     QList<int> belowPreferenceDonors;
 
@@ -5457,9 +5611,17 @@ void InvestigationSessionView::
 
     case 2:
         /*
-         * Lower Details outranks Timeline but not Events.
+         * Lower Details continues taking from Events even after
+         * Events reaches its remembered preferred height.
+         *
+         * Events may compress down to its useful minimum before
+         * Timeline gives up any height.
+         *
+         * If Events cannot supply enough space, Timeline is the
+         * fallback donor.
          */
         belowPreferenceDonors = {
+            1,
             0
         };
         break;
@@ -5836,6 +5998,337 @@ void InvestigationSessionView::
     updateSectionCollapseControlGeometry();
 }
 
+bool InvestigationSessionView::
+    applyAutomaticOuterResize(
+        const QList<int> &baseSizes,
+        int baseSplitterHeight,
+        int currentSplitterHeight
+        )
+{
+    if (
+        m_mainSplitter == nullptr
+        || baseSizes.size() != 3
+        || baseSplitterHeight < 0
+        ) {
+        return false;
+    }
+
+    const int delta =
+        currentSplitterHeight
+        - baseSplitterHeight;
+
+    if (delta == 0) {
+        return false;
+    }
+
+    ensureSectionPreferredHeightsInitialized();
+
+    using ResizePolicy =
+        InvestigationSectionResizePolicy;
+
+    const ResizePolicy::OpenSections
+        openSections{
+            !m_timelineCollapsed,
+            !m_eventCollapsed,
+            !m_lowerRegionCollapsed
+        };
+
+    const ResizePolicy::SectionHeights
+        currentHeights{
+            baseSizes.at(0),
+            baseSizes.at(1),
+            baseSizes.at(2)
+        };
+
+    const ResizePolicy::ResizeLimits
+        limits{
+            m_timelineExpandedHeight,
+            minimumUsefulExpandedHeight(
+                InvestigationSection::Timeline
+                ),
+
+            minimumUsefulExpandedHeight(
+                InvestigationSection::Events
+                ),
+
+            m_lowerRegionExpandedHeight,
+            minimumUsefulExpandedHeight(
+                InvestigationSection::LowerDetails
+                )
+        };
+
+    /*
+     * These values describe the expected compact geometry.
+     *
+     * A section that is already collapsed contributes its
+     * real settled/native compact height. An open section
+     * uses the authored fallback until the collapse
+     * transition establishes its native constraint.
+     *
+     * Immediately after applying a collapse below, we
+     * reconcile any difference between that estimate and
+     * the native compact height actually established by
+     * the widget.
+     */
+    const ResizePolicy::CompactHeights
+        compactHeights{
+            sectionCompactHeight(
+                InvestigationSection::Timeline
+                ),
+            sectionCompactHeight(
+                InvestigationSection::Events
+                ),
+            sectionCompactHeight(
+                InvestigationSection::LowerDetails
+                )
+        };
+
+    const ResizePolicy::AutomaticResizeResult
+        result =
+        ResizePolicy::resizeAutomatically(
+            openSections,
+            currentHeights,
+            limits,
+            compactHeights,
+            m_timelinePreferredCollapsed,
+            m_eventPreferredCollapsed,
+            m_lowerRegionPreferredCollapsed,
+            delta
+            );
+
+    QList<int> targetSizes{
+        result.heights.timeline,
+        result.heights.events,
+        result.heights.lowerDetails
+    };
+
+    const bool wasApplyingPolicy =
+        m_applyingSectionCapacityPolicy;
+
+    m_applyingSectionCapacityPolicy =
+        true;
+
+    /*
+     * Do not expose intermediate QSplitter geometry while
+     * section constraints are changing.
+     */
+    m_mainSplitter->setUpdatesEnabled(
+        false
+        );
+
+    const auto investigationSectionForPolicySection =
+        [](
+            ResizePolicy::Section section
+            ) {
+            switch (section) {
+            case ResizePolicy::Section::Timeline:
+                return InvestigationSection::Timeline;
+
+            case ResizePolicy::Section::Events:
+                return InvestigationSection::Events;
+
+            case ResizePolicy::Section::LowerDetails:
+                return InvestigationSection::LowerDetails;
+            }
+
+            return InvestigationSection::Events;
+        };
+
+    /*
+     * The sign of the outer resize determines the
+     * transition direction:
+     *
+     * shrink -> automatic collapse
+     * grow   -> automatic reopen
+     */
+    const bool collapsing =
+        delta < 0;
+
+    for (
+        const ResizePolicy::Section transition
+        : result.transitions
+        ) {
+        setSectionCollapsed(
+            investigationSectionForPolicySection(
+                transition
+                ),
+            collapsing
+            );
+    }
+
+    /*
+     * Section transitions establish new native widget
+     * constraints. Make them authoritative before applying
+     * the final splitter allocation.
+     */
+    updateEventSectionPresentation();
+    updateTimelineMinimumHeight();
+    updateLowerRegionMinimumHeight();
+
+    if (layout() != nullptr) {
+        layout()->activate();
+    }
+
+    m_mainSplitter->updateGeometry();
+
+    /*
+     * ---------------------------------------------------------
+     * Compact-height reconciliation
+     * ---------------------------------------------------------
+     *
+     * Timeline in particular can establish a native
+     * collapsed title-strip height that differs from the
+     * authored fallback at fractional DPI.
+     *
+     * The planner must not leave an impossible requested
+     * compact height behind. Correct only sections that
+     * actually collapsed during this operation.
+     *
+     * Any newly released/required pixels belong to the same
+     * elastic recipient that owns surplus in the resulting
+     * open-section state.
+     */
+    if (collapsing) {
+        const auto indexForPolicySection =
+            [](
+                ResizePolicy::Section section
+                ) {
+                switch (section) {
+                case ResizePolicy::Section::Timeline:
+                    return 0;
+
+                case ResizePolicy::Section::Events:
+                    return 1;
+
+                case ResizePolicy::Section::LowerDetails:
+                    return 2;
+                }
+
+                return 1;
+            };
+
+        const bool anySectionOpen =
+            result.openSections.timeline
+            || result.openSections.events
+            || result.openSections.lowerDetails;
+
+        int recipientIndex = 1;
+
+        if (result.openSections.events) {
+            recipientIndex = 1;
+        } else if (result.openSections.lowerDetails) {
+            recipientIndex = 2;
+        } else if (result.openSections.timeline) {
+            recipientIndex = 0;
+        }
+
+        for (
+            const ResizePolicy::Section transition
+            : result.transitions
+            ) {
+            const int index =
+                indexForPolicySection(
+                    transition
+                    );
+
+            /*
+             * When Events is the last section to collapse,
+             * its outer container deliberately keeps the
+             * spare all-collapsed presentation space.
+             */
+            if (
+                transition
+                    == ResizePolicy::Section::Events
+                && !anySectionOpen
+                ) {
+                continue;
+            }
+
+            int actualCompactHeight = 0;
+
+            switch (transition) {
+            case ResizePolicy::Section::Timeline:
+                if (m_timelinePanel != nullptr) {
+                    actualCompactHeight =
+                        m_timelinePanel
+                            ->maximumHeight();
+                }
+                break;
+
+            case ResizePolicy::Section::Events:
+                if (m_eventPanel != nullptr) {
+                    actualCompactHeight =
+                        m_eventPanel
+                            ->collapsedHeight();
+                }
+                break;
+
+            case ResizePolicy::Section::LowerDetails:
+                actualCompactHeight =
+                    sectionCompactHeight(
+                        InvestigationSection::
+                        LowerDetails
+                        );
+                break;
+            }
+
+            if (actualCompactHeight <= 0) {
+                continue;
+            }
+
+            const int difference =
+                targetSizes.at(index)
+                - actualCompactHeight;
+
+            if (difference == 0) {
+                continue;
+            }
+
+            targetSizes[index] =
+                actualCompactHeight;
+
+            /*
+             * Positive difference:
+             *   actual compact geometry is smaller,
+             *   so more space was released.
+             *
+             * Negative difference:
+             *   actual compact geometry is larger,
+             *   so the recipient gives those pixels back.
+             */
+            targetSizes[recipientIndex] +=
+                difference;
+        }
+    }
+
+    applyMainSplitterSizes(
+        targetSizes
+        );
+
+    m_mainSplitter->setUpdatesEnabled(
+        true
+        );
+
+    m_mainSplitter->update();
+
+    m_applyingSectionCapacityPolicy =
+        wasApplyingPolicy;
+
+    /*
+     * m_sectionCapacity still supports the manual-chevron
+     * controls for this checkpoint. It no longer owns
+     * automatic native-window geometry.
+     */
+    m_sectionCapacity =
+        sectionCapacityForAvailableHeight();
+
+    updateEventSectionPresentation();
+    updateSectionCollapseControls();
+    updateSectionCollapseControlGeometry();
+
+    return true;
+}
+
 int InvestigationSessionView::
     sectionCompactHeight(
         InvestigationSection section
@@ -5852,11 +6345,17 @@ int InvestigationSessionView::
         if (
             m_timelineCollapsed
             && m_timelinePanel != nullptr
+            && m_timelinePanel->height() > 0
             ) {
-            return std::max(
-                fallback,
-                m_timelinePanel->height()
-                );
+            /*
+             * Once Timeline is actually collapsed, its
+             * settled native geometry is authoritative.
+             *
+             * The authored fallback exists only for cases
+             * where no usable collapsed measurement is
+             * available yet.
+             */
+            return m_timelinePanel->height();
         }
 
         return fallback;
@@ -5866,23 +6365,24 @@ int InvestigationSessionView::
             m_eventCollapsed
             && m_eventPanel != nullptr
             ) {
-            return std::max(
-                fallback,
-                m_eventPanel->collapsedHeight()
-                );
+            const int collapsedHeight =
+                m_eventPanel->collapsedHeight();
+
+            if (collapsedHeight > 0) {
+                return collapsedHeight;
+            }
         }
 
         return fallback;
 
     case InvestigationSection::LowerDetails:
     {
-        int height =
-            fallback;
+        int measuredHeight = 0;
 
         if (m_reviewPanel != nullptr) {
-            height =
+            measuredHeight =
                 std::max(
-                    height,
+                    measuredHeight,
                     m_reviewPanel->collapsedHeight()
                     );
         }
@@ -5891,15 +6391,17 @@ int InvestigationSessionView::
             m_lowerRegionCollapsed
             && m_eventDetailPanel != nullptr
             ) {
-            height =
+            measuredHeight =
                 std::max(
-                    height,
+                    measuredHeight,
                     m_eventDetailPanel
                         ->collapsedHeight()
                     );
         }
 
-        return height;
+        return measuredHeight > 0
+                   ? measuredHeight
+                   : fallback;
     }
     }
 
@@ -6119,7 +6621,6 @@ void InvestigationSessionView::
 
     if (
         m_hasConstrainedRestoreSnapshot
-        && m_constrainedSectionCollapsedDuringCycle
         && m_constrainedWindowResizeActive
         && !m_eventCollapsed
         && m_constrainedTimelinePreferredHeight > 0
@@ -6182,7 +6683,6 @@ void InvestigationSessionView::
 
         const bool constrainedRecoveryActive =
             m_hasConstrainedRestoreSnapshot
-            && m_constrainedSectionCollapsedDuringCycle
             && m_constrainedLowerPreferredHeight > 0;
 
         /*
@@ -6792,6 +7292,17 @@ void InvestigationSessionView::
         return;
     }
 
+    /*
+     * Native outer-window resizing is now owned entirely by
+     * InvestigationSectionResizePolicy.
+     *
+     * A previously queued legacy capacity pass must not
+     * intervene during that operation.
+     */
+    if (m_constrainedWindowResizeActive) {
+        return;
+    }
+
     const InvestigationSectionCapacity
         previousCapacity =
         m_sectionCapacity;
@@ -7051,12 +7562,31 @@ void InvestigationSessionView::
         }
     }
 
-    updateConstrainedRecoveryCompletion();
+    if (heightIncreasing) {
+        updateConstrainedRecoveryCompletion();
+    }
 
-    updateConstrainedRecoveryStretchFactors();
+    const bool partialRecoveryComplete =
+        heightIncreasing
+        && m_constrainedRecoveryComplete
+        && !m_constrainedSectionCollapsedDuringCycle;
 
-    updateTimelineMinimumHeight();
-    updateLowerRegionMinimumHeight();
+    if (partialRecoveryComplete) {
+        /*
+         * A shrink/reverse that never required a section
+         * collapse has returned to its starting presentation.
+         *
+         * The constrained cycle is finished. Hand ordinary
+         * resizing back to QSplitter rather than continuing
+         * to correct every subsequent growth event.
+         */
+        resetConstrainedRestoreState();
+    } else {
+        updateConstrainedRecoveryStretchFactors();
+
+        updateTimelineMinimumHeight();
+        updateLowerRegionMinimumHeight();
+    }
 
     const bool sectionStateChanged =
         openSectionCount()
@@ -7180,14 +7710,39 @@ void InvestigationSessionView::
      * during native window resizing cannot move the
      * recovery targets for the active constrained cycle.
      */
+    const QList<int> currentSizes =
+        m_mainSplitter != nullptr
+            ? m_mainSplitter->sizes()
+            : QList<int>();
+
+    const bool hasCurrentSizes =
+        currentSizes.size() == 3;
+
+    /*
+     * Freeze the presentation that was actually visible when
+     * this constrained resize cycle began.
+     *
+     * For an already-collapsed section, its current compact
+     * height is not an expanded recovery target, so retain its
+     * remembered expanded preference instead.
+     */
     m_constrainedTimelinePreferredHeight =
-        m_timelineExpandedHeight;
+        hasCurrentSizes
+                && !m_timelineCollapsed
+            ? currentSizes.at(0)
+            : m_timelineExpandedHeight;
 
     m_constrainedEventPreferredHeight =
-        m_eventExpandedHeight;
+        hasCurrentSizes
+                && !m_eventCollapsed
+            ? currentSizes.at(1)
+            : m_eventExpandedHeight;
 
     m_constrainedLowerPreferredHeight =
-        m_lowerRegionExpandedHeight;
+        hasCurrentSizes
+                && !m_lowerRegionCollapsed
+            ? currentSizes.at(2)
+            : m_lowerRegionExpandedHeight;
 
     m_constrainedLowerPreferredHeightRecovered =
         false;
@@ -7666,9 +8221,7 @@ void InvestigationSessionView::
      */
     if (
         !m_constrainedSectionCollapsedDuringCycle
-        && !m_timelineCollapsed
         && !m_eventCollapsed
-        && !m_lowerRegionCollapsed
         ) {
         QList<int> targetSizes =
             m_mainSplitter->sizes();
@@ -7680,7 +8233,8 @@ void InvestigationSessionView::
         int excessHeight = 0;
 
         if (
-            m_constrainedTimelinePreferredHeight > 0
+            !m_timelineCollapsed
+            && m_constrainedTimelinePreferredHeight > 0
             && targetSizes.at(0)
                    > m_constrainedTimelinePreferredHeight
             ) {
@@ -7693,7 +8247,8 @@ void InvestigationSessionView::
         }
 
         if (
-            m_constrainedLowerPreferredHeight > 0
+            !m_lowerRegionCollapsed
+            && m_constrainedLowerPreferredHeight > 0
             && targetSizes.at(2)
                    > m_constrainedLowerPreferredHeight
             ) {
@@ -7717,6 +8272,13 @@ void InvestigationSessionView::
 
         targetSizes[1] +=
             excessHeight;
+
+        qInfo()
+            << "[RECOVERY PARTIAL]"
+            << "current="
+            << m_mainSplitter->sizes()
+            << "target="
+            << targetSizes;
 
         applyMainSplitterSizes(
             targetSizes
@@ -7934,7 +8496,141 @@ void InvestigationSessionView::
         }
     }
 
+    qInfo()
+        << "[RECOVERY FULL]"
+        << "current="
+        << m_mainSplitter->sizes()
+        << "target="
+        << targetSizes;
+
     applyMainSplitterSizes(
         targetSizes
         );
+}
+
+void InvestigationSessionView::
+    handleAutomaticMainSplitterResize()
+{
+    if (
+        !m_automaticOuterResizeReady
+        || m_mainSplitter == nullptr
+        || m_handlingAutomaticSplitterResize
+        || m_manualSectionTransitionActive
+        ) {
+        return;
+    }
+
+    const int currentSplitterHeight =
+        m_mainSplitter->height();
+
+    if (
+        m_automaticResizeCanonicalSizes.size() != 3
+        || m_automaticResizeCanonicalSplitterHeight < 0
+        ) {
+        m_automaticResizeCanonicalSizes =
+            m_mainSplitter->sizes();
+
+        m_automaticResizeCanonicalSplitterHeight =
+            currentSplitterHeight;
+
+        return;
+    }
+
+    const int delta =
+        currentSplitterHeight
+        - m_automaticResizeCanonicalSplitterHeight;
+
+    m_handlingAutomaticSplitterResize =
+        true;
+
+    /*
+     * A width-only resize or other native geometry pass can
+     * still cause QSplitter to redistribute its children.
+     *
+     * If the vertical budget did not change, simply restore
+     * our policy-approved geometry.
+     */
+    if (delta == 0) {
+        if (
+            m_mainSplitter->sizes()
+            != m_automaticResizeCanonicalSizes
+            ) {
+            applyMainSplitterSizes(
+                m_automaticResizeCanonicalSizes
+                );
+        }
+
+        m_handlingAutomaticSplitterResize =
+            false;
+
+        return;
+    }
+
+    m_constrainedWindowResizeActive =
+        true;
+
+    if (m_constrainedResizeSettleTimer != nullptr) {
+        m_constrainedResizeSettleTimer->start();
+    }
+
+    const bool applied =
+        applyAutomaticOuterResize(
+            m_automaticResizeCanonicalSizes,
+            m_automaticResizeCanonicalSplitterHeight,
+            currentSplitterHeight
+            );
+
+    if (applied) {
+        /*
+         * Only the policy-approved settled result becomes
+         * canonical state.
+         *
+         * Never copy the pre-correction Qt allocation.
+         */
+        m_automaticResizeCanonicalSizes =
+            m_mainSplitter->sizes();
+
+        m_automaticResizeCanonicalSplitterHeight =
+            currentSplitterHeight;
+    }
+
+    m_lastAvailableMainSplitterHeight =
+        availableMainSplitterHeight();
+
+    m_handlingAutomaticSplitterResize =
+        false;
+}
+
+void InvestigationSessionView::
+    finishManualSectionTransition()
+{
+    if (m_mainSplitter == nullptr) {
+        m_manualSectionTransitionActive =
+            false;
+
+        return;
+    }
+
+    if (layout() != nullptr) {
+        layout()->activate();
+    }
+
+    /*
+     * The legacy manual collapse/expand helpers have now
+     * established the user's requested geometry.
+     *
+     * That geometry becomes the new authoritative starting
+     * state for future automatic outer-window resizing.
+     */
+    m_automaticResizeCanonicalSizes =
+        m_mainSplitter->sizes();
+
+    m_automaticResizeCanonicalSplitterHeight =
+        m_mainSplitter->height();
+
+    m_lastAvailableMainSplitterHeight =
+        availableMainSplitterHeight();
+
+    m_manualSectionTransitionActive =
+        false;
 }

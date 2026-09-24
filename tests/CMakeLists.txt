@@ -198,6 +198,27 @@ add_test(
     COMMAND RecordSeverityTests
 )
 
+qt_add_executable(
+    InvestigationSectionResizePolicyTests
+
+    InvestigationSectionResizePolicyTests.cpp
+
+    ../src/ui/workspace/InvestigationSectionResizePolicy.h
+    ../src/ui/workspace/InvestigationSectionResizePolicy.cpp
+)
+
+target_link_libraries(
+    InvestigationSectionResizePolicyTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSectionResizePolicyTests
+    COMMAND InvestigationSectionResizePolicyTests
+)
+
 # ----------------------------------------------------------------------------
 # Source discovery
 # ----------------------------------------------------------------------------
@@ -1846,6 +1867,8 @@ qt_add_executable(
     ../src/ui/investigation/InvestigationTimelinePanel.h
     ../src/ui/investigation/InvestigationTimelinePanel.cpp
 
+    ../src/ui/workspace/InvestigationSectionResizePolicy.h
+    ../src/ui/workspace/InvestigationSectionResizePolicy.cpp
     ../src/ui/workspace/InvestigationSessionView.h
     ../src/ui/workspace/InvestigationSessionView.cpp
     ../src/ui/workspace/LiveFollowTabControl.h

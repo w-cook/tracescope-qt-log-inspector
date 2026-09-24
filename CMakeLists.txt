@@ -277,6 +277,8 @@ qt_add_executable(TraceScope
     src/workspace/WorkspaceWorkingArtifactStore.h
     src/workspace/WorkspaceWorkingArtifactStore.cpp
     src/ui/ItemViewFocusDelegate.h
+    src/ui/workspace/InvestigationSectionResizePolicy.h
+    src/ui/workspace/InvestigationSectionResizePolicy.cpp
 
 )
 

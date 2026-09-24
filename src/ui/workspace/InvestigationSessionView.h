@@ -334,6 +334,16 @@ private:
 
     void applyConstrainedRecoveryLayout();
 
+    bool applyAutomaticOuterResize(
+        const QList<int> &baseSizes,
+        int baseSplitterHeight,
+        int currentSplitterHeight
+        );
+
+    void handleAutomaticMainSplitterResize();
+
+    void finishManualSectionTransition();
+
     InvestigationSession *m_session =
         nullptr;
 
@@ -498,4 +508,18 @@ private:
 
     int m_lastAvailableMainSplitterHeight =
         -1;
+
+    bool m_automaticOuterResizeReady =
+        false;
+
+    QList<int> m_automaticResizeCanonicalSizes;
+
+    int m_automaticResizeCanonicalSplitterHeight =
+        -1;
+
+    bool m_handlingAutomaticSplitterResize =
+        false;
+
+    bool m_manualSectionTransitionActive =
+        false;
 };
