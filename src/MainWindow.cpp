@@ -564,6 +564,8 @@ MainWindow::MainWindow(QWidget *parent)
     createMenus();
     buildLayout();
 
+    refreshRecentFilesMenu();
+    refreshRecentWorkspacesMenu();
     updateWorkspaceSaveActionState();
 
     connect(
@@ -638,6 +640,36 @@ MainWindow::MainWindow(QWidget *parent)
         this,
         [this]() {
             openWorkspace();
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        recentFilesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu,
+            WorkspaceDocumentHost *targetHost
+            ) {
+            populateRecentFilesMenu(
+                menu,
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        recentWorkspacesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu
+            ) {
+            populateRecentWorkspacesMenu(
+                menu
+                );
         }
         );
 
@@ -1860,6 +1892,25 @@ void MainWindow::configureDetachedWindow(
                 .isEmpty()
         );
 
+    if (window->documentHost()
+        != nullptr) {
+        window
+            ->documentHost()
+            ->setRecentFilesAvailable(
+                !recentItemsStore
+                     .recentFiles()
+                     .isEmpty()
+                );
+
+        window
+            ->documentHost()
+            ->setRecentWorkspacesAvailable(
+                !recentItemsStore
+                     .recentWorkspaces()
+                     .isEmpty()
+                );
+    }
+
     /*
      * Also initializes Save Snapshot / Reload for the
      * new window. The window may still be empty here;
@@ -2283,7 +2334,8 @@ void MainWindow::openInvestigationSnapshot(
             watcher,
             progressDialog,
             persistedSession,
-            targetHostGuard
+            targetHostGuard,
+            absoluteSnapshotPath
         ]() mutable {
             const bool cancelled =
                 watcher->isCanceled();
@@ -2525,6 +2577,12 @@ void MainWindow::openInvestigationSnapshot(
                 false
                 );
 
+            recentItemsStore.addRecentFile(
+                absoluteSnapshotPath
+                );
+
+            refreshRecentFilesMenu();
+
             if (emptySnapshot) {
                 QMessageBox::warning(
                     this,
@@ -2713,6 +2771,12 @@ void MainWindow::saveInvestigationSnapshot(
 
         return;
     }
+
+    recentItemsStore.addRecentFile(
+        filePath
+        );
+
+    refreshRecentFilesMenu();
 
     QMessageBox::information(
         dialogParent,
@@ -6451,6 +6515,34 @@ void MainWindow::refreshRecentFilesMenu()
         recentFilesMenu,
         workspaceDocumentHost
         );
+
+    const bool available =
+        !recentItemsStore
+             .recentFiles()
+             .isEmpty();
+
+    if (workspaceDocumentHost != nullptr) {
+        workspaceDocumentHost
+            ->setRecentFilesAvailable(
+                available
+                );
+
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : workspaceDocumentHost
+                  ->detachedWindows()
+            ) {
+            if (window != nullptr
+                && window->documentHost()
+                       != nullptr) {
+                window
+                    ->documentHost()
+                    ->setRecentFilesAvailable(
+                        available
+                        );
+            }
+        }
+    }
 }
 
 void MainWindow::refreshRecentWorkspacesMenu()
@@ -6458,6 +6550,34 @@ void MainWindow::refreshRecentWorkspacesMenu()
     populateRecentWorkspacesMenu(
         recentWorkspacesMenu
         );
+
+    const bool available =
+        !recentItemsStore
+             .recentWorkspaces()
+             .isEmpty();
+
+    if (workspaceDocumentHost != nullptr) {
+        workspaceDocumentHost
+            ->setRecentWorkspacesAvailable(
+                available
+                );
+
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : workspaceDocumentHost
+                  ->detachedWindows()
+            ) {
+            if (window != nullptr
+                && window->documentHost()
+                       != nullptr) {
+                window
+                    ->documentHost()
+                    ->setRecentWorkspacesAvailable(
+                        available
+                        );
+            }
+        }
+    }
 }
 
 void MainWindow::openRecentFile(
@@ -6487,12 +6607,32 @@ void MainWindow::openRecentFile(
             dialogParent,
             tr("Recent File Not Found"),
             tr(
-                "The recent log file no longer "
+                "The recent file no longer "
                 "exists at:\n%1"
                 )
                 .arg(
                     filePath
                     )
+            );
+
+        return;
+    }
+
+    const bool isSnapshot =
+        fileInfo
+            .suffix()
+            .compare(
+                QStringLiteral(
+                    "tsinv"
+                    ),
+                Qt::CaseInsensitive
+                )
+        == 0;
+
+    if (isSnapshot) {
+        openInvestigationSnapshot(
+            filePath,
+            targetHost
             );
 
         return;

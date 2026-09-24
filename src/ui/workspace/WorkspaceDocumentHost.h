@@ -113,6 +113,14 @@ public:
         bool enabled
         );
 
+    void setRecentFilesAvailable(
+        bool available
+        );
+
+    void setRecentWorkspacesAvailable(
+        bool available
+        );
+
     void refreshInterfaceScale();
 
 signals:
@@ -156,6 +164,15 @@ signals:
         );
 
     void openWorkspaceRequested();
+
+    void recentFilesMenuAboutToShow(
+        QMenu *menu,
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void recentWorkspacesMenuAboutToShow(
+        QMenu *menu
+        );
 
 private slots:
     void updateDocumentTitle(
@@ -290,6 +307,12 @@ private:
     QPushButton *m_emptyStateOpenWorkspaceButton =
         nullptr;
 
+    QPushButton *m_emptyStateRecentFilesButton =
+        nullptr;
+
+    QPushButton *m_emptyStateRecentWorkspacesButton =
+        nullptr;
+
     /*
      * Only meaningful on the root host.
      */
@@ -305,4 +328,13 @@ private:
 
     QSpacerItem *m_emptyStateActionSpacing =
         nullptr;
+
+    bool m_fileOperationsEnabled =
+        true;
+
+    bool m_recentFilesAvailable =
+        false;
+
+    bool m_recentWorkspacesAvailable =
+        false;
 };

@@ -330,6 +330,18 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             m_emptyStateWidget
             );
 
+    m_emptyStateRecentFilesButton =
+        new QPushButton(
+            tr("Recent Files"),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateRecentWorkspacesButton =
+        new QPushButton(
+            tr("Recent Workspaces"),
+            m_emptyStateWidget
+            );
+
     emptyStateLayout->addWidget(
         m_emptyStateOpenLogButton,
         0,
@@ -344,6 +356,18 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
 
     emptyStateLayout->addWidget(
         m_emptyStateOpenWorkspaceButton,
+        0,
+        Qt::AlignHCenter
+        );
+
+    emptyStateLayout->addWidget(
+        m_emptyStateRecentFilesButton,
+        0,
+        Qt::AlignHCenter
+        );
+
+    emptyStateLayout->addWidget(
+        m_emptyStateRecentWorkspacesButton,
         0,
         Qt::AlignHCenter
         );
@@ -380,6 +404,77 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         this,
         [this]() {
             emit openWorkspaceRequested();
+        }
+        );
+
+    connect(
+        m_emptyStateRecentFilesButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            QMenu menu(
+                m_emptyStateRecentFilesButton
+                );
+
+            menu.setToolTipsVisible(
+                true
+                );
+
+            emit recentFilesMenuAboutToShow(
+                &menu,
+                this
+                );
+
+            if (!menu.isEnabled()
+                || menu.actions().isEmpty()) {
+                return;
+            }
+
+            menu.exec(
+                m_emptyStateRecentFilesButton
+                    ->mapToGlobal(
+                        QPoint(
+                            0,
+                            m_emptyStateRecentFilesButton
+                                ->height()
+                            )
+                        )
+                );
+        }
+        );
+
+    connect(
+        m_emptyStateRecentWorkspacesButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            QMenu menu(
+                m_emptyStateRecentWorkspacesButton
+                );
+
+            menu.setToolTipsVisible(
+                true
+                );
+
+            emit recentWorkspacesMenuAboutToShow(
+                &menu
+                );
+
+            if (!menu.isEnabled()
+                || menu.actions().isEmpty()) {
+                return;
+            }
+
+            menu.exec(
+                m_emptyStateRecentWorkspacesButton
+                    ->mapToGlobal(
+                        QPoint(
+                            0,
+                            m_emptyStateRecentWorkspacesButton
+                                ->height()
+                            )
+                        )
+                );
         }
         );
 
@@ -498,6 +593,24 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             m_rootHost,
             &WorkspaceDocumentHost::
             openWorkspaceRequested
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            recentFilesMenuAboutToShow,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            recentFilesMenuAboutToShow
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            recentWorkspacesMenuAboutToShow,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            recentWorkspacesMenuAboutToShow
             );
     }
 
@@ -2781,6 +2894,9 @@ void WorkspaceDocumentHost::
         bool enabled
         )
 {
+    m_fileOperationsEnabled =
+        enabled;
+
     if (m_emptyStateOpenLogButton != nullptr) {
         m_emptyStateOpenLogButton
             ->setEnabled(
@@ -2799,6 +2915,60 @@ void WorkspaceDocumentHost::
         m_emptyStateOpenWorkspaceButton
             ->setEnabled(
                 enabled
+                );
+    }
+
+    if (m_emptyStateRecentFilesButton
+        != nullptr) {
+        m_emptyStateRecentFilesButton
+            ->setEnabled(
+                enabled
+                && m_recentFilesAvailable
+                );
+    }
+
+    if (m_emptyStateRecentWorkspacesButton
+        != nullptr) {
+        m_emptyStateRecentWorkspacesButton
+            ->setEnabled(
+                enabled
+                && m_recentWorkspacesAvailable
+                );
+    }
+}
+
+void WorkspaceDocumentHost::
+    setRecentFilesAvailable(
+        bool available
+        )
+{
+    m_recentFilesAvailable =
+        available;
+
+    if (m_emptyStateRecentFilesButton
+        != nullptr) {
+        m_emptyStateRecentFilesButton
+            ->setEnabled(
+                m_fileOperationsEnabled
+                && m_recentFilesAvailable
+                );
+    }
+}
+
+void WorkspaceDocumentHost::
+    setRecentWorkspacesAvailable(
+        bool available
+        )
+{
+    m_recentWorkspacesAvailable =
+        available;
+
+    if (m_emptyStateRecentWorkspacesButton
+        != nullptr) {
+        m_emptyStateRecentWorkspacesButton
+            ->setEnabled(
+                m_fileOperationsEnabled
+                && m_recentWorkspacesAvailable
                 );
     }
 }
