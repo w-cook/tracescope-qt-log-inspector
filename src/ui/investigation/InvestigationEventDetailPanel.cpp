@@ -18,6 +18,7 @@
 #include <QMargins>
 
 #include "../InterfaceScale.h"
+#include "../ScaleAwareComboBox.h"
 #include "../../domain/RecordSeverity.h"
 
 InvestigationEventDetailPanel::
@@ -32,7 +33,7 @@ InvestigationEventDetailPanel::
         new QPlainTextEdit(this)
         ),
     m_findingStatusCombo(
-        new QComboBox(this)
+        new ScaleAwareComboBox(this)
         ),
     m_noteButton(
         new QPushButton(

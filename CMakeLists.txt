@@ -279,6 +279,7 @@ qt_add_executable(TraceScope
     src/ui/ItemViewFocusDelegate.h
     src/ui/workspace/InvestigationSectionResizePolicy.h
     src/ui/workspace/InvestigationSectionResizePolicy.cpp
+    src/ui/ScaleAwareComboBox.h
 
 )
 

@@ -33,28 +33,12 @@
 #include <QtCharts/QValueAxis>
 
 #include "../InterfaceScale.h"
+#include "../ScaleAwareComboBox.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../workspace/InvestigationSession.h"
 
 namespace
 {
-class ScaleAwareComboBox : public QComboBox
-{
-public:
-    using QComboBox::QComboBox;
-
-    QSize minimumSizeHint() const override
-    {
-        const QSize nativeMinimum =
-            QComboBox::minimumSizeHint();
-
-        return QSize(
-            nativeMinimum.width(),
-            QComboBox::sizeHint().height()
-            );
-    }
-};
-
 constexpr int TimelineMaximumVisibleBucketCount =
     20;
 
