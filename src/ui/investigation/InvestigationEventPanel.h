@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QGroupBox>
 #include <QMetaObject>
+#include <QSet>
 #include <QString>
 
 #include "../../workspace/InvestigationPresentationState.h"
@@ -90,6 +91,12 @@ signals:
         bool startBoundary
         );
 
+protected:
+    bool eventFilter(
+        QObject *watched,
+        QEvent *event
+        ) override;
+
 private:
     void connectSelectionModel();
 
@@ -149,4 +156,7 @@ private:
 
     bool m_collapsed =
         false;
+
+    bool m_headerMouseDown = false;
+    QSet<int> m_manuallyResizedColumns;
 };

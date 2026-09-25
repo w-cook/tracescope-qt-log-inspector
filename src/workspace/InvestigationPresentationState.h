@@ -36,6 +36,8 @@ struct InvestigationEventTablePresentationState
 
     QVector<int> columnWidths;
 
+    QVector<int> manuallyResizedColumns;
+
     int sortColumn = -1;
     Qt::SortOrder sortOrder =
         Qt::AscendingOrder;

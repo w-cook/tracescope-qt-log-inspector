@@ -338,6 +338,8 @@ void InvestigationPresentationStateTests::
         width = 240;
     }
 
+    desired.manuallyResizedColumns = {1};
+
     desired.selectedRecordId =
         QStringLiteral("record-040");
 
@@ -372,6 +374,11 @@ void InvestigationPresentationStateTests::
     const InvestigationEventTablePresentationState
         saved =
         panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.manuallyResizedColumns,
+        desired.manuallyResizedColumns
+        );
 
     QCOMPARE(
         saved.selectedRecordId,
@@ -479,6 +486,11 @@ void InvestigationPresentationStateTests::
     QCOMPARE(
         restored.columnWidths,
         saved.columnWidths
+        );
+
+    QCOMPARE(
+        restored.manuallyResizedColumns,
+        saved.manuallyResizedColumns
         );
 
     QCOMPARE(

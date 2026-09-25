@@ -1711,6 +1711,10 @@ void WorkspaceSerializationTests::
         240
     };
 
+    state.eventTable.manuallyResizedColumns = {
+        1
+    };
+
     state.eventTable.sortColumn =
         2;
 
@@ -1902,6 +1906,11 @@ void WorkspaceSerializationTests::
     QCOMPARE(
         restored.eventTable.columnWidths,
         state.eventTable.columnWidths
+        );
+
+    QCOMPARE(
+        restored.eventTable.manuallyResizedColumns,
+        state.eventTable.manuallyResizedColumns
         );
 
     QCOMPARE(

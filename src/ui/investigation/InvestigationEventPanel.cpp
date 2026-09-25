@@ -7,11 +7,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QEvent>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSignalBlocker>
@@ -665,12 +667,17 @@ InvestigationEventPanel::
      * ---------------------------------------------------------
      */
 
+    m_table
+        ->horizontalHeader()
+        ->viewport()
+        ->installEventFilter(this);
+
     connect(
         m_table->horizontalHeader(),
         &QHeaderView::sectionResized,
         this,
         [this](
-            int,
+            int logicalIndex,
             int,
             int
             ) {
@@ -678,6 +685,23 @@ InvestigationEventPanel::
                 || m_table->model()
                        == nullptr) {
                 return;
+            }
+
+            /*
+             * Automatic section changes also emit sectionResized.
+             * Only classify changes during interaction with the
+             * horizontal header as potentially manual.
+             *
+             * The stretched final column is excluded because
+             * Qt can resize it as a consequence of resizing
+             * another column.
+             */
+            if (m_headerMouseDown
+                && logicalIndex
+                       != m_table->horizontalHeader()->count() - 1
+                && !m_manuallyResizedColumns.contains(logicalIndex)) {
+
+                m_manuallyResizedColumns.insert(logicalIndex);
             }
 
             const int columnCount =
@@ -1255,6 +1279,20 @@ InvestigationEventTablePresentationState
                 m_table->columnWidth(column)
                 );
         }
+
+        for (int column : m_manuallyResizedColumns) {
+            if (column >= 0
+                && column < header->count() - 1) {
+                state.manuallyResizedColumns.append(
+                    column
+                    );
+            }
+        }
+
+        std::sort(
+            state.manuallyResizedColumns.begin(),
+            state.manuallyResizedColumns.end()
+            );
     }
 
     if (m_table->horizontalScrollBar()
@@ -1293,6 +1331,29 @@ void InvestigationEventPanel::
      */
     QHeaderView *header =
         m_table->horizontalHeader();
+
+    m_headerMouseDown = false;
+    m_manuallyResizedColumns.clear();
+
+    if (header != nullptr) {
+        const int applicableColumns =
+            std::min(
+                header->count(),
+                static_cast<int>(
+                    state.columnWidths.size()
+                    )
+                );
+
+        for (int column
+             : state.manuallyResizedColumns) {
+            if (column >= 0
+                && column < applicableColumns - 1) {
+                m_manuallyResizedColumns.insert(
+                    column
+                    );
+            }
+        }
+    }
 
     if (header != nullptr
         && !state.columnWidths.isEmpty()) {
@@ -1423,93 +1484,29 @@ void InvestigationEventPanel::
         m_navigationLayout->invalidate();
     }
 
+
     /*
-     * Preserve the user's existing column-width
-     * proportions while scaling those widths with
-     * the rest of the interface.
+     * Auto-sized columns must be remeasured using the
+     * new font. Manually adjusted columns retain their
+     * relative widths across interface-scale changes.
      *
-     * Do not resize-to-contents here: that would
-     * discard deliberate user adjustments.
+     * Perform the actual resizing in the existing
+     * deferred callback after Qt's font settles.
      */
     const qreal newScaleFactor =
-        InterfaceScale::geometryFactor(
-            m_table
-            );
+        InterfaceScale::geometryFactor(m_table);
 
-    if (
-        m_table->model() != nullptr
-        && m_columnWidthScaleFactor > 0.0
+    const bool scaleChanged =
+        m_columnWidthScaleFactor > 0.0
         && !qFuzzyCompare(
             newScaleFactor,
             m_columnWidthScaleFactor
-            )
-        ) {
-        const qreal widthRatio =
-            newScaleFactor
-            / m_columnWidthScaleFactor;
+            );
 
-        QHeaderView *header =
-            m_table->horizontalHeader();
-
-        if (header != nullptr) {
-            const QSignalBlocker blocker(
-                header
-                );
-
-            QVector<int> scaledWidths;
-
-            const int columnCount =
-                header->count();
-
-            scaledWidths.reserve(
-                columnCount
-                );
-
-            for (
-                int column = 0;
-                column < columnCount;
-                ++column
-                ) {
-                const int currentWidth =
-                    m_table->columnWidth(
-                        column
-                        );
-
-                const int scaledWidth =
-                    std::max(
-                        1,
-                        qRound(
-                            static_cast<qreal>(
-                                currentWidth
-                                )
-                            * widthRatio
-                            )
-                        );
-
-                m_table->setColumnWidth(
-                    column,
-                    scaledWidth
-                    );
-
-                scaledWidths.append(
-                    scaledWidth
-                    );
-            }
-
-            /*
-             * Keep the session's persisted
-             * presentation state synchronized with
-             * what is actually displayed.
-             */
-            if (m_session != nullptr) {
-                m_session->setColumnWidths(
-                    std::move(
-                        scaledWidths
-                        )
-                    );
-            }
-        }
-    }
+    const qreal manualWidthRatio =
+        scaleChanged
+            ? newScaleFactor / m_columnWidthScaleFactor
+            : 1.0;
 
     m_columnWidthScaleFactor =
         newScaleFactor;
@@ -1550,10 +1547,92 @@ void InvestigationEventPanel::
     QTimer::singleShot(
         0,
         this,
-        [this]() {
+        [this, scaleChanged, manualWidthRatio]() {
             if (m_table == nullptr
                 || m_table->model() == nullptr) {
                 return;
+            }
+
+
+            if (scaleChanged) {
+                QHeaderView *header =
+                    m_table->horizontalHeader();
+
+                const int columnCount =
+                    header->count();
+
+                /*
+                 * Snapshot manual widths before remeasuring
+                 * all columns.
+                 */
+                QVector<int> manualWidths(
+                    columnCount,
+                    -1
+                    );
+
+                for (int column : std::as_const(
+                         m_manuallyResizedColumns)) {
+
+                    if (column < 0
+                        || column >= columnCount) {
+                        continue;
+                    }
+
+                    manualWidths[column] =
+                        std::max(
+                            1,
+                            qRound(
+                                m_table->columnWidth(column)
+                                * manualWidthRatio
+                                )
+                            );
+                }
+
+                /*
+                 * Match the existing fresh-import behavior,
+                 * then restore deliberate manual adjustments.
+                 *
+                 * Suppress sectionResized while applying
+                 * programmatic changes.
+                 */
+                {
+                    const QSignalBlocker blocker(header);
+
+                    m_table->resizeColumnsToContents();
+
+                    for (int column = 0;
+                         column < columnCount;
+                         ++column) {
+
+                        if (manualWidths[column] > 0) {
+                            m_table->setColumnWidth(
+                                column,
+                                manualWidths[column]
+                                );
+                        }
+                    }
+                }
+
+                /*
+                 * Persist the final displayed widths using
+                 * the existing session representation.
+                 */
+                if (m_session != nullptr) {
+                    QVector<int> widths;
+                    widths.reserve(columnCount);
+
+                    for (int column = 0;
+                         column < columnCount;
+                         ++column) {
+                        widths.append(
+                            m_table->columnWidth(column)
+                            );
+                    }
+
+                    m_session->setColumnWidths(
+                        std::move(widths)
+                        );
+                }
             }
 
             // Measure using the settled application font.
@@ -1567,41 +1646,6 @@ void InvestigationEventPanel::
                 "updateGeometries",
                 Qt::DirectConnection
                 );
-
-            QHeaderView *header =
-                m_table->verticalHeader();
-
-            if (header != nullptr
-                && header->count() > 0) {
-
-                QStyleOptionHeader option;
-
-                option.initFrom(header);
-                option.orientation = Qt::Vertical;
-
-                option.rect = QRect(
-                    0,
-                    0,
-                    header->width(),
-                    header->sectionSize(0)
-                    );
-
-                option.text =
-                    QStringLiteral("★ 180");
-
-                option.textAlignment =
-                    Qt::AlignRight | Qt::AlignVCenter;
-
-                const QRect labelRect =
-                    header->style()->subElementRect(
-                        QStyle::SE_HeaderLabel,
-                        &option,
-                        header
-                        );
-
-                const QFontMetrics metrics =
-                    header->fontMetrics();
-            }
 
             m_table->viewport()->update();
         }
@@ -1721,6 +1765,44 @@ int InvestigationEventPanel::
     }
 
     return 0;
+}
+
+
+bool InvestigationEventPanel::
+    eventFilter(
+        QObject *watched,
+        QEvent *event
+        )
+{
+    if (m_table != nullptr
+        && watched
+               == m_table
+                      ->horizontalHeader()
+                      ->viewport()) {
+
+        if (event->type()
+            == QEvent::MouseButtonPress) {
+            const auto *mouseEvent =
+                static_cast<QMouseEvent *>(event);
+
+            if (mouseEvent->button()
+                == Qt::LeftButton) {
+                m_headerMouseDown = true;
+            }
+        } else if (
+            event->type()
+                == QEvent::MouseButtonRelease
+            || event->type()
+                   == QEvent::UngrabMouse
+            ) {
+            m_headerMouseDown = false;
+        }
+    }
+
+    return QGroupBox::eventFilter(
+        watched,
+        event
+        );
 }
 
 void InvestigationEventPanel::
