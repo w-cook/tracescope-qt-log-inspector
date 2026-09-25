@@ -21,6 +21,7 @@
 #include <QTableWidgetItem>
 #include <QTextDocument>
 #include <QTextOption>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "../InterfaceScale.h"
@@ -1186,60 +1187,71 @@ void InvestigationFindingsPanel::
         m_headerLayout->invalidate();
     }
 
-    m_table
-        ->verticalHeader()
-        ->setMinimumSectionSize(
-            m_table
-                ->fontMetrics()
-                .height()
-            + InterfaceScale::pixels(
-                8,
-                m_table
-                )
-            );
 
     /*
-     * The event-number column is intentionally a
-     * fixed design width and therefore participates
-     * directly in Interface Scale.
+     * Finding rows are content-sized because the
+     * description can wrap across multiple lines.
+     *
+     * Wait until the updated font and style settle,
+     * then recalculate the column and row geometry.
      */
-    m_table->setColumnWidth(
-        1,
-        InterfaceScale::pixels(
-            58,
-            m_table
-            )
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_table == nullptr) {
+                return;
+            }
+
+            QHeaderView *header =
+                m_table->verticalHeader();
+
+            if (header == nullptr) {
+                return;
+            }
+
+            /*
+             * Release the previous scale's minimum
+             * section size before measuring rows.
+             */
+            header->setMinimumSectionSize(
+                m_table->fontMetrics().height()
+                + InterfaceScale::pixels(
+                    8,
+                    m_table
+                    )
+                );
+
+            /*
+             * Keep the event-number column at its
+             * intended scaled design width.
+             */
+            m_table->setColumnWidth(
+                1,
+                InterfaceScale::pixels(
+                    58,
+                    m_table
+                    )
+                );
+
+            m_table->resizeColumnToContents(0);
+            m_table->resizeColumnToContents(2);
+
+            /*
+             * Measure wrapped descriptions using
+             * the updated font and column widths.
+             */
+            m_table->resizeRowsToContents();
+
+            updateMinimumUsableWidth();
+
+            m_table->updateGeometry();
+            m_table->viewport()->update();
+
+            updateGeometry();
+            update();
+        }
         );
-
-    /*
-     * Status and timestamp are content-sized.
-     * Recalculate them after the application font
-     * changes while leaving Finding as the stretch
-     * column.
-     */
-    m_table->resizeColumnToContents(
-        0
-        );
-
-    m_table->resizeColumnToContents(
-        2
-        );
-
-    /*
-     * FindingTextDelegate already reads
-     * InterfaceScale dynamically from paint() and
-     * sizeHint(). Recalculate row heights so those
-     * new size hints are actually applied.
-     */
-    m_table->resizeRowsToContents();
-
-    updateMinimumUsableWidth();
-
-    m_table->updateGeometry();
-    m_table->viewport()->update();
-
-    updateGeometry();
-    update();
 }
 
 void InvestigationFindingsPanel::
