@@ -54,6 +54,12 @@ WorkspaceTabBar::WorkspaceTabBar(
         );
 }
 
+int WorkspaceTabBar::
+    normalTabRowHeight() const
+{
+    return emptyDropTargetHeight();
+}
+
 void WorkspaceTabBar::setDocumentTint(
     const QString &documentId,
     const QColor &color

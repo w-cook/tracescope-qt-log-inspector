@@ -43,6 +43,8 @@ public:
         bool active
         );
 
+    int normalTabRowHeight() const;
+
 signals:
     void documentDragStarted(
         const QString &documentId

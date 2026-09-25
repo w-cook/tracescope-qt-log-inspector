@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QCursor>
 #include <QDrag>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
 #include <QMenu>
@@ -12,9 +13,12 @@
 #include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSpacerItem>
+#include <QStyle>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
+
+#include <QTimer>
 
 #include <utility>
 
@@ -342,34 +346,59 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             m_emptyStateWidget
             );
 
-    emptyStateLayout->addWidget(
-        m_emptyStateOpenLogButton,
-        0,
-        Qt::AlignHCenter
+
+    /*
+     * Primary open actions.
+     *
+     * Keeping these controls on one centered row reduces
+     * the start surface's required vertical height.
+     */
+    auto *openActionsLayout =
+        new QHBoxLayout();
+
+    openActionsLayout->addStretch(1);
+
+    openActionsLayout->addWidget(
+        m_emptyStateOpenLogButton
         );
 
-    emptyStateLayout->addWidget(
-        m_emptyStateOpenSnapshotButton,
-        0,
-        Qt::AlignHCenter
+    openActionsLayout->addWidget(
+        m_emptyStateOpenSnapshotButton
         );
 
-    emptyStateLayout->addWidget(
-        m_emptyStateOpenWorkspaceButton,
-        0,
-        Qt::AlignHCenter
+    openActionsLayout->addWidget(
+        m_emptyStateOpenWorkspaceButton
         );
 
-    emptyStateLayout->addWidget(
-        m_emptyStateRecentFilesButton,
-        0,
-        Qt::AlignHCenter
+    openActionsLayout->addStretch(1);
+
+    emptyStateLayout->addLayout(
+        openActionsLayout
         );
 
-    emptyStateLayout->addWidget(
-        m_emptyStateRecentWorkspacesButton,
-        0,
-        Qt::AlignHCenter
+    /*
+     * Recent-item actions use a separate centered row.
+     *
+     * These retain their existing shared menu population
+     * and enabled-state behavior.
+     */
+    auto *recentActionsLayout =
+        new QHBoxLayout();
+
+    recentActionsLayout->addStretch(1);
+
+    recentActionsLayout->addWidget(
+        m_emptyStateRecentFilesButton
+        );
+
+    recentActionsLayout->addWidget(
+        m_emptyStateRecentWorkspacesButton
+        );
+
+    recentActionsLayout->addStretch(1);
+
+    emptyStateLayout->addLayout(
+        recentActionsLayout
         );
 
     emptyStateLayout->addStretch(
@@ -2857,6 +2886,7 @@ void WorkspaceDocumentHost::
     }
 }
 
+
 void WorkspaceDocumentHost::
     updateEmptyStatePresentation()
 {
@@ -2886,7 +2916,53 @@ void WorkspaceDocumentHost::
             );
     }
 
+    /*
+     * The empty page is an overlay, not a normal tab.
+     * Qt therefore excludes its content from the
+     * tab widget's natural minimum height.
+     *
+     * Reserve both its actual content requirement
+     * and the normal styled tab-row height.
+     *
+     * Release the explicit constraint when a document
+     * opens. Normal document sizing then takes over.
+     */
+    int minimumHeight = 0;
+
+    if (empty
+        && m_emptyStateWidget != nullptr) {
+        minimumHeight =
+            m_emptyStateWidget
+                ->minimumSizeHint()
+                .height()
+            + InterfaceScale::pixels(
+                2,
+                m_emptyStateWidget
+                );
+
+        if (tabBar != nullptr) {
+            minimumHeight +=
+                tabBar->normalTabRowHeight();
+
+            minimumHeight += std::max(
+                0,
+                m_tabs->style()->pixelMetric(
+                    QStyle::PM_DefaultFrameWidth,
+                    nullptr,
+                    m_tabs
+                    )
+                );
+        }
+    }
+
+    m_tabs->setMinimumHeight(
+        minimumHeight + (empty ? 1 : 0)
+        );
+
     m_tabs->updateEmptyStateGeometry();
+
+    m_tabs->updateGeometry();
+    updateGeometry();
 }
 
 void WorkspaceDocumentHost::
@@ -3033,4 +3109,6 @@ void WorkspaceDocumentHost::
 
     updateGeometry();
     update();
+
+    updateEmptyStatePresentation();
 }
