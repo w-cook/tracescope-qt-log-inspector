@@ -1829,6 +1829,16 @@ void InvestigationTimelinePanel::
         tr("No events to display")
         );
 
+    /*
+     * QChartView retains the larger of its existing
+     * minimum and the incoming chart's minimum.
+     *
+     * Clear the previous chart's constraint before
+     * installation so a reduced Interface Scale can
+     * establish its own appropriate minimum.
+     */
+    m_chartView->setMinimumSize(0, 0);
+
     m_chartView->setChart(
         chart
         );
@@ -2430,6 +2440,16 @@ void InvestigationTimelinePanel::render()
             axisY
             );
 
+        /*
+         * QChartView retains the larger of its existing
+         * minimum and the incoming chart's minimum.
+         *
+         * Clear the previous chart's constraint before
+         * installation so a reduced Interface Scale can
+         * establish its own appropriate minimum.
+         */
+        m_chartView->setMinimumSize(0, 0);
+
         m_chartView->setChart(
             chart
             );
@@ -2548,6 +2568,16 @@ void InvestigationTimelinePanel::render()
         series->attachAxis(
             axisY
             );
+
+        /*
+         * QChartView retains the larger of its existing
+         * minimum and the incoming chart's minimum.
+         *
+         * Clear the previous chart's constraint before
+         * installation so a reduced Interface Scale can
+         * establish its own appropriate minimum.
+         */
+        m_chartView->setMinimumSize(0, 0);
 
         m_chartView->setChart(
             chart
@@ -2878,6 +2908,16 @@ void InvestigationTimelinePanel::render()
     series->attachAxis(
         axisY
         );
+
+    /*
+     * QChartView retains the larger of its existing
+     * minimum and the incoming chart's minimum.
+     *
+     * Clear the previous chart's constraint before
+     * installation so a reduced Interface Scale can
+     * establish its own appropriate minimum.
+     */
+    m_chartView->setMinimumSize(0, 0);
 
     m_chartView->setChart(
         chart
