@@ -5,6 +5,7 @@
 #include <QJsonArray>
 
 #include "../src/importing/ImportProfileSerialization.h"
+#include "../src/workspace/InvestigationPresentationStateSerialization.h"
 #include "../src/workspace/WorkspaceSerialization.h"
 
 class WorkspaceSerializationTests
@@ -31,6 +32,7 @@ private slots:
     void missingMainWindowStateUsesDefaults();
     void missingNumericOrderDirectionUsesDescendingDefault();
     void schemaOneSessionMigratesToSourceBackedV2();
+    void defaultPresentationStateOmitsUnsetColumnWidthScaleFactor();
 };
 
 void WorkspaceSerializationTests::
@@ -1715,6 +1717,8 @@ void WorkspaceSerializationTests::
         1
     };
 
+    state.eventTable.columnWidthScaleFactor = 1.25;
+
     state.eventTable.sortColumn =
         2;
 
@@ -1911,6 +1915,11 @@ void WorkspaceSerializationTests::
     QCOMPARE(
         restored.eventTable.manuallyResizedColumns,
         state.eventTable.manuallyResizedColumns
+        );
+
+    QCOMPARE(
+        restored.eventTable.columnWidthScaleFactor,
+        state.eventTable.columnWidthScaleFactor
         );
 
     QCOMPARE(
@@ -2896,6 +2905,58 @@ void WorkspaceSerializationTests::
             .sourceImportProfile
             ->importerId,
         QStringLiteral("json-lines")
+        );
+}
+
+
+void WorkspaceSerializationTests::
+    defaultPresentationStateOmitsUnsetColumnWidthScaleFactor()
+{
+    /*
+     * A default presentation state has no recorded
+     * column-width scale. The serializer must omit
+     * the field rather than writing an invalid zero.
+     */
+    InvestigationSessionPresentationState defaultState;
+
+    QCOMPARE(
+        defaultState.eventTable.columnWidthScaleFactor,
+        0.0
+        );
+
+    const InvestigationPresentationStateSerializer serializer;
+
+    const QJsonObject json =
+        serializer.serialize(defaultState);
+
+    const QJsonObject eventTable =
+        json.value(
+                QStringLiteral("eventTable")
+                ).toObject();
+
+    QVERIFY(!eventTable.isEmpty());
+
+    QVERIFY(
+        !eventTable.contains(
+            QStringLiteral("columnWidthScaleFactor")
+            )
+        );
+
+    /*
+     * Verify that the resulting presentation state
+     * can also be deserialized successfully.
+     */
+    const PresentationStateDeserializationResult result =
+        serializer.deserialize(json);
+
+    QVERIFY2(
+        result.isSuccess(),
+        qPrintable(result.errorMessage)
+        );
+
+    QCOMPARE(
+        result.state->eventTable.columnWidthScaleFactor,
+        0.0
         );
 }
 

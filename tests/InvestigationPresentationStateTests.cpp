@@ -4,10 +4,12 @@
 #include <QChartView>
 #include <QCoreApplication>
 #include <QGroupBox>
+#include <QHeaderView>
 #include <QMenu>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QTableWidget>
+#include <QTableView>
 #include <QTemporaryFile>
 #include <QToolButton>
 
@@ -18,6 +20,7 @@
 #include "../src/importing/ImportProfile.h"
 #include "../src/importing/ImportResult.h"
 #include "../src/live/LiveSessionFollowCoordinator.h"
+#include "../src/ui/InterfaceScale.h"
 #include "../src/ui/investigation/InvestigationAnalyticsPanel.h"
 #include "../src/ui/investigation/InvestigationEventDetailPanel.h"
 #include "../src/ui/investigation/InvestigationEventPanel.h"
@@ -298,6 +301,7 @@ private slots:
     void liveFollowTransientErrorPreservesFollowNewestIntent();
     void sessionViewPopulatesExportMenu();
     void analyticsOverviewDrillDownFiltersInvestigation();
+    void eventTableRestoresWidthsAcrossInterfaceScales();
 };
 
 void InvestigationPresentationStateTests::
@@ -3348,6 +3352,144 @@ void InvestigationPresentationStateTests::
             entity
             );
     }
+}
+
+
+void InvestigationPresentationStateTests::
+    eventTableRestoresWidthsAcrossInterfaceScales()
+{
+    InvestigationSession session = makeSession();
+
+    InvestigationEventPanel panel;
+    panel.resize(1100, 380);
+    panel.setSession(&session);
+    panel.show();
+
+    processUi();
+
+    QTableView *table =
+        panel.findChild<QTableView *>();
+
+    QVERIFY(table != nullptr);
+
+    if (table == nullptr) {
+        return;
+    }
+
+    QHeaderView *header =
+        table->horizontalHeader();
+
+    QVERIFY(header != nullptr);
+
+    if (header == nullptr) {
+        return;
+    }
+
+    QVERIFY(header->count() >= 3);
+
+    constexpr int automaticColumn = 0;
+    constexpr int manualColumn = 1;
+
+    /*
+     * Establish the automatically measured width
+     * at the current interface scale.
+     */
+    table->resizeColumnToContents(automaticColumn);
+
+    const int expectedAutomaticWidth =
+        table->columnWidth(automaticColumn);
+
+    const qreal currentScale =
+        InterfaceScale::geometryFactor(table);
+
+    QVERIFY(currentScale > 0.0);
+
+    /*
+     * Simulate presentation state saved at half
+     * the current interface scale.
+     *
+     * Give the automatic column an intentionally
+     * incorrect saved width. Restoration must
+     * remeasure it instead of scaling that value.
+     */
+    InvestigationEventTablePresentationState saved =
+        panel.capturePresentationState();
+
+    saved.columnWidthScaleFactor =
+        currentScale / 2.0;
+
+    saved.manuallyResizedColumns = {
+        manualColumn
+    };
+
+    const int savedManualWidth =
+        qMax(
+            200,
+            header->minimumSectionSize() + 20
+            );
+
+    saved.columnWidths[automaticColumn] =
+        expectedAutomaticWidth + 80;
+
+    saved.columnWidths[manualColumn] =
+        savedManualWidth;
+
+    panel.restorePresentationState(saved);
+    processUi();
+
+    const InvestigationEventTablePresentationState
+        restored =
+        panel.capturePresentationState();
+
+    /*
+     * Automatic columns use current font metrics.
+     * Manual columns retain proportional widths.
+     */
+    QCOMPARE(
+        restored.columnWidths[automaticColumn],
+        expectedAutomaticWidth
+        );
+
+    QCOMPARE(
+        restored.columnWidths[manualColumn],
+        savedManualWidth * 2
+        );
+
+    QCOMPARE(
+        restored.manuallyResizedColumns,
+        saved.manuallyResizedColumns
+        );
+
+    QCOMPARE(
+        restored.columnWidthScaleFactor,
+        currentScale
+        );
+
+    /*
+     * Legacy presentation state has no recorded
+     * scale. Preserve its saved pixel widths.
+     */
+    saved.columnWidthScaleFactor = 0.0;
+
+    saved.columnWidths[automaticColumn] =
+        expectedAutomaticWidth + 60;
+
+    panel.restorePresentationState(saved);
+    processUi();
+
+    const InvestigationEventTablePresentationState
+        legacyRestored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        legacyRestored.columnWidths[automaticColumn],
+        saved.columnWidths[automaticColumn]
+        );
+
+    QCOMPARE(
+        legacyRestored.columnWidths[manualColumn],
+        savedManualWidth
+        );
 }
 
 QTEST_MAIN(

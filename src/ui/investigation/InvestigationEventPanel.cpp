@@ -1251,6 +1251,9 @@ InvestigationEventTablePresentationState
     InvestigationEventTablePresentationState
         state;
 
+    state.columnWidthScaleFactor =
+        InterfaceScale::geometryFactor(m_table);
+
     if (m_session != nullptr) {
         state.selectedRecordId =
             m_session->selectedRecordId();
@@ -1355,11 +1358,35 @@ void InvestigationEventPanel::
         }
     }
 
+
     if (header != nullptr
         && !state.columnWidths.isEmpty()) {
-        const QSignalBlocker blocker(
-            header
-            );
+
+        const qreal currentScale =
+            InterfaceScale::geometryFactor(m_table);
+
+        const qreal savedScale =
+            state.columnWidthScaleFactor;
+
+        /*
+     * Missing scale metadata indicates an older
+     * workspace. Preserve its previous exact-width
+     * restoration behavior.
+     */
+        const bool crossScaleRestore =
+            savedScale > 0.0
+            && currentScale > 0.0
+            && !qFuzzyCompare(
+                currentScale,
+                savedScale
+                );
+
+        const qreal widthRatio =
+            crossScaleRestore
+                ? currentScale / savedScale
+                : 1.0;
+
+        const QSignalBlocker blocker(header);
 
         const int count =
             std::min(
@@ -1369,29 +1396,82 @@ void InvestigationEventPanel::
                     )
                 );
 
-        for (
-            int column = 0;
-            column < count;
-            ++column
-            ) {
-            const int width =
-                state.columnWidths.at(
-                    column
-                    );
+        /*
+         * At a different scale, first remeasure every
+         * column using the current font.
+         *
+         * At the same scale (or with legacy metadata),
+         * retain the existing exact-width behavior.
+         */
+        if (crossScaleRestore) {
+            m_table->resizeColumnsToContents();
+        }
 
-            if (width > 0) {
-                m_table->setColumnWidth(
-                    column,
-                    width
+        for (int column = 0;
+             column < count;
+             ++column) {
+
+            /*
+             * Automatically sized columns keep their
+             * freshly measured widths when the saved
+             * scale differs.
+             */
+            if (crossScaleRestore
+                && !m_manuallyResizedColumns.contains(
+                    column
+                    )) {
+                continue;
+            }
+
+            int width =
+                state.columnWidths.at(column);
+
+            if (width <= 0) {
+                continue;
+            }
+
+            if (crossScaleRestore) {
+                width = std::max(
+                    1,
+                    qRound(
+                        static_cast<qreal>(width)
+                        * widthRatio
+                        )
                     );
             }
-        }
 
-        if (m_session != nullptr) {
-            m_session->setColumnWidths(
-                state.columnWidths
+            m_table->setColumnWidth(
+                column,
+                width
                 );
         }
+
+        /*
+         * Store the widths actually applied, rather
+         * than retaining the old-scale saved values.
+         */
+        if (m_session != nullptr) {
+            QVector<int> effectiveWidths;
+
+            effectiveWidths.reserve(
+                header->count()
+                );
+
+            for (int column = 0;
+                 column < header->count();
+                 ++column) {
+                effectiveWidths.append(
+                    m_table->columnWidth(column)
+                    );
+            }
+
+            m_session->setColumnWidths(
+                std::move(effectiveWidths)
+                );
+        }
+
+        m_columnWidthScaleFactor =
+            currentScale;
     }
 
     /*

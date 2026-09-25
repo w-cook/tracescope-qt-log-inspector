@@ -729,6 +729,17 @@ QJsonObject
             )
         );
 
+    if (std::isfinite(
+            state.eventTable.columnWidthScaleFactor
+            )
+        && state.eventTable.columnWidthScaleFactor > 0.0) {
+
+        eventTable.insert(
+            QStringLiteral("columnWidthScaleFactor"),
+            state.eventTable.columnWidthScaleFactor
+            );
+    }
+
     eventTable.insert(
         QStringLiteral("sortColumn"),
         state.eventTable.sortColumn
@@ -999,6 +1010,27 @@ PresentationStateDeserializationResult
 
         state.eventTable.manuallyResizedColumns =
             *manualColumns;
+    }
+
+    const QJsonValue scaleValue =
+        eventTable.value(
+            QStringLiteral("columnWidthScaleFactor")
+            );
+
+    if (!scaleValue.isUndefined()) {
+        if (!scaleValue.isDouble()
+            || !std::isfinite(scaleValue.toDouble())
+            || scaleValue.toDouble() <= 0.0) {
+            return failure(
+                QStringLiteral(
+                    "eventTable columnWidthScaleFactor "
+                    "must be a positive finite number."
+                    )
+                );
+        }
+
+        state.eventTable.columnWidthScaleFactor =
+            scaleValue.toDouble();
     }
 
     state.eventTable.sortOrder =
