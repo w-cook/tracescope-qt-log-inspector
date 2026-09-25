@@ -185,6 +185,33 @@ void MultiSelectFilterComboBox::
         );
 }
 
+
+void MultiSelectFilterComboBox::
+    refreshInterfaceScale()
+{
+    updateGeometry();
+}
+
+QSize MultiSelectFilterComboBox::
+    minimumSizeHint() const
+{
+    /*
+     * QComboBox can retain a minimum-height hint
+     * from an earlier application font.
+     *
+     * Its preferred size hint updates correctly,
+     * so use that for the minimum height while
+     * preserving its native minimum width.
+     */
+    const QSize nativeMinimum =
+        QComboBox::minimumSizeHint();
+
+    return QSize(
+        nativeMinimum.width(),
+        QComboBox::sizeHint().height()
+        );
+}
+
 bool MultiSelectFilterComboBox::eventFilter(
     QObject *watched,
     QEvent *event

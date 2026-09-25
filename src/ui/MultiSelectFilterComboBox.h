@@ -30,6 +30,10 @@ public:
 
     void clearSelection();
 
+    void refreshInterfaceScale();
+
+    QSize minimumSizeHint() const override;
+
 signals:
     void selectionChanged();
 

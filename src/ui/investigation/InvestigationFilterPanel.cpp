@@ -3733,6 +3733,31 @@ void InvestigationFilterPanel::
 
     updateGeometry();
     update();
+
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            for (
+                MultiSelectFilterComboBox *combo
+                : {
+                    m_levelFilterCombo,
+                    m_subsystemFilterCombo,
+                    m_eventCodeFilterCombo,
+                    m_entityFilterCombo,
+                    m_findingStatusFilterCombo
+                }
+                ) {
+                if (combo != nullptr) {
+                    combo->refreshInterfaceScale();
+                }
+            }
+
+            updateResponsiveLayout();
+            updateGeometry();
+        }
+        );
 }
 
 bool InvestigationFilterPanel::

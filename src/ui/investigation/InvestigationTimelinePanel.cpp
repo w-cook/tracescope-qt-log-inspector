@@ -38,6 +38,22 @@
 
 namespace
 {
+class ScaleAwareComboBox : public QComboBox
+{
+public:
+    using QComboBox::QComboBox;
+
+    QSize minimumSizeHint() const override
+    {
+        const QSize nativeMinimum =
+            QComboBox::minimumSizeHint();
+
+        return QSize(
+            nativeMinimum.width(),
+            QComboBox::sizeHint().height()
+            );
+    }
+};
 
 constexpr int TimelineMaximumVisibleBucketCount =
     20;
@@ -467,13 +483,13 @@ InvestigationTimelinePanel::
         new QChartView(this)
         ),
     m_intervalCombo(
-        new QComboBox(this)
+        new ScaleAwareComboBox(this)
         ),
     m_breakdownWidget(
         new QWidget(this)
         ),
     m_breakdownCombo(
-        new QComboBox(
+        new ScaleAwareComboBox(
             m_breakdownWidget
             )
         ),
@@ -481,7 +497,7 @@ InvestigationTimelinePanel::
         new QWidget(this)
         ),
     m_subsystemLimitCombo(
-        new QComboBox(
+        new ScaleAwareComboBox(
             m_subsystemShowWidget
             )
         ),
