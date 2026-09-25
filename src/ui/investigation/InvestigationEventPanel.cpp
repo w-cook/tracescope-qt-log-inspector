@@ -13,10 +13,11 @@
 #include <QLabel>
 #include <QMenu>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSignalBlocker>
 #include <QTableView>
+#include <QTimer>
 #include <QVBoxLayout>
-#include <QScrollBar>
 
 #include "../InterfaceScale.h"
 #include "../ItemViewFocusDelegate.h"
@@ -1392,6 +1393,10 @@ void InvestigationEventPanel::
 void InvestigationEventPanel::
     refreshInterfaceScale()
 {
+    if (m_table == nullptr) {
+        return;
+    }
+
     if (layout() != nullptr) {
         layout()->setSpacing(
             InterfaceScale::pixels(
@@ -1413,8 +1418,6 @@ void InvestigationEventPanel::
 
         m_navigationLayout->invalidate();
     }
-
-    updateRowHeaderWidth();
 
     /*
      * Preserve the user's existing column-width
@@ -1543,6 +1546,30 @@ void InvestigationEventPanel::
 
     updateGeometry();
     update();
+
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_table == nullptr
+                || m_table->model() == nullptr) {
+                return;
+            }
+
+            // Measure using the settled application font.
+            updateRowHeaderWidth();
+
+            // Synchronize the table's header, corner
+            // and viewport geometry.
+            const bool refreshed =
+                QMetaObject::invokeMethod(
+                    m_table,
+                    "updateGeometries",
+                    Qt::DirectConnection
+                    );
+        }
+        );
 }
 
 void InvestigationEventPanel::
@@ -1895,13 +1922,21 @@ void InvestigationEventPanel::
                 widestExpectedText
                 );
 
-    header->setFixedWidth(
+    const int targetWidth =
         textWidth
-        + InterfaceScale::pixels(
-            8,
-            header
-            )
-        );
+        + InterfaceScale::pixels(8, header);
+
+    qInfo()
+        << "ROW HEADER:"
+        << "Scale:" << InterfaceScale::userFactor()
+        << "Header font:" << header->fontMetrics().height()
+        << "Table font:" << m_table->fontMetrics().height()
+        << "Target:" << targetWidth
+        << "Before:" << header->width()
+        << "Maximum event number:" << maximumRowNumber
+        << "Text width:" << textWidth;
+
+    header->setFixedWidth(targetWidth);
 }
 
 void InvestigationEventPanel::
@@ -1988,4 +2023,18 @@ void InvestigationEventPanel::
                 true
                 );
     }
+
+    QTimer::singleShot(0, this, [this]() {
+        QVector<int> widths;
+
+        for (int column = 0;
+             column < m_table->model()->columnCount();
+             ++column) {
+            widths.append(m_table->columnWidth(column));
+        }
+
+        qInfo() << "RESTORED COLUMNS:"
+                << widths
+                << "Viewport:" << m_table->viewport()->width();
+    });
 }
