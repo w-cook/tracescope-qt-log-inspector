@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -22,16 +23,20 @@
 #include <QPromise>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QScreen>
 #include <QScrollArea>
 #include <QSet>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QSplitter>
 #include <QTableWidget>
+#include <QTabWidget>
+#include <QtConcurrentRun>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
-#include <QtConcurrentRun>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -47,6 +52,69 @@
 
 namespace
 {
+
+class FormatSuggestionRow final : public QWidget
+{
+public:
+    FormatSuggestionRow(
+        QLabel *description,
+        QCheckBox *includeRotations,
+        QPushButton *reviewButton,
+        QWidget *parent
+        )
+        : QWidget(parent),
+        m_description(description),
+        m_includeRotations(includeRotations),
+        m_reviewButton(reviewButton)
+    {
+        auto *row =
+            new QHBoxLayout(this);
+
+        row->setContentsMargins(0, 0, 0, 0);
+
+        row->addWidget(m_description, 1);
+        row->addWidget(m_includeRotations);
+        row->addWidget(m_reviewButton);
+
+        QSizePolicy policy(
+            QSizePolicy::Expanding,
+            QSizePolicy::Preferred
+            );
+
+        policy.setHeightForWidth(true);
+        setSizePolicy(policy);
+    }
+
+    int heightForWidth(int width) const override
+    {
+        const int spacing =
+            qMax(0, layout()->spacing());
+
+        const int controlsWidth =
+            m_includeRotations->sizeHint().width()
+            + m_reviewButton->sizeHint().width()
+            + 2 * spacing;
+
+        const int descriptionWidth =
+            qMax(1, width - controlsWidth);
+
+        return qMax(
+            m_description->heightForWidth(
+                descriptionWidth
+                ),
+            qMax(
+                m_includeRotations->sizeHint().height(),
+                m_reviewButton->sizeHint().height()
+                )
+            );
+    }
+
+private:
+    QLabel *m_description;
+    QCheckBox *m_includeRotations;
+    QPushButton *m_reviewButton;
+};
+
 QString customFieldMappingKey(
     const CustomFieldMapping &mapping
     )
@@ -117,6 +185,23 @@ QList<CustomFieldMapping> retainedCustomMappings(
     }
 
     return retained;
+}
+
+QRect availableDialogScreen(const QWidget *dialog)
+{
+    QWidget *parent =
+        dialog != nullptr
+            ? dialog->parentWidget()
+            : nullptr;
+
+    QScreen *screen =
+        parent != nullptr
+            ? parent->screen()
+            : QGuiApplication::primaryScreen();
+
+    return screen != nullptr
+               ? screen->availableGeometry()
+               : QRect();
 }
 }
 
@@ -317,13 +402,6 @@ ImportConfigurationDialog::ImportConfigurationDialog(
         );
 
     setAcceptDrops(true);
-    resize(
-        InterfaceScale::size(
-            1100,
-            700,
-            this
-            )
-        );
 
     workingProfile.name =
         QStringLiteral(
@@ -362,6 +440,56 @@ ImportConfigurationDialog::ImportConfigurationDialog(
 
     updateSourceState();
     updateValidationState();
+
+    const QSize preferred =
+        InterfaceScale::size(1100, 700, this);
+
+    /*
+     * Prevent the compact Source controls from
+     * collapsing beyond their usable width.
+     *
+     * Never require more width than the available
+     * monitor can provide.
+     */
+    constexpr int MinimumDialogWidth = 500;
+
+    const QRect available =
+        availableDialogScreen(this);
+
+    const int preferredMinimum =
+        InterfaceScale::pixels(
+            MinimumDialogWidth,
+            this
+            );
+
+    setMinimumWidth(
+        available.isValid()
+            ? std::min(
+                  preferredMinimum,
+                  std::max(
+                      1,
+                      available.width() - 48
+                      )
+                  )
+            : preferredMinimum
+        );
+
+    if (available.isValid()) {
+        resize(
+            std::min(
+                preferred.width(),
+                std::max(1, available.width() - 48)
+                ),
+            std::min(
+                preferred.height(),
+                std::max(1, available.height() - 48)
+                )
+            );
+    } else {
+        resize(preferred);
+    }
+
+    updateResponsiveLayout();
 }
 
 QString ImportConfigurationDialog::
@@ -438,38 +566,22 @@ void ImportConfigurationDialog::
     auto *sourceLayout =
         new QFormLayout(sourceGroup);
 
-    formatSuggestionLabel->setWordWrap(
-        true
+    formatSuggestionLabel->setWordWrap(true);
+
+    includeRotatedSourcesCheckBox->setEnabled(false);
+    reviewRotatedSourcesButton->setEnabled(false);
+
+    reviewRotatedSourcesButton->setMinimumWidth(
+        browseButton->sizeHint().width()
         );
 
     auto *formatRow =
-        new QHBoxLayout();
-
-    formatRow->addWidget(
-        formatSuggestionLabel,
-        1
-        );
-
-    includeRotatedSourcesCheckBox
-        ->setEnabled(false);
-
-    formatRow->addWidget(
-        includeRotatedSourcesCheckBox
-        );
-
-    reviewRotatedSourcesButton
-        ->setEnabled(false);
-
-    reviewRotatedSourcesButton
-        ->setMinimumWidth(
-            browseButton
-                ->sizeHint()
-                .width()
+        new FormatSuggestionRow(
+            formatSuggestionLabel,
+            includeRotatedSourcesCheckBox,
+            reviewRotatedSourcesButton,
+            sourceGroup
             );
-
-    formatRow->addWidget(
-        reviewRotatedSourcesButton
-        );
 
     sourceLayout->addRow(
         tr("Likely format:"),
@@ -1208,36 +1320,63 @@ void ImportConfigurationDialog::
     previewLayout->addWidget(
         previewSplitter,
         1
-        );
+        );  
+
+    /*
+     * The outer scrolling container exists in both
+     * layouts. This prevents the wide layout's content
+     * from imposing a minimum dialog width.
+     */
+    auto *body =
+        new QWidget(this);
+
+    auto *bodyLayout =
+        new QVBoxLayout(body);
+
+    bodyLayout->setContentsMargins(0, 0, 0, 0);
+
+    mainLayout->removeWidget(introLabel);
+    mainLayout->removeWidget(sourceGroup);
+
+    bodyLayout->addWidget(introLabel);
+    bodyLayout->addWidget(sourceGroup);
 
     auto *contentSplitter =
-        new QSplitter(
-            Qt::Horizontal,
-            this
-            );
+        new QSplitter(Qt::Horizontal, body);
 
-    contentSplitter->addWidget(
-        scrollArea
+    contentSplitter->addWidget(scrollArea);
+    contentSplitter->addWidget(previewGroup);
+
+    contentSplitter->setStretchFactor(0, 1);
+    contentSplitter->setStretchFactor(1, 2);
+
+    bodyLayout->addWidget(contentSplitter, 1);
+
+    auto *outerScroll =
+        new QScrollArea(this);
+
+    outerScroll->setWidgetResizable(true);
+    outerScroll->setFrameShape(QFrame::NoFrame);
+    outerScroll->setMinimumSize(0, 0);
+
+    outerScroll->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Ignored
         );
 
-    contentSplitter->addWidget(
-        previewGroup
-        );
+    outerScroll->setWidget(body);
 
-    contentSplitter->setStretchFactor(
-        0,
-        1
-        );
+    responsiveIntroLabel = introLabel;
+    responsiveSourceGroup = sourceGroup;
+    responsiveOuterScroll = outerScroll;
 
-    contentSplitter->setStretchFactor(
-        1,
-        2
-        );
+    mainLayout->addWidget(outerScroll, 1);
 
-    mainLayout->addWidget(
-        contentSplitter,
-        1
-        );
+    responsiveBody = body;
+    responsiveBodyLayout = bodyLayout;
+    responsiveProfileArea = scrollArea;
+    responsivePreviewGroup = previewGroup;
+    responsiveContent = contentSplitter;
 
     auto *validationGroup =
         new QGroupBox(
@@ -2622,6 +2761,28 @@ void ImportConfigurationDialog::
         );
 
     event->acceptProposedAction();
+}
+
+void ImportConfigurationDialog::
+    resizeEvent(QResizeEvent *event)
+{
+    QDialog::resizeEvent(event);
+
+    if (responsiveContent == nullptr
+        || responsiveUpdateQueued) {
+        return;
+    }
+
+    responsiveUpdateQueued = true;
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            responsiveUpdateQueued = false;
+            updateResponsiveLayout();
+        }
+        );
 }
 
 void ImportConfigurationDialog::
@@ -4140,7 +4301,10 @@ void ImportConfigurationDialog::
 
             previewTable->setColumnWidth(
                 column,
-                width
+                InterfaceScale::pixels(
+                    width,
+                    previewTable
+                    )
                 );
         }
     }
@@ -4772,4 +4936,275 @@ void ImportConfigurationDialog::
     recentProfilesButton->setEnabled(
         validItemCount > 0
         );
+}
+
+
+
+void ImportConfigurationDialog::
+    updateResponsiveLayout()
+{
+    if (responsiveBodyLayout == nullptr
+        || responsiveContent == nullptr
+        || responsiveOuterScroll == nullptr) {
+        return;
+    }
+
+    const QRect available =
+        availableDialogScreen(this);
+
+    const QSize preferred =
+        InterfaceScale::size(1100, 700, this);
+
+    const bool heightConstrained =
+        available.isValid()
+        && preferred.height()
+               > available.height() - 48;
+
+    const bool compact =
+        width() < InterfaceScale::pixels(1000, this)
+        || heightConstrained;
+
+    if (compact == usingCompactLayout) {
+        return;
+    }
+
+    auto *rootLayout =
+        qobject_cast<QVBoxLayout *>(layout());
+
+    QWidget *profileContent =
+        responsiveProfileArea->widget();
+
+    auto *profileLayout =
+        profileContent != nullptr
+            ? qobject_cast<QVBoxLayout *>(
+                  profileContent->layout()
+                  )
+            : nullptr;
+
+    if (rootLayout == nullptr
+        || profileLayout == nullptr) {
+        return;
+    }
+
+    QWidget *oldContent = responsiveContent;
+    QWidget *newContent = nullptr;
+
+    if (compact) {
+        auto *splitter =
+            qobject_cast<QSplitter *>(oldContent);
+
+        if (splitter == nullptr) {
+            return;
+        }
+
+        lastWideSplitterSizes = splitter->sizes();
+
+        splitter->hide();
+
+        responsiveBodyLayout->removeWidget(
+            splitter
+            );
+
+        /*
+         * Move the introductory instructions into
+         * the existing scrollable mappings panel.
+         */
+        responsiveBodyLayout->removeWidget(
+            responsiveIntroLabel
+            );
+
+        profileLayout->insertWidget(
+            0,
+            responsiveIntroLabel
+            );
+
+        responsiveIntroLabel->show();
+
+        /*
+         * Move Source out of the outer scrolling
+         * region so it remains visible.
+         */
+        responsiveBodyLayout->removeWidget(
+            responsiveSourceGroup
+            );
+
+        rootLayout->insertWidget(
+            rootLayout->indexOf(
+                responsiveOuterScroll
+                ),
+            responsiveSourceGroup
+            );
+
+        /*
+         * Both tab pages must be scrollable.
+         *
+         * Profile & Mappings already has its own
+         * QScrollArea. Give Source Preview one too.
+         */
+        auto *tabs = new QTabWidget(this);
+
+        tabs->setMinimumSize(0, 0);
+
+        tabs->setSizePolicy(
+            QSizePolicy::Ignored,
+            QSizePolicy::Ignored
+            );
+
+        auto *previewScroll =
+            new QScrollArea(tabs);
+
+        previewScroll->setWidgetResizable(true);
+
+        previewScroll->setFrameShape(
+            QFrame::NoFrame
+            );
+
+        previewScroll->setMinimumSize(0, 0);
+
+        previewScroll->setSizePolicy(
+            QSizePolicy::Ignored,
+            QSizePolicy::Ignored
+            );
+
+        tabs->addTab(
+            responsiveProfileArea,
+            tr("Profile & Mappings")
+            );
+
+        previewScroll->setWidget(
+            responsivePreviewGroup
+            );
+
+        tabs->addTab(
+            previewScroll,
+            tr("Source Preview")
+            );
+
+        tabs->setCurrentIndex(
+            lastCompactTabIndex
+            );
+
+        /*
+         * Place the tabs directly in the root
+         * layout, below Source and above Validation.
+         * Their tab bar now stays stationary.
+         */
+        rootLayout->insertWidget(
+            rootLayout->indexOf(
+                responsiveOuterScroll
+                ),
+            tabs,
+            1
+            );
+
+        responsiveOuterScroll->hide();
+
+        responsiveSourceGroup->show();
+        tabs->show();
+
+        newContent = tabs;
+    } else {
+        auto *tabs =
+            qobject_cast<QTabWidget *>(oldContent);
+
+        if (tabs == nullptr) {
+            return;
+        }
+
+        auto *previewScroll =
+            qobject_cast<QScrollArea *>(
+                tabs->widget(1)
+                );
+
+        if (previewScroll == nullptr
+            || previewScroll->widget()
+                   != responsivePreviewGroup) {
+            return;
+        }
+
+        lastCompactTabIndex =
+            tabs->currentIndex();
+
+        tabs->hide();
+        rootLayout->removeWidget(tabs);
+
+        /*
+         * Detach both original panels before
+         * deleting the temporary tab container.
+         */
+        previewScroll->takeWidget();
+
+        tabs->removeTab(1);
+        tabs->removeTab(0);
+
+        /*
+         * Restore the original wide-layout
+         * hierarchy.
+         */
+        profileLayout->removeWidget(
+            responsiveIntroLabel
+            );
+
+        responsiveBodyLayout->insertWidget(
+            0,
+            responsiveIntroLabel
+            );
+
+        rootLayout->removeWidget(
+            responsiveSourceGroup
+            );
+
+        responsiveBodyLayout->insertWidget(
+            1,
+            responsiveSourceGroup
+            );
+
+        auto *splitter =
+            new QSplitter(
+                Qt::Horizontal,
+                responsiveBody
+                );
+
+        splitter->addWidget(
+            responsiveProfileArea
+            );
+
+        splitter->addWidget(
+            responsivePreviewGroup
+            );
+
+        splitter->setStretchFactor(0, 1);
+        splitter->setStretchFactor(1, 2);
+
+        if (!lastWideSplitterSizes.isEmpty()) {
+            splitter->setSizes(
+                lastWideSplitterSizes
+                );
+        }
+
+        responsiveBodyLayout->insertWidget(
+            2,
+            splitter,
+            1
+            );
+
+        responsiveOuterScroll->show();
+
+        responsiveIntroLabel->show();
+        responsiveSourceGroup->show();
+        responsiveProfileArea->show();
+        responsivePreviewGroup->show();
+        splitter->show();
+
+        newContent = splitter;
+    }
+
+    responsiveContent = newContent;
+    usingCompactLayout = compact;
+
+    oldContent->deleteLater();
+
+    responsiveBodyLayout->invalidate();
+    rootLayout->invalidate();
+    updateGeometry();
 }
