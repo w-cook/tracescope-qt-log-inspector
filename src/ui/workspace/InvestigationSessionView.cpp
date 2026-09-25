@@ -2262,6 +2262,11 @@ void InvestigationSessionView::
         layout()->invalidate();
     }
 
+    if (m_summaryPanel != nullptr) {
+        m_summaryPanel
+            ->refreshInterfaceScale();
+    }
+
     if (m_filterPanel != nullptr) {
         m_filterPanel
             ->refreshInterfaceScale();

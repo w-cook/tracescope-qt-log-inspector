@@ -6,6 +6,7 @@
 
 #include "../../workspace/WorkspaceDocumentLayoutState.h"
 
+class QLabel;
 class QMenu;
 class QPushButton;
 class QSpacerItem;
@@ -289,6 +290,8 @@ private:
 
     void updateEmptyStatePresentation();
 
+    void refreshEmptyStateTitleFont();
+
     WorkspaceDocumentHost *m_rootHost =
         nullptr;
 
@@ -297,6 +300,8 @@ private:
 
     QWidget *m_emptyStateWidget =
         nullptr;
+
+    QLabel *m_emptyStateTitleLabel = nullptr;
 
     QPushButton *m_emptyStateOpenLogButton =
         nullptr;

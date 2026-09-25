@@ -16,9 +16,8 @@
 #include <QStyle>
 #include <QTabBar>
 #include <QTabWidget>
-#include <QVBoxLayout>
-
 #include <QTimer>
+#include <QVBoxLayout>
 
 #include <utility>
 
@@ -226,33 +225,21 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         1
         );
 
-    auto *titleLabel =
+
+    m_emptyStateTitleLabel =
         new QLabel(
             tr("TraceScope"),
             m_emptyStateWidget
             );
 
-    QFont titleFont =
-        titleLabel->font();
+    refreshEmptyStateTitleFont();
 
-    titleFont.setBold(
-        true
-        );
-
-    titleFont.setPointSizeF(
-        titleFont.pointSizeF() * 1.5
-        );
-
-    titleLabel->setFont(
-        titleFont
-        );
-
-    titleLabel->setAlignment(
+    m_emptyStateTitleLabel->setAlignment(
         Qt::AlignHCenter
         );
 
     emptyStateLayout->addWidget(
-        titleLabel
+        m_emptyStateTitleLabel
         );
 
     auto *instructionLabel =
@@ -2886,6 +2873,43 @@ void WorkspaceDocumentHost::
     }
 }
 
+void WorkspaceDocumentHost::
+    refreshEmptyStateTitleFont()
+{
+    if (m_emptyStateTitleLabel == nullptr) {
+        return;
+    }
+
+    /*
+     * Always derive the title from the current
+     * application font, never the title's previously
+     * scaled font.
+     *
+     * This reproduces the same result whether the
+     * application starts at a particular scale or
+     * changes to it while running.
+     */
+    QFont titleFont =
+        QApplication::font();
+
+    titleFont.setBold(true);
+
+    if (titleFont.pointSizeF() > 0.0) {
+        titleFont.setPointSizeF(
+            titleFont.pointSizeF() * 1.5
+            );
+    } else if (titleFont.pixelSize() > 0) {
+        titleFont.setPixelSize(
+            qRound(
+                titleFont.pixelSize() * 1.5
+                )
+            );
+    }
+
+    m_emptyStateTitleLabel->setFont(
+        titleFont
+        );
+}
 
 void WorkspaceDocumentHost::
     updateEmptyStatePresentation()
@@ -3052,6 +3076,8 @@ void WorkspaceDocumentHost::
 void WorkspaceDocumentHost::
     refreshInterfaceScale()
 {
+    refreshEmptyStateTitleFont();
+
     if (m_emptyStateWidget != nullptr) {
         if (QLayout *emptyLayout =
             m_emptyStateWidget->layout();
@@ -3110,5 +3136,37 @@ void WorkspaceDocumentHost::
     updateGeometry();
     update();
 
+
     updateEmptyStatePresentation();
+
+    /*
+     * The application has changed its font and style,
+     * but Qt may still have pending layout updates.
+     *
+     * Recalculate the empty overlay's minimum after
+     * that layout work has had an opportunity to run.
+     * Do not resize the outer window.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (
+                m_tabs == nullptr
+                || m_emptyStateWidget == nullptr
+                || m_tabs->count() != 0
+                ) {
+                return;
+            }
+
+            if (QLayout *emptyLayout =
+                m_emptyStateWidget->layout();
+                emptyLayout != nullptr) {
+                emptyLayout->invalidate();
+                emptyLayout->activate();
+            }
+
+            updateEmptyStatePresentation();
+        }
+        );
 }

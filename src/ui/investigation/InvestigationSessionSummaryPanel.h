@@ -25,6 +25,8 @@ public:
         const QVector<InvestigationRecord> &visibleRecords
         );
 
+    void refreshInterfaceScale();
+
 protected:
     void resizeEvent(
         QResizeEvent *event
