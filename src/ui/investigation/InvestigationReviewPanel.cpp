@@ -427,6 +427,24 @@ int InvestigationReviewPanel::
         .height();
 }
 
+void InvestigationReviewPanel::
+    refreshCollapsedHeight()
+{
+    if (!m_collapsed) {
+        return;
+    }
+
+    const int height = collapsedHeight();
+
+    // Release the old constraint before applying
+    // the newly measured tab height.
+    setMaximumHeight(QWIDGETSIZE_MAX);
+    setMinimumHeight(height);
+    setMaximumHeight(height);
+
+    updateGeometry();
+}
+
 int InvestigationReviewPanel::
     minimumUsefulExpandedHeight() const
 {

@@ -2365,10 +2365,16 @@ void InvestigationSessionView::
         }
         );
 
+
     QTimer::singleShot(
         0,
         this,
         [this]() {
+            if (m_lowerRegionCollapsed
+                && m_reviewPanel != nullptr) {
+                m_reviewPanel->refreshCollapsedHeight();
+            }
+
             updateLowerRegionMinimumHeight();
             updateMinimumConstrainedHeight();
             scheduleSectionCapacityUpdate();

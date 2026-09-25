@@ -69,6 +69,8 @@ public:
 
     int collapsedHeight() const;
 
+    void refreshCollapsedHeight();
+
     int minimumUsefulExpandedHeight() const;
 
 signals:
