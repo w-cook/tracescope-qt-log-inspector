@@ -10,11 +10,14 @@
 #include <QColor>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QEasingCurve>
+#include <QEnterEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPalette>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -23,9 +26,12 @@
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStringList>
+#include <QStyleOptionToolButton>
+#include <QStylePainter>
 #include <QTextOption>
 #include <QTimer>
 #include <QToolButton>
+#include <QVariantAnimation>
 #include <QVBoxLayout>
 
 #include "../InterfaceScale.h"
@@ -54,6 +60,137 @@
 
 namespace
 {
+
+class HoverChevronButton final : public QToolButton
+{
+public:
+    explicit HoverChevronButton(QWidget *parent = nullptr)
+        : QToolButton(parent),
+          m_indicatorColor(128, 128, 128),
+          m_animation(new QVariantAnimation(this))
+    {
+        m_animation->setDuration(120);
+        m_animation->setEasingCurve(QEasingCurve::OutCubic);
+
+        connect(
+            m_animation,
+            &QVariantAnimation::valueChanged,
+            this,
+            [this](const QVariant &value) {
+                m_indicatorColor = value.value<QColor>();
+                update();
+            });
+    }
+
+protected:
+    void enterEvent(QEnterEvent *event) override
+    {
+        QToolButton::enterEvent(event);
+
+        if (isEnabled()) {
+            animateTo(QColor(35, 115, 190));
+        }
+    }
+
+    void leaveEvent(QEvent *event) override
+    {
+        QToolButton::leaveEvent(event);
+        animateTo(QColor(128, 128, 128));
+    }
+
+    void paintEvent(QPaintEvent *) override
+    {
+        // Retain the native tool-button background and
+        // hover presentation, but draw our own chevron.
+        QStyleOptionToolButton option;
+        initStyleOption(&option);
+
+        option.features.setFlag(
+            QStyleOptionToolButton::Arrow,
+            false);
+
+        option.arrowType = Qt::NoArrow;
+
+        QStylePainter painter(this);
+        painter.drawComplexControl(
+            QStyle::CC_ToolButton,
+            option);
+
+        painter.setRenderHint(
+            QPainter::Antialiasing);
+
+        const QColor color =
+            isEnabled()
+                ? m_indicatorColor
+                : palette().color(
+                      QPalette::Disabled,
+                      QPalette::ButtonText);
+
+        const qreal side =
+            std::min(width(), height());
+
+        const qreal span = side * 0.18;
+
+        QPen pen(
+            color,
+            std::max(1.25, side * 0.085),
+            Qt::SolidLine,
+            Qt::RoundCap,
+            Qt::RoundJoin);
+
+        painter.setPen(pen);
+
+        const QPointF center =
+            QRectF(rect()).center();
+
+        if (arrowType() == Qt::DownArrow) {
+            painter.drawLine(
+                QPointF(
+                    center.x() - span,
+                    center.y() - span / 2.0),
+                QPointF(
+                    center.x(),
+                    center.y() + span / 2.0));
+
+            painter.drawLine(
+                QPointF(
+                    center.x(),
+                    center.y() + span / 2.0),
+                QPointF(
+                    center.x() + span,
+                    center.y() - span / 2.0));
+        } else if (arrowType() == Qt::LeftArrow) {
+            painter.drawLine(
+                QPointF(
+                    center.x() + span / 2.0,
+                    center.y() - span),
+                QPointF(
+                    center.x() - span / 2.0,
+                    center.y()));
+
+            painter.drawLine(
+                QPointF(
+                    center.x() - span / 2.0,
+                    center.y()),
+                QPointF(
+                    center.x() + span / 2.0,
+                    center.y() + span));
+        }
+    }
+
+private:
+    void animateTo(const QColor &target)
+    {
+        m_animation->stop();
+        m_animation->setStartValue(m_indicatorColor);
+        m_animation->setEndValue(target);
+        m_animation->start();
+    }
+
+    QColor m_indicatorColor;
+    QVariantAnimation *m_animation;
+};
+
 class ResizeAwareSplitter final
     : public QSplitter
 {
@@ -713,19 +850,13 @@ InvestigationSessionView::
         );
 
     m_timelineCollapseButton =
-        new QToolButton(
-            m_timelinePanel
-            );
+        new HoverChevronButton(m_timelinePanel);
 
     m_eventCollapseButton =
-        new QToolButton(
-            m_eventPanel
-            );
+        new HoverChevronButton(m_eventPanel);
 
     m_lowerRegionCollapseButton =
-        new QToolButton(
-            m_eventDetailPanel
-            );
+        new HoverChevronButton(m_eventDetailPanel);
 
     for (
         QToolButton *button
@@ -748,32 +879,6 @@ InvestigationSessionView::
             );
 
         button->raise();
-    }
-
-    QPalette sectionControlPalette =
-        palette();
-
-    sectionControlPalette.setColor(
-        QPalette::ButtonText,
-        QColor(128, 128, 128)
-        );
-
-    sectionControlPalette.setColor(
-        QPalette::WindowText,
-        QColor(128, 128, 128)
-        );
-
-    for (
-        QToolButton *button
-        : {
-            m_timelineCollapseButton,
-            m_eventCollapseButton,
-            m_lowerRegionCollapseButton
-        }
-        ) {
-        button->setPalette(
-            sectionControlPalette
-            );
     }
 
     connect(
