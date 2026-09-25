@@ -26,6 +26,7 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QScrollBar>
 
@@ -41,6 +42,62 @@ namespace
 {
 
 constexpr int AnalyticsTopEntityCount = 10;
+
+
+void refreshAnalyticsTableRowHeights(
+    QTableWidget *table
+    )
+{
+    if (table == nullptr) {
+        return;
+    }
+
+    QHeaderView *header =
+        table->verticalHeader();
+
+    if (header == nullptr) {
+        return;
+    }
+
+    const int nativeDefault =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderDefaultSectionSizeVertical,
+            nullptr,
+            header
+            );
+
+    const int headerMargin =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderMargin,
+            nullptr,
+            header
+            );
+
+    const int textHeight =
+        std::max(
+            table->fontMetrics().height(),
+            header->fontMetrics().height()
+            );
+
+    const int contentHeight =
+        textHeight
+        + 2 * headerMargin
+        + InterfaceScale::pixels(
+            4,
+            header
+            );
+
+    const int targetHeight =
+        std::max({
+            nativeDefault,
+            header->minimumSectionSize(),
+            contentHeight
+        });
+
+    header->setDefaultSectionSize(
+        targetHeight
+        );
+}
 
 QString formatDurationMilliseconds(
     qint64 milliseconds
@@ -1334,25 +1391,42 @@ void InvestigationAnalyticsPanel::
         }
     }
 
+
     /*
-     * Frequency and burst tables use Qt-native
-     * ResizeToContents / Stretch behavior, so a
-     * geometry refresh is sufficient after the
-     * global style/font repolish.
+     * Native table rows retain their previous default
+     * section heights across live font/style changes.
+     *
+     * Refresh all three Analytics tables after Qt has
+     * processed the new application font.
      */
-    for (
-        QTableWidget *table
-        : {
-            m_eventCodeTable,
-            m_entityTable,
-            m_burstTable
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            for (
+                QTableWidget *table
+                : {
+                    m_eventCodeTable,
+                    m_entityTable,
+                    m_burstTable
+                }
+                ) {
+                if (table == nullptr) {
+                    continue;
+                }
+
+                refreshAnalyticsTableRowHeights(
+                    table
+                    );
+
+                table->updateGeometry();
+                table->viewport()->update();
+            }
+
+            updateGeometry();
+            update();
         }
-        ) {
-        if (table != nullptr) {
-            table->updateGeometry();
-            table->viewport()->update();
-        }
-    }
+        );
 
     updateGeometry();
     update();

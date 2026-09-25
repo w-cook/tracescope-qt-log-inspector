@@ -6,8 +6,10 @@
 #include <QModelIndex>
 #include <QScrollBar>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -416,21 +418,74 @@ void InvestigationIssueSummaryPanel::
     }
 }
 
+
 void InvestigationIssueSummaryPanel::
     refreshInterfaceScale()
 {
     /*
-     * The table columns are content-sized, so
-     * recalculate them using the new application
-     * font/style metrics.
+     * Allow the application font and native style
+     * metrics to settle before measuring table rows.
      */
-    updateMinimumTableWidth();
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_table == nullptr) {
+                return;
+            }
 
-    m_table->updateGeometry();
-    m_table->viewport()->update();
+            QHeaderView *header =
+                m_table->verticalHeader();
 
-    updateGeometry();
-    update();
+            if (header == nullptr) {
+                return;
+            }
+
+            const int nativeDefault =
+                header->style()->pixelMetric(
+                    QStyle::PM_HeaderDefaultSectionSizeVertical,
+                    nullptr,
+                    header
+                    );
+
+            const int headerMargin =
+                header->style()->pixelMetric(
+                    QStyle::PM_HeaderMargin,
+                    nullptr,
+                    header
+                    );
+
+            const int textHeight =
+                std::max(
+                    m_table->fontMetrics().height(),
+                    header->fontMetrics().height()
+                    );
+
+            const int contentHeight =
+                textHeight
+                + 2 * headerMargin
+                + InterfaceScale::pixels(
+                    4,
+                    header
+                    );
+
+            header->setDefaultSectionSize(
+                std::max({
+                    nativeDefault,
+                    header->minimumSectionSize(),
+                    contentHeight
+                })
+                );
+
+            updateMinimumTableWidth();
+
+            m_table->updateGeometry();
+            m_table->viewport()->update();
+
+            updateGeometry();
+            update();
+        }
+        );
 }
 
 void InvestigationIssueSummaryPanel::
