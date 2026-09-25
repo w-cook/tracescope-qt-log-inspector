@@ -6,6 +6,8 @@
 #include <utility>
 
 #include <QAbstractItemView>
+#include <QApplication>
+#include <QFileInfo>
 #include <QFont>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -13,11 +15,11 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
-#include <QVBoxLayout>
-#include <QFileInfo>
 #include <QTimer>
+#include <QVBoxLayout>
 
 #include "../InterfaceScale.h"
 #include "../ItemViewFocusDelegate.h"
@@ -428,6 +430,11 @@ QLabel *makeHeading(
         font
         );
 
+    label->setProperty(
+        "comparisonFontRole",
+        QStringLiteral("heading")
+        );
+
     return label;
 }
 
@@ -447,6 +454,19 @@ QLabel *makeUnavailableLabel(
         );
 
     return label;
+}
+
+int comparisonTableRowHeight(QTableWidget *table)
+{
+    if (table == nullptr) {
+        return 0;
+    }
+
+    return std::max(
+        InterfaceScale::pixels(24, table),
+        table->fontMetrics().height()
+            + InterfaceScale::pixels(4, table)
+        );
 }
 
 QTableWidget *makeTable(
@@ -492,7 +512,7 @@ QTableWidget *makeTable(
 
     table->verticalHeader()
         ->setDefaultSectionSize(
-            24
+            comparisonTableRowHeight(table)
             );
 
     table->horizontalHeader()
@@ -696,6 +716,11 @@ QGroupBox *makeSourcesGroup(
                 roleFont
                 );
 
+            roleLabel->setProperty(
+                "comparisonFontRole",
+                QStringLiteral("bold")
+                );
+
             auto *nameLabel =
                 new QLabel(
                     sourceNameFor(source),
@@ -881,6 +906,11 @@ QGroupBox *makeEventCodeGroup(
 
             label->setFont(
                 font
+                );
+
+            label->setProperty(
+                "comparisonFontRole",
+                QStringLiteral("bold")
                 );
 
             layout->addWidget(
@@ -1179,6 +1209,11 @@ QGroupBox *makeCustomFieldsGroup(
             font
             );
 
+        label->setProperty(
+            "comparisonFontRole",
+            QStringLiteral("bold")
+            );
+
         layout->addWidget(
             label
             );
@@ -1301,6 +1336,11 @@ QGroupBox *makeCustomFieldsGroup(
 
         label->setFont(
             font
+            );
+
+        label->setProperty(
+            "comparisonFontRole",
+            QStringLiteral("bold")
             );
 
         layout->addWidget(
@@ -2308,6 +2348,73 @@ void InvestigationComparisonDocument::
             contentLayout->invalidate();
         }
     }
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_scrollArea == nullptr
+                || m_scrollArea->widget() == nullptr) {
+                return;
+            }
+
+            QWidget *content =
+                m_scrollArea->widget();
+
+            const auto labels =
+                content->findChildren<QLabel *>();
+
+            for (QLabel *label : labels) {
+                const QString fontRole =
+                    label->property(
+                             "comparisonFontRole"
+                             ).toString();
+
+                if (fontRole.isEmpty()) {
+                    continue;
+                }
+
+                /*
+                 * Always start from the current application
+                 * font. Never repeatedly scale the label's
+                 * existing font.
+                 */
+                QFont font =
+                    QApplication::font(label);
+
+                font.setBold(true);
+
+                if (fontRole == QStringLiteral("heading")
+                    && font.pointSizeF() > 0.0) {
+                    font.setPointSizeF(
+                        font.pointSizeF() + 2.0
+                        );
+                }
+
+                label->setFont(font);
+                label->updateGeometry();
+            }
+
+            const auto tables =
+                content->findChildren<QTableWidget *>();
+
+            for (QTableWidget *table : tables) {
+                table->verticalHeader()
+                ->setDefaultSectionSize(
+                    comparisonTableRowHeight(table)
+                    );
+
+                fitTableHeight(table);
+                table->updateGeometry();
+            }
+
+            if (content->layout() != nullptr) {
+                content->layout()->invalidate();
+            }
+
+            content->updateGeometry();
+        }
+        );
 
     WorkspaceDocument::
         refreshInterfaceScale();

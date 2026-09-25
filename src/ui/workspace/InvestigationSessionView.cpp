@@ -8612,13 +8612,6 @@ void InvestigationSessionView::
         }
     }
 
-    qInfo()
-        << "[RECOVERY FULL]"
-        << "current="
-        << m_mainSplitter->sizes()
-        << "target="
-        << targetSizes;
-
     applyMainSplitterSizes(
         targetSizes
         );
