@@ -3169,4 +3169,68 @@ void WorkspaceDocumentHost::
             updateEmptyStatePresentation();
         }
         );
+
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_tabs == nullptr) {
+                return;
+            }
+
+            WorkspaceTabBar *tabBar =
+                m_tabs->workspaceTabBar();
+
+            if (tabBar == nullptr) {
+                return;
+            }
+
+            for (int index = 0;
+                 index < tabBar->count();
+                 ++index) {
+                QWidget *closeButton =
+                    tabBar->tabButton(
+                        index,
+                        QTabBar::RightSide
+                        );
+
+                if (closeButton == nullptr) {
+                    continue;
+                }
+
+                const QSize preferredSize =
+                    closeButton->sizeHint();
+
+                if (closeButton->size()
+                    == preferredSize) {
+                    continue;
+                }
+
+                /*
+                 * Restore the native button's current
+                 * preferred size and make QTabBar rebuild
+                 * its layout around that button.
+                 */
+                closeButton->resize(
+                    preferredSize
+                    );
+
+                tabBar->setTabButton(
+                    index,
+                    QTabBar::RightSide,
+                    nullptr
+                    );
+
+                tabBar->setTabButton(
+                    index,
+                    QTabBar::RightSide,
+                    closeButton
+                    );
+            }
+
+            tabBar->updateGeometry();
+            m_tabs->updateGeometry();
+        }
+        );
 }
