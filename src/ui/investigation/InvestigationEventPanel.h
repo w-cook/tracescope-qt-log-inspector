@@ -102,6 +102,7 @@ private:
         );
 
     void updateRowHeaderWidth();
+    void refreshRowHeights();
 
     void restoreColumnWidths();
 

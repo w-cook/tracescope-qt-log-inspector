@@ -15,6 +15,8 @@
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSignalBlocker>
+#include <QStyle>
+#include <QStyleOptionHeader>
 #include <QTableView>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -218,6 +220,8 @@ InvestigationEventPanel::
             ActiveFilterValueRole
             )
         );
+
+    refreshRowHeights();
 
     layout->addWidget(
         m_table
@@ -1433,8 +1437,7 @@ void InvestigationEventPanel::
             );
 
     if (
-        m_table != nullptr
-        && m_table->model() != nullptr
+        m_table->model() != nullptr
         && m_columnWidthScaleFactor > 0.0
         && !qFuzzyCompare(
             newScaleFactor,
@@ -1511,9 +1514,6 @@ void InvestigationEventPanel::
     m_columnWidthScaleFactor =
         newScaleFactor;
 
-    m_table->updateGeometry();
-    m_table->viewport()->update();
-
     if (m_collapsed) {
         /*
          * Release the old scale's collapsed-height
@@ -1547,7 +1547,6 @@ void InvestigationEventPanel::
     updateGeometry();
     update();
 
-
     QTimer::singleShot(
         0,
         this,
@@ -1558,16 +1557,53 @@ void InvestigationEventPanel::
             }
 
             // Measure using the settled application font.
+            refreshRowHeights();
             updateRowHeaderWidth();
 
             // Synchronize the table's header, corner
             // and viewport geometry.
-            const bool refreshed =
-                QMetaObject::invokeMethod(
-                    m_table,
-                    "updateGeometries",
-                    Qt::DirectConnection
+            QMetaObject::invokeMethod(
+                m_table,
+                "updateGeometries",
+                Qt::DirectConnection
+                );
+
+            QHeaderView *header =
+                m_table->verticalHeader();
+
+            if (header != nullptr
+                && header->count() > 0) {
+
+                QStyleOptionHeader option;
+
+                option.initFrom(header);
+                option.orientation = Qt::Vertical;
+
+                option.rect = QRect(
+                    0,
+                    0,
+                    header->width(),
+                    header->sectionSize(0)
                     );
+
+                option.text =
+                    QStringLiteral("★ 180");
+
+                option.textAlignment =
+                    Qt::AlignRight | Qt::AlignVCenter;
+
+                const QRect labelRect =
+                    header->style()->subElementRect(
+                        QStyle::SE_HeaderLabel,
+                        &option,
+                        header
+                        );
+
+                const QFontMetrics metrics =
+                    header->fontMetrics();
+            }
+
+            m_table->viewport()->update();
         }
         );
 }
@@ -1915,28 +1951,114 @@ void InvestigationEventPanel::
                 maximumRowNumber
                 );
 
+
+    const QFontMetrics metrics =
+        header->fontMetrics();
+
     const int textWidth =
-        header
-            ->fontMetrics()
-            .horizontalAdvance(
+        std::max(
+            metrics.horizontalAdvance(
                 widestExpectedText
-                );
+                ),
+            metrics.boundingRect(
+                       widestExpectedText
+                       ).width()
+            );
 
+    QStyleOptionHeader option;
+
+    option.initFrom(header);
+
+    option.orientation =
+        Qt::Vertical;
+
+    option.state &=
+        ~QStyle::State_Horizontal;
+
+    option.text =
+        widestExpectedText;
+
+    option.textAlignment =
+        Qt::AlignRight
+        | Qt::AlignVCenter;
+
+    const QSize styledSize =
+        header->style()->sizeFromContents(
+            QStyle::CT_HeaderSection,
+            &option,
+            QSize(
+                textWidth,
+                metrics.height()
+                ),
+            header
+            );
+
+    /*
+     * Account for the native header's styling,
+     * including its text margins. Retain a small
+     * scaled clearance for glyph rendering.
+     */
     const int targetWidth =
-        textWidth
-        + InterfaceScale::pixels(8, header);
+        styledSize.width()
+        + InterfaceScale::pixels(
+            4,
+            header
+            );
 
-    qInfo()
-        << "ROW HEADER:"
-        << "Scale:" << InterfaceScale::userFactor()
-        << "Header font:" << header->fontMetrics().height()
-        << "Table font:" << m_table->fontMetrics().height()
-        << "Target:" << targetWidth
-        << "Before:" << header->width()
-        << "Maximum event number:" << maximumRowNumber
-        << "Text width:" << textWidth;
+    header->setFixedWidth(
+        targetWidth
+        );
+}
 
-    header->setFixedWidth(targetWidth);
+void InvestigationEventPanel::
+    refreshRowHeights()
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    QHeaderView *header =
+        m_table->verticalHeader();
+
+    if (header == nullptr) {
+        return;
+    }
+
+    const int nativeDefault =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderDefaultSectionSizeVertical,
+            nullptr,
+            header
+            );
+
+    const int headerMargin =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderMargin,
+            nullptr,
+            header
+            );
+
+    const int textHeight =
+        header->fontMetrics().height();
+
+    const int contentHeight =
+        textHeight
+        + 2 * headerMargin
+        + InterfaceScale::pixels(
+            4,
+            header
+            );
+
+    const int targetHeight =
+        std::max({
+            nativeDefault,
+            header->minimumSectionSize(),
+            contentHeight
+        });
+
+    header->setDefaultSectionSize(
+        targetHeight
+        );
 }
 
 void InvestigationEventPanel::
@@ -2032,9 +2154,5 @@ void InvestigationEventPanel::
              ++column) {
             widths.append(m_table->columnWidth(column));
         }
-
-        qInfo() << "RESTORED COLUMNS:"
-                << widths
-                << "Viewport:" << m_table->viewport()->width();
     });
 }
