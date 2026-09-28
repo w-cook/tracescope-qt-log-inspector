@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSignalBlocker>
@@ -29,6 +30,91 @@
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../models/InvestigationTableModel.h"
 #include "../../workspace/InvestigationSession.h"
+
+namespace
+{
+
+class BookmarkRowHeader : public QHeaderView
+{
+public:
+    explicit BookmarkRowHeader(QWidget *parent)
+        : QHeaderView(Qt::Vertical, parent)
+    {
+        setHighlightSections(true);
+        setSectionsClickable(true);
+        setSectionResizeMode(QHeaderView::Fixed);
+    }
+
+protected:
+    void paintSection(
+        QPainter *painter,
+        const QRect &rect,
+        int logicalIndex
+        ) const override
+    {
+        // Preserve Qt's native event-number rendering,
+        // selection highlighting, and selected font.
+        QHeaderView::paintSection(
+            painter,
+            rect,
+            logicalIndex
+            );
+
+        if (
+            model() == nullptr
+            || !model()
+                    ->headerData(
+                        logicalIndex,
+                        Qt::Vertical,
+                        InvestigationFilterProxyModel::
+                        BookmarkedHeaderRole
+                        )
+                    .toBool()
+            ) {
+            return;
+        }
+
+        const QString star =
+            QStringLiteral("★");
+
+        const int margin =
+            style()->pixelMetric(
+                QStyle::PM_HeaderMargin,
+                nullptr,
+                this
+                );
+
+        const int inset =
+            margin
+            + InterfaceScale::pixels(2, this);
+
+        const QRect starRect(
+            rect.left() + inset,
+            rect.top(),
+            fontMetrics().horizontalAdvance(star)
+                + InterfaceScale::pixels(2, this),
+            rect.height()
+            );
+
+        painter->save();
+
+        painter->setFont(font());
+
+        painter->setPen(
+            palette().color(QPalette::ButtonText)
+            );
+
+        painter->drawText(
+            starRect,
+            Qt::AlignLeft | Qt::AlignVCenter,
+            star
+            );
+
+        painter->restore();
+    }
+};
+
+}
 
 InvestigationEventPanel::
     InvestigationEventPanel(
@@ -221,6 +307,10 @@ InvestigationEventPanel::
             InvestigationFilterProxyModel::
             ActiveFilterValueRole
             )
+        );
+
+    m_table->setVerticalHeader(
+        new BookmarkRowHeader(m_table)
         );
 
     refreshRowHeights();
@@ -2102,74 +2192,69 @@ void InvestigationEventPanel::
         }
     }
 
-    /*
-     * Always reserve room for the bookmark
-     * indicator so filtering cannot make the
-     * row-header width jump.
-     */
-    const QString widestExpectedText =
-        QStringLiteral("★ %1")
-            .arg(
-                maximumRowNumber
-                );
+    const QString maximumNumberText =
+        QString::number(maximumRowNumber);
 
+    const QFontMetrics normalMetrics(
+        header->font()
+        );
 
-    const QFontMetrics metrics =
-        header->fontMetrics();
+    QFont boldFont = header->font();
+    boldFont.setBold(true);
 
-    const int textWidth =
-        std::max(
-            metrics.horizontalAdvance(
-                widestExpectedText
-                ),
-            metrics.boundingRect(
-                       widestExpectedText
-                       ).width()
+    const QFontMetrics boldMetrics(boldFont);
+
+    const int starWidth =
+        normalMetrics.horizontalAdvance(
+            QStringLiteral("★")
             );
 
-    QStyleOptionHeader option;
-
-    option.initFrom(header);
-
-    option.orientation =
-        Qt::Vertical;
-
-    option.state &=
-        ~QStyle::State_Horizontal;
-
-    option.text =
-        widestExpectedText;
-
-    option.textAlignment =
-        Qt::AlignRight
-        | Qt::AlignVCenter;
-
-    const QSize styledSize =
-        header->style()->sizeFromContents(
-            QStyle::CT_HeaderSection,
-            &option,
-            QSize(
-                textWidth,
-                metrics.height()
+    const int numberWidth =
+        std::max(
+            normalMetrics.horizontalAdvance(
+                maximumNumberText
                 ),
+            boldMetrics.horizontalAdvance(
+                maximumNumberText
+                )
+            );
+
+    /*
+     * Match the left inset used by BookmarkRowHeader
+     * when painting the star.
+     */
+    const int margin =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderMargin,
+            nullptr,
             header
             );
 
+    const int leftInset =
+        margin + InterfaceScale::pixels(2, header);
+
+    const int gap =
+        InterfaceScale::pixels(2, header);
+
+    const int rightInset =
+        margin + InterfaceScale::pixels(1, header);
+
     /*
-     * Account for the native header's styling,
-     * including its text margins. Retain a small
-     * scaled clearance for glyph rendering.
+     * Calculate the entire width once.
+     * No additional native sizing calculations.
      */
     const int targetWidth =
-        styledSize.width()
-        + InterfaceScale::pixels(
-            4,
-            header
-            );
+        leftInset
+        + starWidth
+        + gap
+        + numberWidth
+        + rightInset;
 
     header->setFixedWidth(
         targetWidth
         );
+
+    header->viewport()->update();
 }
 
 void InvestigationEventPanel::

@@ -919,6 +919,10 @@ QVariant InvestigationFilterProxyModel::
             record->recordId
             );
 
+    if (role == BookmarkedHeaderRole) {
+        return bookmarked;
+    }
+
     if (role == Qt::TextAlignmentRole) {
         return static_cast<int>(
             Qt::AlignRight
@@ -927,30 +931,9 @@ QVariant InvestigationFilterProxyModel::
     }
 
     if (role == Qt::DisplayRole) {
-        /*
-         * The vertical gutter is the investigation-facing
-         * event number.
-         *
-         * It is derived from the underlying source-model
-         * position rather than the proxy row, so sorting
-         * and filtering never renumber an event.
-         *
-         * Source-relative record numbers remain separate
-         * provenance metadata.
-         */
-        const QString eventNumberText =
-            QString::number(
-                sourceIndex.row() + 1
-                );
-
-        if (!bookmarked) {
-            return eventNumberText;
-        }
-
-        return QStringLiteral("★ %1")
-            .arg(
-                eventNumberText
-                );
+        return QString::number(
+            sourceIndex.row() + 1
+            );
     }
 
     if (role == Qt::ToolTipRole

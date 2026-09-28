@@ -99,6 +99,40 @@ public:
         }
     }
 
+    QSize sizeHint(
+        const QStyleOptionViewItem &option,
+        const QModelIndex &index
+        ) const override
+    {
+        const QSize normalSize =
+            QStyledItemDelegate::sizeHint(
+                option,
+                index
+                );
+
+        if (m_boldWhenTrueRole < 0) {
+            return normalSize;
+        }
+
+        /*
+         * Reserve enough space for an active filter
+         * to make this value bold later.
+         */
+        QStyleOptionViewItem boldOption(option);
+        boldOption.font.setBold(true);
+
+        const QSize boldSize =
+            QStyledItemDelegate::sizeHint(
+                boldOption,
+                index
+                );
+
+        return QSize(
+            qMax(normalSize.width(), boldSize.width()),
+            qMax(normalSize.height(), boldSize.height())
+            );
+    }
+
 protected:
     static void drawCurrentCellIndicator(
         QPainter *painter,

@@ -129,8 +129,8 @@ public:
 
     enum DataRole
     {
-        ActiveFilterValueRole =
-        Qt::UserRole + 100
+        ActiveFilterValueRole = Qt::UserRole + 100,
+        BookmarkedHeaderRole = Qt::UserRole + 101
     };
 
     QVariant data(
