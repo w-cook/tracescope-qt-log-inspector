@@ -72,6 +72,8 @@ private:
 
     void updateMinimumUsableWidth();
 
+    void refreshDetailText();
+
     QGridLayout *m_stateLayout =
         nullptr;
 
@@ -90,4 +92,8 @@ private:
 
     bool m_collapsed =
         false;
+
+
+    QString m_recordDetailText;
+    QString m_analystNote;
 };

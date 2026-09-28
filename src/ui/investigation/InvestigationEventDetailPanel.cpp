@@ -363,35 +363,6 @@ void InvestigationEventDetailPanel::
         QString()
         );
 
-    lines << QString();
-    lines << QStringLiteral("Source:");
-
-    if (!record.source.sourceName.isEmpty()) {
-        lines << QStringLiteral("Name: %1")
-        .arg(
-            record.source.sourceName
-            );
-    }
-
-    if (!record.source.sourcePath.isEmpty()) {
-        lines << QStringLiteral("Path: %1")
-        .arg(
-            record.source.sourcePath
-            );
-    }
-
-    if (record.source.recordNumber > 0) {
-        lines << QStringLiteral("Source Record: %1")
-        .arg(
-            record.source.recordNumber
-            );
-    }
-
-    lines << QStringLiteral("Source Generation: %1")
-                 .arg(
-                     record.source.sourceGeneration
-                     );
-
     if (!record.customAttributes.isEmpty()) {
         lines << QString();
         lines << QStringLiteral(
@@ -430,17 +401,49 @@ void InvestigationEventDetailPanel::
         }
     }
 
-    m_detailText->setPlainText(
-        lines.join(
-            QStringLiteral("\n")
-            )
+    lines << QString();
+    lines << QStringLiteral("Source / Provenance:");
+
+    if (!record.source.sourceName.isEmpty()) {
+        lines << QStringLiteral("Name: %1")
+        .arg(
+            record.source.sourceName
+            );
+    }
+
+    if (!record.source.sourcePath.isEmpty()) {
+        lines << QStringLiteral("Path: %1")
+        .arg(
+            record.source.sourcePath
+            );
+    }
+
+    if (record.source.recordNumber > 0) {
+        lines << QStringLiteral("Source Record: %1")
+        .arg(
+            record.source.recordNumber
+            );
+    }
+
+    lines << QStringLiteral("Source Generation: %1")
+                 .arg(
+                     record.source.sourceGeneration
+                     );
+
+    m_recordDetailText = lines.join(
+        QStringLiteral("\n")
         );
+
+    refreshDetailText();
 }
 
 void InvestigationEventDetailPanel::
     clearRecord()
 {
-    m_detailText->clear();
+    m_recordDetailText.clear();
+    m_analystNote.clear();
+
+    refreshDetailText();
 }
 
 void InvestigationEventDetailPanel::
@@ -470,6 +473,9 @@ void InvestigationEventDetailPanel::
     m_noteButton->setEnabled(
         false
         );
+
+    m_analystNote.clear();
+    refreshDetailText();
 
     m_noteButton->setText(
         tr("Add Note")
@@ -522,13 +528,16 @@ void InvestigationEventDetailPanel::
     const bool hasNote =
         !state.note.trimmed().isEmpty();
 
+    m_analystNote = state.note;
+    refreshDetailText();
+
     m_noteButton->setEnabled(
         true
         );
 
     m_noteButton->setText(
         hasNote
-            ? tr("View/Edit Note")
+            ? tr("Edit Note")
             : tr("Add Note")
         );
 
@@ -1054,4 +1063,24 @@ void InvestigationEventDetailPanel::
         );
 
     updateResponsiveControls();
+}
+
+void InvestigationEventDetailPanel::
+    refreshDetailText()
+{
+    QString text = m_recordDetailText;
+
+    if (
+        !m_recordDetailText.isEmpty()
+        && !m_analystNote.trimmed().isEmpty()
+        ) {
+        text =
+            tr("Analyst Note:")
+            + QStringLiteral("\n")
+            + m_analystNote
+            + QStringLiteral("\n\n")
+            + m_recordDetailText;
+    }
+
+    m_detailText->setPlainText(text);
 }
