@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <QAbstractItemView>
+#include <QColor>
 #include <QComboBox>
 #include <QFrame>
 #include <QGraphicsLayout>
@@ -13,16 +14,15 @@
 #include <QLabel>
 #include <QMargins>
 #include <QPainter>
+#include <QResizeEvent>
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSpacerItem>
+#include <QTimer>
 #include <QTimeZone>
 #include <QVariant>
 #include <QVBoxLayout>
-#include <QColor>
-#include <QResizeEvent>
-#include <QTimer>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -822,6 +822,18 @@ InvestigationTimelinePanel::
         10
         );
 
+    m_subsystemLimitCombo->setMinimumWidth(
+        m_subsystemLimitCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Top 10")
+                )
+        + InterfaceScale::pixels(
+            40,
+            m_subsystemLimitCombo
+            )
+        );
+
     subsystemShowLayout->addWidget(
         subsystemShowLabel
         );
@@ -1496,6 +1508,18 @@ void InvestigationTimelinePanel::
         + InterfaceScale::pixels(
             40,
             m_breakdownCombo
+            )
+        );
+
+    m_subsystemLimitCombo->setMinimumWidth(
+        m_subsystemLimitCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Top 10")
+                )
+        + InterfaceScale::pixels(
+            40,
+            m_subsystemLimitCombo
             )
         );
 
