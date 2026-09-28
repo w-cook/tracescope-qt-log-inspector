@@ -1344,6 +1344,8 @@ void ImportConfigurationDialog::
     auto *contentSplitter =
         new QSplitter(Qt::Horizontal, body);
 
+    contentSplitter->setChildrenCollapsible(false);
+
     contentSplitter->addWidget(scrollArea);
     contentSplitter->addWidget(previewGroup);
 
@@ -5164,6 +5166,8 @@ void ImportConfigurationDialog::
                 Qt::Horizontal,
                 responsiveBody
                 );
+
+        splitter->setChildrenCollapsible(false);
 
         splitter->addWidget(
             responsiveProfileArea
