@@ -288,6 +288,11 @@ InvestigationEventPanel::
         Qt::AscendingOrder
         );
 
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
     m_table
         ->horizontalHeader()
         ->setResizeContentsPrecision(
@@ -1631,6 +1636,11 @@ void InvestigationEventPanel::
     if (m_table == nullptr) {
         return;
     }
+
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
 
     if (layout() != nullptr) {
         layout()->setSpacing(

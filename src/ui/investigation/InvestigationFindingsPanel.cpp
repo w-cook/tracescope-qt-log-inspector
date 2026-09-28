@@ -516,6 +516,11 @@ InvestigationFindingsPanel::
         tr("Finding")
     });
 
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
     m_table
         ->horizontalHeaderItem(1)
         ->setToolTip(

@@ -41,6 +41,14 @@ InvestigationIssueSummaryPanel::
         tr("Total")
     });
 
+    m_table->horizontalHeader()->setHighlightSections(false);
+    m_table->verticalHeader()->setHighlightSections(false);
+
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
     m_table
         ->horizontalHeader()
         ->setSectionResizeMode(

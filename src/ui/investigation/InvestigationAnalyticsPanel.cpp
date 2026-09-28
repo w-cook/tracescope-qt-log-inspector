@@ -508,6 +508,18 @@ InvestigationAnalyticsPanel::
         }
         );
 
+    for (QTableWidget *table : {
+             m_eventCodeTable,
+             m_entityTable
+         }) {
+        table->horizontalHeader()->setHighlightSections(false);
+
+        QFont headerFont = table->font();
+        headerFont.setBold(true);
+
+        table->horizontalHeader()->setFont(headerFont);
+    }
+
     entityLayout->addWidget(
         m_entityTable
         );
@@ -679,6 +691,13 @@ InvestigationAnalyticsPanel::
             tr("Elevated"),
             tr("Highest Severity")
         });
+
+    QFont burstHeaderFont = m_burstTable->font();
+    burstHeaderFont.setBold(true);
+
+    m_burstTable->horizontalHeader()->setFont(
+        burstHeaderFont
+        );
 
     m_burstTable->setEditTriggers(
         QAbstractItemView::NoEditTriggers
@@ -1414,6 +1433,11 @@ void InvestigationAnalyticsPanel::
                 if (table == nullptr) {
                     continue;
                 }
+
+                QFont headerFont = table->font();
+                headerFont.setBold(true);
+
+                table->horizontalHeader()->setFont(headerFont);
 
                 refreshAnalyticsTableRowHeights(
                     table
