@@ -7,7 +7,7 @@
         "severity": "level",
         "subsystem": "subsystem",
         "eventCode": "eventCode",
-        "entityId": "entityId",
+        "entityId": "",
         "message": "message"
     },
     "customFields": [
@@ -50,6 +50,110 @@
         {
             "name": "Request ID",
             "sourcePath": "structuredDataFields.request@32473.requestId"
+        },
+        {
+            "name": "Deployment Environment",
+            "sourcePath": "structuredDataFields.deployment@32473.environment"
+        },
+        {
+            "name": "Deployment Region",
+            "sourcePath": "structuredDataFields.deployment@32473.region"
+        },
+        {
+            "name": "Inventory SKU",
+            "sourcePath": "structuredDataFields.inventory@32473.sku"
+        },
+        {
+            "name": "Available Quantity",
+            "sourcePath": "structuredDataFields.inventory@32473.availableQuantity"
+        },
+        {
+            "name": "Reorder Threshold",
+            "sourcePath": "structuredDataFields.inventory@32473.reorderThreshold"
+        },
+        {
+            "name": "Customer Region",
+            "sourcePath": "structuredDataFields.request@32473.customerRegion"
+        },
+        {
+            "name": "Supplier",
+            "sourcePath": "structuredDataFields.request@32473.supplier"
+        },
+        {
+            "name": "Supplier Elapsed (ms)",
+            "sourcePath": "structuredDataFields.request@32473.elapsedMs"
+        },
+        {
+            "name": "Supplier Confirmation ID",
+            "sourcePath": "structuredDataFields.request@32473.confirmationId"
+        },
+        {
+            "name": "Payment Request ID",
+            "sourcePath": "structuredDataFields.payment@32473.requestId"
+        },
+        {
+            "name": "Payment Provider",
+            "sourcePath": "structuredDataFields.payment@32473.provider"
+        },
+        {
+            "name": "Database Request ID",
+            "sourcePath": "structuredDataFields.database@32473.requestId"
+        },
+        {
+            "name": "Database",
+            "sourcePath": "structuredDataFields.database@32473.database"
+        },
+        {
+            "name": "Database Elapsed (ms)",
+            "sourcePath": "structuredDataFields.database@32473.elapsedMs"
+        },
+        {
+            "name": "Retry Request ID",
+            "sourcePath": "structuredDataFields.retry@32473.requestId"
+        },
+        {
+            "name": "Retry Attempt",
+            "sourcePath": "structuredDataFields.retry@32473.attempt"
+        },
+        {
+            "name": "Retry Delay (ms)",
+            "sourcePath": "structuredDataFields.retry@32473.delayMs"
+        },
+        {
+            "name": "Selected Route",
+            "sourcePath": "structuredDataFields.routing@32473.route"
+        },
+        {
+            "name": "Routing Destination",
+            "sourcePath": "structuredDataFields.routing@32473.destination"
+        },
+        {
+            "name": "Diagnostic Note",
+            "sourcePath": "structuredDataFields.detail@32473.note"
+        },
+        {
+            "name": "Queue Name",
+            "sourcePath": "structuredDataFields.queue@32473.queue"
+        },
+        {
+            "name": "Queue Region",
+            "sourcePath": "structuredDataFields.queue@32473.region"
+        },
+        {
+            "name": "Processed Orders",
+            "sourcePath": "structuredDataFields.summary@32473.processedOrders"
+        },
+        {
+            "name": "Warning Count",
+            "sourcePath": "structuredDataFields.summary@32473.warningCount"
+        },
+        {
+            "name": "Error Count",
+            "sourcePath": "structuredDataFields.summary@32473.errorCount"
+        },
+        {
+            "name": "Critical Count",
+            "sourcePath": "structuredDataFields.summary@32473.criticalCount"
         }
     ],
     "severityAliases": {},

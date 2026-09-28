@@ -26,6 +26,10 @@
         {
             "name": "Correlation ID",
             "sourcePath": "correlation_id"
+        },
+        {
+            "name": "Deployment Ring",
+            "sourcePath": "deployment_ring"
         }
     ],
     "severityAliases": {},
