@@ -1234,8 +1234,10 @@ void InvestigationReportHtmlRendererTests::
 
     const QString categorical =
         sectionBetween(
-            QStringLiteral("<h4>Categorical Fields</h4>"),
-            QStringLiteral("<h4>Numeric Fields</h4>")
+            QStringLiteral(
+                "<table class=\"report-table-categorical\">"
+                ),
+            QStringLiteral("</table>")
             );
 
     QVERIFY(!categorical.isEmpty());

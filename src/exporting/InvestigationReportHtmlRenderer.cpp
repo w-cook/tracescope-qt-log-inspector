@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include <QTextStream>
 #include <QJsonArray>
@@ -433,9 +434,10 @@ void appendFilterScope(
     )
 {
     out
-        << "<details>"
+        << "<details class=\"print-filter-details\">"
         << "<summary>Captured investigation filters</summary>"
-        << "<div class=\"details-body\">";
+        << "<div class=\"details-body print-keep\">"
+        << "<h4 class=\"print-only\">Captured investigation filters</h4>";
 
     if (!hasActiveFilters(filters)) {
         out
@@ -583,7 +585,7 @@ void appendCapabilities(
         };
 
     out
-        << "<details>"
+        << "<details class=\"print-keep\">"
         << "<summary>Source capabilities</summary>"
         << "<div class=\"details-body\">"
         << "<dl class=\"definition-grid\">";
@@ -944,12 +946,16 @@ void appendIssueGroups(
     }
 
     out
-        << "<details open>"
+        << "<details class=\"print-captioned-table\" open>"
         << "<summary>Subsystem Issue Groups ("
         << groups.size()
         << ")</summary>"
         << "<div class=\"details-body table-wrap\">"
         << "<table class=\"report-table-issue-groups\">"
+        << "<caption class=\"print-table-caption\">"
+        << "Grouped Warning/Error Analysis — Subsystem Issue Groups ("
+        << groups.size()
+        << ")</caption>"
         << "<thead><tr>"
         << "<th>Subsystem</th>"
         << "<th>Warnings</th>"
@@ -991,11 +997,16 @@ void appendFrequencyTable(
     QTextStream &out,
     const QString &title,
     const QVector<InvestigationValueFrequency>
-        &frequencies
+        &frequencies,
+    bool includePrintContext = false
     )
 {
     out
-        << "<details>"
+        << (
+            frequencies.isEmpty()
+                ? "<details class=\"print-keep\">"
+                : "<details class=\"print-captioned-table\">"
+            )
         << "<summary>"
         << escaped(title)
         << " ("
@@ -1016,6 +1027,23 @@ void appendFrequencyTable(
     out
         << "<div class=\"table-wrap\">"
         << "<table>"
+        << "<caption class=\"print-table-caption\">"
+        << "Deterministic Analytics — "
+        << escaped(title)
+        << " ("
+        << frequencies.size()
+        << ")";
+
+    if (includePrintContext) {
+        out
+            << "<span class=\"print-table-subcaption\">"
+            << "These frequency summaries describe populated "
+               "canonical values in the captured analysis population."
+            << "</span>";
+    }
+
+    out
+        << "</caption>"
         << "<thead><tr>"
         << "<th>Value</th>"
         << "<th>Count</th>"
@@ -1212,6 +1240,7 @@ void appendComparisonSeverity(
     )
 {
     out
+        << "<div class=\"print-keep\">"
         << "<h3>Severity Changes</h3>";
 
     if (!severity.comparable()) {
@@ -1219,7 +1248,7 @@ void appendComparisonSeverity(
             << "<p class=\"muted\">"
             << "Severity comparison is unavailable because "
                "severity data is not populated in both sessions."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
@@ -1228,7 +1257,7 @@ void appendComparisonSeverity(
         out
             << "<p class=\"muted\">"
             << "No severity-count differences were captured."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
@@ -1288,6 +1317,7 @@ void appendComparisonSeverity(
 
     out
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 }
 
@@ -1299,7 +1329,15 @@ void appendComparisonDimension(
     bool groupByChange = false
     )
 {
+    const bool hasDifferenceTable =
+        dimension.comparable() && !dimension.differences.isEmpty();
+
     out
+        << (
+               hasDifferenceTable
+                   ? "<div class=\"print-keep print-captioned-dimension\">"
+                   : "<div class=\"print-keep\">"
+               )
         << "<h3>"
         << escaped(title)
         << "</h3>";
@@ -1308,7 +1346,7 @@ void appendComparisonDimension(
         out
             << "<p class=\"muted\">"
             << escaped(unavailableText)
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
@@ -1317,7 +1355,7 @@ void appendComparisonDimension(
         out
             << "<p class=\"muted\">"
             << "No differences were captured for this dimension."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
@@ -1325,6 +1363,9 @@ void appendComparisonDimension(
     out
         << "<div class=\"table-wrap\">"
         << "<table class=\"report-table-dimension\">"
+        << "<caption class=\"print-table-caption\">"
+        << escaped(title)
+        << "</caption>"
         << "<thead><tr>"
         << "<th>Value</th>"
         << "<th>Baseline</th>"
@@ -1366,7 +1407,7 @@ void appendComparisonDimension(
 
     QString previousGroup;
 
-    for (const auto &difference : orderedDifferences) {
+    for (const auto &difference : std::as_const(orderedDifferences)) {
         if (groupByChange) {
             const QString group =
                 difference.appearsOnlyInComparison()
@@ -1410,6 +1451,7 @@ void appendComparisonDimension(
 
     out
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 }
 
@@ -1418,27 +1460,31 @@ void appendComparisonCustomFields(
     const InvestigationCustomFieldComparison &customFields
     )
 {
-    out
-        << "<h3>Custom-Field Changes</h3>";
-
     if (
         customFields.categoricalFields.isEmpty()
         && customFields.numericFields.isEmpty()
         ) {
         out
+            << "<div class=\"print-keep\">"
+            << "<h3>Custom-Field Changes</h3>"
             << "<p class=\"muted\">"
             << "No meaningful shared custom-field differences "
                "were captured."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
 
+    out
+        << "<h3 class=\"print-screen-heading\">Custom-Field Changes</h3>";
+
     if (!customFields.categoricalFields.isEmpty()) {
         out
-            << "<h4>Categorical Fields</h4>"
+            << "<h4 class=\"print-screen-heading\">Categorical Fields</h4>"
             << "<div class=\"table-wrap\">"
             << "<table class=\"report-table-categorical\">"
+            << "<caption class=\"print-table-caption\">"
+            << "Custom-Field Changes — Categorical Fields</caption>"
             << "<thead><tr>"
             << "<th>Field</th>"
             << "<th>Value</th>"
@@ -1520,9 +1566,11 @@ void appendComparisonCustomFields(
 
     if (!customFields.numericFields.isEmpty()) {
         out
-            << "<h4>Numeric Fields</h4>"
+            << "<h4 class=\"print-screen-heading\">Numeric Fields</h4>"
             << "<div class=\"table-wrap\">"
             << "<table class=\"report-table-numeric\">"
+            << "<caption class=\"print-table-caption\">"
+            << "Custom-Field Changes — Numeric Fields</caption>"
             << "<thead><tr>"
             << "<th>Field</th>"
             << "<th>Baseline</th>"
@@ -1632,6 +1680,7 @@ void appendComparisonBursts(
     )
 {
     out
+        << "<div class=\"print-keep\">"
         << "<h3>Burst Comparison</h3>";
 
     if (!bursts.has_value()) {
@@ -1639,7 +1688,7 @@ void appendComparisonBursts(
             << "<p class=\"muted\">"
             << "No shared-settings burst comparison was "
                "captured for this comparison document."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
@@ -1706,6 +1755,7 @@ void appendComparisonBursts(
 
     out
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 }
 
@@ -1787,6 +1837,7 @@ void appendComparison(
         << "</div>";
 
     out
+        << "<div class=\"print-keep\">"
         << "<h3>Captured Timing</h3>"
         << "<div class=\"table-wrap\">"
         << "<table class=\"report-table-timing\">"
@@ -1876,6 +1927,7 @@ void appendComparison(
                )
         << "</td></tr>"
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 
     appendComparisonSeverity(
@@ -2229,11 +2281,15 @@ void appendBurstAnalysis(
     const InvestigationReportBurstSnapshot &analysis
     )
 {
+    out
+        << "<div class=\"print-keep\">"
+        << "<h3>Burst Analysis</h3>";
+
     if (!analysis.available) {
         out
             << "<p class=\"muted\">"
             << "Burst analysis is unavailable for this source."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
@@ -2281,7 +2337,7 @@ void appendBurstAnalysis(
         << "</div>";
 
     out
-        << "<details>"
+        << "<details class=\"print-keep\">"
         << "<summary>Burst detection settings</summary>"
         << "<div class=\"details-body\">"
         << "<h4>Configured</h4>";
@@ -2308,18 +2364,29 @@ void appendBurstAnalysis(
             << "<p class=\"muted\">"
             << "Burst analysis was available, but no bursts "
                "met the captured detection thresholds."
-            << "</p>";
+            << "</p>"
+            << "</div>";
 
         return;
     }
 
+    /*
+     * Close the compact introduction group.
+     * Detected Bursts remains a separate print unit.
+     */
+    out << "</div>";
+
     out
-        << "<details open>"
+        << "<details class=\"print-captioned-table\" open>"
         << "<summary>Detected Bursts ("
         << analysis.bursts.size()
         << ")</summary>"
         << "<div class=\"details-body table-wrap\">"
         << "<table class=\"burst-table\">"
+        << "<caption class=\"print-table-caption\">"
+        << "Detected Bursts ("
+        << analysis.bursts.size()
+        << ")</caption>"
         << "<thead><tr>"
         << "<th>Start</th>"
         << "<th>End</th>"
@@ -2417,17 +2484,23 @@ void appendInvestigatorAnnotations(
 
     if (statefulIndexes.isEmpty()) {
         out
+            << "<div class=\"print-keep\">"
+            << "<h3>Findings and Investigator Annotations</h3>"
             << "<p class=\"muted\">"
             << "No bookmarks, analyst notes, or finding "
                "classifications were captured for this source."
-            << "</p>";
+            << "</p></div>";
 
         return;
     }
 
     out
+        << "<h3 class=\"print-screen-heading\">"
+           "Findings and Investigator Annotations</h3>"
         << "<div class=\"table-wrap\">"
         << "<table class=\"annotation-table\">"
+        << "<caption class=\"print-table-caption\">"
+           "Findings and Investigator Annotations</caption>"
         << "<thead><tr>"
         << "<th>Finding</th>"
         << "<th>Severity</th>"
@@ -2956,13 +3029,11 @@ void appendImportDiagnostics(
     )
 {
     out
-        << "<details"
         << (
                diagnostics.isEmpty()
-                   ? ""
-                   : " open"
+                   ? "<details class=\"print-keep\">"
+                   : "<details class=\"print-captioned-table\" open>"
                )
-        << ">"
         << "<summary>Import Diagnostics ("
         << diagnostics.size()
         << ")</summary>"
@@ -2981,6 +3052,10 @@ void appendImportDiagnostics(
     out
         << "<div class=\"table-wrap\">"
         << "<table>"
+        << "<caption class=\"print-table-caption\">"
+        << "Import Diagnostics ("
+        << diagnostics.size()
+        << ")</caption>"
         << "<thead><tr>"
         << "<th>Severity</th>"
         << "<th>Code</th>"
@@ -3085,11 +3160,13 @@ void appendTechnicalImportProfile(
     )
 {
     out
-        << "<details>"
+        << "<details class=\"print-profile\">"
         << "<summary>Complete Import Profile</summary>"
         << "<div class=\"details-body\">";
 
     out
+        << "<div class=\"print-keep\">"
+        << "<h4 class=\"print-only\">Complete Import Profile</h4>"
         << "<dl class=\"definition-grid\">"
         << "<dt>Schema version</dt><dd>"
         << profile.schemaVersion
@@ -3107,10 +3184,12 @@ void appendTechnicalImportProfile(
                    )
                )
         << "</dd>"
-        << "</dl>";
+        << "</dl>"
+        << "</div>";
 
     if (!profile.recordPath.trimmed().isEmpty()) {
         out
+            << "<div class=\"print-keep\">"
             << "<h4>Record Selection</h4>"
             << "<dl class=\"definition-grid\">"
             << "<dt>Record path</dt><dd>"
@@ -3118,20 +3197,24 @@ void appendTechnicalImportProfile(
                    profile.recordPath
                    )
             << "</dd>"
-            << "</dl>";
+            << "</dl>"
+            << "</div>";
     }
 
     if (!profile.regexPattern.trimmed().isEmpty()) {
         out
+            << "<div class=\"print-keep\">"
             << "<h4>Regex Configuration</h4>"
             << "<pre class=\"technical-code\">"
             << escaped(
                    profile.regexPattern
                    )
-            << "</pre>";
+            << "</pre>"
+            << "</div>";
     }
 
     out
+        << "<div class=\"print-keep\">"
         << "<h4>Canonical Field Mappings</h4>"
         << "<div class=\"table-wrap\">"
         << "<table>"
@@ -3191,10 +3274,15 @@ void appendTechnicalImportProfile(
 
     out
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 
     out
-        << "<details>"
+        << (
+            profile.customFields.isEmpty()
+                ? "<details class=\"print-keep\">"
+                : "<details class=\"print-captioned-table\">"
+            )
         << "<summary>Custom Field Mappings ("
         << profile.customFields.size()
         << ")</summary>"
@@ -3209,6 +3297,10 @@ void appendTechnicalImportProfile(
         out
             << "<div class=\"table-wrap\">"
             << "<table>"
+            << "<caption class=\"print-table-caption\">"
+            << "Custom Field Mappings ("
+            << profile.customFields.size()
+            << ")</caption>"
             << "<thead><tr>"
             << "<th>Name</th>"
             << "<th>Source path</th>"
@@ -3236,7 +3328,11 @@ void appendTechnicalImportProfile(
         << "</div></details>";
 
     out
-        << "<details>"
+        << (
+               profile.severityAliases.isEmpty()
+                   ? "<details class=\"print-keep\">"
+                   : "<details class=\"print-captioned-table\">"
+               )
         << "<summary>Severity Aliases ("
         << profile.severityAliases.size()
         << ")</summary>"
@@ -3251,6 +3347,10 @@ void appendTechnicalImportProfile(
         out
             << "<div class=\"table-wrap\">"
             << "<table>"
+            << "<caption class=\"print-table-caption\">"
+            << "Severity Aliases ("
+            << profile.severityAliases.size()
+            << ")</caption>"
             << "<thead><tr>"
             << "<th>Source value</th>"
             << "<th>Canonical severity</th>"
@@ -3287,7 +3387,11 @@ void appendTechnicalImportProfile(
         << "</div></details>";
 
     out
-        << "<details>"
+        << (
+            profile.timestampRules.isEmpty()
+                ? "<details class=\"print-keep\">"
+                : "<details class=\"print-captioned-table\">"
+            )
         << "<summary>Timestamp Rules ("
         << profile.timestampRules.size()
         << ")</summary>"
@@ -3302,6 +3406,10 @@ void appendTechnicalImportProfile(
         out
             << "<div class=\"table-wrap\">"
             << "<table>"
+            << "<caption class=\"print-table-caption\">"
+            << "Timestamp Rules ("
+            << profile.timestampRules.size()
+            << ")</caption>"
             << "<thead><tr>"
             << "<th>Priority</th>"
             << "<th>Type</th>"
@@ -3357,6 +3465,8 @@ void appendImportContext(
     )
 {
     out
+        << "<div class=\"print-keep\">"
+        << "<h3>Import and Data-Quality Context</h3>"
         << "<div class=\"table-wrap\">"
         << "<table><tbody>"
         << "<tr><th>Source name</th><td>"
@@ -3411,6 +3521,7 @@ void appendImportContext(
                )
         << "</td></tr>"
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 
     appendImportDiagnostics(
@@ -3533,6 +3644,7 @@ void appendSession(
      */
 
     out
+        << "<div class=\"print-keep\">"
         << "<h3>Investigation Scope</h3>"
         << "<div class=\"table-wrap\">"
         << "<table><tbody>"
@@ -3601,6 +3713,7 @@ void appendSession(
         << "</td></tr>"
 
         << "</tbody></table>"
+        << "</div>"
         << "</div>";
 
     out
@@ -3618,6 +3731,7 @@ void appendSession(
      */
 
     out
+        << "<div class=\"print-unit\">"
         << "<h3>Severity Summary</h3>";
 
     appendSeverityTable(
@@ -3626,6 +3740,8 @@ void appendSession(
         session.analysisSeveritySummary
         );
 
+    out << "</div>";
+
     /*
      * -------------------------------------------------
      * Event activity timeline
@@ -3633,6 +3749,7 @@ void appendSession(
      */
 
     out
+        << "<div class=\"print-unit\">"
         << "<h3>Event Activity Timeline</h3>"
         << "<p class=\"muted\">"
         << "The timeline represents the deterministic "
@@ -3644,19 +3761,32 @@ void appendSession(
         session.timeline
         );
 
+    out << "</div>";
+
     /*
      * -------------------------------------------------
      * Grouped warning/error analysis
      * -------------------------------------------------
      */
 
-    out
-        << "<h3>Grouped Warning/Error Analysis</h3>";
+    if (session.elevatedIssueGroups.isEmpty()) {
+        out
+            << "<div class=\"print-keep\">"
+            << "<h3>Grouped Warning/Error Analysis</h3>";
+    } else {
+        out
+            << "<h3 class=\"print-screen-heading\">"
+               "Grouped Warning/Error Analysis</h3>";
+    }
 
     appendIssueGroups(
         out,
         session.elevatedIssueGroups
         );
+
+    if (session.elevatedIssueGroups.isEmpty()) {
+        out << "</div>";
+    }
 
     /*
      * -------------------------------------------------
@@ -3664,9 +3794,23 @@ void appendSession(
      * -------------------------------------------------
      */
 
+    const bool hasFrequencyTable =
+        !session.eventCodeFrequencies.isEmpty()
+        || !session.entityFrequencies.isEmpty()
+        || !session.subsystemFrequencies.isEmpty();
+
     out
-        << "<h3>Deterministic Analytics</h3>"
-        << "<p class=\"muted\">"
+        << (
+               hasFrequencyTable
+                   ? "<h3 class=\"print-screen-heading\">"
+                   : "<h3>"
+               )
+        << "Deterministic Analytics</h3>"
+        << (
+               hasFrequencyTable
+                   ? "<p class=\"muted print-screen-heading\">"
+                   : "<p class=\"muted\">"
+               )
         << "These frequency summaries describe populated "
            "canonical values in the captured analysis population."
         << "</p>";
@@ -3674,19 +3818,25 @@ void appendSession(
     appendFrequencyTable(
         out,
         QStringLiteral("Event Codes"),
-        session.eventCodeFrequencies
+        session.eventCodeFrequencies,
+        !session.eventCodeFrequencies.isEmpty()
         );
 
     appendFrequencyTable(
         out,
         QStringLiteral("Entities"),
-        session.entityFrequencies
+        session.entityFrequencies,
+        session.eventCodeFrequencies.isEmpty()
+            && !session.entityFrequencies.isEmpty()
         );
 
     appendFrequencyTable(
         out,
         QStringLiteral("Subsystems"),
-        session.subsystemFrequencies
+        session.subsystemFrequencies,
+        session.eventCodeFrequencies.isEmpty()
+            && session.entityFrequencies.isEmpty()
+            && !session.subsystemFrequencies.isEmpty()
         );
 
     /*
@@ -3696,6 +3846,7 @@ void appendSession(
      */
 
     out
+        << "<div class=\"print-keep\">"
         << "<h3>Timestamp Cadence</h3>";
 
     if (
@@ -3717,14 +3868,13 @@ void appendSession(
             << "</p>";
     }
 
+    out << "</div>";
+
     /*
      * -------------------------------------------------
      * Burst analysis
      * -------------------------------------------------
      */
-
-    out
-        << "<h3>Burst Analysis</h3>";
 
     appendBurstAnalysis(
         out,
@@ -3736,9 +3886,6 @@ void appendSession(
      * Findings and annotations
      * -------------------------------------------------
      */
-
-    out
-        << "<h3>Findings and Investigator Annotations</h3>";
 
     appendInvestigatorAnnotations(
         out,
@@ -3753,6 +3900,12 @@ void appendSession(
      */
 
     out
+        << (
+            session.evidenceRecords.isEmpty()
+                ? "<div class=\"print-evidence-section "
+                  "print-evidence-empty\">"
+                : "<div class=\"print-evidence-section\">"
+            )
         << "<h3>Supporting Evidence</h3>";
 
     appendEvidence(
@@ -3762,14 +3915,13 @@ void appendSession(
         supportingEvidenceIncluded
         );
 
+    out << "</div>";
+
     /*
      * -------------------------------------------------
      * Import and data-quality context
      * -------------------------------------------------
      */
-
-    out
-        << "<h3>Import and Data-Quality Context</h3>";
 
     appendImportContext(
         out,
@@ -3961,6 +4113,60 @@ body {
     line-height: 1.2;
 }
 
+.report-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.report-title-copy {
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+.report-details-controls {
+    flex: 0 0 auto;
+}
+
+.report-details-toggle {
+    padding: 7px 12px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.report-details-toggle:hover,
+.report-details-toggle:focus-visible {
+    background: #d8e9f5;
+}
+
+.report-details-toggle[hidden] {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .report-title-row {
+        flex-direction: column;
+    }
+
+    .report-title-copy,
+    .report-details-controls {
+        width: 100%;
+        flex: 0 1 auto;
+    }
+
+    .report-details-toggle {
+        width: 100%;
+    }
+}
+
 .report-header,
 .report-section,
 .evidence-record {
@@ -4091,6 +4297,12 @@ thead th {
 td.number {
     text-align: start;
     font-variant-numeric: tabular-nums;
+}
+
+/* Table captions are exclusively for printed reports. */
+.print-table-caption,
+.print-only {
+    display: none;
 }
 
 .note {
@@ -4987,40 +5199,624 @@ h5 {
     }
 }
 
+@page {
+    size: auto;
+    margin: 18mm 15mm;
+}
 
 @media print {
+    html,
+    body {
+        width: auto;
+        margin: 0;
+        padding: 0;
+        overflow: visible !important;
+    }
+
     body {
         background: white;
+        color: #17202a;
+        font-size: 9pt;
+        line-height: 1.4;
+        orphans: 3;
+        widows: 3;
     }
 
     .report-shell {
         display: block;
+        width: 100%;
+        min-height: 0;
     }
 
-    .report-nav {
-        display: none;
+    .report-nav,
+    .report-details-controls {
+        display: none !important;
     }
 
     .report-main {
-        width: auto;
+        width: 100%;
+        max-width: none;
         padding: 0;
+        margin: 0;
+        overflow: visible;
     }
 
+    /*
+     * Allow report sections and nested detail
+     * blocks to continue naturally across pages.
+     */
     .report-header,
     .report-section {
-        break-inside: avoid;
+        margin: 0 0 5mm;
+        padding: 0 0 4mm;
         border: 0;
-        border-bottom: 1px solid #cccccc;
+        border-bottom: 1px solid #ddd;
         border-radius: 0;
-        padding: 18px 0;
+        background: white;
+        break-inside: auto;
+    }
+
+    .report-header {
+        break-inside: avoid-page;
+    }
+
+    .report-header h1 {
+        font-size: 17pt;
+    }
+
+    .section-kicker,
+    h2,
+    h3,
+    h4,
+    h5,
+    summary {
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+
+    h2 {
+        font-size: 13pt;
+    }
+
+    h3 {
+        font-size: 11pt;
     }
 
     details {
-        break-inside: avoid;
+        margin: 3mm 0;
+        border: 0;
+        border-radius: 0;
+        background: white;
+        break-inside: auto;
     }
 
-    details > * {
+    summary {
+        padding: 2mm 0;
+        list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .details-body {
+        padding: 0;
+    }
+
+    /*
+     * Remove screen-only horizontal scrolling
+     * and desktop table minimum widths.
+     */
+    .table-wrap,
+    .timeline-scroll {
+        width: 100%;
+        max-width: 100%;
+        overflow: visible !important;
+    }
+
+    .table-wrap table {
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+        font-size: 8pt;
+    }
+
+    .table-wrap table th,
+    .table-wrap table td {
+        width: auto !important;
+        padding: 1.5mm;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    tr {
+        break-inside: avoid-page;
+    }
+
+    /*
+     * Keep charts inside the printable area.
+     * Long timelines become scaled overviews.
+     */
+    .timeline-chart {
+        width: 100%;
+        max-width: 100%;
+        padding: 2mm;
+        break-inside: avoid-page;
+    }
+
+    /* Print legend colors without relying on backgrounds. */
+    .timeline-legend i {
+        width: 10px;
+        height: 10px;
+        background: transparent !important;
+        border: 5px solid;
+        border-radius: 2px;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .timeline-legend .legend-info {
+        border-color: #6c8eaa;
+    }
+
+    .timeline-legend .legend-warning {
+        border-color: #d5a72d;
+    }
+
+    .timeline-legend .legend-error {
+        border-color: #c45b45;
+    }
+
+    .timeline-legend .legend-critical {
+        border-color: #853c4a;
+    }
+
+    .timeline-legend .legend-unspecified {
+        border-color: #a8b0b8;
+    }
+
+    .timeline-svg {
         display: block;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+    }
+
+    /*
+     * Preserve the complete technical content
+     * rather than clipping scrollable blocks.
+     */
+    .raw-source,
+    .technical-code {
+        max-height: none;
+        overflow: visible;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .comparison-route {
+        grid-template-columns:
+            minmax(0, 1fr) auto minmax(0, 1fr);
+        break-inside: avoid-page;
+    }
+
+    .metric {
+        break-inside: avoid-page;
+    }
+}
+
+@media print {
+    /*
+     * Print exceptionally wide tables as labeled
+     * records instead of eight compressed columns.
+     */
+    :is(
+        .report-table-chronology,
+        .report-table-burst-comparison,
+        .burst-table,
+        .annotation-table
+    ) {
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: auto !important;
+    }
+
+    :is(
+        .report-table-chronology,
+        .report-table-burst-comparison,
+        .burst-table,
+        .annotation-table
+    ) thead {
+        display: none;
+    }
+
+    :is(
+        .report-table-chronology,
+        .report-table-burst-comparison,
+        .burst-table,
+        .annotation-table
+    ) tbody {
+        display: block;
+    }
+
+    :is(
+        .report-table-chronology,
+        .report-table-burst-comparison,
+        .burst-table,
+        .annotation-table
+    ) tbody tr {
+        display: block;
+        margin-bottom: 3mm;
+        padding: 1mm;
+        border: 1px solid #ccc;
+        break-inside: avoid-page;
+    }
+
+    :is(
+        .report-table-chronology,
+        .report-table-burst-comparison,
+        .burst-table,
+        .annotation-table
+    ) tbody tr > :is(th, td) {
+        display: grid;
+        grid-template-columns: 35% minmax(0, 1fr);
+        gap: 2mm;
+        width: 100% !important;
+        padding: 1.5mm 2mm;
+        border-bottom: 1px solid #eee;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        text-align: left;
+    }
+
+    :is(
+        .report-table-chronology,
+        .report-table-burst-comparison,
+        .burst-table,
+        .annotation-table
+    ) tbody tr > :is(th, td)::before {
+        color: #555;
+        font-weight: 700;
+    }
+
+    /*
+     * Evidence Chronology.
+     */
+    .report-table-chronology td:nth-child(1)::before {
+        content: "Timestamp";
+    }
+    .report-table-chronology td:nth-child(2)::before {
+        content: "Source";
+    }
+    .report-table-chronology td:nth-child(3)::before {
+        content: "Severity";
+    }
+    .report-table-chronology td:nth-child(4)::before {
+        content: "Message";
+    }
+    .report-table-chronology td:nth-child(5)::before {
+        content: "Context";
+    }
+
+    /*
+     * Burst Comparison.
+     */
+    .report-table-burst-comparison th:first-child::before {
+        content: "Session";
+    }
+    .report-table-burst-comparison td:nth-child(2)::before {
+        content: "Bursts";
+    }
+    .report-table-burst-comparison td:nth-child(3)::before {
+        content: "Elevated records";
+    }
+    .report-table-burst-comparison td:nth-child(4)::before {
+        content: "Peak elevated";
+    }
+    .report-table-burst-comparison td:nth-child(5)::before {
+        content: "Longest burst";
+    }
+    .report-table-burst-comparison td:nth-child(6)::before {
+        content: "Dominant subsystem";
+    }
+    .report-table-burst-comparison td:nth-child(7)::before {
+        content: "Dominant event code";
+    }
+    .report-table-burst-comparison td:nth-child(8)::before {
+        content: "Dominant entity";
+    }
+    .report-table-burst-comparison td[colspan]::before {
+        content: "Analysis";
+    }
+
+    /*
+     * Detected Bursts.
+     */
+    .burst-table td:nth-child(1)::before {
+        content: "Start";
+    }
+    .burst-table td:nth-child(2)::before {
+        content: "End";
+    }
+    .burst-table td:nth-child(3)::before {
+        content: "Duration";
+    }
+    .burst-table td:nth-child(4)::before {
+        content: "Warning";
+    }
+    .burst-table td:nth-child(5)::before {
+        content: "Error";
+    }
+    .burst-table td:nth-child(6)::before {
+        content: "Critical";
+    }
+    .burst-table td:nth-child(7)::before {
+        content: "Total elevated";
+    }
+    .burst-table td:nth-child(8)::before {
+        content: "Trigger";
+    }
+
+    /*
+     * Findings and investigator annotations.
+     */
+    .annotation-table td:nth-child(1)::before {
+        content: "Finding";
+    }
+    .annotation-table td:nth-child(2)::before {
+        content: "Severity";
+    }
+    .annotation-table td:nth-child(3)::before {
+        content: "Message";
+    }
+    .annotation-table td:nth-child(4)::before {
+        content: "Note";
+    }
+    .annotation-table td:nth-child(5)::before {
+        content: "Bookmark";
+    }
+    .annotation-table td:nth-child(6)::before {
+        content: "Timestamp";
+    }
+    .annotation-table td:nth-child(7)::before {
+        content: "Event #";
+    }
+
+    .annotation-table .annotation-link {
+        margin: 0;
+        padding: 0;
+        text-decoration: none;
+    }
+
+    /*
+     * Avoid enormous unbreakable report sections.
+     */
+    .report-section,
+    details {
+        break-inside: auto;
+    }
+
+    /*
+     * Keep compact, meaningful content together.
+     */
+    .print-unit,
+    .metrics,
+    .comparison-route,
+    .timeline-chart {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    /*
+     * Keep headings and introductory descriptions
+     * attached to the following content.
+     */
+    h2,
+    h3,
+    h4,
+    h5,
+    summary,
+    h2 + p,
+    h3 + p {
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+
+    /*
+     * Keep short tables intact when space permits.
+     * Long tables can still span multiple pages.
+     */
+    .report-table-sources,
+    .report-table-standard,
+    .report-table-wide,
+    .report-table-delta,
+    .report-table-timing,
+    .report-table-issue-groups {
+        break-inside: avoid-page;
+    }
+
+    /*
+     * If a table must span pages, preserve individual
+     * rows and repeat its headings where supported.
+     */
+    thead {
+        display: table-header-group;
+    }
+
+    tr {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+}
+
+@media print {
+    /*
+     * Each included document gets its own opening page.
+     * Evidence Chronology also starts on a fresh page
+     * to prevent its heading from being stranded.
+     */
+    #chronology,
+    .comparison-section,
+    .source-section {
+        break-before: page;
+        page-break-before: always;
+    }
+
+    /*
+     * Documents can contain many pages.
+     * Do not try to keep an entire document together.
+     */
+    .comparison-section,
+    .source-section {
+        break-inside: auto;
+    }
+
+    /*
+     * Move individual tables to the next page
+     * when they cannot fit in the available space.
+     */
+    .comparison-section .table-wrap,
+    .source-section .table-wrap {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    /*
+     * Keep headings attached to their following
+     * content, including comparison subtables.
+     */
+    #chronology h2,
+    #chronology > p,
+    #chronology summary,
+    .comparison-section h3,
+    .comparison-section h4,
+    .source-section h3,
+    .source-section summary {
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+
+    /*
+     * Supporting Evidence has its own page sequence.
+     * Empty evidence sections do not waste a page.
+     */
+    .print-evidence-section:not(.print-evidence-empty) {
+        break-before: page;
+        break-after: page;
+    }
+
+    .print-evidence-section > h3,
+    .print-evidence-section > p {
+        break-after: avoid-page;
+    }
+
+    /*
+     * Keep each evidence record together whenever
+     * the complete record fits on one page.
+     */
+    .print-evidence-section > .evidence-record {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    /*
+     * The first record shares the section's opening
+     * page. Each subsequent record starts a new page.
+     */
+    .print-evidence-section
+        > .evidence-record ~ .evidence-record {
+        break-before: page;
+        page-break-before: always;
+    }
+}
+
+@media print {
+    /*
+     * Keep related headings and compact content
+     * together when they fit on one page.
+     */
+    .report-main .print-keep {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    /*
+     * The printed table caption replaces the
+     * interactive details summary.
+     */
+    .print-captioned-table > summary {
+        display: none !important;
+    }
+
+    .print-table-caption {
+        display: table-caption;
+        caption-side: top;
+        padding: 0 0 2mm;
+        color: #17202a;
+        font-size: 11pt;
+        font-weight: 700;
+        text-align: left;
+    }
+}
+
+@media print {
+    /* Captions follow variable-length tables when pagination moves them. */
+    .print-screen-heading,
+    .print-overview-captioned > .section-kicker,
+    .print-overview-captioned > h2,
+    .print-profile > summary,
+    .print-filter-details > summary {
+        display: none !important;
+    }
+
+    .print-only {
+        display: block;
+        font-size: 11pt;
+        font-weight: 700;
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+
+    /* Block-style print tables need block captions, not table layout. */
+    .annotation-table > .print-table-caption {
+        display: block;
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+
+    /* Introductory notes should stay with the first table when possible. */
+    .print-overview-captioned > p {
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+}
+
+@media print {
+    /* The table title must travel with long comparison-dimension tables. */
+    .print-captioned-dimension > h3 {
+        display: none;
+    }
+
+    .burst-table > .print-table-caption {
+        display: block;
+        break-after: avoid-page;
+        page-break-after: avoid;
+    }
+
+    .print-table-subcaption {
+        display: block;
+        margin-top: 1mm;
+        color: #555;
+        font-size: 8pt;
+        font-weight: 400;
+        text-transform: none;
     }
 }
 </style>
@@ -5124,10 +5920,19 @@ h5 {
 
     out
         << "<header class=\"report-header\" id=\"overview\">"
+        << "<div class=\"report-title-row\">"
+        << "<div class=\"report-title-copy\">"
         << "<div class=\"section-kicker\">TraceScope Investigation Report</div>"
         << "<h1>"
         << escaped(snapshot.title)
-        << "</h1>";
+        << "</h1>"
+        << "</div>"
+        << "<div class=\"report-details-controls\">"
+        << "<button type=\"button\" "
+           "class=\"report-details-toggle\" hidden>"
+           "Expand All</button>"
+        << "</div>"
+        << "</div>";
 
     if (!snapshot.context.trimmed().isEmpty()) {
         out
@@ -5191,7 +5996,12 @@ h5 {
      */
 
     out
-        << "<section class=\"report-section\" id=\"sources\">"
+        << (
+               snapshot.sessions.isEmpty()
+                   ? "<section class=\"report-section\" id=\"sources\">"
+                   : "<section class=\"report-section "
+                     "print-overview-captioned\" id=\"sources\">"
+               )
         << "<div class=\"section-kicker\">Investigation Overview</div>"
         << "<h2>Sources</h2>"
         << "<p class=\"muted\">"
@@ -5206,6 +6016,7 @@ h5 {
         out
             << "<div class=\"table-wrap\">"
             << "<table class=\"report-table-sources\">"
+            << "<caption class=\"print-table-caption\">Sources</caption>"
             << "<thead><tr>"
             << "<th>Source</th>"
             << "<th>Importer</th>"
@@ -5258,7 +6069,8 @@ h5 {
 
     if (!snapshot.sourceTimeCoverage.isEmpty()) {
         out
-            << "<section class=\"report-section\" id=\"time-coverage\">"
+            << "<section class=\"report-section "
+               "print-overview-captioned\" id=\"time-coverage\">"
             << "<div class=\"section-kicker\">Cross-Source Context</div>"
             << "<h2>Time Coverage</h2>"
             << "<p class=\"note\">"
@@ -5268,6 +6080,7 @@ h5 {
             << "</p>"
             << "<div class=\"table-wrap\">"
             << "<table class=\"report-table-wide\">"
+            << "<caption class=\"print-table-caption\">Time Coverage</caption>"
             << "<thead><tr>"
             << "<th>Source</th>"
             << "<th>Timestamped records</th>"
@@ -5553,6 +6366,89 @@ h5 {
         navigation.classList.add(
             "js-nav-enabled"
         );
+
+        /*
+         * Report-wide expandable content controls.
+         * Includes nested details and evidence records.
+         */
+        const reportDetails = Array.from(
+            document.querySelectorAll(".report-main details")
+        );
+
+        const detailsButton =
+            document.querySelector(".report-details-toggle");
+
+        function updateDetailsButton() {
+            if (reportDetails.length === 0) {
+                detailsButton.hidden = true;
+                return;
+            }
+
+            detailsButton.hidden = false;
+
+            const allExpanded =
+                reportDetails.every(detail => detail.open);
+
+            detailsButton.textContent =
+                allExpanded ? "Collapse All" : "Expand All";
+        }
+
+        detailsButton.addEventListener("click", function () {
+            const shouldExpand =
+                !reportDetails.every(detail => detail.open);
+
+            for (const detail of reportDetails) {
+                detail.open = shouldExpand;
+            }
+
+            updateDetailsButton();
+            scheduleActiveNavigationUpdate();
+        });
+
+        /*
+         * Individual expansions and collapses also
+         * update the report-wide button.
+         */
+        document.addEventListener("toggle", function (event) {
+            if (reportDetails.includes(event.target)) {
+                updateDetailsButton();
+            }
+        }, true);
+
+        updateDetailsButton();
+
+        let prePrintStates = null;
+
+        window.addEventListener("beforeprint", function () {
+            if (prePrintStates !== null) {
+                return;
+            }
+
+            prePrintStates = reportDetails.map(
+                detail => detail.open
+            );
+
+            for (const detail of reportDetails) {
+                detail.open = true;
+            }
+
+            updateDetailsButton();
+        });
+
+        window.addEventListener("afterprint", function () {
+            if (prePrintStates === null) {
+                return;
+            }
+
+            reportDetails.forEach(function (detail, index) {
+                detail.open = prePrintStates[index];
+            });
+
+            prePrintStates = null;
+
+            updateDetailsButton();
+            scheduleActiveNavigationUpdate();
+        });
 
         const navigationSections = Array.from(
             navigation.querySelectorAll('nav a[href^="#"]')
