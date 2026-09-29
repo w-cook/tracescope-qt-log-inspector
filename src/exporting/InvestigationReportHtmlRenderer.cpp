@@ -949,7 +949,7 @@ void appendIssueGroups(
         << groups.size()
         << ")</summary>"
         << "<div class=\"details-body table-wrap\">"
-        << "<table>"
+        << "<table class=\"report-table-issue-groups\">"
         << "<thead><tr>"
         << "<th>Subsystem</th>"
         << "<th>Warnings</th>"
@@ -1155,7 +1155,7 @@ void appendComparisonSeverity(
 
     out
         << "<div class=\"table-wrap\">"
-        << "<table>"
+        << "<table class=\"report-table-delta\">"
         << "<thead><tr>"
         << "<th>Severity</th>"
         << "<th>Baseline</th>"
@@ -1230,7 +1230,7 @@ void appendComparisonDimension(
 
     out
         << "<div class=\"table-wrap\">"
-        << "<table>"
+        << "<table class=\"report-table-dimension\">"
         << "<thead><tr>"
         << "<th>Value</th>"
         << "<th>Baseline</th>"
@@ -1296,7 +1296,7 @@ void appendComparisonCustomFields(
         out
             << "<h4>Categorical Fields</h4>"
             << "<div class=\"table-wrap\">"
-            << "<table>"
+            << "<table class=\"report-table-categorical\">"
             << "<thead><tr>"
             << "<th>Field</th>"
             << "<th>Value</th>"
@@ -1374,7 +1374,7 @@ void appendComparisonCustomFields(
         out
             << "<h4>Numeric Fields</h4>"
             << "<div class=\"table-wrap\">"
-            << "<table>"
+            << "<table class=\"report-table-numeric\">"
             << "<thead><tr>"
             << "<th>Field</th>"
             << "<th>Baseline</th>"
@@ -1531,7 +1531,7 @@ void appendComparisonBursts(
 
     out
         << "<div class=\"table-wrap\">"
-        << "<table>"
+        << "<table class=\"report-table-burst-comparison\">"
         << "<thead><tr>"
         << "<th>Session</th>"
         << "<th>Bursts</th>"
@@ -1641,7 +1641,7 @@ void appendComparison(
     out
         << "<h3>Captured Timing</h3>"
         << "<div class=\"table-wrap\">"
-        << "<table>"
+        << "<table class=\"report-table-timing\">"
         << "<thead><tr>"
         << "<th></th>"
         << "<th>Baseline</th>"
@@ -3755,9 +3755,46 @@ body {
     background: rgba(255, 255, 255, 0.09);
 }
 
+.report-nav a[aria-current="location"] {
+    background: rgba(255, 255, 255, 0.16);
+    font-weight: 700;
+}
+
+/*
+ * Mobile navigation controls remain hidden
+ * unless the phone layout is active.
+ */
+.nav-header-spacer,
+.nav-brand-short,
+.nav-toggle,
+.nav-current {
+    display: none;
+}
+
+.nav-brand-full {
+    display: inline;
+}
+
+.nav-toggle {
+    font: inherit;
+    color: var(--nav-text);
+    background: transparent;
+    border: 1px solid #8293a3;
+    border-radius: 5px;
+    padding: 5px;
+    cursor: pointer;
+}
+
+.nav-toggle:hover,
+.nav-toggle:focus-visible {
+    background: rgba(255, 255, 255, 0.09);
+}
+
 .report-main {
     width: min(1400px, 100%);
+    min-width: 0;
     padding: 28px 16px 52px;
+    overflow-wrap: break-word;
 }
 
 .report-header,
@@ -3835,6 +3872,9 @@ h3 {
 }
 
 .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     overflow-x: auto;
     margin: 14px 0;
 }
@@ -3842,6 +3882,48 @@ h3 {
 table {
     width: 100%;
     border-collapse: collapse;
+}
+
+/*
+ * Readable widths for multi-column report tables.
+ * Tables expand normally when space is available
+ * and scroll within their wrappers otherwise.
+ */
+.report-table-standard {
+    min-width: 600px;
+    table-layout: auto;
+}
+
+.report-table-wide {
+    min-width: 760px;
+    table-layout: auto;
+}
+
+.report-table-chronology {
+    min-width: 900px;
+    table-layout: auto;
+}
+
+.report-table-burst-comparison {
+    min-width: 1050px;
+    table-layout: auto;
+}
+
+/*
+ * Prefer wrapping between words. Only break
+ * long, unbroken strings when necessary.
+ */
+.table-wrap .report-table-standard th,
+.table-wrap .report-table-standard td,
+.table-wrap .report-table-wide th,
+.table-wrap .report-table-wide td,
+.table-wrap .report-table-chronology th,
+.table-wrap .report-table-chronology td,
+.table-wrap .report-table-burst-comparison th,
+.table-wrap .report-table-burst-comparison td {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
 }
 
 th,
@@ -4037,7 +4119,7 @@ footer {
 
 .preserve-whitespace {
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .burst-table {
@@ -4230,7 +4312,8 @@ footer {
 }
 
 .evidence-record > summary {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
 }
 
 .evidence-record {
@@ -4304,6 +4387,8 @@ h5 {
 @media (max-width: 860px) {
     .report-shell {
         display: block;
+        width: 100%;
+        min-width: 0;
     }
 
     .report-nav {
@@ -4311,6 +4396,8 @@ h5 {
         top: 0;
         z-index: 10;
         display: block;
+        width: 100%;
+        max-width: 100%;
         height: auto;
         max-height: none;
         padding: 6px 10px 7px;
@@ -4322,23 +4409,28 @@ h5 {
         margin: 0 0 4px;
         font-size: 0.86rem;
         line-height: 1.2;
+        text-align: center;
     }
 
     .report-nav nav {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
+        justify-content: center;
         gap: 2px 4px;
         overflow: visible;
         white-space: normal;
     }
 
     .report-nav a {
-        flex: 0 0 auto;
+        flex: 0 1 auto;
+        max-width: 100%;
         padding: 3px 6px;
         font-size: 0.8rem;
         line-height: 1.25;
-        white-space: nowrap;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-align: center;
     }
 
     .nav-label {
@@ -4346,6 +4438,9 @@ h5 {
     }
 
     .report-main {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
         padding: 18px 10px 40px;
     }
 
@@ -4353,7 +4448,389 @@ h5 {
     .report-section {
         padding: 18px 12px;
     }
+
+    /*
+     * More compact multi-column tables on
+     * narrow and intermediate viewports.
+     */
+    .table-wrap .report-table-standard th,
+    .table-wrap .report-table-standard td,
+    .table-wrap .report-table-wide th,
+    .table-wrap .report-table-wide td,
+    .table-wrap .report-table-chronology th,
+    .table-wrap .report-table-chronology td,
+    .table-wrap .report-table-burst-comparison th,
+    .table-wrap .report-table-burst-comparison td {
+        padding: 6px 7px;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+
+    /*
+     * Targeted compact layouts for the tables
+     * that otherwise develop excessive column gaps.
+     */
+
+    .report-table-sources {
+        min-width: 580px;
+        table-layout: fixed;
+    }
+
+    .report-table-sources th:nth-child(1) {
+        width: 27%;
+    }
+
+    .report-table-sources th:nth-child(2) {
+        width: 15%;
+    }
+
+    .report-table-sources th:nth-child(3),
+    .report-table-sources th:nth-child(4) {
+        width: 15%;
+    }
+
+    .report-table-sources th:nth-child(5) {
+        width: 13%;
+    }
+
+    .report-table-sources th:nth-child(6) {
+        width: 15%;
+    }
+
+    /*
+     * Severity, event-code, subsystem and entity
+     * differences share the same four-column layout.
+     */
+    .report-table-delta {
+        min-width: 460px;
+        table-layout: fixed;
+    }
+
+    .report-table-delta th:nth-child(1) {
+        width: 30%;
+    }
+
+    .report-table-delta th:nth-child(2) {
+        width: 21%;
+    }
+
+    .report-table-delta th:nth-child(3) {
+        width: 30%;
+    }
+
+    .report-table-delta th:nth-child(4) {
+        width: 19%;
+    }
+
+    /*
+     * Captured Timing needs more room for
+     * its full timestamps.
+     */
+    .report-table-timing {
+        min-width: 560px;
+        table-layout: fixed;
+    }
+
+    .report-table-timing th:nth-child(1) {
+        width: 28%;
+    }
+
+    .report-table-timing th:nth-child(2),
+    .report-table-timing th:nth-child(3) {
+        width: 36%;
+    }
+
+    /*
+     * Five-column categorical changes.
+     */
+    .report-table-categorical {
+        min-width: 650px;
+        table-layout: fixed;
+    }
+
+    .report-table-categorical th:nth-child(1) {
+        width: 22%;
+    }
+
+    .report-table-categorical th:nth-child(2) {
+        width: 25%;
+    }
+
+    .report-table-categorical th:nth-child(3) {
+        width: 16%;
+    }
+
+    .report-table-categorical th:nth-child(4) {
+        width: 22%;
+    }
+
+    .report-table-categorical th:nth-child(5) {
+        width: 15%;
+    }
+
+    /*
+     * Numeric summaries need more space for
+     * min/median/max and sample-count values.
+     */
+    .report-table-numeric {
+        min-width: 680px;
+        table-layout: fixed;
+    }
+
+    .report-table-numeric th:nth-child(1) {
+        width: 20%;
+    }
+
+    .report-table-numeric th:nth-child(2),
+    .report-table-numeric th:nth-child(3) {
+        width: 40%;
+    }
+
+    /*
+     * Burst Comparison has eight columns.
+     * Reduce its minimum width moderately.
+     */
+    .report-table-burst-comparison {
+        min-width: 900px;
+        table-layout: fixed;
+    }
+
+    .report-table-burst-comparison th:nth-child(1) {
+        width: 16%;
+    }
+
+    .report-table-burst-comparison th:nth-child(2) {
+        width: 8%;
+    }
+
+    .report-table-burst-comparison th:nth-child(3) {
+        width: 15%;
+    }
+
+    .report-table-burst-comparison th:nth-child(4) {
+        width: 10%;
+    }
+
+    .report-table-burst-comparison th:nth-child(5) {
+        width: 12%;
+    }
+
+    .report-table-burst-comparison th:nth-child(6) {
+        width: 13%;
+    }
+
+    .report-table-burst-comparison th:nth-child(7) {
+        width: 15%;
+    }
+
+    .report-table-burst-comparison th:nth-child(8) {
+        width: 11%;
+    }
+
+    .report-table-burst-comparison th:first-child,
+    .report-table-burst-comparison td:first-child {
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
+    }
+
+    /*
+     * Compact subsystem issue-group table.
+     */
+    .report-table-issue-groups {
+        min-width: 460px;
+        table-layout: fixed;
+    }
+
+    .report-table-issue-groups th:nth-child(1) {
+        width: 36%;
+    }
+
+    .report-table-issue-groups th:nth-child(2) {
+        width: 16%;
+    }
+
+    .report-table-issue-groups th:nth-child(3) {
+        width: 26%;
+    }
+
+    .report-table-issue-groups th:nth-child(4) {
+        width: 22%;
+    }
+
+    .report-table-issue-groups th,
+    .report-table-issue-groups td {
+        padding: 6px 6px;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    /*
+     * Preserve whole-word wrapping wherever possible.
+     * Exceptionally long identifiers can still break
+     * rather than overflowing their cells.
+     */
+    .table-wrap .report-table-sources th,
+    .table-wrap .report-table-sources td,
+    .table-wrap .report-table-delta th,
+    .table-wrap .report-table-delta td,
+    .table-wrap .report-table-timing th,
+    .table-wrap .report-table-timing td,
+    .table-wrap .report-table-categorical th,
+    .table-wrap .report-table-categorical td,
+    .table-wrap .report-table-numeric th,
+    .table-wrap .report-table-numeric td {
+        padding: 6px 7px;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+        hyphens: none;
+    }
+
+    .report-table-dimension {
+        min-width: 460px;
+        table-layout: auto;
+    }
+
+    .table-wrap .report-table-dimension th,
+    .table-wrap .report-table-dimension td {
+        padding: 6px 7px;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    .table-wrap .report-table-dimension td:first-child {
+        overflow-wrap: normal;
+        word-break: normal;
+        hyphens: none;
+    }
 }
+
+
+@media (max-width: 480px) {
+    /*
+     * Give definition values the full available
+     * width instead of squeezing them beside labels.
+     */
+    .definition-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+    }
+
+    .definition-grid dt {
+        margin-top: 8px;
+    }
+
+    .definition-grid dd {
+        min-width: 0;
+        margin-bottom: 8px;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    /*
+     * Keep the navigation compact and prevent
+     * long report titles from enlarging the header.
+     */
+    .report-nav.js-nav-enabled {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .report-nav.js-nav-enabled .nav-header {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr) 70px;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .report-nav.js-nav-enabled .nav-header-spacer,
+    .report-nav.js-nav-enabled .nav-brand-short,
+    .report-nav.js-nav-enabled .nav-toggle {
+        display: block;
+    }
+
+    .report-nav.js-nav-enabled .nav-brand-full {
+        display: none;
+    }
+
+    .report-nav.js-nav-enabled .nav-brand {
+        margin: 0;
+        min-width: 0;
+        text-align: center;
+    }
+
+    .report-nav.js-nav-enabled .nav-toggle {
+        width: 70px;
+        text-align: center;
+    }
+
+    /*
+     * Display the current section underneath
+     * the compact header.
+     */
+    .report-nav.js-nav-enabled .nav-current {
+        display: block;
+        margin-top: 3px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        text-align: center;
+        font-size: 0.75rem;
+        color: #bdcad7;
+    }
+
+    /*
+     * The dropdown overlays the report instead
+     * of increasing the sticky header's height.
+     */
+    .report-nav.js-nav-enabled nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        padding: 8px;
+        max-height: 280px;
+        max-height: min(55dvh, 280px);
+        overflow-y: auto;
+        background: var(--nav);
+        border-bottom: 1px solid #8293a3;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+    }
+
+    .report-nav.js-nav-enabled.nav-open nav {
+        display: flex;
+    }
+
+    .report-nav.js-nav-enabled nav a {
+        width: 100%;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+        text-align: center;
+    }
+
+    .report-nav.js-nav-enabled .nav-label {
+        display: block;
+        text-align: center;
+    }
+
+    /*
+     * Preserve the currently viewed section's
+     * highlight inside the open dropdown.
+     */
+    .report-nav.js-nav-enabled nav a[aria-current="location"] {
+        background: rgba(255, 255, 255, 0.16);
+        font-weight: 700;
+    }
+}
+
 
 @media print {
     body {
@@ -4405,8 +4882,23 @@ h5 {
 
     out
         << "<aside class=\"report-nav\">"
-        << "<div class=\"nav-brand\">TraceScope Investigation Report</div>"
-        << "<nav>"
+        << "<div class=\"nav-header\">"
+        << "<span class=\"nav-header-spacer\" "
+           "aria-hidden=\"true\"></span>"
+        << "<div class=\"nav-brand\">"
+        << "<span class=\"nav-brand-full\">"
+           "TraceScope Investigation Report</span>"
+        << "<span class=\"nav-brand-short\">"
+           "TraceScope</span>"
+        << "</div>"
+        << "<button type=\"button\" class=\"nav-toggle\" "
+           "aria-controls=\"report-navigation\" "
+           "aria-expanded=\"false\">"
+           "Sections</button>"
+        << "</div>"
+        << "<div class=\"nav-current\">"
+           "Viewing: Overview</div>"
+        << "<nav id=\"report-navigation\">"
         << "<a href=\"#overview\">Overview</a>"
         << "<a href=\"#sources\">Sources</a>";
 
@@ -4556,7 +5048,8 @@ h5 {
             << "<p>No full source-session sections were included.</p>";
     } else {
         out
-            << "<div class=\"table-wrap\"><table>"
+            << "<div class=\"table-wrap\">"
+            << "<table class=\"report-table-sources\">"
             << "<thead><tr>"
             << "<th>Source</th>"
             << "<th>Importer</th>"
@@ -4617,7 +5110,8 @@ h5 {
                "imported by TraceScope. Clock synchronization or "
                "clock skew between independent sources is not inferred."
             << "</p>"
-            << "<div class=\"table-wrap\"><table>"
+            << "<div class=\"table-wrap\">"
+            << "<table class=\"report-table-wide\">"
             << "<thead><tr>"
             << "<th>Source</th>"
             << "<th>Timestamped records</th>"
@@ -4677,7 +5171,7 @@ h5 {
             << snapshot.crossSourceChronology.size()
             << " chronology entries</summary>"
             << "<div class=\"details-body table-wrap\">"
-            << "<table>"
+            << "<table class=\"report-table-chronology\">"
             << "<thead><tr>"
             << "<th>Timestamp</th>"
             << "<th>Source</th>"
@@ -4800,6 +5294,237 @@ h5 {
             );
         }
 
+        /*
+         * Track the report sections represented by
+         * the persistent navigation.
+         */
+        const navigation =
+            document.querySelector(".report-nav");
+
+
+        /*
+         * Phone navigation dropdown.
+         */
+        const menuButton =
+            navigation.querySelector(".nav-toggle");
+
+        const currentLabel =
+            navigation.querySelector(".nav-current");
+
+        const navigationLinks =
+            navigation.querySelector("#report-navigation");
+
+        function setMenuOpen(open) {
+            navigation.classList.toggle(
+                "nav-open",
+                open
+            );
+
+            menuButton.setAttribute(
+                "aria-expanded",
+                String(open)
+            );
+        }
+
+        menuButton.addEventListener(
+            "click",
+            function () {
+                setMenuOpen(
+                    !navigation.classList.contains(
+                        "nav-open"
+                    )
+                );
+            }
+        );
+
+        /*
+         * Close the menu after following a link.
+         * Existing section-tracking code continues
+         * updating the active highlight as we scroll.
+         */
+        navigationLinks.addEventListener(
+            "click",
+            function (event) {
+                if (
+                    event.target.closest(
+                        'a[href^="#"]'
+                    )
+                ) {
+                    setMenuOpen(false);
+                }
+            }
+        );
+
+        /*
+         * Escape closes the menu and restores
+         * keyboard focus to its button.
+         */
+        document.addEventListener(
+            "keydown",
+            function (event) {
+                if (
+                    event.key === "Escape"
+                    && navigation.classList.contains(
+                        "nav-open"
+                    )
+                ) {
+                    setMenuOpen(false);
+                    menuButton.focus();
+                }
+            }
+        );
+
+        /*
+         * Clicking outside an open menu closes it.
+         */
+        document.addEventListener(
+            "click",
+            function (event) {
+                if (
+                    !navigation.contains(
+                        event.target
+                    )
+                ) {
+                    setMenuOpen(false);
+                }
+            }
+        );
+
+        /*
+         * Enable the collapsible layout only
+         * after its JavaScript is ready.
+         */
+        navigation.classList.add(
+            "js-nav-enabled"
+        );
+
+        const navigationSections = Array.from(
+            navigation.querySelectorAll('nav a[href^="#"]')
+        )
+            .map(function (link) {
+                return {
+                    link: link,
+                    section: document.getElementById(
+                        link.getAttribute("href").substring(1)
+                    )
+                };
+            })
+            .filter(function (entry) {
+                return entry.section !== null;
+            });
+
+
+        function updateActiveNavigation() {
+            if (navigationSections.length === 0) {
+                return;
+            }
+
+            const isCompact =
+                window.matchMedia(
+                    "(max-width: 860px)"
+                ).matches;
+
+            /*
+             * Use a reading position 30% into
+             * the unobstructed viewport.
+             */
+            const topInset =
+                isCompact
+                    ? navigation.getBoundingClientRect().bottom + 10
+                    : 18;
+
+            const availableHeight = Math.max(
+                0,
+                window.innerHeight - topInset
+            );
+
+            const threshold =
+                topInset + availableHeight * 0.30;
+
+            let active = navigationSections[0];
+
+            /*
+             * Find the last section whose beginning
+             * has crossed the reading position.
+             */
+            for (const entry of navigationSections) {
+                if (
+                    entry.section.getBoundingClientRect().top
+                    <= threshold + 2
+                ) {
+                    active = entry;
+                } else {
+                    break;
+                }
+            }
+
+            /*
+             * Activate the final section when the
+             * reader reaches the document's end.
+             */
+            const documentHeight =
+                document.documentElement.scrollHeight;
+
+            if (
+                documentHeight > window.innerHeight + 5
+                && window.scrollY + window.innerHeight
+                    >= documentHeight - 2
+            ) {
+                active =
+                    navigationSections[
+                        navigationSections.length - 1
+                    ];
+            }
+
+            /*
+             * Update the highlighted navigation link.
+             * This applies to both the desktop sidebar
+             * and the mobile dropdown.
+             */
+            for (const entry of navigationSections) {
+                if (entry === active) {
+                    entry.link.setAttribute(
+                        "aria-current",
+                        "location"
+                    );
+                } else {
+                    entry.link.removeAttribute(
+                        "aria-current"
+                    );
+                }
+            }
+
+            /*
+             * Keep the compact mobile header
+             * synchronized with the active link.
+             */
+            currentLabel.textContent =
+                "Viewing: " + active.link.textContent.trim();
+        }
+
+
+        /*
+         * Coalesce repeated scroll events into
+         * one update per animation frame.
+         */
+        let navigationUpdateQueued = false;
+
+        function scheduleActiveNavigationUpdate() {
+            if (navigationUpdateQueued) {
+                return;
+            }
+
+            navigationUpdateQueued = true;
+
+            window.requestAnimationFrame(
+                function () {
+                    navigationUpdateQueued = false;
+                    updateActiveNavigation();
+                }
+            );
+        }
+
+
         function revealEvidenceTarget() {
             if (!window.location.hash) {
                 return;
@@ -4838,24 +5563,55 @@ h5 {
         }
 
         /*
-         * Establish the correct sticky-navigation
-         * offset when the report first opens.
+         * Initialize the sticky offset and
+         * active-section navigation.
          */
         updateNavigationOffset();
+        scheduleActiveNavigationUpdate();
+
+        window.addEventListener(
+            "scroll",
+            scheduleActiveNavigationUpdate,
+            { passive: true }
+        );
 
         window.addEventListener(
             "resize",
-            updateNavigationOffset
+            function () {
+                if (
+                    !window.matchMedia(
+                        "(max-width: 480px)"
+                    ).matches
+                ) {
+                    setMenuOpen(false);
+                }
+
+                updateNavigationOffset();
+                scheduleActiveNavigationUpdate();
+            }
         );
 
         window.addEventListener(
             "hashchange",
-            revealEvidenceTarget
+            function () {
+                revealEvidenceTarget();
+                scheduleActiveNavigationUpdate();
+            }
         );
 
         /*
-         * Also support opening an evidence anchor
-         * supplied directly in the report URL.
+         * Collapsible content may change section
+         * positions without generating a scroll event.
+         */
+        document.addEventListener(
+            "toggle",
+            scheduleActiveNavigationUpdate,
+            true
+        );
+
+        /*
+         * Support direct links to individual
+         * supporting-evidence records.
          */
         revealEvidenceTarget();
     })();
