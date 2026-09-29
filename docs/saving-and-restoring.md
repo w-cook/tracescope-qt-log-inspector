@@ -24,7 +24,7 @@ A TraceScope investigation can involve three different kinds of file. They serve
 | --- | --- | --- |
 | **External log file** (for example, `.jsonl` or `.csv`) | The source records written by the original application. | Importing, reloading, or continuing to follow the source. TraceScope does not control whether another application later truncates or replaces it. |
 | **Investigation snapshot** (`.tsinv`) | A point-in-time copy of normalized records already admitted to one investigation, together with its import profile, import diagnostics and counts, and available source-continuity information. | Keeping the captured evidence independent of the original log file. |
-| **Workspace** (`.tsw` **plus its companion `.sessions/` folder**) | The overall workspace, its saved investigation snapshots, investigation annotations and filters, comparison documents, and applicable document, window, and presentation state. | Stopping work and returning later with the wider investigation context restored. |
+| **Workspace** (`.tsw` **plus its companion `.sessions/` folder**) | The overall workspace, its saved investigation snapshots, investigation annotations and filters, immutable comparison documents (including any independently captured time boundaries), and applicable document, window, and presentation state. | Stopping work and returning later with the wider investigation context restored. |
 
 **The central rule: save the workspace if you want to preserve your investigation, not just its raw evidence.**
 
@@ -40,7 +40,7 @@ gateway-review.sessions/
     ...one or more .tsinv investigation snapshots...
 ```
 
-The `.tsw` file is the workspace's manifest and broader investigation state. Its `.sessions/` folder holds durable evidence snapshots for the investigations saved in that workspace. Both parts are needed. The folder is managed by TraceScope; there is normally no reason to open or rename its individual snapshot files.
+The `.tsw` file is the workspace's manifest and broader investigation state, including previously created immutable comparison results. Its `.sessions/` folder holds durable evidence snapshots for the investigations saved in that workspace. Both parts are needed. The folder is managed by TraceScope; there is normally no reason to open or rename its individual snapshot files.
 
 **Keep the `.tsw` file and its matching `.sessions/` folder together** when copying, backing up, or sharing a workspace. Copying only the `.tsw` file does not preserve the complete saved package.
 
@@ -112,7 +112,7 @@ The restored snapshot is authoritative for this recovered investigation; the una
 Other choices in the missing-source prompt are useful in different circumstances:
 
 - **Locate File...** lets you select the source if it was moved or is otherwise available at a different location. Use the correct original file or appropriate continuation of that source.
-- **Skip Session** omits that investigation from this opening attempt rather than preventing all other recoverable workspace content from opening. Previously captured comparison documents can retain their independent snapshots even if an original source investigation is skipped.
+- **Skip Session** omits that investigation from this opening attempt rather than preventing other recoverable workspace content from opening. Previously captured comparison documents retain their independent analysis even if an original source investigation is skipped; they do not require that session to be reopened to display their earlier results.
 - **Cancel** abandons opening the workspace.
 
 The **Open Saved Snapshot** option appears when a usable saved snapshot is available. If a snapshot is missing or cannot be read, that particular recovery option may not be available.
@@ -211,7 +211,7 @@ Source-family discovery may also need to find the related rotated files. Do not 
 
 A few habits help prevent surprises:
 
-- **Save after meaningful investigation changes.** New annotations, filter changes, source transitions, comparison documents, and newly admitted live evidence are reasons to save the workspace again.
+- **Save after meaningful investigation changes.** New annotations, filter changes, source transitions, comparison documents (whether complete-session or independently time-scoped), and newly admitted live evidence are reasons to save the workspace again. A new comparison captures its scope once; saving preserves that captured result rather than a live link to current filters.
 - **Back up the whole workspace package.** Copy the `.tsw` file and its matching `.sessions/` folder together. If you expect normal SourceBacked restoration elsewhere, keep the external logs available too; TraceScope may need you to locate them on the other machine.
 - **Treat saved evidence as potentially sensitive.** `.tsinv` files and workspace snapshot folders can contain normalized log records and source metadata. Workspaces may also include analyst notes, source paths, and other investigation context. Review what you are permitted to share.
 - **Use a new name for experiments.** **Save Workspace As...** is useful before trying a backing-mode change or missing-source recovery that you may want to undo.
@@ -225,6 +225,7 @@ A few habits help prevent surprises:
 | The saved snapshot option is missing during recovery. | Check that the workspace's companion snapshots exist and are readable. Without a usable snapshot, choose **Locate File...** if possible. See [Optional walkthrough: recover when the original source is missing](#3-optional-walkthrough-recover-when-the-original-source-is-missing) for more information. |
 | I reopened my workspace but earlier live records are gone. | Check the backing mode. A SourceBacked investigation normally re-imports its current external file, which may have been truncated or replaced. Use preserved snapshot evidence when you need independence from that file. See [Understand the three backing modes](#5-understand-the-three-backing-modes) and [Preserve an open investigation as snapshot-only](#preserve-an-open-investigation-as-snapshot-only) for related information. |
 | My `.tsinv` opens, but my bookmarks and notes are missing. | A standalone snapshot stores the evidence, not the broader annotation and workspace state. Reopen the saved `.tsw` with its companion folder instead. See [Understand what TraceScope saves](#1-understand-what-tracescope-saves) and [Save or open an individual investigation snapshot](#4-save-or-open-an-individual-investigation-snapshot) for related information. |
+| A saved comparison reopens with an earlier time range or no time range. | This is expected: each comparison retains the selected populations and optional boundaries captured when it was created, not the source sessions' current filters. See [Comparing Sessions](comparing-sessions.md#optionally-compare-selected-time-ranges). |
 | I can't start live following from a saved snapshot. | A SnapshotBacked investigation has no active connected source. Reconnection requires usable source-continuity information and successful verification; see [Live Following](live-following.md). Also see [Understand the three backing modes](#5-understand-the-three-backing-modes) and [Reconnect preserved evidence to an external source](#reconnect-preserved-evidence-to-an-external-source) for related information. |
 | The source path has changed, and reconnection or relocation fails. | Confirm that the candidate really is the recorded physical source and that required source-identity information exists. Reconnection is intentionally not an arbitrary file-substitution operation. See [Reload, relocate, and resume work deliberately](#6-reload-relocate-and-resume-work-deliberately) for more information. |
 

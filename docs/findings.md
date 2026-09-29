@@ -25,10 +25,10 @@ Select **Reset Filters** for a predictable starting point. In the **Telemetry Ev
 | Control | Purpose | Does it place the record in Findings? |
 | --- | --- | --- |
 | **Bookmark Event** / **Remove Bookmark** | Mark or unmark an event for quick recognition and bookmark-based filtering. | No. |
-| **Add Note** / **View/Edit Note** | Attach your own observations to that event. | No, not by itself. |
+| **Add Note** / **Edit Note** | Attach your own observations to that event. | No, not by itself. |
 | **Finding status** | Explicitly classify a record as **Open**, **Resolved**, **Dismissed**, or **None**. | Yes, for every status except **None**. |
 
-These three properties are independent. You can bookmark an event without classifying it, add a note before deciding whether it is a finding, or classify a finding without a bookmark or note. They remain associated with the same source record as you investigate.
+These three properties are independent. You can bookmark an event without classifying it, add a note before deciding whether it is a finding, or classify a finding without a bookmark or note. They remain associated with the same source record as you investigate. When an event has a saved note, its text now appears **at the top of Event Details**, so you can review the note alongside the selected record without reopening the editor.
 
 The **Findings** tab is in the lower investigation area, alongside **Issue Summary** and **Analytics**, with **Event Details** beside those review tabs. If part of the interface is collapsed, use the chevrons near the right side of the section headings to expand the area you need. The layout adapts to window size, display scaling, and **View > Interface Scale**; on a constrained screen, expanding one section may collapse another. See [Getting Started](getting-started.md#adjust-the-layout-for-your-screen) for layout guidance.
 
@@ -41,7 +41,7 @@ Let's mark a database timeout as evidence to examine.
 3. Choose **Bookmark Event**. The button changes to **Remove Bookmark**, and a **star (★)** appears next to that event's number in the Event Table's left-hand gutter.
 4. If you want to check the bookmark independently of the event-code filter, clear the filters and enable **Bookmarks only**. Your bookmarked event will appear alongside any others you have marked.
 
-The event number identifies a record's position in the underlying imported investigation. Sorting and filtering can move it around the visible table, but do not renumber it. The bookmark is attached to the record, not to the row's current position.
+The event number identifies a record's position in the underlying imported investigation. Sorting and filtering can move it around the visible table, but do not renumber it. A bookmark is attached to the record, not to the row's current position.
 
 **A bookmark is not a finding.** It is a useful way to flag a record while you are still deciding whether it warrants a formal entry in your investigation. The Findings tab does not list a record merely because it is bookmarked.
 
@@ -65,12 +65,12 @@ A finding is more useful when it records *why* you selected the event and what y
 1. Keep the `DB_TIMEOUT` finding selected. Its record should be available in **Event Details**; you can select its row in the Event Table again if needed.
 2. Select **Add Note**. The **Analyst Note** editor opens for that event.
 3. Enter a concise observation, for example: `Database timeout during order processing. Compare with earlier DB_POOL_HIGH warnings and the retry sequence before identifying a cause.`
-4. Choose **Save**. The button in Event Details now reads **View/Edit Note**.
+4. Choose **Save**. The button in Event Details now reads **Edit Note**, and the saved note appears as an **Analyst Note** block at the start of the existing Event Details text area.
 5. Return to the **Findings** tab. The default **(No analyst note)** description is replaced by the note you saved.
 
 The example deliberately separates what the record shows from what still needs investigation. A useful note might describe the observed symptom, mention related event codes or identifiers, and record a question or follow-up. Avoid treating a nearby warning or a repeated message as proof that it caused the failure.
 
-To revise the note, select the same event or finding, choose **View/Edit Note**, change the text, and **Save**. To remove a note, clear its contents and save the empty editor. If the event is still classified, the Findings tab returns to its default **(No analyst note)** description. Clearing a note does not automatically remove its bookmark or change its finding status.
+To revise the note, select the same event or finding, choose **Edit Note**, change the text, and **Save**. The inline note refreshes with your changes. To remove a note, clear its contents and save the empty editor. If the event is still classified, the Findings tab returns to its default **(No analyst note)** description. Clearing a note does not automatically remove its bookmark or change its finding status.
 
 You can also add a note to an unclassified event. It will stay attached to that record but will **not** appear in the Findings list until you assign a status other than None.
 
@@ -150,7 +150,7 @@ For source-backed investigations, saving does not silently change the original e
 | A finding remains listed even though it is missing from the Event Table | The Findings list spans classified records independently of Event Table filters. Single-click it to preview its evidence; double-click to reveal it and, if necessary, adjust the filters. See [Navigate between Findings and the Event Table](#5-navigate-between-findings-and-the-event-table) for more information. |
 | Export Filtered Findings is disabled or has an unexpectedly low count | Check **all** current Event Table filters, including **Bookmarks only** and **Finding status**. Export All Findings ignores those filters. See [Export the findings you need](#7-export-the-findings-you-need) for more information. |
 | Export Bookmarked Findings has fewer entries than the number of bookmark stars | Only records that are both **bookmarked and explicitly classified** qualify for that scope. See [Export the findings you need](#7-export-the-findings-you-need) for more information. |
-| The finding's description still says **(No analyst note)** | Select that finding, choose **Add Note** in Event Details, enter a note, and **Save**. See [Add and revise an analyst note](#4-add-and-revise-an-analyst-note) for more information. |
+| The finding's description still says **(No analyst note)** | Select that finding and use **Add Note** in Event Details to save its first note. See [Add and revise an analyst note](#4-add-and-revise-an-analyst-note). |
 | You cannot see Event Details or the Findings tab | Expand the lower investigation area, enlarge the window, or reduce **View > Interface Scale** if needed. See [Open the sample and locate the review controls](#1-open-the-sample-and-locate-the-review-controls) for more information. |
 
 ## Where to go next

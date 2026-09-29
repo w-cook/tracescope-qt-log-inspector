@@ -24,8 +24,8 @@ For a predictable starting point, select **Reset Filters** before following the 
 
 The main investigation areas are:
 
-- **Telemetry Events:** The Event Table displays imported records using the canonical and custom fields supplied by the import profile. Select a record *row* here to inspect it.
-- **Event Details:** Displays the selected row's mapped values, original source context, and custom attributes. The panel also contains bookmarking, notes, and finding-status controls.
+- **Telemetry Events:** The Event Table displays imported records using canonical and custom fields supplied by the import profile. Select a record *row* here to inspect it. Values participating in active categorical filters are bold within the table.
+- **Event Details:** Displays the selected row's mapped values and **Custom Attributes** before **Source / Provenance**, with available original source context. A saved **Analyst Note** appears at the very top of this existing details area. The panel also contains bookmarking, note-editing, and finding-status controls.
 - **Filters and search:** Control which records appear in the Event Table.
 - **Event Counts Over Time:** The timeline groups events into time buckets and supports drilling down into a particular interval.
 - **Issue Summary, Findings, and Analytics:** Tabs in the lower investigation area. Issue Summary groups elevated-severity events matching source-data filters, Findings organizes explicitly classified records, and Analytics explores frequencies and bursts.
@@ -98,11 +98,11 @@ When you have isolated a set of interesting events, the Event Table's navigation
 4. Use **Previous Issue** and **Next Issue** to jump between **visible** `WARN`, `ERROR`, or `CRITICAL` records. These controls are particularly useful when the current view also contains routine messages.
 5. Select a different column heading to change the Event Table's sort order, then observe how navigation follows the displayed order.
 
-The number shown in the Event Table's left-hand gutter identifies the event's position in the underlying imported investigation. Filtering or sorting does **not** renumber that event. A bookmarked event also receives a star beside its number, providing a quick visual cue when you return to it.
+The number shown in the Event Table's left-hand gutter identifies the event's position in the underlying imported investigation. Filtering or sorting does **not** renumber that event. A bookmarked event receives a **star** beside its number to indicate its bookmarked status.
 
 **Context matters:** Navigation follows the *currently visible, sorted* rows. If you want to inspect what happened immediately before or after a selected event in the broader source, clear overly restrictive filters and use an appropriate chronological sort. Adjacent rows in a filtered list are not necessarily consecutive events in the original source.
 
-The **Event Details** panel follows your selected Event Table record, making it useful for comparing messages, identities, source-record information, and custom attributes as you move.
+The **Event Details** panel follows your selected Event Table record. Its **Custom Attributes** appear before the **Source / Provenance** block; if the record has a saved note, you can read it at the top without opening the note editor.
 
 ## 7. Focus on a time window
 
@@ -117,6 +117,8 @@ The time boundaries are **inclusive**. Records without usable timestamps cannot 
 
 You can also right-click a valid **Timestamp** cell in the Event Table and choose **Filter From This Timestamp** or **Filter Through This Timestamp**. If you choose a boundary that is already active on that timestamp, the menu offers its removal instead.
 
+**Comparing a period between investigations:** These same active From/To boundaries can optionally be captured *independently* for Baseline and Comparison when you create a new session comparison. Only the selected time boundaries apply to its scoped record population; unrelated Event Table filters do not. See [Comparing Sessions](comparing-sessions.md#optionally-compare-selected-time-ranges) for that separate workflow.
+
 ## 8. Explore the event timeline
 
 **Event Counts Over Time** shows the distribution of records matching your source-data filters (regardless of any review-only bookmark or finding-status filter). It is often a faster starting point for locating a concentrated period of activity than scanning the entire Event Table.
@@ -124,7 +126,7 @@ You can also right-click a valid **Timestamp** cell in the Event Table and choos
 1. Select **Reset Filters** and expand **Event Counts Over Time** if it is collapsed.
 2. Examine the chart for changes across the sample's recorded interval. The sample includes routine activity followed by database and other operational problems, making it suitable for exploring shifts in activity.
 3. Use **Bucket size**. **Auto** chooses an interval suited to the available chart space and time span; choosing a specific interval gives you a more detailed or broader view. A short interval is not automatically more informative, particularly when records are sparse.
-4. Where available, use **Breakdown** to switch between **Severity** and **Subsystem**. When viewing subsystems, **Show: Top 5 / Top 10** controls how many subsystem series are displayed.
+4. Where available, use **Breakdown** to switch between **Severity** and **Subsystem**. When viewing subsystems, **Show: Top 5 / Top 10** controls how many subsystem series are displayed. The **Show** control changes the displayed series limit, not the underlying record population.
 5. If the selected bucket size produces more buckets than can be shown comfortably, use the timeline's horizontal scroll bar and **Visible** range label to navigate without compressing every bucket into the viewport.
 6. **Double-click a bar** corresponding to an interesting interval. TraceScope applies the selected bucket's time span as a filter. When you double-click a severity or subsystem series, the drill-down also narrows to that series.
 

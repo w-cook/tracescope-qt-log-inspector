@@ -75,9 +75,9 @@ The Import Configuration layout may differ according to your window size. Its co
 
 After the import, the log is displayed as an investigation. Take a moment to explore the main areas:
 
-- **Event table:** Browse, sort, and select normalized records. Source-specific fields appear alongside the recognized investigation fields where available.
+- **Event table:** Browse, sort, and select normalized records. Source-specific fields appear alongside recognized investigation fields where available. Active categorical filter values appear bold within records.
 - **Filters and search:** Narrow the event table by severity, subsystem, event code, and other available fields, or search across the records.
-- **Event Details:** Select a record row in the **Telemetry Events** table. The separate **Event Details** panel displays that record's normalized values, source context, and additional attributes. This is also where you can bookmark and annotate evidence.
+- **Event Details:** Select a record row in **Telemetry Events**. The separate **Event Details** panel shows the record's mapped values and **Custom Attributes** before **Source / Provenance**. If you later save an analyst note, it appears above the record information in this same panel. This is also where you can bookmark and annotate evidence.
 - **Timeline and analysis:** Explore how recorded activity changes over time and use the available summary and analytical views to investigate patterns.
 
 ### Adjust the layout for your screen
@@ -113,10 +113,10 @@ You can use **Reset Filters** whenever you want to return to the full visible da
 
 With the `DB_POOL_HIGH` record still selected in the Event Table:
 
-1. In **Event Details**, select **Bookmark Event**. Look back at the Event Table: a **star (★) appears next to that record's event number**. This gives you an immediate visual indication that the record is bookmarked.
+1. In **Event Details**, select **Bookmark Event**. Look back at the Event Table: a **star (★) appears beside that record's event number to indicate its new Bookmarked status**.
 2. In **Event Details**, change **Finding status** from **None** to **Open**. A bookmark marks a record for your attention; assigning a finding status also adds it to your formal findings list.
 3. In the lower investigation area, select the **Findings** tab. If that area is collapsed, expand it using its chevron first. Find your newly created **Open** finding in the list. Its text initially begins with **(No analyst note)** and includes the event's code and message.
-4. Return to **Event Details** for the selected record and select **Add Note**. Enter a brief observation, such as: `Review this database-pool warning alongside subsequent order-processing and dependency failures.` Select **Save** in the note editor.
+4. Return to **Event Details** for the selected record and select **Add Note**. Enter a brief observation, such as: `Review this database-pool warning alongside subsequent order-processing and dependency failures.` Select **Save** in the note editor. The text appears immediately in an **Analyst Note** block above the record details, and the button changes to **Edit Note**.
 5. Look at the **Findings** tab again. The entry's default **(No analyst note)** description has been replaced by **your note**. This demonstrates how the Event Table, Event Details, and Findings tab represent the same underlying record and investigation state.
 
 You have now bookmarked a source record, classified it as an unresolved finding, and attached an observation directly to that evidence. You can return to it through the bookmark and finding controls as you continue investigating.

@@ -28,7 +28,7 @@ The main distinctions are:
 - **Live Following** continues admitting newly written records from its active external source while it is running.
 - **Pause** temporarily stops reading while retaining the current follow position, allowing TraceScope to catch up when you resume *if the unread source data is still available*.
 - **Stop** ends the current follow operation. Starting again uses the retained follow position when the physical source still permits it.
-- **Follow Newest** is a separate navigation preference. It keeps the Event Table positioned at the latest visible end and can keep your selected record moving forward if you explicitly select that latest row.
+- **Follow Newest** is a separate navigation preference. It keeps the Event Table and Timeline positioned at the latest visible end and can keep your selected record moving forward if you explicitly select that latest row.
 
 Live Following is available when an investigation has an external source and a supported import profile. A standalone snapshot with no connected external source is not, by itself, an actively followable file. The file must remain accessible at the configured source path.
 
@@ -122,7 +122,7 @@ Follow Newest is separate from ingestion. You can turn it off to examine histori
 A live investigation uses the same filtering and review controls as a static one. In the Field Gateway demonstration, try these steps while following continues:
 
 1. Select the `WARN`, `ERROR`, and `CRITICAL` severity values as they become available. New elevated events matching your filter enter the visible Event Table; other incoming severities still belong to the underlying investigation.
-2. Select an arriving event and read its **Event Details**, including its event code, entity, and available custom fields such as latency or queued-record counts.
+2. Select an arriving event and read its **Event Details**, including its event code, entity, available custom fields such as latency or queued-record counts, and **Source / Provenance** details.
 3. Open **Issue Summary** or **Analytics** to examine the current elevated-event groups or event-code frequencies. Use the timeline to observe changes over time.
 4. Turn **Follow newest data** off when you want to investigate a specific event without the viewport moving to the latest activity. Enable it again when you are ready to watch the incoming end.
 5. If a record is worth reviewing later, bookmark it, add an analyst note, or give it a finding status as described in [Findings](findings.md).
@@ -130,6 +130,8 @@ A live investigation uses the same filtering and review controls as a static one
 New matching records enter the Event Table incrementally. More expensive derived views—such as summary, analytics, and general timeline refreshes—are updated on a coordinated schedule rather than being rebuilt on every live-file poll. Their displayed counts or visualizations can therefore briefly lag behind the most recent Event Table rows. An actively visible timeline with Follow Newest enabled receives a separate, faster coalesced refresh path.
 
 As with a static investigation, source-data filters affect the analysis population, while review-only **Bookmarks only** and finding-status filters affect Event Table visibility without redefining the underlying analytical population. See [Investigating Logs](investigating-logs.md#2-understand-what-filtering-changes) for that distinction.
+
+**Comparing a live investigation:** A comparison captures a fixed snapshot at creation time; new live records do not change an existing comparison. See [Comparing Sessions](comparing-sessions.md#optionally-compare-selected-time-ranges).
 
 Live Following records observations; it does not automatically identify root causes. A warning near a timeout, or a change in a chart, is a reason to inspect the associated records—not proof of causation.
 
