@@ -6,9 +6,12 @@
 #include <QString>
 
 #include "../analysis/BurstDetectionSettings.h"
+#include "../workspace/InvestigationComparisonTimeRange.h"
 
+class InvestigationSession;
 class InvestigationWorkspace;
 
+class QCheckBox;
 class QComboBox;
 class QDialogButtonBox;
 class QDoubleSpinBox;
@@ -32,6 +35,12 @@ public:
     QString baselineSessionId() const;
     QString comparisonSessionId() const;
 
+    std::optional<InvestigationComparisonTimeRange>
+    baselineTimeRange() const;
+
+    std::optional<InvestigationComparisonTimeRange>
+    comparisonTimeRange() const;
+
     std::optional<BurstDetectionSettings>
     burstSettings() const;
 
@@ -45,8 +54,17 @@ private:
 
     void updateValidation();
 
+    const InvestigationSession *selectedSession(
+        const QString &sessionId
+        ) const;
+
+    void refreshTimeRangeOptions();
+
     InvestigationWorkspace *m_workspace =
         nullptr;
+
+    QCheckBox *m_baselineTimeRangeCheck = nullptr;
+    QCheckBox *m_comparisonTimeRangeCheck = nullptr;
 
     QComboBox *m_baselineCombo =
         nullptr;

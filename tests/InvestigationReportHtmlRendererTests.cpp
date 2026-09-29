@@ -292,6 +292,7 @@ private slots:
     void neverRendersEvidenceSourcePath();
     void rendersTechnicalImportAppendix();
     void omitsTechnicalProfileWhenDisabled();
+    void rendersTimeScopedComparisonAndPrintGrouping();
 };
 
 void InvestigationReportHtmlRendererTests::
@@ -755,7 +756,7 @@ void InvestigationReportHtmlRendererTests::
     QVERIFY(
         html.contains(
             QStringLiteral(
-                "Record rate"
+                "Observed record rate"
                 )
             )
         );
@@ -2471,6 +2472,231 @@ void InvestigationReportHtmlRendererTests::
         !html.contains(
             QStringLiteral(
                 "Complete Import Profile"
+                )
+            )
+        );
+}
+
+void InvestigationReportHtmlRendererTests::
+    rendersTimeScopedComparisonAndPrintGrouping()
+{
+    InvestigationReportSnapshot snapshot;
+
+    snapshot.title =
+        QStringLiteral("Scoped Comparison");
+
+    snapshot.generatedAtUtc =
+        fixedTimestamp();
+
+    InvestigationReportComparisonSnapshot comparison =
+        makeComparison();
+
+    InvestigationComparisonTimeRange baselineRange;
+
+    baselineRange.startTime =
+        fixedTimestamp();
+
+    baselineRange.endTime =
+        fixedTimestamp(1800);
+
+    comparison.baselineTimeRange =
+        baselineRange;
+
+    InvestigationComparisonTimeRange comparisonRange;
+
+    comparisonRange.startTime =
+        fixedTimestamp(60);
+
+    comparison.comparisonTimeRange =
+        comparisonRange;
+
+    snapshot.comparisons.append(comparison);
+
+    InvestigationReportHtmlRenderer renderer;
+
+    const QString html =
+        renderer.render(snapshot);
+
+    /*
+     * Each source's scope must remain within
+     * the protected comparison-route block.
+     */
+    const qsizetype routeStart =
+        html.indexOf(
+            QStringLiteral(
+                "<div class=\"comparison-route\">"
+                )
+            );
+
+    const qsizetype routeEnd =
+        html.indexOf(
+            QStringLiteral(
+                "<div class=\"metrics\">"
+                ),
+            routeStart
+            );
+
+    QVERIFY(routeStart >= 0);
+    QVERIFY(routeEnd > routeStart);
+
+    const QString route =
+        html.mid(
+            routeStart,
+            routeEnd - routeStart
+            );
+
+    QCOMPARE(
+        route.count(
+            QStringLiteral(
+                "Scope: Captured active time range"
+                )
+            ),
+        2
+        );
+
+    QVERIFY(
+        route.contains(
+            QStringLiteral("End: Unbounded")
+            )
+        );
+
+    /*
+     * The short timing table and its optional
+     * explanation share one print-keep block.
+     */
+    const qsizetype timingStart =
+        html.indexOf(
+            QStringLiteral(
+                "<div class=\"print-keep\">"
+                "<h3>Captured Timing</h3>"
+                )
+            );
+
+    const qsizetype timingEnd =
+        html.indexOf(
+            QStringLiteral(
+                "appendComparisonSeverity"
+                ),
+            timingStart
+            );
+
+    QVERIFY(timingStart >= 0);
+
+    const QString timing =
+        html.mid(timingStart);
+
+    QVERIFY(
+        timing.contains(
+            QStringLiteral(
+                "Observed record rate"
+                )
+            )
+        );
+
+    const qsizetype rateStart =
+        timing.indexOf(
+            QStringLiteral(
+                "<tr><th>Window-average record rate</th>"
+                )
+            );
+
+    QVERIFY(rateStart >= 0);
+
+    const qsizetype rateEnd =
+        timing.indexOf(
+            QStringLiteral("</tr>"),
+            rateStart
+            );
+
+    QVERIFY(rateEnd > rateStart);
+
+    const QString rateRow =
+        timing.mid(
+            rateStart,
+            rateEnd - rateStart
+            );
+
+    QVERIFY(
+        rateRow.contains(
+            QStringLiteral("3.33 records/min")
+            )
+        );
+
+    QVERIFY(
+        rateRow.contains(
+            QStringLiteral("<td>—</td>")
+            )
+        );
+
+    QVERIFY(
+        timing.contains(
+            QStringLiteral(
+                "comparison-rate-note"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ".report-main .print-keep {"
+                )
+            )
+        );
+
+    /*
+     * Two bounded ranges produce two rates.
+     */
+    comparisonRange.endTime =
+        fixedTimestamp(960);
+
+    comparison.comparisonTimeRange =
+        comparisonRange;
+
+    snapshot.comparisons.clear();
+    snapshot.comparisons.append(comparison);
+
+    const QString bothBounded =
+        renderer.render(snapshot);
+
+    QVERIFY(
+        bothBounded.contains(
+            QStringLiteral("3.33 records/min")
+            )
+        );
+
+    QVERIFY(
+        bothBounded.contains(
+            QStringLiteral("8.33 records/min")
+            )
+        );
+
+    /*
+     * Legacy complete-session comparisons retain
+     * observed rates without adding a window row.
+     */
+    comparison.baselineTimeRange.reset();
+    comparison.comparisonTimeRange.reset();
+
+    snapshot.comparisons.clear();
+    snapshot.comparisons.append(comparison);
+
+    const QString complete =
+        renderer.render(snapshot);
+
+    QCOMPARE(
+        complete.count(
+            QStringLiteral(
+                "Scope: Complete imported session"
+                )
+            ),
+        2
+        );
+
+    QVERIFY(
+        !complete.contains(
+            QStringLiteral(
+                "Window-average record rate"
                 )
             )
         );

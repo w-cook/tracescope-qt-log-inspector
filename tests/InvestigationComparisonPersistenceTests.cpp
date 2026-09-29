@@ -191,6 +191,17 @@ void InvestigationComparisonPersistenceTests::
     analysis.bursts =
         burstComparison;
 
+    InvestigationComparisonTimeRange baselineRange;
+
+    baselineRange.startTime =
+        QDateTime::fromString(
+            QStringLiteral("2026-08-27T12:00:00Z"),
+            Qt::ISODate
+            );
+
+    baselineSource.capturedTimeRange =
+        baselineRange;
+
     InvestigationComparisonSnapshot original(
         QStringLiteral("comparison-123"),
         std::move(baselineSource),
@@ -339,6 +350,27 @@ void InvestigationComparisonPersistenceTests::
             ->comparison
             .burstCount,
         5
+        );
+
+    QVERIFY(
+        persisted.baselineSource
+            .capturedTimeRange.has_value()
+        );
+
+    QVERIFY(
+        restored.baselineSource()
+            .capturedTimeRange.has_value()
+        );
+
+    QCOMPARE(
+        restored.baselineSource()
+            .capturedTimeRange->startTime.value(),
+        baselineRange.startTime.value()
+        );
+
+    QVERIFY(
+        !restored.comparisonSource()
+             .capturedTimeRange.has_value()
         );
 }
 
@@ -760,6 +792,34 @@ void InvestigationComparisonPersistenceTests::
 
     analysis.bursts =
         burstComparison;
+
+    InvestigationComparisonTimeRange baselineRange;
+
+    baselineRange.startTime =
+        QDateTime::fromString(
+            QStringLiteral("2026-08-27T12:00:00Z"),
+            Qt::ISODate
+            );
+
+    baselineRange.endTime =
+        QDateTime::fromString(
+            QStringLiteral("2026-08-27T12:02:00Z"),
+            Qt::ISODate
+            );
+
+    baselineSource.capturedTimeRange =
+        baselineRange;
+
+    InvestigationComparisonTimeRange comparisonRange;
+
+    comparisonRange.endTime =
+        QDateTime::fromString(
+            QStringLiteral("2026-08-28T12:04:00Z"),
+            Qt::ISODate
+            );
+
+    comparisonSource.capturedTimeRange =
+        comparisonRange;
 
     InvestigationComparisonSnapshot original(
         QStringLiteral("comparison-123"),
@@ -1203,6 +1263,131 @@ void InvestigationComparisonPersistenceTests::
             .dominantEntity
             ->value,
         QStringLiteral("node-4")
+        );
+
+    QVERIFY(
+        restored.baselineSource()
+            .capturedTimeRange.has_value()
+        );
+
+    QVERIFY(
+        restored.comparisonSource()
+            .capturedTimeRange.has_value()
+        );
+
+    QCOMPARE(
+        restored.baselineSource()
+            .capturedTimeRange->startTime.value(),
+        baselineRange.startTime.value()
+        );
+
+    QCOMPARE(
+        restored.baselineSource()
+            .capturedTimeRange->endTime.value(),
+        baselineRange.endTime.value()
+        );
+
+    QVERIFY(
+        !restored.comparisonSource()
+             .capturedTimeRange->startTime.has_value()
+        );
+
+    QCOMPARE(
+        restored.comparisonSource()
+            .capturedTimeRange->endTime.value(),
+        comparisonRange.endTime.value()
+        );
+
+    /*
+ * An older workspace has neither scope property.
+ * Both sources must restore as complete sessions.
+ */
+    QJsonObject legacyJson = json;
+
+    for (const QString &key : {
+             QStringLiteral("baselineSource"),
+             QStringLiteral("comparisonSource")
+         }) {
+        QJsonObject source =
+            legacyJson.value(key).toObject();
+
+        source.remove(
+            QStringLiteral("capturedTimeRange")
+            );
+
+        legacyJson.insert(key, source);
+    }
+
+    const auto legacyResult =
+        serializer.deserialize(legacyJson);
+
+    QVERIFY(legacyResult.isSuccess());
+
+    QVERIFY(
+        !legacyResult.comparison
+             ->baselineSource.capturedTimeRange
+             .has_value()
+        );
+
+    QVERIFY(
+        !legacyResult.comparison
+             ->comparisonSource.capturedTimeRange
+             .has_value()
+        );
+
+    /*
+ * A present but empty scope is invalid.
+ */
+    QJsonObject malformedJson = json;
+
+    QJsonObject malformedSource =
+        malformedJson.value(
+                         QStringLiteral("baselineSource")
+                         ).toObject();
+
+    malformedSource.insert(
+        QStringLiteral("capturedTimeRange"),
+        QJsonObject{}
+        );
+
+    malformedJson.insert(
+        QStringLiteral("baselineSource"),
+        malformedSource
+        );
+
+    QVERIFY(
+        !serializer.deserialize(malformedJson)
+             .isSuccess()
+        );
+
+    /*
+     * Reversed boundaries must also be rejected.
+     */
+    QJsonObject reversedRange;
+
+    reversedRange.insert(
+        QStringLiteral("startTime"),
+        QStringLiteral("2026-08-27T12:10:00.000Z")
+        );
+
+    reversedRange.insert(
+        QStringLiteral("endTime"),
+        QStringLiteral("2026-08-27T12:00:00.000Z")
+        );
+
+    malformedSource.insert(
+        QStringLiteral("capturedTimeRange"),
+        reversedRange
+        );
+
+    malformedJson.insert(
+        QStringLiteral("baselineSource"),
+        malformedSource
+        );
+
+    QVERIFY(
+        !serializer.deserialize(malformedJson)
+             .isSuccess()
         );
 }
 

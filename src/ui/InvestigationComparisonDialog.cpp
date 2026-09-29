@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -10,9 +11,9 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
-#include <QSignalBlocker>
 
 #include "../analysis/InvestigationCadenceAnalyzer.h"
 #include "../workspace/InvestigationSession.h"
@@ -22,7 +23,6 @@
 
 namespace
 {
-
 QString sessionDisplayText(
     const InvestigationSession &session
     )
@@ -43,6 +43,60 @@ QString sessionDisplayText(
     return name;
 }
 
+std::optional<InvestigationComparisonTimeRange>
+activeRangeFor(
+    const InvestigationSession *session
+    )
+{
+    if (session == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto *proxy =
+        session->investigationController()
+            ->proxyModel();
+
+    InvestigationComparisonTimeRange range;
+
+    range.startTime =
+        proxy->timeRangeStart();
+
+    range.endTime =
+        proxy->timeRangeEnd();
+
+    return range.isValid()
+               ? std::make_optional(range)
+               : std::nullopt;
+}
+
+bool containsRecordsInRange(
+    const InvestigationSession &session,
+    const InvestigationComparisonTimeRange &range
+    )
+{
+    const auto &records =
+        session.investigationController()
+            ->allRecords();
+
+    return std::any_of(
+        records.cbegin(),
+        records.cend(),
+        [&range](const InvestigationRecord &record) {
+            if (!record.timestamp.has_value()
+                || !record.timestamp->isValid()) {
+                return false;
+            }
+
+            const QDateTime &timestamp =
+                *record.timestamp;
+
+            return (!range.startTime.has_value()
+                    || timestamp >= *range.startTime)
+                   && (!range.endTime.has_value()
+                       || timestamp <= *range.endTime);
+        }
+        );
+}
 }
 
 InvestigationComparisonDialog::
@@ -57,8 +111,20 @@ InvestigationComparisonDialog::
     m_baselineCombo(
         new QComboBox(this)
         ),
+    m_baselineTimeRangeCheck(
+        new QCheckBox(
+            tr("Use this session's active time range"),
+            this
+            )
+        ),
     m_comparisonCombo(
         new QComboBox(this)
+        ),
+    m_comparisonTimeRangeCheck(
+        new QCheckBox(
+            tr("Use this session's active time range"),
+            this
+            )
         ),
     m_burstGroup(
         new QGroupBox(
@@ -121,10 +187,13 @@ InvestigationComparisonDialog::
     auto *description =
         new QLabel(
             tr(
-                "Compare two complete imported sessions. "
-                "The baseline is evaluated against the "
-                "comparison session, and every delta is "
-                "calculated as Comparison − Baseline."
+                "Compare two imported sessions. "
+                "By default, each side uses its complete "
+                "imported record population. Optionally, "
+                "capture either session's active time range. "
+                "Other active filters are ignored. "
+                "Every delta is calculated as "
+                "Comparison − Baseline."
                 ),
             this
             );
@@ -160,8 +229,26 @@ InvestigationComparisonDialog::
         );
 
     sessionsLayout->addRow(
+        QString(),
+        m_baselineTimeRangeCheck
+        );
+
+    sessionsLayout->addRow(
         tr("Comparison:"),
         m_comparisonCombo
+        );
+
+    sessionsLayout->addRow(
+        QString(),
+        m_comparisonTimeRangeCheck
+        );
+
+    m_baselineTimeRangeCheck->setObjectName(
+        QStringLiteral("baselineTimeRangeCheck")
+        );
+
+    m_comparisonTimeRangeCheck->setObjectName(
+        QStringLiteral("comparisonTimeRangeCheck")
         );
 
     auto *swapButton =
@@ -197,11 +284,17 @@ InvestigationComparisonDialog::
                 return;
             }
 
+            const bool baselineScoped =
+                m_baselineTimeRangeCheck->isChecked();
+
+            const bool comparisonScoped =
+                m_comparisonTimeRangeCheck->isChecked();
+
             /*
-         * Avoid recalculating shared burst defaults
-         * twice while the two selections are in an
-         * intermediate swapped state.
-         */
+             * Avoid recalculating shared burst defaults
+             * twice while the two selections are in an
+             * intermediate swapped state.
+             */
             const QSignalBlocker baselineBlocker(
                 m_baselineCombo
                 );
@@ -218,6 +311,23 @@ InvestigationComparisonDialog::
                 baselineIndex
                 );
 
+            const QSignalBlocker baselineRangeBlocker(
+                m_baselineTimeRangeCheck
+                );
+
+            const QSignalBlocker comparisonRangeBlocker(
+                m_comparisonTimeRangeCheck
+                );
+
+            m_baselineTimeRangeCheck->setChecked(
+                comparisonScoped
+                );
+
+            m_comparisonTimeRangeCheck->setChecked(
+                baselineScoped
+                );
+
+            refreshTimeRangeOptions();
             updateValidation();
             applySharedBurstDefaults();
         }
@@ -249,13 +359,11 @@ InvestigationComparisonDialog::
     auto *burstDescription =
         new QLabel(
             tr(
-                "Window and merge-gap values default to "
-                "shared automatic recommendations derived "
-                "from the complete cadence of both selected "
-                "sessions. The same explicit settings are "
-                "then used for both sides of the comparison. "
-                "You may adjust them before creating the "
-                "comparison."
+                "Shared automatic recommendations are "
+                "derived from the selected record populations. "
+                "The same explicit burst-detection settings "
+                "are applied to both sides. You may adjust "
+                "them before creating the comparison."
                 ),
             m_burstGroup
             );
@@ -378,6 +486,7 @@ InvestigationComparisonDialog::
         &QComboBox::currentIndexChanged,
         this,
         [this](int) {
+            refreshTimeRangeOptions();
             updateValidation();
             applySharedBurstDefaults();
         }
@@ -388,9 +497,30 @@ InvestigationComparisonDialog::
         &QComboBox::currentIndexChanged,
         this,
         [this](int) {
+            refreshTimeRangeOptions();
             updateValidation();
             applySharedBurstDefaults();
         }
+        );
+
+    const auto timeRangeChanged =
+        [this](bool) {
+            updateValidation();
+            applySharedBurstDefaults();
+        };
+
+    connect(
+        m_baselineTimeRangeCheck,
+        &QCheckBox::toggled,
+        this,
+        timeRangeChanged
+        );
+
+    connect(
+        m_comparisonTimeRangeCheck,
+        &QCheckBox::toggled,
+        this,
+        timeRangeChanged
         );
 
     connect(
@@ -432,6 +562,7 @@ InvestigationComparisonDialog::
         initialComparisonSessionId
         );
 
+    refreshTimeRangeOptions();
     applySharedBurstDefaults();
     updateValidation();
 }
@@ -677,21 +808,77 @@ void InvestigationComparisonDialog::
         return;
     }
 
+    const auto baselineRange =
+        baselineTimeRange();
+
+    const auto comparisonRange =
+        comparisonTimeRange();
+
+    QVector<InvestigationRecord> scopedBaseline;
+    QVector<InvestigationRecord> scopedComparison;
+
+    const auto &allBaseline =
+        baselineSession->investigationController()
+            ->allRecords();
+
+    const auto &allComparison =
+        comparisonSession->investigationController()
+            ->allRecords();
+
+    if (baselineRange.has_value()) {
+        scopedBaseline =
+            selectComparisonTimeRangeRecords(
+                allBaseline,
+                *baselineRange
+                );
+    }
+
+    if (comparisonRange.has_value()) {
+        scopedComparison =
+            selectComparisonTimeRangeRecords(
+                allComparison,
+                *comparisonRange
+                );
+    }
+
+    const auto &baselineRecords =
+        baselineRange.has_value()
+            ? scopedBaseline
+            : allBaseline;
+
+    const auto &comparisonRecords =
+        comparisonRange.has_value()
+            ? scopedComparison
+            : allComparison;
+
     InvestigationCadenceAnalyzer analyzer;
 
-    const InvestigationCadence baselineCadence =
-        analyzer.analyze(
-            baselineSession
-                ->investigationController()
-                ->allRecords()
-            );
+    InvestigationCadence baselineCadence =
+        analyzer.analyze(baselineRecords);
 
-    const InvestigationCadence comparisonCadence =
-        analyzer.analyze(
-            comparisonSession
-                ->investigationController()
-                ->allRecords()
-            );
+    InvestigationCadence comparisonCadence =
+        analyzer.analyze(comparisonRecords);
+
+    /*
+     * If a selected time range is too sparse for
+     * adaptive recommendations, use the corresponding
+     * complete session's cadence instead.
+     *
+     * This affects automatic shared settings only.
+     * The actual comparison still uses the selected
+     * record populations.
+     */
+    if (baselineRange.has_value()
+        && baselineCadence.usesFallbackRecommendation) {
+        baselineCadence =
+            analyzer.analyze(allBaseline);
+    }
+
+    if (comparisonRange.has_value()
+        && comparisonCadence.usesFallbackRecommendation) {
+        comparisonCadence =
+            analyzer.analyze(allComparison);
+    }
 
     /*
      * Use one shared setting for both sides.
@@ -774,5 +961,95 @@ void InvestigationComparisonDialog::
 
     m_validationLabel->setVisible(
         true
+        );
+}
+
+const InvestigationSession *
+InvestigationComparisonDialog::selectedSession(
+    const QString &sessionId
+    ) const
+{
+    if (m_workspace == nullptr) {
+        return nullptr;
+    }
+
+    const int index =
+        m_workspace->indexOfSession(sessionId);
+
+    return index >= 0
+               ? m_workspace->sessionAt(index)
+               : nullptr;
+}
+
+std::optional<InvestigationComparisonTimeRange>
+InvestigationComparisonDialog::baselineTimeRange() const
+{
+    return m_baselineTimeRangeCheck->isChecked()
+    ? activeRangeFor(
+          selectedSession(baselineSessionId())
+          )
+    : std::nullopt;
+}
+
+std::optional<InvestigationComparisonTimeRange>
+InvestigationComparisonDialog::comparisonTimeRange() const
+{
+    return m_comparisonTimeRangeCheck->isChecked()
+    ? activeRangeFor(
+          selectedSession(comparisonSessionId())
+          )
+    : std::nullopt;
+}
+
+void InvestigationComparisonDialog::
+    refreshTimeRangeOptions()
+{
+    const auto configure =
+        [this](
+            QCheckBox *checkbox,
+            const QString &sessionId
+            ) {
+            const InvestigationSession *session =
+                selectedSession(sessionId);
+
+            const auto range =
+                activeRangeFor(session);
+
+            const bool available =
+                session != nullptr
+                && range.has_value()
+                && containsRecordsInRange(
+                    *session,
+                    *range
+                    );
+
+            checkbox->setEnabled(available);
+
+            if (!available) {
+                checkbox->setChecked(false);
+            }
+
+            checkbox->setToolTip(
+                available
+                    ? tr(
+                          "Compare records within this "
+                          "session's active time boundaries. "
+                          "All other filters are ignored."
+                          )
+                    : tr(
+                          "This session has no usable active "
+                          "time range containing records."
+                          )
+                );
+        };
+
+    configure(
+        m_baselineTimeRangeCheck,
+        baselineSessionId()
+        );
+
+    configure(
+        m_comparisonTimeRangeCheck,
+        comparisonSessionId()
         );
 }

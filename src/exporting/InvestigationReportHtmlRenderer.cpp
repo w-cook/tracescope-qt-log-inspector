@@ -10,6 +10,8 @@
 #include <QJsonValue>
 #include <QJsonObject>
 
+#include "../workspace/InvestigationComparisonWindowRate.h"
+
 namespace
 {
 
@@ -1759,6 +1761,46 @@ void appendComparisonBursts(
         << "</div>";
 }
 
+void appendComparisonRouteSource(
+    QTextStream &out,
+    const QString &role,
+    const QString &sourceName,
+    const std::optional<InvestigationComparisonTimeRange>
+        &range
+    )
+{
+    out
+        << "<div class=\"comparison-route-source\">"
+        << "<span class=\"route-label\">"
+        << escaped(role)
+        << "</span><strong>"
+        << escaped(sourceName)
+        << "</strong><span class=\"route-scope\">";
+
+    if (!range.has_value()) {
+        out << "Scope: Complete imported session";
+    } else {
+        out << "Scope: Captured active time range";
+
+        out
+            << "<span class=\"route-boundary\">Start: "
+            << escaped(
+                   range->startTime.has_value()
+                       ? timestampText(*range->startTime)
+                       : QStringLiteral("Unbounded")
+                   )
+            << "</span><span class=\"route-boundary\">End: "
+            << escaped(
+                   range->endTime.has_value()
+                       ? timestampText(*range->endTime)
+                       : QStringLiteral("Unbounded")
+                   )
+            << "</span>";
+    }
+
+    out << "</span></div>";
+}
+
 void appendComparison(
     QTextStream &out,
     const InvestigationReportComparisonSnapshot &comparison,
@@ -1779,22 +1821,25 @@ void appendComparison(
                )
         << "</h2>";
 
-    out
-        << "<div class=\"comparison-route\">"
-        << "<div><span class=\"route-label\">Baseline</span>"
-        << "<strong>"
-        << escaped(
-               comparison.baselineSourceName
-               )
-        << "</strong></div>"
-        << "<div class=\"route-arrow\">→</div>"
-        << "<div><span class=\"route-label\">Comparison</span>"
-        << "<strong>"
-        << escaped(
-               comparison.comparisonSourceName
-               )
-        << "</strong></div>"
-        << "</div>";
+    out << "<div class=\"comparison-route\">";
+
+    appendComparisonRouteSource(
+        out,
+        QStringLiteral("Baseline"),
+        comparison.baselineSourceName,
+        comparison.baselineTimeRange
+        );
+
+    out << "<div class=\"route-arrow\">→</div>";
+
+    appendComparisonRouteSource(
+        out,
+        QStringLiteral("Comparison"),
+        comparison.comparisonSourceName,
+        comparison.comparisonTimeRange
+        );
+
+    out << "</div>";
 
     out
         << "<div class=\"metrics\">";
@@ -1835,6 +1880,22 @@ void appendComparison(
 
     out
         << "</div>";
+
+    const std::optional<double> baselineWindowRate =
+        comparisonWindowAverageRate(
+            comparison.baselineTimeRange,
+            comparison.analysis.baselineTiming
+            );
+
+    const std::optional<double> comparisonWindowRate =
+        comparisonWindowAverageRate(
+            comparison.comparisonTimeRange,
+            comparison.analysis.comparisonTiming
+            );
+
+    const bool showWindowAverageRate =
+        baselineWindowRate.has_value()
+        || comparisonWindowRate.has_value();
 
     out
         << "<div class=\"print-keep\">"
@@ -1909,7 +1970,7 @@ void appendComparison(
                    )
                )
         << "</td></tr>"
-        << "<tr><th>Record rate</th><td>"
+        << "<tr><th>Observed record rate</th><td>"
         << escaped(
                comparisonRateText(
                    comparison.analysis
@@ -1925,10 +1986,42 @@ void appendComparison(
                        .recordsPerMinute
                    )
                )
-        << "</td></tr>"
+        << "</td></tr>";
+
+    if (showWindowAverageRate) {
+        out
+            << "<tr><th>Window-average record rate</th><td>"
+            << escaped(
+                   baselineWindowRate.has_value()
+                       ? comparisonRateText(baselineWindowRate)
+                       : QStringLiteral("—")
+                   )
+            << "</td><td>"
+            << escaped(
+                   comparisonWindowRate.has_value()
+                       ? comparisonRateText(comparisonWindowRate)
+                       : QStringLiteral("—")
+                   )
+            << "</td></tr>";
+    }
+
+    out
         << "</tbody></table>"
-        << "</div>"
         << "</div>";
+
+    if (showWindowAverageRate) {
+        out
+            << "<p class=\"comparison-rate-note\">"
+            << "Observed rates use the first and last "
+               "selected event timestamps. Window-average "
+               "rates include the entire bounded selected "
+               "time window, including quiet periods. "
+               "A dash indicates that no bounded window "
+               "average is available for that side."
+            << "</p>";
+    }
+
+    out << "</div>";
 
     appendComparisonSeverity(
         out,
@@ -4368,6 +4461,31 @@ summary {
     text-transform: uppercase;
 }
 
+.comparison-route-source {
+    min-width: 0;
+}
+
+.route-scope {
+    display: block;
+    min-width: 0;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.route-boundary {
+    display: block;
+    font-variant-numeric: tabular-nums;
+}
+
+.comparison-rate-note {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 .route-arrow {
     color: var(--accent);
     font-size: 1.5rem;
@@ -5403,6 +5521,18 @@ h5 {
     .comparison-route {
         grid-template-columns:
             minmax(0, 1fr) auto minmax(0, 1fr);
+        break-inside: avoid-page;
+    }
+
+    .comparison-route-source,
+    .route-scope,
+    .route-boundary {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .comparison-rate-note {
+        font-size: 8pt;
         break-inside: avoid-page;
     }
 

@@ -280,6 +280,8 @@ qt_add_executable(TraceScope
     src/ui/workspace/InvestigationSectionResizePolicy.h
     src/ui/workspace/InvestigationSectionResizePolicy.cpp
     src/ui/ScaleAwareComboBox.h
+    src/workspace/InvestigationComparisonTimeRange.h
+    src/workspace/InvestigationComparisonWindowRate.h
 
 )
 

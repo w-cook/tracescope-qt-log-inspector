@@ -1264,6 +1264,100 @@ bool burstSummaryFromJson(
                );
 }
 
+QJsonValue comparisonTimeRangeToJson(
+    const std::optional<InvestigationComparisonTimeRange>
+        &timeRange
+    )
+{
+    if (!timeRange.has_value()) {
+        return QJsonValue(QJsonValue::Null);
+    }
+
+    QJsonObject object;
+
+    object.insert(
+        QStringLiteral("startTime"),
+        timeRange->startTime.has_value()
+            ? dateTimeToJson(*timeRange->startTime)
+            : QJsonValue(QJsonValue::Null)
+        );
+
+    object.insert(
+        QStringLiteral("endTime"),
+        timeRange->endTime.has_value()
+            ? dateTimeToJson(*timeRange->endTime)
+            : QJsonValue(QJsonValue::Null)
+        );
+
+    return QJsonValue(object);
+}
+
+bool comparisonTimeRangeFromJson(
+    const QJsonValue &value,
+    std::optional<InvestigationComparisonTimeRange>
+        &timeRange
+    )
+{
+    /*
+     * Missing values occur in older workspaces.
+     * Null represents an explicit complete-session
+     * comparison in newly saved workspaces.
+     */
+    if (value.isUndefined() || value.isNull()) {
+        timeRange.reset();
+        return true;
+    }
+
+    if (!value.isObject()) {
+        return false;
+    }
+
+    const QJsonObject object = value.toObject();
+
+    const QString startKey =
+        QStringLiteral("startTime");
+
+    const QString endKey =
+        QStringLiteral("endTime");
+
+    if (!object.contains(startKey)
+        || !object.contains(endKey)) {
+        return false;
+    }
+
+    const QJsonValue startValue =
+        object.value(startKey);
+
+    const QJsonValue endValue =
+        object.value(endKey);
+
+    QDateTime start;
+    QDateTime end;
+
+    if (!readDateTime(startValue, start)
+        || !readDateTime(endValue, end)) {
+        return false;
+    }
+
+    InvestigationComparisonTimeRange restored;
+
+    if (start.isValid()) {
+        restored.startTime = start;
+    }
+
+    if (end.isValid()) {
+        restored.endTime = end;
+    }
+
+    if (!restored.isValid()) {
+        return false;
+    }
+
+    timeRange = std::move(restored);
+
+    return true;
+}
+
 QJsonObject sourceToJson(
     const PersistedInvestigationComparisonSource
         &source
@@ -1306,6 +1400,13 @@ QJsonObject sourceToJson(
         QStringLiteral("importedAtUtc"),
         dateTimeToJson(
             source.importedAtUtc
+            )
+        );
+
+    object.insert(
+        QStringLiteral("capturedTimeRange"),
+        comparisonTimeRangeToJson(
+            source.capturedTimeRange
             )
         );
 
@@ -1367,6 +1468,12 @@ bool sourceFromJson(
                        )
                    ),
                source.importedAtUtc
+               )
+           && comparisonTimeRangeFromJson(
+               object.value(
+                   QStringLiteral("capturedTimeRange")
+                   ),
+               source.capturedTimeRange
                );
 }
 

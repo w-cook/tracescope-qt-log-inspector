@@ -8,6 +8,7 @@
 #include <QMap>
 #include <QStringList>
 
+#include "InvestigationComparisonTimeRange.h"
 #include "InvestigationPresentationState.h"
 #include "InvestigationSessionBackingPersistence.h"
 #include "WorkspaceDocumentLayoutState.h"
@@ -60,6 +61,9 @@ struct PersistedInvestigationComparisonSource
 
     QDateTime sourceLastModified;
     QDateTime importedAtUtc;
+
+    std::optional<InvestigationComparisonTimeRange>
+        capturedTimeRange;
 };
 
 struct PersistedInvestigationComparison

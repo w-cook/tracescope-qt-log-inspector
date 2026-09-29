@@ -1,8 +1,13 @@
 #include <QtTest>
 
+#include <QTimeZone>
+
+#include <cmath>
+#include <stdexcept>
 #include <utility>
 
 #include "../src/workspace/InvestigationComparisonSnapshotBuilder.h"
+#include "../src/workspace/InvestigationComparisonWindowRate.h"
 
 namespace
 {
@@ -24,6 +29,26 @@ InvestigationRecord makeRecord(
         record.message =
             message;
     }
+
+    return record;
+}
+
+InvestigationRecord makeTimedRecord(
+    const QString &id,
+    qint64 timestampMilliseconds
+    )
+{
+    InvestigationRecord record =
+        makeRecord(
+            id,
+            RecordSeverity::Info
+            );
+
+    record.timestamp =
+        QDateTime::fromMSecsSinceEpoch(
+            timestampMilliseconds,
+            QTimeZone::UTC
+            );
 
     return record;
 }
@@ -56,6 +81,9 @@ private slots:
     void snapshotsRemainUnchangedAfterLiveAppend();
     void preservesBurstRequestState();
     void assignsDistinctComparisonIds();
+    void independentlySelectsTimeRanges();
+    void rejectsInvalidAndEmptyTimeRanges();
+    void calculatesWindowAverageRateIndependently();
 };
 
 void InvestigationComparisonSnapshotBuilderTests::
@@ -621,6 +649,284 @@ void InvestigationComparisonSnapshotBuilderTests::
     QVERIFY(
         first.id()
         != second.id()
+        );
+}
+
+void InvestigationComparisonSnapshotBuilderTests::
+    independentlySelectsTimeRanges()
+{
+    ImportProfile profile;
+
+    InvestigationSession baseline(
+        QStringLiteral("baseline.jsonl"),
+        profile,
+        makeResult({
+            makeTimedRecord(
+                QStringLiteral("b1"), 0),
+            makeTimedRecord(
+                QStringLiteral("b2"), 60000),
+            makeTimedRecord(
+                QStringLiteral("b3"), 120000),
+            makeRecord(
+                QStringLiteral("untimed"),
+                RecordSeverity::Info)
+        })
+        );
+
+    InvestigationSession comparison(
+        QStringLiteral("comparison.jsonl"),
+        profile,
+        makeResult({
+            makeTimedRecord(
+                QStringLiteral("c1"), 0),
+            makeTimedRecord(
+                QStringLiteral("c2"), 60000),
+            makeTimedRecord(
+                QStringLiteral("c3"), 120000)
+        })
+        );
+
+    // Unrelated active filters must be ignored.
+    baseline.investigationController()
+        ->setFilters(
+            QString(),
+            QString(),
+            QStringLiteral("NO_MATCH")
+            );
+
+    InvestigationComparisonTimeRange range;
+
+    range.startTime =
+        QDateTime::fromMSecsSinceEpoch(
+            60000,
+            QTimeZone::UTC
+            );
+
+    range.endTime =
+        QDateTime::fromMSecsSinceEpoch(
+            120000,
+            QTimeZone::UTC
+            );
+
+    InvestigationComparisonSnapshotBuilder builder;
+
+    const auto snapshot =
+        builder.build(
+            baseline,
+            comparison,
+            std::nullopt,
+            range,
+            std::nullopt
+            );
+
+    QCOMPARE(
+        snapshot.analysis().totalRecords.baselineCount,
+        qint64(2)
+        );
+
+    QCOMPARE(
+        snapshot.analysis().totalRecords.comparisonCount,
+        qint64(3)
+        );
+
+    QVERIFY(
+        snapshot.baselineSource()
+            .capturedTimeRange.has_value()
+        );
+
+    QVERIFY(
+        !snapshot.comparisonSource()
+             .capturedTimeRange.has_value()
+        );
+
+    QCOMPARE(
+        snapshot.baselineSource()
+            .capturedTimeRange->startTime,
+        range.startTime
+        );
+}
+
+void InvestigationComparisonSnapshotBuilderTests::
+    rejectsInvalidAndEmptyTimeRanges()
+{
+    ImportProfile profile;
+
+    InvestigationSession baseline(
+        QStringLiteral("baseline.jsonl"),
+        profile,
+        makeResult({
+            makeTimedRecord(
+                QStringLiteral("b1"), 60000)
+        })
+        );
+
+    InvestigationSession comparison(
+        QStringLiteral("comparison.jsonl"),
+        profile,
+        makeResult({
+            makeTimedRecord(
+                QStringLiteral("c1"), 60000)
+        })
+        );
+
+    InvestigationComparisonSnapshotBuilder builder;
+
+    InvestigationComparisonTimeRange invalid;
+
+    QVERIFY(!invalid.isValid());
+
+    QVERIFY_THROWS_EXCEPTION(
+        std::invalid_argument,
+        builder.build(
+            baseline,
+            comparison,
+            std::nullopt,
+            invalid
+            )
+        );
+
+    InvestigationComparisonTimeRange emptySelection;
+
+    emptySelection.startTime =
+        QDateTime::fromMSecsSinceEpoch(
+            120000,
+            QTimeZone::UTC
+            );
+
+    QVERIFY_THROWS_EXCEPTION(
+        std::invalid_argument,
+        builder.build(
+            baseline,
+            comparison,
+            std::nullopt,
+            emptySelection
+            )
+        );
+
+    // An open-ended range with matching records
+    // is valid.
+    InvestigationComparisonTimeRange openEnded;
+
+    openEnded.endTime =
+        QDateTime::fromMSecsSinceEpoch(
+            60000,
+            QTimeZone::UTC
+            );
+
+    const auto snapshot =
+        builder.build(
+            baseline,
+            comparison,
+            std::nullopt,
+            openEnded
+            );
+
+    QCOMPARE(
+        snapshot.analysis().totalRecords.baselineCount,
+        qint64(1)
+        );
+}
+
+void InvestigationComparisonSnapshotBuilderTests::
+    calculatesWindowAverageRateIndependently()
+{
+    ImportProfile profile;
+
+    InvestigationSession baseline(
+        QStringLiteral("baseline.jsonl"),
+        profile,
+        makeResult({
+            makeTimedRecord(
+                QStringLiteral("b1"), 300000),
+            makeTimedRecord(
+                QStringLiteral("b2"), 600000)
+        })
+        );
+
+    InvestigationSession comparison(
+        QStringLiteral("comparison.jsonl"),
+        profile,
+        makeResult({
+            makeTimedRecord(
+                QStringLiteral("c1"), 0),
+            makeTimedRecord(
+                QStringLiteral("c2"), 60000)
+        })
+        );
+
+    InvestigationComparisonTimeRange range;
+
+    range.startTime =
+        QDateTime::fromMSecsSinceEpoch(
+            0,
+            QTimeZone::UTC
+            );
+
+    range.endTime =
+        QDateTime::fromMSecsSinceEpoch(
+            1800000,
+            QTimeZone::UTC
+            );
+
+    InvestigationComparisonSnapshotBuilder builder;
+
+    const auto snapshot =
+        builder.build(
+            baseline,
+            comparison,
+            std::nullopt,
+            range,
+            std::nullopt
+            );
+
+    const auto windowRate =
+        comparisonWindowAverageRate(
+            snapshot.baselineSource()
+                .capturedTimeRange,
+            snapshot.analysis().baselineTiming
+            );
+
+    QVERIFY(windowRate.has_value());
+
+    // Two records spread across a selected
+    // 30-minute window.
+    QVERIFY(
+        std::abs(
+            *windowRate - 2.0 / 30.0
+            ) < 0.000001
+        );
+
+    // The observed rate uses the five-minute
+    // span between the actual selected events.
+    QVERIFY(
+        std::abs(
+            *snapshot.analysis()
+                 .baselineTiming.recordsPerMinute
+            - 2.0 / 5.0
+            ) < 0.000001
+        );
+
+    // A complete-session comparison has no
+    // analyst-selected window-average rate.
+    QVERIFY(
+        !comparisonWindowAverageRate(
+             snapshot.comparisonSource()
+                 .capturedTimeRange,
+             snapshot.analysis().comparisonTiming
+             ).has_value()
+        );
+
+    // An open-ended scope has no finite window
+    // denominator.
+    InvestigationComparisonTimeRange openEnded;
+
+    openEnded.startTime = range.startTime;
+
+    QVERIFY(
+        !comparisonWindowAverageRate(
+             openEnded,
+             snapshot.analysis().baselineTiming
+             ).has_value()
         );
 }
 

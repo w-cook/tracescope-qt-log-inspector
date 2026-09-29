@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -6279,16 +6280,30 @@ void MainWindow::
 
     InvestigationComparisonSnapshotBuilder builder;
 
-    InvestigationComparisonSnapshot snapshot =
-        builder.build(
+    std::optional<InvestigationComparisonSnapshot>
+        capturedSnapshot;
+
+    try {
+        capturedSnapshot = builder.build(
             *baselineSession,
             *comparisonSession,
-            dialog.burstSettings()
+            dialog.burstSettings(),
+            dialog.baselineTimeRange(),
+            dialog.comparisonTimeRange()
             );
+    } catch (const std::invalid_argument &error) {
+        QMessageBox::warning(
+            destinationHost->window(),
+            tr("Cannot Create Comparison"),
+            QString::fromUtf8(error.what())
+            );
+
+        return;
+    }
 
     auto *document =
         new InvestigationComparisonDocument(
-            std::move(snapshot)
+            std::move(*capturedSnapshot)
             );
 
     if (!destinationHost

@@ -91,6 +91,14 @@ buildComparisonSnapshot(
             comparison.comparisonSource()
             );
 
+    snapshot.baselineTimeRange =
+        comparison.baselineSource()
+            .capturedTimeRange;
+
+    snapshot.comparisonTimeRange =
+        comparison.comparisonSource()
+            .capturedTimeRange;
+
     snapshot.requestedBurstSettings =
         comparison.requestedBurstSettings();
 
