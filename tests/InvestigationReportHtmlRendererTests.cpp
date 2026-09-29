@@ -284,6 +284,7 @@ private slots:
     void omitsLocalSourcePaths();
     void preservesReportSectionOrder();
     void rendersImmutableComparisonProvenance();
+    void rendersComparisonDifferencesInImpactOrder();
     void rendersUnavailableComparisonAnalysisGracefully();
     void rendersCrossSourceClockCaveat();
     void rendersTimelineAndDeterministicAnalytics();
@@ -1027,6 +1028,261 @@ void InvestigationReportHtmlRendererTests::
             )
         );
 }
+
+
+void InvestigationReportHtmlRendererTests::
+    rendersComparisonDifferencesInImpactOrder()
+{
+    InvestigationReportSnapshot snapshot;
+
+    snapshot.title =
+        QStringLiteral("Comparison Sorting Test");
+
+    snapshot.generatedAtUtc =
+        fixedTimestamp();
+
+    InvestigationReportComparisonSnapshot comparison =
+        makeComparison();
+
+    /*
+     * Intentionally supply unsorted severity changes.
+     * Critical and Error tie on absolute delta;
+     * Critical must appear first.
+     */
+    comparison.analysis.severity.differences = {
+        { RecordSeverity::Warning, 1, 2 },
+        { RecordSeverity::Error, 1, 5 },
+        { RecordSeverity::Critical, 5, 1 }
+    };
+
+    /*
+     * Event codes must be grouped into Appeared,
+     * Disappeared and Changed. Each group is sorted
+     * independently by absolute delta.
+     */
+    comparison.analysis.eventCodes.differences = {
+        { QStringLiteral("Z_CHANGED"), 2, 4 },
+        { QStringLiteral("Z_APPEARED"), 0, 2 },
+        { QStringLiteral("B_DISAPPEARED"), 3, 0 },
+        { QStringLiteral("A_APPEARED"), 0, 5 },
+        { QStringLiteral("A_CHANGED"), 3, 5 },
+        { QStringLiteral("A_DISAPPEARED"), 5, 0 }
+    };
+
+    /*
+     * Equal-magnitude dimension changes use
+     * deterministic alphabetical ordering.
+     */
+    comparison.analysis.elevatedSubsystems.differences = {
+        { QStringLiteral("zeta"), 2, 5 },
+        { QStringLiteral("Alpha"), 4, 1 },
+        { QStringLiteral("beta"), 1, 6 }
+    };
+
+    /*
+     * Categorical values are sorted independently
+     * within each custom field.
+     */
+    comparison.analysis.customFields
+        .categoricalFields[0]
+        .changedValues = {
+        { QStringLiteral("old"), 2, 0 },
+        { QStringLiteral("big"), 0, 6 },
+        { QStringLiteral("Alpha"), 4, 0 },
+        { QStringLiteral("beta"), 0, 4 }
+    };
+
+    snapshot.comparisons.append(comparison);
+
+    InvestigationReportHtmlRenderer renderer;
+
+    const QString html =
+        renderer.render(snapshot);
+
+    /*
+     * Extract individual report sections so
+     * unrelated occurrences of the same text
+     * cannot produce false positives.
+     */
+    const auto sectionBetween =
+        [&html](
+            const QString &begin,
+            const QString &end
+            ) {
+            const qsizetype first =
+                html.indexOf(begin);
+
+            if (first < 0) {
+                return QString();
+            }
+
+            const qsizetype last =
+                html.indexOf(
+                    end,
+                    first + begin.size()
+                    );
+
+            if (last < 0) {
+                return QString();
+            }
+
+            return html.mid(
+                first,
+                last - first
+                );
+        };
+
+    const auto appearsInOrder =
+        [](
+            const QString &content,
+            const QStringList &markers
+            ) {
+            qsizetype position = 0;
+
+            for (const QString &marker : markers) {
+                const qsizetype found =
+                    content.indexOf(
+                        marker,
+                        position
+                        );
+
+                if (found < 0) {
+                    return false;
+                }
+
+                position =
+                    found + marker.size();
+            }
+
+            return true;
+        };
+
+    const QString severity =
+        sectionBetween(
+            QStringLiteral("<h3>Severity Changes</h3>"),
+            QStringLiteral("<h3>Event-Code Changes</h3>")
+            );
+
+    QVERIFY(!severity.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            severity,
+            {
+                QStringLiteral("<td>Critical</td>"),
+                QStringLiteral("<td>Error</td>"),
+                QStringLiteral("<td>Warning</td>")
+            }
+            )
+        );
+
+    const QString eventCodes =
+        sectionBetween(
+            QStringLiteral("<h3>Event-Code Changes</h3>"),
+            QStringLiteral(
+                "<h3>Elevated Subsystem Changes</h3>"
+                )
+            );
+
+    QVERIFY(!eventCodes.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            eventCodes,
+            {
+                QStringLiteral(
+                    "<th colspan=\"4\">Appeared</th>"
+                    ),
+                QStringLiteral("<td>A_APPEARED</td>"),
+                QStringLiteral("<td>Z_APPEARED</td>"),
+                QStringLiteral(
+                    "<th colspan=\"4\">Disappeared</th>"
+                    ),
+                QStringLiteral("<td>A_DISAPPEARED</td>"),
+                QStringLiteral("<td>B_DISAPPEARED</td>"),
+                QStringLiteral(
+                    "<th colspan=\"4\">Changed</th>"
+                    ),
+                QStringLiteral("<td>A_CHANGED</td>"),
+                QStringLiteral("<td>Z_CHANGED</td>")
+            }
+            )
+        );
+
+    const QString subsystems =
+        sectionBetween(
+            QStringLiteral(
+                "<h3>Elevated Subsystem Changes</h3>"
+                ),
+            QStringLiteral(
+                "<h3>Elevated Entity Changes</h3>"
+                )
+            );
+
+    QVERIFY(!subsystems.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            subsystems,
+            {
+                QStringLiteral("<td>beta</td>"),
+                QStringLiteral("<td>Alpha</td>"),
+                QStringLiteral("<td>zeta</td>")
+            }
+            )
+        );
+
+    const QString categorical =
+        sectionBetween(
+            QStringLiteral("<h4>Categorical Fields</h4>"),
+            QStringLiteral("<h4>Numeric Fields</h4>")
+            );
+
+    QVERIFY(!categorical.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            categorical,
+            {
+                QStringLiteral("<td>big</td>"),
+                QStringLiteral("<td>Alpha</td>"),
+                QStringLiteral("<td>beta</td>"),
+                QStringLiteral("<td>old</td>")
+            }
+            )
+        );
+
+    /*
+     * Rendering must never reorder or otherwise
+     * mutate the captured comparison snapshot.
+     */
+    const auto &retained =
+        snapshot.comparisons.constFirst().analysis;
+
+    QCOMPARE(
+        retained.severity.differences.constFirst().severity,
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        retained.eventCodes.differences.constFirst().value,
+        QStringLiteral("Z_CHANGED")
+        );
+
+    QCOMPARE(
+        retained.elevatedSubsystems
+            .differences.constFirst().value,
+        QStringLiteral("zeta")
+        );
+
+    QCOMPARE(
+        retained.customFields.categoricalFields
+            .constFirst().changedValues
+            .constFirst().value,
+        QStringLiteral("old")
+        );
+}
+
 
 void InvestigationReportHtmlRendererTests::
     rendersUnavailableComparisonAnalysisGracefully()

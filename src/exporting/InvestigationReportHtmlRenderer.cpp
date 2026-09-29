@@ -1126,6 +1126,86 @@ QString comparisonDominantValueText(
             );
 }
 
+bool comparisonTextLess(
+    const QString &left,
+    const QString &right
+    )
+{
+    const int insensitive =
+        QString::compare(
+            left,
+            right,
+            Qt::CaseInsensitive
+            );
+
+    if (insensitive != 0) {
+        return insensitive < 0;
+    }
+
+    return QString::compare(
+               left,
+               right,
+               Qt::CaseSensitive
+               ) < 0;
+}
+
+bool comparisonValueImpactBefore(
+    const InvestigationValueDifference &left,
+    const InvestigationValueDifference &right
+    )
+{
+    const qint64 leftMagnitude =
+        std::abs(left.delta());
+
+    const qint64 rightMagnitude =
+        std::abs(right.delta());
+
+    if (leftMagnitude != rightMagnitude) {
+        return leftMagnitude > rightMagnitude;
+    }
+
+    return comparisonTextLess(
+        left.value,
+        right.value
+        );
+}
+
+QVector<InvestigationValueDifference>
+sortedComparisonValues(
+    const QVector<InvestigationValueDifference> &values
+    )
+{
+    QVector<InvestigationValueDifference> sorted =
+        values;
+
+    std::sort(
+        sorted.begin(),
+        sorted.end(),
+        comparisonValueImpactBefore
+        );
+
+    return sorted;
+}
+
+bool comparisonSeverityImpactBefore(
+    const InvestigationSeverityDifference &left,
+    const InvestigationSeverityDifference &right
+    )
+{
+    const qint64 leftMagnitude =
+        std::abs(left.delta());
+
+    const qint64 rightMagnitude =
+        std::abs(right.delta());
+
+    if (leftMagnitude != rightMagnitude) {
+        return leftMagnitude > rightMagnitude;
+    }
+
+    return static_cast<int>(left.severity)
+           > static_cast<int>(right.severity);
+}
+
 void appendComparisonSeverity(
     QTextStream &out,
     const InvestigationSeverityComparison &severity
@@ -1164,9 +1244,22 @@ void appendComparisonSeverity(
         << "</tr></thead>"
         << "<tbody>";
 
+    QVector<InvestigationSeverityDifference>
+        sortedDifferences =
+        severity.differences;
+
+    std::sort(
+        sortedDifferences.begin(),
+        sortedDifferences.end(),
+        comparisonSeverityImpactBefore
+        );
+
+    const QVector<InvestigationSeverityDifference>
+        &orderedDifferences = sortedDifferences;
+
     for (
         const InvestigationSeverityDifference &difference
-        : severity.differences
+        : orderedDifferences
         ) {
         out
             << "<tr>"
@@ -1202,7 +1295,8 @@ void appendComparisonDimension(
     QTextStream &out,
     const QString &title,
     const InvestigationDimensionComparison &dimension,
-    const QString &unavailableText
+    const QString &unavailableText,
+    bool groupByChange = false
     )
 {
     out
@@ -1239,10 +1333,58 @@ void appendComparisonDimension(
         << "</tr></thead>"
         << "<tbody>";
 
-    for (
-        const InvestigationValueDifference &difference
-        : dimension.differences
-        ) {
+    QVector<InvestigationValueDifference>
+        orderedDifferences;
+
+    if (groupByChange) {
+        QVector<InvestigationValueDifference> appeared;
+        QVector<InvestigationValueDifference> disappeared;
+        QVector<InvestigationValueDifference> changed;
+
+        for (const auto &difference : dimension.differences) {
+            if (difference.appearsOnlyInComparison()) {
+                appeared.append(difference);
+            } else if (difference.appearsOnlyInBaseline()) {
+                disappeared.append(difference);
+            } else {
+                changed.append(difference);
+            }
+        }
+
+        orderedDifferences =
+            sortedComparisonValues(appeared);
+
+        orderedDifferences +=
+            sortedComparisonValues(disappeared);
+
+        orderedDifferences +=
+            sortedComparisonValues(changed);
+    } else {
+        orderedDifferences =
+            sortedComparisonValues(dimension.differences);
+    }
+
+    QString previousGroup;
+
+    for (const auto &difference : orderedDifferences) {
+        if (groupByChange) {
+            const QString group =
+                difference.appearsOnlyInComparison()
+                    ? QStringLiteral("Appeared")
+                    : difference.appearsOnlyInBaseline()
+                          ? QStringLiteral("Disappeared")
+                          : QStringLiteral("Changed");
+
+            if (group != previousGroup) {
+                out
+                    << "<tr class=\"comparison-difference-group\">"
+                    << "<th colspan=\"4\">"
+                    << escaped(group)
+                    << "</th></tr>";
+
+                previousGroup = group;
+            }
+        }
         out
             << "<tr>"
             << "<td>"
@@ -1311,9 +1453,15 @@ void appendComparisonCustomFields(
                 &field
             : customFields.categoricalFields
             ) {
+            const QVector<InvestigationValueDifference>
+                orderedValues =
+                sortedComparisonValues(
+                    field.changedValues
+                    );
+
             for (
                 const InvestigationValueDifference &difference
-                : field.changedValues
+                : orderedValues
                 ) {
                 QString changeText;
 
@@ -1742,7 +1890,8 @@ void appendComparison(
         QStringLiteral(
             "Event-code comparison is unavailable because "
             "event-code data is not populated in both sessions."
-            )
+            ),
+        true
         );
 
     appendComparisonDimension(
@@ -4120,6 +4269,13 @@ footer {
 .preserve-whitespace {
     white-space: pre-wrap;
     overflow-wrap: break-word;
+}
+
+.comparison-difference-group th {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.8rem;
+    text-transform: uppercase;
 }
 
 .burst-table {
