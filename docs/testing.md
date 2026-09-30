@@ -1,8 +1,8 @@
 # Testing TraceScope
 
-This document describes TraceScope's automated test organization, continuous integration, and reproducible manual verification. It is intended for contributors changing the code or evaluating the engineering approach, not as an assertion that every behavior is automatically tested.
+This document describes TraceScope's automated test organization, continuous integration, manual scenario testing, and release verification. It is intended for contributors changing the code or evaluating how behavior is verified, not as an assertion that every possible source file, display environment, or user workflow is automatically tested.
 
-**Documentation baseline:** Phase 16 source on `phase-16-final-polish` at commit `8011035`. The reviewed `tests/CMakeLists.txt` declares **92 CTest test executables**; this is a count of registered test programs, **not** individual test cases, a code-coverage percentage, or a claim that this documentation run executed them. Revisit the test inventory after the planned targeted development pass.
+The current test configuration in [`tests/CMakeLists.txt`](../tests/CMakeLists.txt) registers **92 CTest test programs**. This is a count of registered executables, not individual QTest functions, a code-coverage percentage, or a quality score.
 
 ## Find the information you need
 
@@ -12,42 +12,54 @@ This document describes TraceScope's automated test organization, continuous int
 | Build or run the complete or selected suite | [2. Running automated tests](#2-running-automated-tests) |
 | Understand the GitHub Actions gates | [3. Continuous integration](#3-continuous-integration) |
 | Repeat realistic live-follow tests | [4. Manual scenario testing](#4-manual-scenario-testing) |
-| Verify a release and interpret test claims | [5. Release verification](#5-release-verification) |
+| Understand release-level verification | [5. Release verification](#5-release-verification) |
 | Add appropriate tests with a change | [6. Test development guidelines](#6-test-development-guidelines) |
 
 ## 1. Testing approach and coverage
 
-TraceScope uses **Qt Test / QTest**, CMake and CTest. Most automated tests exercise focused non-UI classes using controlled inputs. Selected tests also exercise Qt models, dialogs, document host behavior, or integration across multiple services. The source of truth for registered test programs is [`tests/CMakeLists.txt`](../tests/CMakeLists.txt).
+TraceScope uses **Qt Test / QTest**, CMake, and CTest. Most automated tests exercise focused domain, importer, analysis, persistence, or policy classes using deterministic inputs. Other suites exercise Qt models, dialogs, document hosts, source lifecycle behavior, or integration across several services.
 
-Each test program is a separate executable registered with CTest. The following groups indicate the current areas of coverage; examples are representative, not an exhaustive inventory.
+Each registered CTest program is a separate executable and may contain multiple QTest functions. [`tests/CMakeLists.txt`](../tests/CMakeLists.txt) is the source of truth for the current automated inventory.
+
+The following groups describe the major areas covered by the suite. Test names are representative rather than exhaustive.
 
 | Area | Representative test programs | What they help protect |
 | --- | --- | --- |
-| Domain, parsing, and profile rules | `InvestigationRecordTests`, `RecordSeverityTests`, `ImportProfileSerializationTests`, `ImportProfileValidatorTests` | Optional fields, severity conversion, schema round-trips, invalid configurations |
-| Importers and preview | `JsonLinesImporterTests`, `StructuredJsonImporterTests`, `XmlImporterTests`, `SyslogImporterTests`, `IisW3cImporterTests`, `ImportPreviewServiceTests`, `SourceFamilyImportServiceTests` | Input structures, normalization, diagnostics, record limits, preview and ordered source families |
-| Table, filters, and investigation logic | `InvestigationTableModelTests`, `InvestigationFilterProxyModelTests`, `InvestigationControllerTests`, `FilterPresetStoreTests` | Dynamic columns, model/proxy mapping, sorting, filters and saved presets |
-| Analysis | `EventTimelineAnalyzerTests`, `InvestigationAnalyticsAnalyzerTests`, `InvestigationBurstAnalyzerTests`, `InvestigationCadenceAnalyzerTests`, `InvestigationSessionComparisonAnalyzerTests` | Deterministic event summaries, buckets, bursts, timing and comparison calculations |
-| Findings and output | `InvestigationFindingExportSnapshotBuilderTests`, `InvestigationFindingsCsvExporterTests`, `InvestigationReportSnapshotBuilderTests`, `InvestigationReportHtmlRendererTests` | Selection, frozen report data, structured exports and safe HTML rendering |
-| Workspace and continuity | `InvestigationSessionBackingTests`, `InvestigationSessionRestorationServiceTests`, `WorkspaceSavePackageServiceTests`, `WorkspaceDocumentHostTests` | Backing transitions, reconstruction/recovery, durable package construction and document behavior |
-| Live following and physical sources | `LiveFileFollowerTests`, `LiveSessionFollowCoordinatorTests`, `LiveStructuredJsonImportAdapterTests`, `LiveStructuredXmlImportAdapterTests`, `SourcePhysicalIdentityTests` | Growth, record framing, generation changes, format adapters and continuity |
-| Standalone generator | `LiveLogScenarioLoaderTests`, `LiveLogScenarioPlayerTests`, `LogRecordRendererFactoryTests`, individual renderer test programs | Deterministic scenario parsing/playback and output format behavior |
+| Domain, parsing, and profile rules | `InvestigationRecordTests`, `RecordSeverityTests`, `ImportProfileTests`, `ImportProfileSerializationTests`, `ImportProfileValidatorTests` | Optional normalized fields, severity handling, profile structure, validation, and schema round trips |
+| Importers, preview, and source access | `JsonLinesImporterTests`, `StructuredJsonImporterTests`, `XmlImporterTests`, `SyslogImporterTests`, `IisW3cImporterTests`, `ImportPreviewServiceTests`, `SourceFamilyImportServiceTests`, `SharedReadFileTests` | Format normalization, diagnostics, bounded preview, rotated source families, and passive access to producer-owned files |
+| Table, filters, navigation, and layout policy | `InvestigationTableModelTests`, `InvestigationFilterProxyModelTests`, `InvestigationControllerTests`, `FilterPresetStoreTests`, `InvestigationSectionResizePolicyTests` | Dynamic columns, source/proxy mapping, filters, navigation state, presets, and deterministic constrained-height behavior |
+| Analysis and comparison | `EventTimelineAnalyzerTests`, `InvestigationAnalyticsAnalyzerTests`, `InvestigationBurstAnalyzerTests`, `InvestigationCadenceAnalyzerTests`, `InvestigationSessionComparisonAnalyzerTests`, `InvestigationComparisonSnapshotBuilderTests`, `InvestigationComparisonPersistenceTests` | Timeline aggregation, issue metrics, cadence and bursts, independently time-scoped comparisons, immutable capture, and persistence |
+| Findings, reporting, and export | `InvestigationFindingExportSnapshotBuilderTests`, `InvestigationFindingsCsvExporterTests`, `InvestigationReportSelectionModelTests`, `InvestigationReportSessionSnapshotBuilderTests`, `InvestigationReportSnapshotBuilderTests`, `InvestigationReportHtmlRendererTests` | Findings selection, report capture boundaries, frozen analytical state, structured export, and escaped/self-contained HTML rendering |
+| Workspace and evidence continuity | `InvestigationSessionBackingTests`, `InvestigationSessionBackingPersistenceSerializationTests`, `InvestigationSessionRestorationServiceTests`, `InvestigationSessionSnapshotSerializationTests`, `WorkspaceSerializationTests`, `WorkspaceSavePackageServiceTests`, `WorkspaceDocumentHostTests` | Backing modes, versioned persistence, recovery and reconciliation, save-package durability, document ownership, and cross-window movement |
+| Live following and physical-source identity | `LiveFileFollowerTests`, `LiveSessionFollowCoordinatorTests`, `LiveLineImportAdapterTests`, `LiveStructuredJsonImportAdapterTests`, `LiveStructuredXmlImportAdapterTests`, `LiveLineSourceContextTests`, `SourcePhysicalIdentityTests` | Appends, partial records, generation changes, format-specific incremental parsing, source continuity, and safe observation of changing files |
+| Standalone Live-Log Generator | `LiveLogScenarioLoaderTests`, `LiveLogScenarioPlayerTests`, `LogRecordRendererFactoryTests`, and renderer-specific suites | Deterministic scenario parsing/playback and source-format rendering used for real-file live-follow verification |
 
-Concrete test examples visible in the reviewed tree include open structured JSON arrays with incomplete trailing records, structured XML and Windows Event XML growth, session-comparison snapshots remaining unchanged after live appends and reloads, and workspace package validation before writing. The section-resize-policy suite separately exercises constrained-height layout transitions; it does not replace visual testing on actual displays.
+Several v1.0 behaviors deliberately have tests at more than one layer. For example:
+
+- `SharedReadFileTests` verify that TraceScope's read handle does not prevent an external writer from continuing to write and, where the platform supports the operation, remove or rename the source while the TraceScope handle remains open.
+- comparison tests cover complete-session capture, independently selected time ranges, invalid or empty ranges, persistence, and the rule that an existing comparison does not change after later live additions to its source sessions.
+- workspace document-host tests cover ownership-preserving transfers and movement between visible peer windows rather than treating detached windows as disposable copies of documents.
+- `InvestigationSectionResizePolicyTests` exercise automatic shrink/growth and collapse/recovery rules independently from the widget hierarchy.
+
+These focused tests complement rather than replace end-to-end and visual verification.
 
 ### Test boundaries
 
-A green unit or component suite establishes the behaviors asserted by those tests, not complete correctness for every source file, display configuration or user workflow. In particular:
+A green automated suite establishes the behaviors asserted by those tests. It does not imply complete correctness for every external input or environment.
 
-- Importing complex third-party logs requires representative source files and the actual matching profile. Passing a parser fixture cannot validate an unknown customer's source format.
-- Live file behavior also depends on file-system timing, concurrent writes, partial records, rotation naming, file access and the user's operating system.
-- Qt GUI behavior depends on font metrics, display scaling, accessibility, window geometry and focus transitions; some of these require hands-on checks.
-- Package success depends on deployed runtime libraries and launching the **packaged artifact**, not merely running the development executable.
+Important boundaries include:
 
-There is no published automated line/branch coverage percentage in this documentation. Do not interpret the number of CTest targets as such a metric.
+- **Source formats:** parser and profile fixtures cannot validate an arbitrary third-party log whose actual structure has not been inspected.
+- **Concurrent files:** live behavior depends on producer timing, partial writes, truncation, replacement, rotation, filesystem semantics, and operating-system file sharing. Deterministic source-lifecycle tests reduce risk but do not reproduce every external producer.
+- **GUI presentation:** font metrics, native window frames, fractional DPI, accessibility settings, monitor geometry, and focus behavior require real desktop verification in addition to policy/model tests.
+- **Packaging:** building the development executable does not establish that a deployed ZIP, AppImage, or Live-Log Generator package contains every required runtime dependency or starts correctly.
+- **Performance:** functional tests do not establish throughput, latency, or maximum supported file size. Measured observations belong in [Performance Notes](performance.md).
+
+TraceScope does not publish a line- or branch-coverage percentage. The number of registered CTest programs should not be interpreted as one.
 
 ## 2. Running automated tests
 
-Build TraceScope using a supported Qt 6 desktop kit with **Qt Widgets, Qt Charts, Qt Concurrent and Qt Test**, CMake 3.21 or later, and a compatible C++17 compiler. Follow [Building from Source](building-from-source.md) first if the project has not been configured on this machine.
+Build TraceScope using a supported Qt 6 desktop kit with **Qt Widgets, Qt Charts, Qt Concurrent, and Qt Test**, CMake 3.21 or later, and a compatible C++17 compiler. See [Building from Source](building-from-source.md) for the complete development setup.
 
 From the repository root after configuration:
 
@@ -56,20 +68,29 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-To list registered tests or run a subset:
+To list the registered programs or run a subset:
 
 ```sh
 ctest --test-dir build -N
 ctest --test-dir build -R 'LiveSessionFollowCoordinatorTests|LiveFileFollowerTests' --output-on-failure
 ctest --test-dir build -R 'ImportProfile|Importer|ImportPreview' --output-on-failure
+ctest --test-dir build -R 'InvestigationComparison|ReportSnapshot|ReportHtml' --output-on-failure
 ```
 
-CTest's `-R` matches **registered test-executable names**. For an individual QTest function, consult that executable's QTest command-line support or run the program directly; CTest is primarily used for the complete registered suite.
+CTest's `-R` option matches **registered test-program names**. A single registered executable may contain several QTest functions. To target an individual QTest function, run that test executable directly using QTest's command-line selection support.
 
-**Headless/CI-compatible execution:** The GitHub workflow sets `QT_QPA_PLATFORM=offscreen` for its test step. If a GUI-related test fails solely because a desktop/display server is unavailable, try the same environment before assuming an application defect:
+### Offscreen execution
+
+The GitHub Actions jobs run the test suite with:
+
+```text
+QT_QPA_PLATFORM=offscreen
+```
+
+The same setting is useful when running GUI-dependent test programs in an environment without a normal display server.
 
 ```sh
-# Bash (Linux or a compatible shell)
+# Bash
 QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
 ```
 
@@ -79,76 +100,135 @@ $env:QT_QPA_PLATFORM = 'offscreen'
 ctest --test-dir build --output-on-failure
 ```
 
-Use a fresh build directory after switching compiler families, incompatible Qt installations or major configuration options. On Windows, building with the same MinGW toolchain as the selected Qt kit avoids mixing incompatible runtime/ABI versions.
+Offscreen execution verifies program logic that depends on Qt GUI classes; it does not substitute for manual visual testing of native windows, display scaling, or constrained layouts.
 
-When diagnosing a failure, preserve the failing test name, assertion output, platform, Qt version and exact source/branch revision. Then reproduce with that specific test before attempting the entire suite again.
+Use a fresh build directory after switching compiler families, incompatible Qt installations, or major CMake configuration options. On Windows, the compiler must remain ABI-compatible with the selected Qt kit.
+
+When diagnosing a failure, preserve the registered test name, failing QTest function where available, assertion output, operating system, Qt/toolchain version, and source revision. Reproduce the focused failure before rerunning the entire suite.
 
 ## 3. Continuous integration
 
-The reviewed workflow, [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), runs on **push**, **pull request**, and **manual workflow dispatch**. It contains three jobs:
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on **push**, **pull request**, and **manual workflow dispatch**. The v1.0 workflow builds and verifies the application on Windows and Linux and produces the release-oriented application, Live-Log Generator, and sample artifacts.
 
-| Job | Environment | Current automated checks |
+The CI build type is **Release**, and the automated platform builds use Qt **6.10.3**.
+
+| Area | Environment | Automated checks and artifacts |
 | --- | --- | --- |
-| Windows build/test/package | GitHub-hosted Windows, Qt **6.10.3** with matching 64-bit MinGW | CMake/Ninja Release build, complete CTest suite, `windeployqt`, required-file verification, portable ZIP startup smoke test |
-| Linux build/test/package | **Ubuntu 22.04**, GCC, Qt **6.10.3** | CMake Release build, complete CTest suite, pinned `linuxdeploy` tooling, AppDir/AppImage checks, offscreen packaged AppImage startup smoke test |
-| Samples package | Ubuntu 22.04 | Required sample/profile file checks, neutral samples ZIP creation and archive-entry verification |
+| Windows application | GitHub-hosted Windows with matching 64-bit MinGW and Qt 6.10.3 | CMake/Ninja Release build, complete CTest suite with the offscreen Qt platform, `windeployqt`, required-file checks, portable application ZIP creation, extraction, and startup smoke test |
+| Linux application | Ubuntu 22.04 with GCC and Qt 6.10.3 | CMake Release build, complete CTest suite with the offscreen Qt platform, pinned `linuxdeploy` tooling, AppDir/AppImage verification, and packaged AppImage startup smoke test |
+| Live-Log Generator | Windows and Linux release packaging | Separate convenience packages containing the standalone generator and launcher, required runtime files, and package/startup verification |
+| Samples | Ubuntu 22.04 | Required source/profile validation, complete samples archive creation, archive-content checks, and source-versus-package file-count verification |
 
-The build configuration in the reviewed workflow is **Release**. The Windows and Linux test jobs set `QT_QPA_PLATFORM=offscreen`. Packaging runs after the build/tests within each platform job. The platform jobs smoke-test the *extracted/deployed application* by starting it briefly; this checks startup and key packaging dependencies, **not** interactive behavior or extended investigation scenarios.
+The Windows and Linux application jobs execute the complete CTest registration for the configured build. A failure in a registered test prevents that platform job from proceeding as a successful release build.
 
-The workflow is currently versioned for the `v0.16.0` artifacts and must be updated and rerun for the final v1.0 candidate. CI results and uploaded workflow artifacts are build evidence, not a substitute for separately approving and publishing a GitHub Release. Consult the workflow itself before claiming a particular run passed; this document describes configured checks rather than reporting a live CI result.
+Packaging checks deliberately run against **deployed artifacts**, not only the executable in the build tree. The application smoke tests extract or launch the produced package and verify that the process can start with its deployed runtime dependencies. These are startup checks, not substitutes for interactive investigation testing.
+
+The Live-Log Generator is packaged separately from TraceScope because it is an independent test and demonstration utility rather than part of the application runtime. TraceScope communicates with it only through the physical files the generator writes.
+
+Release artifacts use the v1.0 version identity rather than earlier prerelease package names.
+
+GitHub Actions establishes reproducible build/test/package gates. It does not by itself establish every manual acceptance criterion described below.
 
 ## 4. Manual scenario testing
 
-Some of the highest-value regression checks involve an external process changing a real file while TraceScope is reading it. For this purpose, the repository includes a separate deterministic **Live-Log Generator** (CLI and Qt Widgets launcher) under `tools/live-log-generator/`, with scenarios under `samples/live/`.
+Some of TraceScope's most important behaviors depend on an independent process modifying a real file while TraceScope observes it. The repository therefore includes the standalone deterministic **Live-Log Generator** under `tools/live-log-generator/`, with reusable scenarios under `samples/live/`.
 
-The generator's boundary is intentional: it produces ordinary physical files, and TraceScope has **no knowledge of the generating process**. Test the real file-follow path rather than a direct injection hook.
+The generator's separation from TraceScope is intentional:
 
-A focused manual session should include:
+```text
+scenario → generator → physical file → TraceScope
+```
 
-1. **Baseline import:** Open a representative sample with the matching bundled profile. Confirm a recognizable first/last record, mapped dynamic fields, and correct import counts.
-2. **Follow and incomplete records:** Start live following on the generator's output; check that complete records appear and that a deliberately partial trailing record is not admitted prematurely.
-3. **Pause/resume/stop:** Verify control state and the expected treatment of content added while paused or between follow sessions.
-4. **Physical lifecycle:** Exercise the scenario's supported truncation, same-path replacement or rotation case. Inspect source generations, rotated-family membership and record provenance separately.
-5. **Continuity:** Save an investigation snapshot/workspace when evidence matters. Where relevant, reopen after a source changes or is unavailable, and choose explicit source-reconnection/authority actions deliberately.
-6. **Presentation/output:** Verify filtering, timeline, findings, annotations, comparisons and HTML/CSV export on the resulting investigation, especially after longer runs.
+TraceScope has no direct integration with the generator and cannot distinguish generator output from a file written by another application.
 
-Use the scenario suited to the question rather than combining unrelated failure modes into a single ambiguous test:
+A representative manual live-follow session covers the following areas.
+
+1. **Baseline import**  
+   Open a representative source with its matching profile and confirm recognizable records, expected mapped fields, source provenance, and import counts.
+
+2. **Passive source access**  
+   Keep TraceScope attached to the source while the generator continues writing. Exercise source lifecycle operations supported by the scenario—append, rename/rotation, truncation, or replacement—and confirm TraceScope does not require the producer to stop or surrender ownership of its file.
+
+3. **Incomplete records**  
+   Verify that a deliberately partial trailing record or structured fragment is not admitted until the source content completes it.
+
+4. **Pause, resume, and stop**  
+   Confirm the expected control state and treatment of content written while following is paused or between follow sessions.
+
+5. **Physical lifecycle and provenance**  
+   Exercise truncation, same-path replacement, and rotated source families as separate concepts. Verify source-generation changes and physical-file provenance rather than treating rotation as a generation change.
+
+6. **Evidence continuity**  
+   Save snapshots and workspaces where appropriate. Verify source-unavailable recovery, SnapshotBacked and Hybrid behavior, source reconnection, and explicit source-authority transitions without silently discarding preserved evidence.
+
+7. **Investigation and comparison behavior**  
+   Exercise filtering, findings, annotations, timeline/analytics, and comparison capture after the live run. For time-scoped comparisons, verify that each side retains its independently captured range and that subsequent live records do not change an existing comparison.
+
+8. **Reporting and export**  
+   Produce CSV and HTML output from the resulting investigation. Confirm that a generated report represents its captured state rather than continuing to change with the live session.
+
+Use the scenario that isolates the behavior under test rather than combining unrelated source-lifecycle changes into one ambiguous run.
 
 | Scenario | Intended focus |
 | --- | --- |
-| `field-gateway-live-scenario.json` | Rising latency, retries, partial records, in-place truncation and recovery |
+| `field-gateway-live-scenario.json` | Rising latency, retries, partial records, in-place truncation, and recovery |
 | `warehouse-sync-deployment-rotation-live-scenario.json` | Replacement, catch-up traffic, and multiple rotations |
-| `checkout-api-healthy-baseline-live-scenario.json` and `checkout-api-payment-regression-live-scenario.json` | Meaningful baseline/regression comparison, including error bursts |
-| `web-access-live-scenario.json` | Web-access renderers and corresponding access-log investigation |
+| `checkout-api-healthy-baseline-live-scenario.json` and `checkout-api-payment-regression-live-scenario.json` | Baseline/regression comparison, including error bursts |
+| `web-access-live-scenario.json` | Web-access rendering and access-log investigation |
 
-The generator supports multiple renderer families, but not every format can preserve every semantic scenario field. Use its documented capability matrix and the matching profile; do not assume a format like RFC 3164 or Apache access logs carries every field present in the source scenario. See [Live-Log Generator](live-log-generator.md) and [Supported Formats](supported-formats.md).
+The generator supports multiple renderer families, but not every output format can represent every semantic field in a scenario. Use the documented renderer capabilities and matching TraceScope profiles rather than assuming that formats such as RFC 3164 or access logs preserve the same normalized fields as JSON or XML.
 
-**Safety of test material:** Generate into a disposable directory, not a real diagnostic source that must be preserved. Keep saved `.tsinv` and workspace sidecars when reproducing source-data continuity behavior.
+See [Live-Log Generator](live-log-generator.md), [Live Following](live-following.md), and [Supported Formats](supported-formats.md).
+
+Generate test output into a disposable directory rather than an important diagnostic source. Preserve the corresponding `.tsinv`, `.tsw`, and managed session snapshots when the purpose of a reproduction is evidence continuity.
 
 ## 5. Release verification
 
-Before approving a new version, run the automated suite **and** check behavior that CI does not fully establish:
+The v1.0 release combines automated CI gates with manual acceptance checks that are difficult or inappropriate to reduce to headless tests.
 
-- Confirm a clean build and complete CTest result on the intended release revision; inspect Windows and Linux job results individually.
-- Extract and launch the actual Windows portable ZIP and Linux AppImage; verify bundled sample/profile files and at least one representative import on each target platform when available.
-- Exercise saved workspace and snapshot recovery when an external file is unavailable or has changed. Verify an existing captured comparison and a report generated after restoration.
-- Run representative manual live-follow playback, including partial writes, a source generation change, and a rotated source family.
-- Check high-DPI/fractional-scale and constrained-window layouts in a real desktop session; offscreen CI cannot establish their visual correctness.
-- Update release artifact versions, screenshots, performance claims and this document only after evidence from the actual release candidate.
+Release verification includes:
 
-Current measured performance observations and test-machine details are recorded in [Performance Notes](performance.md). Preserve the original test conditions if adding new measurements; do not silently present historical runs as a new-version benchmark.
+- a clean Release build and complete CTest run on the v1.0 revision on both Windows and Linux CI environments
+- successful creation and startup smoke testing of the Windows portable package and Linux AppImage
+- successful creation and verification of the separate Windows and Linux Live-Log Generator convenience packages
+- verification of the packaged sample/profile collection and at least one representative import from the deployed application
+- manual live-follow playback covering partial writes, producer-safe shared reading, a same-path generation change, and a rotated source family
+- save/reopen and missing-source recovery for workspace and standalone snapshot evidence
+- SnapshotBacked/Hybrid continuity and an explicit return to source authority
+- complete-session and independently time-scoped comparison capture, including confirmation that captured comparisons remain unchanged after later session mutations
+- HTML report generation from restored/captured state and offline review of the resulting document
+- multi-window document movement and workspace restoration across peer windows
+- real-desktop checks for native/fractional DPI behavior, Interface Scale changes, constrained-height section behavior, focus/navigation, and the final major UI surfaces
+- review of the packaged application rather than only the development build
+
+The release workflow distinguishes between **configured checks** and **evidence from a particular run**. When documenting or diagnosing a release, identify the source revision and the CI/manual verification that actually produced the result rather than inferring success merely from the existence of the workflow.
+
+Measured performance observations and their test environment are documented separately in [Performance Notes](performance.md). Release verification uses fresh measurements where a v1.0 performance claim depends on them rather than treating earlier development measurements as automatically representative.
 
 ## 6. Test development guidelines
 
-1. **Put correctness rules in testable classes where practical.** A focused domain/importer/analyzer/persistence test is generally easier to make deterministic than one that drives an entire main window.
-2. **Test boundaries as well as happy paths.** Useful cases include missing canonical fields, malformed and partial input, duplicate values, cancellation, source rotation/replacement, incompatible snapshots, and failed saves.
-3. **Preserve provenance and immutable-artifact semantics.** For reload and live-follow changes, test existing annotations and earlier admitted evidence. For comparison/report changes, check that previously captured output does not silently change after source/session mutations.
-4. **Pair each new format or generator renderer with tests and a readable sample.** Keep parsing, profile mapping, preview, runtime following and renderer behavior separate where they express different contracts.
-5. **Check platform/UI boundaries manually.** Record precise reproduction steps and the intended display/toolchain configuration for visual or timing issues; add deterministic policy/model tests for logic extracted from UI code.
-6. **Register new suites in `tests/CMakeLists.txt`.** Verify the relevant named test locally, then run the complete suite before the user's normal PR/merge workflow.
+1. **Put deterministic correctness rules in focused classes where practical.**  
+   Import parsing, source identity, analysis, persistence, comparison capture, and layout policy are easier to verify reliably when their rules are not buried inside a complete window interaction.
 
-For architectural ownership and starting points, see [Architecture](architecture.md). For local development prerequisites, see [Building from Source](building-from-source.md).
+2. **Test boundaries and failure behavior, not only successful inputs.**  
+   Relevant cases include missing canonical fields, malformed and partial source data, cancellation, empty selections, invalid comparison ranges, source truncation/replacement, incompatible persistence, failed saves, and unavailable external sources.
 
----
+3. **Treat producer-owned source access as a contract.**  
+   Code that reads external logs should preserve the passive shared-read boundary. Tests should verify that TraceScope does not unnecessarily prevent the producer from continuing normal write, rotation, rename, replacement, or removal behavior supported by the platform.
 
-**After the targeted development pass:** Re-evaluate this guide's test inventory and CI/version references; add focused regression tests for whichever deferred fixes are actually implemented. Planned changes are not current test coverage.
+4. **Preserve evidence-authority semantics.**  
+   Changes to reload, live following, restoration, or source reconciliation should test which evidence remains authoritative and ensure that earlier admitted or saved evidence is not discarded as an accidental side effect.
+
+5. **Preserve immutable-artifact semantics.**  
+   Comparison tests should verify captured scope and analysis after later session changes. Report tests should verify that rendering consumes frozen report data rather than mutable session state.
+
+6. **Pair new source formats and generator renderers with readable examples.**  
+   Keep parsing, profile mapping, preview, incremental/live behavior, and generator rendering separately testable where they express different contracts.
+
+7. **Test workspace ownership separately from window appearance.**  
+   Document-transfer and persistence logic belongs in deterministic host/layout tests; native frame behavior, display scaling, visual spacing, and focus still require manual desktop regression checks.
+
+8. **Register new suites with CTest and run both focused and complete verification.**  
+   Add the executable and `add_test` registration in `tests/CMakeLists.txt`, run the affected program while developing, and run the complete suite before merging.
+
+For subsystem ownership and extension points, see [Architecture](architecture.md). For compiler, Qt, CMake, and local configuration details, see [Building from Source](building-from-source.md).
