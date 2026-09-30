@@ -1,193 +1,747 @@
 # Supported Log Formats in TraceScope
 
-TraceScope imports local log files into a common investigation view. The **Format** selected in **Import Configuration** determines how records are read; an **import profile** determines which source values become timestamps, severities, messages, other familiar investigation fields, and source-specific attributes.
+TraceScope imports supported file-based log formats into a common investigation model. The selected **Format** determines how source records are read; an **import profile** determines how the values extracted from those records map to TraceScope's canonical and custom fields.
 
-Use this reference to choose an importer and check its expected input. For the complete process of opening, previewing, and configuring a file, see [Importing Logs](importing-logs.md). If you are opening TraceScope for the first time, start with [Getting Started](getting-started.md).
+This reference describes the built-in importer families, recognized layouts, source requirements, bundled examples, and Live Following compatibility in TraceScope v1.0.
 
-**Having trouble identifying or importing a format?** [Jump straight to Troubleshooting](#troubleshooting).
+For the step-by-step import workflow, see [Importing Logs](importing-logs.md). For profile fields and mapping rules, see [Import Profiles](import-profiles.md).
+
+**Having trouble identifying a format or source layout?** [Jump straight to Troubleshooting](#troubleshooting).
 
 ## Find the information you need
 
 | I want to... | Go to |
 | --- | --- |
-| Identify an available format and its importer | [Supported formats at a glance](#1-supported-formats-at-a-glance) |
-| Check how TraceScope suggests an importer | [Format suggestions and file extensions](#2-format-suggestions-and-file-extensions) |
-| Understand what a particular importer expects | [Format-specific requirements](#3-format-specific-requirements) |
-| Find a sample file and matching profile | [Bundled format examples](#4-bundled-format-examples) |
-| Check which formats work with live files | [Live Following compatibility](#5-live-following-compatibility) |
-| Understand what a valid import may still be missing | [Field availability and import limitations](#6-field-availability-and-import-limitations) |
-| Fix a format-specific problem | [Troubleshooting](#troubleshooting) |
+| See every built-in importer | [1. Supported formats at a glance](#1-supported-formats-at-a-glance) |
+| Understand automatic format suggestions | [2. Format suggestions](#2-format-suggestions) |
+| Check the requirements of a specific format | [3. Format reference](#3-format-reference) |
+| Find a matching sample and profile | [4. Bundled examples](#4-bundled-examples) |
+| Check Live Following support | [5. Live Following compatibility](#5-live-following-compatibility) |
+| Understand field and format limitations | [6. Field availability and limitations](#6-field-availability-and-limitations) |
 
 ## 1. Supported formats at a glance
 
-TraceScope includes nine built-in importers. Some familiar log layouts are recognized through **presets** for an existing importer rather than through separate parsers.
+TraceScope v1.0 contains **nine built-in importer families**.
 
-| Format in TraceScope | Importer ID | Expected source | Example |
+Some familiar source layouts use a preset or profile over one of those importers rather than a separate parser.
+
+| Format | Importer ID | Source model | Typical extensions |
 | --- | --- | --- | --- |
-| **JSON Lines** | `json-lines` | One JSON object per line; commonly `.jsonl` or `.ndjson` | [Order Fulfillment](../samples/order-fulfillment-incident.jsonl) |
-| **Structured JSON** | `structured-json` | A JSON object, an array of record objects, or an object containing a selected record array; commonly `.json` | [Nested structured JSON](../samples/structured-json-nested-session.json) |
-| **CSV** | `csv` | Comma-separated records with a header row; commonly `.csv` | [Service session CSV](../samples/service-session.csv) |
-| **TSV** | `tsv` | Tab-separated records with a header row; commonly `.tsv` | [Telemetry batch TSV](../samples/telemetry-batch.tsv) |
-| **Key-Value / logfmt** | `key-value` | Line-oriented `key=value` fields, including supported quoted values; often `.log` or `.txt` | [Field Gateway](../samples/field-gateway-known-good.log) |
-| **Syslog (RFC 5424 / RFC 3164)** | `syslog` | Text records following either supported Syslog layout; commonly `.log` or `.syslog` | [RFC 5424 sample](../samples/syslog-rfc5424-session.log) |
-| **IIS W3C Extended Log** | `iis-w3c` | IIS-style text with a `#Fields:` header; commonly `.log` | [IIS W3C sample](../samples/iis-w3c-access.log) |
-| **Structured XML** | `xml` | XML with a document-root record or records selected by element path; commonly `.xml` | [Engineering session XML](../samples/structured-engineering-session.xml) |
-| **Regex Plain Text** | `regex-text` | One text record per line, parsed using a configured regular expression with named captures; often `.log` or `.txt` | [General application log](../samples/general-application.log) |
+| **JSON Lines** | `json-lines` | One JSON object per physical record line | `.jsonl`, `.ndjson`, `.log` |
+| **Structured JSON** | `structured-json` | One JSON document containing an object or record collection | `.json` |
+| **CSV** | `csv` | Header-based comma-separated records | `.csv` |
+| **TSV** | `tsv` | Header-based tab-separated records | `.tsv` |
+| **Key-Value / logfmt** | `key-value` | One line containing named `key=value` assignments | `.log`, `.txt` |
+| **Syslog (RFC 5424 / RFC 3164)** | `syslog` | One supported Syslog message per line | `.log`, `.syslog` |
+| **IIS W3C Extended Log** | `iis-w3c` | Header-driven IIS W3C text records | `.log` |
+| **Structured XML** | `xml` | XML document root or selected record elements | `.xml` |
+| **Regex Plain Text** | `regex-text` | One text record per line interpreted by a configured regular expression | `.log`, `.txt` |
 
-**Note:** `.log` and `.txt` can contain several different log formats. See [Format suggestions and file extensions](#2-format-suggestions-and-file-extensions) for details.
+### Recognized layouts built on these importers
 
-**Recognized layouts, not extra importers:** Apache Common and Apache/Nginx Combined access logs use supplied **Regex Plain Text** presets. Windows Event XML uses **Structured XML** with an appropriate record path and field mappings. Native binary Windows `.evtx` files are **not** directly supported.
+The following layouts are supported through profiles or presets rather than separate importer families:
 
-These are source-import formats. A saved TraceScope workspace (`.tsw`) or standalone investigation snapshot (`.tsinv`) is a separate TraceScope artifact, opened using its own application command; neither is a log-import format. See [Saving and Restoring](saving-and-restoring.md) for details.
-
-## 2. Format suggestions and file extensions
-
-When you select a file, **Likely format** offers a starting point. TraceScope uses recognizable extensions for several formats and can examine representative content for certain text formats.
-
-| Source indicator | Typical suggestion |
+| Layout | Underlying importer |
 | --- | --- |
-| `.jsonl` or `.ndjson` | JSON Lines |
+| Apache Common Access Log | Regex Plain Text |
+| Apache Combined Access Log | Regex Plain Text |
+| Nginx Combined Access Log | Regex Plain Text |
+| Windows Event XML | Structured XML |
+
+Windows Event support applies to **XML-formatted events and event collections**. Native binary Windows `.evtx` files are not directly imported.
+
+### TraceScope artifacts are not log formats
+
+The following are application persistence formats rather than source-log import formats:
+
+- `.tsinv` — saved investigation evidence
+- `.tsw` — saved workspace manifest
+
+Open those using TraceScope's investigation/workspace commands rather than Import Configuration. See [Saving and Restoring](saving-and-restoring.md).
+
+## 2. Format suggestions
+
+When a source file is selected, TraceScope may show a **Likely format** and, where appropriate, a matching built-in preset.
+
+Suggestions are advisory. The selected importer and profile remain the authority for how a source is interpreted.
+
+### Extension-based suggestions
+
+| Source indicator | Suggested family |
+| --- | --- |
+| `.jsonl`, `.ndjson` | JSON Lines |
 | `.json` | Structured JSON |
-| `.csv` or `.tsv` | CSV or TSV |
-| `.xml` | Structured XML; a recognizable Windows Event XML document or collection can also select a Windows Event preset |
+| `.csv` | CSV |
+| `.tsv` | TSV |
+| `.xml` | Structured XML, with Windows Event XML recognition when applicable |
 | `.syslog` | Syslog |
-| Suitable content in a generic text file | JSON Lines, Syslog, Key-Value / logfmt, IIS W3C, or a recognized Apache/Nginx access-log preset, depending on the content |
 
-A `.log` or `.txt` extension does not identify a unique format. The suggestion process samples only part of the file and may not recognize custom or mixed-content logs. **Always inspect the selected Format, profile, Validation, and Source Record Preview** before importing. You can choose an importer or load a profile manually even when TraceScope suggests something else.
+Extensions such as `.log` and `.txt` are not specific enough to identify one importer.
 
-For the exact UI procedure, see [Import a log file](importing-logs.md#1-import-a-log-file) and [Verify the preview and validation](importing-logs.md#5-verify-the-preview-and-validation).
+### Content-based suggestions
 
-## 3. Format-specific requirements
+For generic text files, TraceScope can inspect representative source content and recognize patterns such as:
+
+- JSON objects on successive lines
+- Key-Value / logfmt assignments
+- RFC 5424 or RFC 3164 Syslog
+- IIS W3C `#Fields:` declarations
+- Apache Common access logs
+- Apache/Nginx Combined access logs
+
+Windows Event XML recognition inspects the XML structure rather than relying only on the `.xml` extension.
+
+Format detection is intentionally conservative. A custom layout, mixed-format file, unusual header, or unrepresentative beginning of a file may not be recognized automatically.
+
+Always verify:
+
+- selected importer
+- selected or loaded profile
+- validation results
+- source-record preview
+- normalized preview
+
+before relying on the import.
+
+## 3. Format reference
 
 ### JSON Lines
 
-Each nonempty record line should contain a complete JSON object. JSON Lines is useful for applications that write successive structured events without maintaining one large JSON document. It is not the same as a single JSON array spread across multiple lines.
+**Importer ID:** `json-lines`
 
-A profile maps top-level or nested object fields using source paths, such as `context.requestId`. Malformed or unsuitable records may produce import diagnostics. For an initial example, use the [Order Fulfillment log](../samples/order-fulfillment-incident.jsonl) and [its matching profile](../samples/profiles/order-fulfillment-incident-profile.json).
+JSON Lines treats successive physical lines as independent records.
+
+Each nonempty record line must contain a complete JSON object.
+
+Representative record:
+
+```json
+{"timestamp":"2026-08-18T13:00:00.000Z","level":"INFO","subsystem":"ApiGateway","eventCode":"REQUEST_ACCEPTED","entityId":"ORD-7421","message":"Request accepted by order API"}
+```
+
+A JSON array spread across several lines is **not** JSON Lines; use Structured JSON instead.
+
+Profiles can map top-level or nested object values. Dot-separated source paths such as:
+
+```text
+context.requestId
+```
+
+refer to values inside each record object.
+
+Malformed lines produce import diagnostics rather than being silently converted into valid records.
+
+Example:
+
+- [`order-fulfillment-incident.jsonl`](../samples/order-fulfillment-incident.jsonl)
+- [`order-fulfillment-incident-profile.json`](../samples/profiles/order-fulfillment-incident-profile.json)
 
 ### Structured JSON
 
-Use Structured JSON when the file is one JSON document rather than independent line-delimited objects. With **Record path** left blank, TraceScope can import a root object as one record or a root array as multiple records. If an object contains the actual records deeper inside, supply a dot-separated **Record path** to select them.
+**Importer ID:** `structured-json`
 
-For example, the [nested JSON sample](../samples/structured-json-nested-session.json) uses `data.records`. Its [profile](../samples/profiles/structured-json-nested-profile.json) demonstrates both selecting that array and mapping nested fields within each selected record.
+Structured JSON reads one JSON document.
 
-For very large structured JSON files, TraceScope may require you to select **Refresh Preview** rather than automatically parsing a preview. Live Following has an additional repeated-record-array requirement explained [below](#5-live-following-compatibility).
+With **Record path** empty:
 
-### CSV and TSV
+- a root object becomes one source record
+- a root array supplies multiple source records
 
-Both delimited importers expect a **header row**. Map the column names—not column positions—to canonical and custom investigation fields. CSV separates fields with commas; TSV separates them with tabs. Quoted values and escaped quotation marks are supported in individual delimited records.
+Array elements selected as records must be JSON objects.
 
-These import paths treat each physical line as a record. Do not assume a CSV or TSV file with quoted fields spanning multiple physical lines can be imported correctly. Check the preview and diagnostics if data contains embedded line breaks, missing headers, inconsistent column counts, or unusual quoting.
+Representative source:
 
-Try the [service-session CSV](../samples/service-session.csv) with its [profile](../samples/profiles/service-session-csv-profile.json), or the [telemetry-batch TSV](../samples/telemetry-batch.tsv) with its [profile](../samples/profiles/telemetry-batch-tsv-profile.json).
+```json
+[
+  {
+    "timestamp": "2026-08-11T10:00:08.120Z",
+    "level": "INFO",
+    "subsystem": "Gateway",
+    "eventCode": "REQUEST_ACCEPTED",
+    "entityId": "GW-01",
+    "message": "Inbound request accepted"
+  },
+  {
+    "timestamp": "2026-08-11T10:00:48.430Z",
+    "level": "WARN",
+    "subsystem": "Gateway",
+    "eventCode": "RATE_LIMIT",
+    "entityId": "GW-01",
+    "message": "Client approaching rate limit"
+  }
+]
+```
+
+A configured dot-separated **Record path** begins at an object document root and may resolve to:
+
+- one object
+- an array of record objects
+
+For example:
+
+```text
+data.records
+```
+
+can select the `records` value from:
+
+```json
+{
+  "data": {
+    "records": [
+      { "message": "First" },
+      { "message": "Second" }
+    ]
+  }
+}
+```
+
+Field mappings are then resolved within each selected record.
+
+Large Structured JSON sources use the structured-document preview behavior described in [Importing Logs](importing-logs.md); full imports parse the document as structured JSON rather than as independent physical lines.
+
+Static import can also admit complete records from a supported structured JSON record array that is currently still open because another process is writing it.
+
+Example profiles:
+
+- [`structured-json-array-profile.json`](../samples/profiles/structured-json-array-profile.json)
+- [`structured-json-nested-profile.json`](../samples/profiles/structured-json-nested-profile.json)
+
+### CSV
+
+**Importer ID:** `csv`
+
+CSV requires a header row that names the source fields.
+
+Representative source:
+
+```text
+timestamp,level,subsystem,eventCode,entityId,message
+2026-08-11T09:00:05.120Z,INFO,Gateway,REQ_RECEIVED,GW-01,Request accepted
+```
+
+Profiles map header names rather than numeric column positions.
+
+The CSV parser supports:
+
+- comma delimiters
+- quoted fields
+- doubled quotation marks inside quoted values
+
+Each physical line is treated as one record. Quoted fields that span multiple physical lines are not supported.
+
+Records with malformed quoting or inconsistent field counts produce diagnostics.
+
+Example:
+
+- [`service-session.csv`](../samples/service-session.csv)
+- [`service-session-csv-profile.json`](../samples/profiles/service-session-csv-profile.json)
+
+### TSV
+
+**Importer ID:** `tsv`
+
+TSV has the same record model as CSV but uses tab delimiters.
+
+It requires a header row and maps fields by header name.
+
+Representative source:
+
+```text
+event_time	priority	component	event_id	device_id	details
+2026-08-11 10:15:03.115	NOTICE	Ingest	BATCH_OPENED	ING-01	Telemetry batch opened
+```
+
+Quoted-field handling follows the same delimited-record rules as CSV, including the limitation that one physical line represents one source record.
+
+Example:
+
+- [`telemetry-batch.tsv`](../samples/telemetry-batch.tsv)
+- [`telemetry-batch-tsv-profile.json`](../samples/profiles/telemetry-batch-tsv-profile.json)
 
 ### Key-Value / logfmt
 
-This importer reads line-oriented records containing named assignments, such as `level=INFO` and `message="Batch uploaded"`. Values can contain supported quoted text. Use the extracted keys as source paths in the profile.
+**Importer ID:** `key-value`
 
-Because many unrelated applications use `.log`, format recognition for logfmt-like text depends on the content rather than a dedicated extension. The importer reports malformed assignments or other parsing problems through diagnostics. The [Field Gateway sample pair](#4-bundled-format-examples) demonstrates using one shared profile for two related log files.
+This importer reads one line-oriented record containing named assignments.
+
+Representative record:
+
+```text
+timestamp=2026-08-12T08:20:18.427Z level=INFO subsystem=Orders eventCode=ORDER_RECEIVED entityId=ORD-5812 requestId=REQ-9201 message="Order received for processing"
+```
+
+Extracted keys become source fields available to the import profile.
+
+Because `.log` is used by many unrelated formats, TraceScope relies on source content rather than the extension alone when suggesting Key-Value / logfmt.
+
+Example:
+
+- [`logfmt-service-session.log`](../samples/logfmt-service-session.log)
+- [`logfmt-service-session-profile.json`](../samples/profiles/logfmt-service-session-profile.json)
+
+The bundled Field Gateway sources also use this importer:
+
+- [`field-gateway-known-good.log`](../samples/field-gateway-known-good.log)
+- [`field-gateway-degraded.log`](../samples/field-gateway-degraded.log)
+- [`field-gateway-support-session-profile.json`](../samples/profiles/field-gateway-support-session-profile.json)
 
 ### Syslog: RFC 5424 and RFC 3164
 
-The Syslog importer recognizes the supported RFC 5424 and RFC 3164 line layouts and extracts available fields for profile mapping. The supplied profiles demonstrate timestamp, severity, subsystem, message, and Syslog-specific custom-field mappings. RFC 5424 also supplies event codes through its message ID. Neither bundled sample supplies an entity ID, and RFC 3164 does not supply event codes.
+**Importer ID:** `syslog`
 
-**Important timestamp distinction:** RFC 3164 timestamps have no year or timezone. TraceScope infers the nearest year relative to its import reference date and interprets the result using local time. It emits an informational diagnostic when this happens. An inferred time should not be treated as equivalent to an explicit, independently verified timestamp when comparing sources.
+One Syslog record is read from each physical line.
 
-Use the [RFC 5424 sample](../samples/syslog-rfc5424-session.log) and [profile](../samples/profiles/syslog-rfc5424-profile.json), or the [RFC 3164 sample](../samples/syslog-rfc3164-session.log) and [profile](../samples/profiles/syslog-rfc3164-profile.json).
+The same importer recognizes supported RFC 5424 and RFC 3164 layouts.
+
+TraceScope derives common values from the Syslog priority, including:
+
+- facility code
+- severity code
+- Syslog severity name
+- normalized TraceScope-compatible severity value
+
+#### RFC 5424
+
+Representative record:
+
+```text
+<134>1 2026-08-12T08:20:18.427Z api-01 orders-service 4120 ORDER_RECEIVED [request@32473 requestId="REQ-9201" customerRegion="us-east"] Order ORD-5812 received for processing
+```
+
+Supported parsed values include, where present:
+
+- timestamp
+- hostname
+- application/subsystem name
+- process ID
+- message ID / event code
+- structured data
+- message
+
+RFC 5424 structured-data parameters are available for profile mapping.
+
+Example:
+
+- [`syslog-rfc5424-session.log`](../samples/syslog-rfc5424-session.log)
+- [`syslog-rfc5424-profile.json`](../samples/profiles/syslog-rfc5424-profile.json)
+
+#### RFC 3164
+
+Representative record:
+
+```text
+<134>Aug 12 08:20:18 api-01 orders-service[4120]: Order ORD-5812 received for processing
+```
+
+RFC 3164 does not carry an explicit year or timezone.
+
+TraceScope:
+
+1. infers the nearest valid year relative to the import reference date
+2. interprets the resulting timestamp in the system's local timezone
+3. records an informational import diagnostic indicating that inference occurred
+
+That timestamp should therefore not be treated as equivalent to an independently recorded timestamp containing an explicit year and timezone.
+
+RFC 3164 also contains less structured metadata than RFC 5424; an event code, for example, is not inherently available.
+
+Example:
+
+- [`syslog-rfc3164-session.log`](../samples/syslog-rfc3164-session.log)
+- [`syslog-rfc3164-profile.json`](../samples/profiles/syslog-rfc3164-profile.json)
 
 ### IIS W3C Extended Log
 
-Use this dedicated importer for IIS-style W3C access logs with a `#Fields:` declaration. It reads the declared field names, including names such as `cs-method` and `sc-status`, and makes them available for profile mapping. The importer combines source `date` and `time` fields into a timestamp value for mapping.
+**Importer ID:** `iis-w3c`
 
-A log without the expected field declaration cannot be treated like an ordinary CSV simply because its data rows contain separated values. Request methods, response codes, and durations are meaningful custom fields, but an HTTP status code is **not automatically a TraceScope severity**. The supplied profile leaves unavailable canonical fields unmapped rather than inventing them.
+The IIS importer reads W3C Extended Log records using an active:
 
-See the [IIS sample](../samples/iis-w3c-access.log) and [profile](../samples/profiles/iis-w3c-profile.json).
+```text
+#Fields:
+```
 
-### Structured XML, including Windows Event XML
+directive.
 
-The XML importer maps selected elements and attributes into source fields. Leave **Record path** empty when the document root is itself the record. For repeated elements within a container, supply their dot-separated element path.
+Representative source:
 
-The [engineering XML sample](../samples/structured-engineering-session.xml) uses `session.events.event` with its [matching profile](../samples/profiles/structured-xml-engineering-session-profile.json). For an XML collection of Windows Event records, the [Windows Event sample](../samples/windows-event-engineering-session.xml) uses `Events.Event` with its [matching profile](../samples/profiles/windows-event-engineering-session-profile.json). Windows Event mappings can use attribute paths such as `System.TimeCreated.@SystemTime`; levels can be converted using profile severity aliases.
+```text
+#Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip sc-status time-taken
+2026-08-12 15:05:17 192.0.2.10 GET /api/orders/5812 - 443 analyst 198.51.100.31 200 57
+```
 
-TraceScope recognizes appropriate Windows Event XML structures and offers relevant presets. This supports **XML-formatted events and collections**, not direct import of binary `.evtx` files. The presence and meaning of individual Windows event fields can vary; for example, not every event contains a rendered message or application-specific entity ID.
+The declared names become source fields available to the profile.
 
-For live XML, a nonempty record path selecting repeated elements is required. See [Live Following compatibility](#5-live-following-compatibility).
+TraceScope also derives:
 
-### Regex Plain Text, including web access-log presets
+- a combined timestamp from `date` and `time`
+- a message from available request method and request target fields
 
-For custom line-oriented text, provide a **Qt `QRegularExpression`-compatible pattern with named capture groups**. Map the resulting capture names in the profile. A line that does not match your pattern cannot supply the expected fields; investigate skipped records and diagnostics rather than assuming a valid regular expression fits the entire file.
+W3C comments and directives are not imported as investigation records.
 
-Start with the [general application sample](../samples/general-application.log) and its [regex profile](../samples/profiles/general-application-regex-profile.json). There are also supplied examples and presets for [Apache Common](../samples/apache-common-access.log), [Apache Combined](../samples/apache-combined-access.log), and [Nginx Combined](../samples/nginx-combined-access.log) layouts. These use the Regex Plain Text importer; they are not separate generic web-server parsers.
+A data line encountered before a valid field declaration cannot be interpreted reliably and produces a diagnostic.
 
-The built-in access-log presets map the HTTP request to **Message** and common request/response information to custom fields. They do not invent severity values for sources that do not provide them. Logs with customized access-log layouts may need a different regex profile. See [Import text using a regular expression](importing-logs.md#import-text-using-a-regular-expression) for configuration help.
+HTTP response status is source-specific data; TraceScope does not automatically treat an HTTP status code as investigation severity.
 
-## 4. Bundled format examples
+Example:
 
-These sample/profile pairs offer a practical way to verify your setup before configuring an unfamiliar source. They are fictional demonstration material.
+- [`iis-w3c-access.log`](../samples/iis-w3c-access.log)
+- [`iis-w3c-profile.json`](../samples/profiles/iis-w3c-profile.json)
 
-| Format or layout | Sample source | Matching profile |
+### Structured XML
+
+**Importer ID:** `xml`
+
+Structured XML reads XML elements into source values that can be mapped by an import profile.
+
+With **Record path** empty, the document root is treated as one source record.
+
+A nonempty dot-separated Record path selects matching record elements within the document.
+
+Representative record within a larger document:
+
+```xml
+<event sequence="1">
+    <metadata>
+        <timestamp>2026-08-13T12:00:00.000Z</timestamp>
+        <level>INFO</level>
+        <component>TestOrchestrator</component>
+        <code>RUN_STARTED</code>
+    </metadata>
+    <context>
+        <deviceId>RIG-ALPHA-07</deviceId>
+    </context>
+</event>
+```
+
+For that structure, a Record path can identify the repeated elements:
+
+```text
+session.events.event
+```
+
+XML attributes are represented using `@`-prefixed source names. The exact source-path rules and Windows Event normalization are documented in [Import Profiles](import-profiles.md).
+
+Example:
+
+- [`structured-engineering-session.xml`](../samples/structured-engineering-session.xml)
+- [`structured-xml-engineering-session-profile.json`](../samples/profiles/structured-xml-engineering-session-profile.json)
+
+#### Windows Event XML
+
+Windows Event XML uses the Structured XML importer with Windows Event-specific presets and mappings.
+
+Representative event fragment:
+
+```xml
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+        <Provider Name="TraceScope-Sample-Engineering" />
+        <EventID>4100</EventID>
+        <Level>4</Level>
+        <TimeCreated SystemTime="2026-08-13T12:00:00.000Z" />
+    </System>
+</Event>
+```
+
+TraceScope recognizes:
+
+- a single rendered `<Event>` document in the Windows Event namespace
+- collections containing Windows `<Event>` records
+
+Typical mapped values can include:
+
+- provider
+- event ID
+- level
+- time created
+- channel
+- computer
+- event data
+
+Actual field availability varies by event.
+
+TraceScope supports XML-formatted Windows Event data only. It does **not** directly parse native binary `.evtx` files.
+
+Example:
+
+- [`windows-event-engineering-session.xml`](../samples/windows-event-engineering-session.xml)
+- [`windows-event-engineering-session-profile.json`](../samples/profiles/windows-event-engineering-session-profile.json)
+
+### Regex Plain Text
+
+**Importer ID:** `regex-text`
+
+Regex Plain Text handles custom line-oriented logs through a configured Qt `QRegularExpression`.
+
+Representative record:
+
+```text
+2026-08-11T13:02:03.447Z [WARN] [Orders] [SUPPLIER_SLOW] [ORD-1842] [REQ-4004] Supplier response exceeded 800 ms
+```
+
+A corresponding profile can use named capture groups for values such as timestamp, severity, subsystem, event code, entity, request ID, and message.
+
+Conceptually:
+
+```text
+(?<timestamp>...)\s+\[(?<level>...)\]\s+\[(?<subsystem>...)\]\s+...
+```
+
+The configured expression must match the **entire source record**, not merely a substring.
+
+A record that does not match produces an import diagnostic.
+
+Example:
+
+- [`general-application.log`](../samples/general-application.log)
+- [`general-application-regex-profile.json`](../samples/profiles/general-application-regex-profile.json)
+
+#### Apache Common Access Log
+
+Apache Common uses the Regex Plain Text importer with a supplied preset.
+
+Representative record:
+
+```text
+192.0.2.10 - - [12/Aug/2026:08:20:02 -0400] "GET / HTTP/1.1" 200 1256
+```
+
+Example:
+
+- [`apache-common-access.log`](../samples/apache-common-access.log)
+- [`apache-common-profile.json`](../samples/profiles/apache-common-profile.json)
+
+#### Apache Combined Access Log
+
+Apache Combined extends the common layout with referrer and user-agent fields.
+
+Representative record:
+
+```text
+198.51.100.24 - analyst [12/Aug/2026:09:00:48 -0400] "GET /api/orders/5812 HTTP/1.1" 200 842 "https://portal.example.test/orders" "Mozilla/5.0"
+```
+
+Example:
+
+- [`apache-combined-access.log`](../samples/apache-combined-access.log)
+- [`apache-combined-profile.json`](../samples/profiles/apache-combined-profile.json)
+
+#### Nginx Combined Access Log
+
+The bundled Nginx Combined preset uses the corresponding line-oriented combined-access layout.
+
+Representative record:
+
+```text
+203.0.113.41 - - [12/Aug/2026:10:12:44 -0400] "POST /api/orders HTTP/1.1" 201 428 "https://app.example.test/orders/new" "Mozilla/5.0"
+```
+
+Example:
+
+- [`nginx-combined-access.log`](../samples/nginx-combined-access.log)
+- [`nginx-combined-profile.json`](../samples/profiles/nginx-combined-profile.json)
+
+The access-log presets expose useful HTTP request/response values without manufacturing canonical fields that the source does not contain.
+
+For example, HTTP status remains source-specific data rather than automatically becoming TraceScope severity.
+
+Custom server log layouts may require a custom regex profile instead of a built-in preset.
+
+## 4. Bundled examples
+
+The repository contains fictional sample sources and matching profiles for each major supported family and recognized layout.
+
+| Format or layout | Sample | Profile |
 | --- | --- | --- |
 | JSON Lines | [`order-fulfillment-incident.jsonl`](../samples/order-fulfillment-incident.jsonl) | [`order-fulfillment-incident-profile.json`](../samples/profiles/order-fulfillment-incident-profile.json) |
-| Structured JSON, root array | [`structured-json-array-session.json`](../samples/structured-json-array-session.json) | [`structured-json-array-profile.json`](../samples/profiles/structured-json-array-profile.json) |
-| Structured JSON, nested array | [`structured-json-nested-session.json`](../samples/structured-json-nested-session.json) | [`structured-json-nested-profile.json`](../samples/profiles/structured-json-nested-profile.json) |
+| Structured JSON — root array | [`structured-json-array-session.json`](../samples/structured-json-array-session.json) | [`structured-json-array-profile.json`](../samples/profiles/structured-json-array-profile.json) |
+| Structured JSON — nested records | [`structured-json-nested-session.json`](../samples/structured-json-nested-session.json) | [`structured-json-nested-profile.json`](../samples/profiles/structured-json-nested-profile.json) |
 | CSV | [`service-session.csv`](../samples/service-session.csv) | [`service-session-csv-profile.json`](../samples/profiles/service-session-csv-profile.json) |
 | TSV | [`telemetry-batch.tsv`](../samples/telemetry-batch.tsv) | [`telemetry-batch-tsv-profile.json`](../samples/profiles/telemetry-batch-tsv-profile.json) |
-| Key-Value / logfmt | [`field-gateway-known-good.log`](../samples/field-gateway-known-good.log) and [`field-gateway-degraded.log`](../samples/field-gateway-degraded.log) | [`field-gateway-support-session-profile.json`](../samples/profiles/field-gateway-support-session-profile.json) |
-| RFC 5424 Syslog | [`syslog-rfc5424-session.log`](../samples/syslog-rfc5424-session.log) | [`syslog-rfc5424-profile.json`](../samples/profiles/syslog-rfc5424-profile.json) |
-| RFC 3164 Syslog | [`syslog-rfc3164-session.log`](../samples/syslog-rfc3164-session.log) | [`syslog-rfc3164-profile.json`](../samples/profiles/syslog-rfc3164-profile.json) |
+| Key-Value / logfmt | [`logfmt-service-session.log`](../samples/logfmt-service-session.log) | [`logfmt-service-session-profile.json`](../samples/profiles/logfmt-service-session-profile.json) |
+| Field Gateway key-value pair | [`field-gateway-known-good.log`](../samples/field-gateway-known-good.log), [`field-gateway-degraded.log`](../samples/field-gateway-degraded.log) | [`field-gateway-support-session-profile.json`](../samples/profiles/field-gateway-support-session-profile.json) |
+| Syslog RFC 5424 | [`syslog-rfc5424-session.log`](../samples/syslog-rfc5424-session.log) | [`syslog-rfc5424-profile.json`](../samples/profiles/syslog-rfc5424-profile.json) |
+| Syslog RFC 3164 | [`syslog-rfc3164-session.log`](../samples/syslog-rfc3164-session.log) | [`syslog-rfc3164-profile.json`](../samples/profiles/syslog-rfc3164-profile.json) |
 | IIS W3C | [`iis-w3c-access.log`](../samples/iis-w3c-access.log) | [`iis-w3c-profile.json`](../samples/profiles/iis-w3c-profile.json) |
 | Structured XML | [`structured-engineering-session.xml`](../samples/structured-engineering-session.xml) | [`structured-xml-engineering-session-profile.json`](../samples/profiles/structured-xml-engineering-session-profile.json) |
-| Windows Event XML collection | [`windows-event-engineering-session.xml`](../samples/windows-event-engineering-session.xml) | [`windows-event-engineering-session-profile.json`](../samples/profiles/windows-event-engineering-session-profile.json) |
+| Windows Event XML | [`windows-event-engineering-session.xml`](../samples/windows-event-engineering-session.xml) | [`windows-event-engineering-session-profile.json`](../samples/profiles/windows-event-engineering-session-profile.json) |
 | Regex plain text | [`general-application.log`](../samples/general-application.log) | [`general-application-regex-profile.json`](../samples/profiles/general-application-regex-profile.json) |
-| Apache Common access log | [`apache-common-access.log`](../samples/apache-common-access.log) | [`apache-common-profile.json`](../samples/profiles/apache-common-profile.json) |
-| Apache/Nginx Combined access log | [`nginx-combined-access.log`](../samples/nginx-combined-access.log) | [`nginx-combined-profile.json`](../samples/profiles/nginx-combined-profile.json) |
+| Apache Common | [`apache-common-access.log`](../samples/apache-common-access.log) | [`apache-common-profile.json`](../samples/profiles/apache-common-profile.json) |
+| Apache Combined | [`apache-combined-access.log`](../samples/apache-combined-access.log) | [`apache-combined-profile.json`](../samples/profiles/apache-combined-profile.json) |
+| Nginx Combined | [`nginx-combined-access.log`](../samples/nginx-combined-access.log) | [`nginx-combined-profile.json`](../samples/profiles/nginx-combined-profile.json) |
 
-The same importer can support many different source schemas. A successful import with one sample profile does not mean the profile is correct for every file of that general format. Confirm field names, timestamps, optional values, and source-record preview against your own data.
+A profile that works for one source does not automatically apply to every file using the same general serialization format.
+
+For example, two JSON Lines applications may use entirely different names and structures for their timestamps, severities, identifiers, and messages.
+
+Use the examples to understand the importer and profile structure, then verify mappings against the actual source being investigated.
 
 ## 5. Live Following compatibility
 
-A successful static import and a followable growing file are related but different questions. All nine built-in importer families have live-ingestion paths, **subject to the source shape and configuration**. Live Following requires an accessible connected external source, not merely a saved standalone investigation snapshot.
+Static import support and Live Following compatibility are related but distinct.
 
-| Importer family | Live Following requirement |
+All nine built-in importer families have a live-ingestion path when the physical source and configuration satisfy the requirements below.
+
+| Importer family | Live Following requirements |
 | --- | --- |
-| JSON Lines | Complete JSON-object records are delimited by lines; incomplete trailing lines are held until complete. |
-| CSV / TSV | Header-based, one physical line per record; the active file must retain the necessary header context. |
-| Key-Value / logfmt, Syslog, Regex Plain Text | Line-oriented source with a matching import profile; incomplete trailing lines are held until complete. |
-| IIS W3C | Line-oriented W3C source with its `#Fields:` header context. |
-| Structured JSON | A repeatedly appended **array of record objects**: either the root array or an array selected by **Record path**. A one-off root object is useful for static import but is not a repeated live-record container. |
-| Structured XML | A **nonempty Record path** selecting repeated record elements in a growing XML container. An isolated document-root record is not sufficient for live XML following. |
+| **JSON Lines** | Line-oriented JSON objects. An incomplete final physical line remains pending until completed. |
+| **CSV / TSV** | One physical line per record. Header state must be available for the active physical source. |
+| **Key-Value / logfmt** | Line-oriented records using the configured profile. |
+| **Syslog** | Supported RFC 5424 or RFC 3164 messages, one per line. |
+| **IIS W3C** | Line-oriented source with valid active `#Fields:` context. |
+| **Regex Plain Text** | One physical record per line matching the configured expression. |
+| **Structured JSON** | A record **array** containing JSON objects: either the document root array or an array selected by Record path. |
+| **Structured XML** | A **nonempty Record path** selecting repeated record elements in the growing document. |
 
-Live Following observes a growing **file**, not a Syslog network listener, a database, or an application process. New records join the existing investigation. Truncation, replacement, or rotation can affect which unread bytes remain available; plan preservation accordingly. See [Live Following](live-following.md) for operation, source changes, and evidence preservation.
+### Structured JSON live sources
 
-## 6. Field availability and import limitations
+A Structured JSON root object can be imported statically, but it is not a repeated live-record container.
 
-A supported source format determines how TraceScope *reads* records. What you can investigate depends on which fields the source actually contains and how accurately the profile maps them.
+For Live Following, TraceScope must be able to locate an array of record objects.
 
-- **Canonical fields are optional.** Timestamp, Severity, Subsystem, Event code, Entity ID, and Message need not all exist. Leave genuinely unavailable mappings blank. Views and comparisons that depend on absent data may be unavailable or less informative rather than showing an invented zero.
-- **Custom fields preserve source-specific meaning.** Use them for attributes such as HTTP status, queue depth, firmware, device identifiers, or request context without pretending they are universally equivalent across unrelated sources.
-- **Timestamp interpretation matters.** Verify timestamp rules, timezones, and inferred RFC 3164 dates before drawing conclusions about order, duration, or rates across independently recorded sources.
-- **A recognized layout is not a guarantee of good mappings.** The preview samples only part of the source. Check representative records, including unusual and error conditions, and review available import diagnostics after importing.
-- **Format conversion is not automatic.** TraceScope does not directly read binary Windows `.evtx` files; export events to a supported XML representation when that workflow is appropriate. Other custom source layouts may require a deliberately configured regex or a separate supported text/structured representation.
+Valid live shapes include:
 
-The separate **Import Profiles** reference will document the saved profile schema and individual configuration fields. For now, see [Configure an import profile](importing-logs.md#3-configure-an-import-profile).
+```json
+[
+  { "message": "First" },
+  { "message": "Second" }
+```
+
+or an object containing a selected array:
+
+```json
+{
+  "events": [
+    { "message": "First" },
+    { "message": "Second" }
+```
+
+while that array/document is still being written.
+
+Complete record objects are admitted as they become available. An incomplete trailing object remains pending.
+
+### Structured XML live sources
+
+Live Structured XML requires a nonempty Record path selecting repeated elements.
+
+For example:
+
+```text
+session.events.event
+```
+
+allows complete `<event>` elements to be admitted while their outer XML container remains open.
+
+A static XML document whose root itself is the single record does not provide the repeated-record structure required for live XML following.
+
+Windows Event XML collections use this same Structured XML live path. A growing collection of repeated `<Event>` records can be followed when the appropriate record path is configured.
+
+### Physical source requirement
+
+Live Following operates on a connected external file.
+
+It is not:
+
+- a network Syslog listener
+- a socket or pipe consumer
+- a database reader
+- a direct application integration
+- a live view over a standalone `.tsinv` snapshot
+
+For source replacement, truncation, rotation, and evidence-continuity behavior, see [Live Following](live-following.md) and [Saving and Restoring](saving-and-restoring.md).
+
+## 6. Field availability and limitations
+
+Support for a source serialization format does not imply that every TraceScope investigation field exists in that source.
+
+### Canonical fields are optional
+
+TraceScope's canonical fields are:
+
+- Timestamp
+- Severity
+- Subsystem
+- Event code
+- Entity ID
+- Message
+
+A source may provide any subset of them.
+
+Leave genuinely unavailable fields unmapped rather than inventing values.
+
+Features that require an absent field may be unavailable or less informative.
+
+### Custom fields retain source-specific information
+
+Source-specific values belong naturally in custom attributes.
+
+Examples include:
+
+- HTTP status
+- queue depth
+- request ID
+- firmware version
+- client address
+- process ID
+- device-specific measurements
+
+A custom field does not imply that the same-named field in an unrelated source has identical semantics.
+
+### Timestamp quality depends on the source
+
+Timestamp-based investigation depends on the actual timestamp information supplied by the source and its profile.
+
+Check:
+
+- format
+- timezone
+- parsing rule
+- inferred values
+- source clock assumptions
+
+before comparing independently recorded systems.
+
+RFC 3164's inferred year/local timezone behavior is a specific example of why timestamp provenance matters.
+
+### Format recognition is not mapping validation
+
+A correct format suggestion only identifies a likely parser family.
+
+It does not prove that:
+
+- field mappings are correct
+- severity values are meaningful
+- timestamps parse as intended
+- nested record paths select the intended records
+- a regex matches every source record
+- custom fields mean the same thing across sources
+
+Use profile validation, preview, and import diagnostics to verify those separate concerns.
+
+### Unsupported native Windows Event files
+
+TraceScope does not directly import binary `.evtx` files.
+
+Windows Event data must be available in a supported XML representation before it can be handled by the Structured XML importer.
 
 ## Troubleshooting
 
 | Situation | What to check |
 | --- | --- |
-| TraceScope does not suggest a format for my `.log` file. | Extensions such as `.log` can contain many unrelated layouts. Inspect a few representative records, select the matching importer manually, or load a supplied profile. See [Format suggestions and file extensions](#2-format-suggestions-and-file-extensions) for more information. |
-| My JSON file is treated as individual lines, or a JSON Lines file is treated as one document. | Distinguish independent JSON objects on successive lines from a single structured JSON object or array. Change the importer if necessary. See [JSON Lines](#json-lines) and [Structured JSON](#structured-json) for more information. |
-| Structured JSON or XML imports no records, or the wrong records. | Confirm whether the document root is the record or whether you must set **Record path** to a nested array/element. Then check individual field mappings. See [Structured JSON](#structured-json), [Structured XML](#structured-xml-including-windows-event-xml), and [Importing Logs](importing-logs.md#select-records-inside-structured-json-or-xml) for more information. |
-| CSV/TSV records are skipped or columns are wrong. | Verify the header row, selected delimiter, column names, and whether values contain unusual quoting or embedded newlines. See [CSV and TSV](#csv-and-tsv) for more information. |
-| A web access log has no severity or event code. | The supported access-log presets intentionally do not manufacture fields the source does not contain. Use HTTP status as source-specific data unless you deliberately establish another mapping. See [Regex Plain Text, including web access-log presets](#regex-plain-text-including-web-access-log-presets) for more information. |
-| RFC 3164 timestamps differ from expected times. | The source does not include a year or timezone. Check TraceScope's inference diagnostic and your actual collection context. See [Syslog: RFC 5424 and RFC 3164](#syslog-rfc-5424-and-rfc-3164) for more information. |
-| I cannot import a Windows `.evtx` file. | TraceScope supports Windows **Event XML**, not native binary `.evtx` input. Obtain XML-formatted events and use appropriate mappings. See [Structured XML, including Windows Event XML](#structured-xml-including-windows-event-xml) for more information. |
-| My imported structured document cannot be followed live. | Check whether the source is a repeated-record array (JSON) or has a configured repeating record path (XML), whether a connected external file still exists, and whether the producer is appending complete records. See [Live Following compatibility](#5-live-following-compatibility) and [Live Following](live-following.md) for more information. |
+| No likely-format suggestion appears, or the suggestion is wrong | Treat the suggestion as advisory. Generic `.log` and `.txt` files can represent many unrelated layouts; inspect representative records and select the importer that matches the actual source structure. See [Format suggestions](#2-format-suggestions) for more information. |
+| A JSON source opens no records or is interpreted incorrectly | Confirm whether the source is **JSON Lines**—one complete JSON object per physical line—or **Structured JSON**—one JSON document containing an object or record collection. See [JSON Lines](#json-lines) and [Structured JSON](#structured-json) for related information. |
+| CSV or TSV records are skipped or columns do not line up | Verify the selected importer, header row, delimiter, quoting, and physical record layout. Quoted fields spanning multiple physical lines are not supported. See [CSV](#csv) and [TSV](#tsv) for related information. |
+| Syslog timestamps look different from the source time you expected | Check which Syslog layout is being parsed. RFC 3164 does not contain a year or timezone, so TraceScope must infer them as documented. See [Syslog: RFC 5424 and RFC 3164](#syslog-rfc-5424-and-rfc-3164) and [Timestamp quality depends on the source](#timestamp-quality-depends-on-the-source) for related information. |
+| A Windows event file is rejected | Confirm that the source is XML-formatted Windows Event data. TraceScope does not directly import native binary `.evtx` files. See [Windows Event XML](#windows-event-xml) and [Unsupported native Windows Event files](#unsupported-native-windows-event-files) for more information. |
+| Regex Plain Text skips records even though part of the line matches | The configured expression must match the **entire source record**, and the fields you want to map must be exposed through named capture groups. See [Regex Plain Text](#regex-plain-text) and [Import Profiles: Regex Plain Text](import-profiles.md#regex-plain-text) for related information. |
+| A format imports successfully, but an expected canonical field is unavailable | Format support does not guarantee that the source contains every TraceScope canonical field. Check what the source actually supplies and leave genuinely absent concepts unmapped. See [Field availability and limitations](#6-field-availability-and-limitations) and [Import Profiles: The six canonical fields](import-profiles.md#the-six-canonical-fields) for related information. |
+| A Structured JSON or XML file imports statically but cannot be followed live | Static import and Live Following have different source-shape requirements. Structured JSON needs a repeated record array for live use; Structured XML needs a nonempty Record path selecting repeated elements. See [Live Following compatibility](#5-live-following-compatibility) for more information. |
 
 ## Related documentation
 
-- [Getting Started](getting-started.md) — import and investigate a provided JSON Lines sample without creating a profile.
-- [Importing Logs](importing-logs.md) — configure a source, map fields, interpret preview/validation, and import rotated files.
-- [Live Following](live-following.md) — observe supported growing files and preserve evidence when external sources change.
-- [Saving and Restoring](saving-and-restoring.md) — understand the distinction between source log files, saved workspaces, and standalone investigation snapshots.
-- **Import Profiles (planned)** — saved profile schema, source paths, field mappings, and reusable configuration.
+- [Import Profiles](import-profiles.md) — importer IDs, record paths, canonical mappings, custom fields, severity aliases, timestamp rules, and saved profile JSON.
+- [Importing Logs](importing-logs.md) — source selection, preview, mapping, validation, rotated source families, and import execution.
+- [Live Following](live-following.md) — following growing files, pause/resume, source generations, truncation, replacement, and rotation.
+- [Saving and Restoring](saving-and-restoring.md) — source-backed, snapshot-backed, and Hybrid evidence continuity.
+- [Troubleshooting](troubleshooting.md) — import failures, unexpected mappings, live-source problems, and recovery guidance.
