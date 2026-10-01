@@ -8,15 +8,7 @@ TraceScope works directly with files rather than requiring centralized log colle
 
 [**Download TraceScope**](https://github.com/w-cook/tracescope-qt-log-inspector/releases) · [**Get started**](docs/getting-started.md) · [**Browse the documentation**](https://w-cook.github.io/tracescope-qt-log-inspector/) · [**Explore an example report**](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html)
 
-<!--
-MEDIA 01 — HERO: A short, readable demonstration of a real investigation.
-Suggested sequence: open a representative Field Gateway source; inspect the
-mapped records; narrow the investigation with filters and timeline drill-down;
-inspect the selected record and related findings. Lead with the actual app,
-not a title-card montage. Prefer an animation here.
-Suggested final placement:
-![TraceScope: from log file to focused investigation](docs/media/readme-hero.gif)
--->
+![TraceScope investigation workflow](docs/media/readme-hero.gif)
 
 ## From unfamiliar files to useful evidence
 
