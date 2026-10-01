@@ -8,7 +8,7 @@ TraceScope works directly with files rather than requiring centralized log colle
 
 [**Download TraceScope**](https://github.com/w-cook/tracescope-qt-log-inspector/releases) · [**Get started**](docs/getting-started.md) · [**Browse the documentation**](https://w-cook.github.io/tracescope-qt-log-inspector/) · [**Explore an example report**](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html)
 
-![TraceScope investigation workflow](docs/media/readme-hero.gif)
+[![TraceScope investigation workflow](docs/media/readme-hero.gif)](docs/media/readme-hero-2x.gif)
 
 ## From unfamiliar files to useful evidence
 
