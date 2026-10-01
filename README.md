@@ -8,7 +8,7 @@ TraceScope works directly with files rather than requiring centralized log colle
 
 [**Download TraceScope**](https://github.com/w-cook/tracescope-qt-log-inspector/releases) · [**Get started**](docs/getting-started.md) · [**Browse the documentation**](https://w-cook.github.io/tracescope-qt-log-inspector/) · [**Explore an example report**](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html)
 
-[![TraceScope investigation workflow](docs/media/readme-hero.gif)](docs/media/readme-hero-2x.gif)
+![TraceScope investigation workspace](docs/screenshots/readme-hero.png)
 
 ## From unfamiliar files to useful evidence
 
@@ -16,13 +16,7 @@ Use TraceScope to bring differently structured log files into the same investiga
 
 You do not need every source to provide the same metadata before it becomes useful. Timestamp, severity, subsystem, event code, entity ID, and message are optional canonical fields, while application-specific values can remain available as custom attributes. That lets you work with the information the source actually contains instead of forcing missing concepts into the data.
 
-<!--
-MEDIA 02 — IMPORT: Show an actual file and profile being selected, mapped
-preview vs. raw source, then the resulting event table. Choose a short GIF if
-interaction is important; otherwise a clean annotated still may read better.
-Suggested final placement:
-![Import configuration and normalized investigation](docs/media/readme-import.gif)
--->
+![TraceScope import configuration and preview](docs/screenshots/readme-import.png)
 
 TraceScope supports JSON Lines, Structured JSON, CSV and TSV, Key-Value/logfmt, Syslog RFC 3164 and RFC 5424, IIS W3C, Structured XML, XML-formatted Windows Events, and common Apache/Nginx access-log layouts through regex-based profiles. Other line-oriented text can be imported with a matching regular-expression profile. Native binary `.evtx` files are not directly supported.
 
@@ -36,14 +30,7 @@ When a pattern is easier to see in aggregate than one row at a time, use the tim
 
 The goal is to help you build and test an investigation path from the evidence in front of you. TraceScope highlights patterns and gives you ways to reach the records behind them.
 
-<!--
-MEDIA 03 — INVESTIGATION: Demonstrate advanced filtering, one meaningful
-timeline or issue-summary drill-down, and inspecting a selected source record.
-If a single GIF becomes too dense, use one interaction GIF and a crisp static
-analytics/burst image rather than accelerating the entire UI sequence.
-Suggested final placement:
-![Filtering, timeline drill-down, and investigation analysis](docs/media/readme-investigate.gif)
--->
+![TraceScope burst analysis and investigation drill-down](docs/screenshots/readme-investigate.png)
 
 [Investigating Logs](docs/investigating-logs.md)
 
@@ -55,14 +42,7 @@ Pause ingestion when you want to hold the current view, resume to catch up with 
 
 TraceScope also keeps source changes understandable as the investigation evolves. Incomplete writes are admitted only when a complete record is available, rotated files can remain part of one logical source family, and same-path truncation or replacement is tracked as a new source generation. When evidence needs to outlive the external file that produced it, you can preserve the admitted investigation state and continue working from that evidence later.
 
-<!--
-MEDIA 04 — LIVE FOLLOW: Use the standalone generator to show a deterministic
-scenario producing a real on-disk log while TraceScope independently follows
-it. Capture incoming records, a meaningful filter, and the controlled derived-
-view update. Avoid cramming every lifecycle control into the same animation.
-Suggested final placement:
-![Live following a growing source file](docs/media/readme-live-follow.gif)
--->
+![TraceScope live file following](docs/media/readme-live-follow.gif)
 
 [Live Following](docs/live-following.md) · [Saving and Restoring](docs/saving-and-restoring.md)
 
@@ -74,15 +54,7 @@ You can compare the complete evidence currently admitted to each investigation o
 
 Each comparison captures the selected populations and results at the moment you create it. You can continue filtering, following, or otherwise working in the source investigations without changing that saved comparison, then return to the original investigations when a difference gives you something worth examining more closely.
 
-<!--
-MEDIA 05 — COMPARE: Use a coherent related pair, such as the bundled known-
-good and degraded Field Gateway investigations. Establish the baseline and
-comparison, then show a small number of meaningful difference views. Consider
-showing an independently scoped time range if it remains readable. Prefer one
-restrained GIF plus a legible static comparison image over a dense animation.
-Suggested final placement:
-![Comparing baseline and degraded investigation sessions](docs/media/readme-compare.gif)
--->
+![TraceScope investigation comparison](docs/screenshots/readme-comparison.png)
 
 [Comparing Sessions](docs/comparing-sessions.md)
 
@@ -90,18 +62,13 @@ Suggested final placement:
 
 Bookmarks, analyst notes, and finding statuses let you keep important observations connected to the evidence they came from. Records can be marked for another look, annotated with your investigation context, and tracked as **Open**, **Resolved**, or **Dismissed** as your understanding develops.
 
+![TraceScope findings and analyst notes](docs/screenshots/readme-findings.png)
+
 Saving the complete workspace lets you return later with its investigations, filters, findings, comparisons, and window layout intact. A standalone snapshot gives you another option when the admitted evidence from one investigation needs to be preserved independently of the broader workspace.
 
 When someone else needs the result, you can choose the level of handoff that fits the situation. Individual records can be copied to the **clipboard** as formatted text or JSON and pasted into another application. Filtered records or classified findings can be exported as **CSV spreadsheets** for further review or sharing. For a fuller handoff, you can generate a self-contained **HTML report** from selected investigations and comparisons, preserving that point-in-time result in a file that can be opened in a browser, reviewed offline, and printed or saved as PDF.
 
-<!--
-MEDIA 06 — HANDOFF: A concise findings/bookmark interaction paired with a
-high-resolution static view of the exported HTML report. The report should
-remain readable; an animated browser scroll is optional, not mandatory.
-Suggested final placements:
-![Reviewing and preserving findings](docs/media/readme-findings.gif)
-![Self-contained offline investigation report](docs/media/readme-report.png)
--->
+![TraceScope generated HTML investigation report](docs/screenshots/readme-report.png)
 
 [Findings](docs/findings.md) · [Saving and Restoring](docs/saving-and-restoring.md) · [Reporting and Export](docs/reporting-and-export.md) · [View an example interactive HTML report](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.html) or [its PDF print](https://w-cook.github.io/tracescope-qt-log-inspector/examples/field-gateway-investigation-report.pdf)
 
