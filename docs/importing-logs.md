@@ -23,16 +23,55 @@ If you have not used TraceScope before, start with [Getting Started](getting-sta
 
 ## 1. Import a log file
 
-1. Choose **File > Open Log File...** (`Ctrl+O` on Windows). TraceScope opens **Import Configuration**. You can also open a single local log file through the application's supported drag-and-drop workflow; Import Configuration still gives you a chance to inspect it before importing.
+1. Choose **File > Open Log File...** (`Ctrl+O` on Windows). TraceScope opens **Import Configuration**.
+
+    ![Open a log file](screenshots/importing-logs-open-log-file.png)
+
+    You can also open a single local log file through the application's supported drag-and-drop workflow;
+    
+    ![Drag and drop](screenshots/importing-logs-drag-and-drop.png)
+
+    Import Configuration still gives you a chance to inspect it before importing.
 2. Under **Source**, choose **Browse...** and select your log file. Alternatively, enter its path in the **File** field.
-3. Read **Likely format**. TraceScope may suggest an importer based on the extension or recognizable source content. If you also see **Include rotations**, that option concerns older log files moved aside by the producing application. You can ignore it for a single-file import; see [Import a rotated source family](#6-import-a-rotated-source-family) for details.
-4. Inspect the selected **Format**, the field mappings, and **Source Record Preview**. If the default configuration is not appropriate, load an existing profile or adjust the mappings before proceeding.
-5. Check **Validation** for configuration errors. Examine the preview to confirm that the records contain the information you expect.
+
+    ![Browse for a log file](screenshots/importing-logs-browse-for-log-file.png)
+
+3. Read **Likely format**. TraceScope may suggest an importer based on the extension or recognizable source content.
+
+    ![Likely format](screenshots/importing-logs-likely-format.png)
+
+    If you also see **Include rotations**, that option concerns older log files moved aside by the producing application.
+    
+    ![Include rotations](screenshots/importing-logs-include-rotations.png)
+
+    You can ignore it for a single-file import; see [Import a rotated source family](#6-import-a-rotated-source-family) for details.
+4. Inspect the selected **Format**,
+    
+    ![Selected format](screenshots/importing-logs-selected-format.png)
+    
+    the field mappings,
+    
+    ![Field mappings](screenshots/importing-logs-field-mappings.png)
+    
+    and **Source Record Preview**.
+    
+    ![Source record preview](screenshots/importing-logs-source-record-preview.png)
+    
+    If the default configuration is not appropriate, load an existing profile or adjust the mappings before proceeding.
+5. Check **Validation** for configuration errors.
+    
+    ![Validation](screenshots/importing-logs-validation.png)
+
+    Examine the preview to confirm that the records contain the information you expect.
 6. Select **Import**. TraceScope processes the selected source and opens it as an investigation document.
+
+    ![Import](screenshots/importing-logs-import.png)
 
 **A format suggestion is a starting point, not a guarantee.** TraceScope can recognize several common formats, but an extension such as `.log` does not reveal every custom log structure. A profile that passes validation can still produce missing values or unexpected results if its mappings do not match your data. Check the preview rather than importing solely because a format was suggested.
 
 If you already have a profile for the source, **Load Profile...** is usually the quickest and most reliable route. For example, the supplied `samples/service-session.csv` can be opened with `samples/profiles/service-session-csv-profile.json`.
+
+![Load profile](screenshots/importing-logs-load-profile.png)
 
 ## 2. Find your way around Import Configuration
 
@@ -51,7 +90,13 @@ The profile controls include **New From Source**, **Load Profile...**, **Recent 
 
 The arrangement responds to the available screen space and interface scaling. On a sufficiently wide display, profile controls and source preview appear beside each other, separated by a **resizable vertical divider**. Drag the divider left if you want to give the preview more room, or right if you need more space to edit the profile and mappings. In a more constrained layout, the content may instead appear under separate **Profile & Mappings** and **Source Preview** tabs. The **Source** and **Validation** areas remain accessible, and you can scroll within the relevant content.
 
-You can resize the dialog if your screen permits it. To adjust TraceScope's additional interface scaling, close Import Configuration, choose **View > Interface Scale** from the main application window, and reopen the import dialog. **100% (System)** uses the operating system's scaling without an additional TraceScope multiplier. The [Getting Started guide](getting-started.md#adjust-the-layout-for-your-screen) explains these options in more detail.
+![Compact view](screenshots/importing-logs-compact-view.png)
+
+You can resize the dialog if your screen permits it. To adjust TraceScope's additional interface scaling, close Import Configuration, choose **View > Interface Scale** from the main application window, and reopen the import dialog.
+
+![Interface scale](screenshots/importing-logs-interface-scale.png)
+
+**100% (System)** uses the operating system's scaling without an additional TraceScope multiplier. The [Getting Started guide](getting-started.md#adjust-the-layout-for-your-screen) explains these options in more detail.
 
 The location of a control may change between layouts, but its function does not.
 
@@ -66,7 +111,11 @@ Start with the suggested configuration or a supplied profile whenever possible. 
 
 ### Choose the format
 
-Select an importer from **Format**. The following summarizes the available source families and the main configuration decisions:
+Select an importer from **Format**.
+
+![Format](screenshots/importing-logs-format.png)
+
+The following summarizes the available source families and the main configuration decisions:
 
 | Source family | Typical configuration |
 | --- | --- |
@@ -86,7 +135,11 @@ Selecting the correct importer matters more than the filename. If no format is s
 
 ### Map the canonical investigation fields
 
-The **Canonical Field Mapping** section contains six optional destinations. Enter the *source field or path* containing each value; do not type a sample value from a record.
+The **Canonical Field Mapping** section contains six optional destinations.
+
+![Canonical field mapping](screenshots/importing-logs-canonical-field-mapping.png)
+
+Enter the *source field or path* containing each value; do not type a sample value from a record.
 
 | Destination | Example source field | Used for |
 | --- | --- | --- |
@@ -103,9 +156,13 @@ A JSON source might use `level` for severity, while another might use `priority`
 
 For a concrete nested example, open the supplied `samples/structured-json-nested-session.json` and load `samples/profiles/structured-json-nested-profile.json`. This profile maps `observedAt` to Timestamp, `priority` to Severity, `service.name` to Subsystem, and other nested paths to their respective destinations.
 
+![Nested example](screenshots/importing-logs-nested-example.png)
+
 ### Select records inside structured JSON or XML
 
 Some structured files contain metadata around the actual records. For these sources, **Record path** identifies the object or element path containing the records to import. Leave it blank only when the document's root is the appropriate record location.
+
+![Record path](screenshots/importing-logs-record-path.png)
 
 The nested JSON sample above places its records at `data.records`, so its profile uses:
 
@@ -126,11 +183,21 @@ Under **Custom Field Mappings**, choose **Add Mapping** and enter:
 - **Field Name:** the label you want TraceScope to display.
 - **Source Path:** the corresponding field in the source record.
 
+![Add mapping](screenshots/importing-logs-add-mapping.png)
+
 For example, `samples/service-session.csv` contains a `duration_ms` column. Its matching profile maps that column to a custom field named **Duration (ms)**. A JSON profile can similarly map a nested path such as `context.requestId` to **Request ID**.
 
-You can add multiple mappings or select a row and use **Remove Selected**. Custom fields can become investigation columns and provide additional search and filtering context.
+You can add multiple mappings or select a row and use **Remove Selected**.
 
-**Preserve unmapped source fields** retains other source attributes that are not explicitly assigned to canonical or custom destinations. Keeping it enabled is generally useful when exploring an unfamiliar source: the preview can then help you identify fields you may want to map deliberately. Turning it off is an explicit choice to omit those unmapped attributes from the normalized custom-field data. The original raw source remains available for inspection.
+![Remove mapping](screenshots/importing-logs-remove-mapping.png)
+
+Custom fields can become investigation columns and provide additional search and filtering context.
+
+**Preserve unmapped source fields** retains other source attributes that are not explicitly assigned to canonical or custom destinations.
+
+![Preserve unmapped source fields](screenshots/importing-logs-preserve-unmapped.png)
+
+Keeping it enabled is generally useful when exploring an unfamiliar source: the preview can then help you identify fields you may want to map deliberately. Turning it off is an explicit choice to omit those unmapped attributes from the normalized custom-field data. The original raw source remains available for inspection.
 
 TraceScope can also detect candidate custom fields from previewed source content for supported formats. Review any resulting mappings instead of assuming that automatically discovered fields have the most useful display names.
 
@@ -138,13 +205,29 @@ TraceScope can also detect candidate custom fields from previewed source content
 
 Your source may use values that differ from TraceScope's standard severity levels. Use **Severity Aliases** to map the source's terminology to **TRACE**, **DEBUG**, **INFO**, **WARN**, **ERROR**, or **CRITICAL**.
 
+![Severity aliases](screenshots/importing-logs-severity-aliases.png)
+
 The supplied nested JSON sample uses source values such as `CAUTION` and `FAIL`. Its profile maps them to TraceScope's warning and error levels. Without appropriate aliases, a mapped but unrecognized severity value can produce a diagnostic and leave that record without a normalized severity.
 
-Use **Add Alias** to add a **Source Value** and select its **Maps To** target. Review the preview after changing an alias, especially when severity-based investigation is important to your workflow.
+Use **Add Alias** to add a **Source Value**
+
+![Add alias](screenshots/importing-logs-add-alias.png)
+
+and select its **Maps To** target.
+
+![Alias mapping](screenshots/importing-logs-alias-mapping.png)
+
+Review the preview after changing an alias, especially when severity-based investigation is important to your workflow.
 
 ### Parse timestamps
 
-If you map a Timestamp field, configure at least one **Timestamp Rule**. TraceScope supports ISO 8601 parsing and explicitly configured Qt-format rules. Use **Add Rule** to add a rule or **Remove Selected** to remove one you no longer need.
+If you map a Timestamp field, configure at least one **Timestamp Rule**. TraceScope supports ISO 8601 parsing and explicitly configured Qt-format rules. Use **Add Rule** to add a rule
+
+![Add timestamp rule](screenshots/importing-logs-add-timestamp-rule.png)
+
+or **Remove Selected** to remove one you no longer need.
+
+![Remove timestamp rule](screenshots/importing-logs-remove-timestamp-rule.png)
 
 The bundled JSON and CSV examples use ISO 8601 timestamps, such as `2026-08-11T09:00:05.120Z`. For a different timestamp representation, configure a matching format rather than assuming TraceScope can infer every possible date convention.
 
@@ -153,6 +236,8 @@ Verify the resulting timestamp column in **Source Record Preview**. A field name
 ### Import text using a regular expression
 
 For custom line-oriented text, choose **Regex Plain Text** and provide a regular expression with named captures. The capture names become source fields that you can map in **Canonical Field Mapping** or **Custom Field Mappings**.
+
+![Regular expressions](screenshots/importing-logs-regex.png)
 
 For a working example, open `samples/general-application.log` with `samples/profiles/general-application-regex-profile.json`. The supplied profile captures timestamps, levels, subsystems, event codes, entity IDs, request IDs, and messages from the sample's bracketed log format.
 
@@ -172,9 +257,23 @@ Once your preview looks right, save the configuration so you do not have to recr
 
 **Save a profile:** Choose **Save Profile...** and select a location for the `.json` profile file. Give the profile a meaningful name in the **Name** field before saving. The button requires a valid profile configuration.
 
-**Load a profile:** After selecting a compatible log file, choose **Load Profile...**, then select the saved `.json` profile. **Recent Profiles** provides shortcuts to previously used, still-available profile files. Confirm the selected source and preview after loading; a valid profile may not match every file with the same extension.
+![Save profile](screenshots/importing-logs-save-profile.png)
 
-**Start again from the source:** Choose **New From Source** to replace the current working configuration with a new one based on the selected file and any available format suggestion. If you have edited the current profile, TraceScope requests confirmation before replacing it. Save changes you want to keep first.
+**Load a profile:** After selecting a compatible log file, choose **Load Profile...**, then select the saved `.json` profile.
+
+![Load profile](screenshots/importing-logs-load-profile.png)
+
+**Recent Profiles** provides shortcuts to previously used, still-available profile files. 
+
+![Recent profiles](screenshots/importing-logs-recent-profiles.png)
+
+Confirm the selected source and preview after loading; a valid profile may not match every file with the same extension.
+
+**Start again from the source:** Choose **New From Source** to replace the current working configuration with a new one based on the selected file and any available format suggestion.
+
+![New from source](screenshots/importing-logs-new-from-source.png)
+
+If you have edited the current profile, TraceScope requests confirmation before replacing it. Save changes you want to keep first.
 
 Profiles describe **import behavior**. They are not investigation files and do not contain your bookmarks, analyst notes, finding statuses, or saved workspace layout. A saved workspace and a standalone investigation snapshot serve different purposes; see [Getting Started](getting-started.md#7-save-your-workspace) for the introductory distinction.
 
@@ -186,11 +285,19 @@ This is the most important check before importing unfamiliar data. Configuration
 
 **Validation** checks whether your profile is structurally acceptable. For example, it can identify a missing profile name, malformed source path, invalid regular expression, duplicate custom-field name, or a missing timestamp rule for a mapped timestamp.
 
+![Invalid profile](screenshots/importing-logs-invalid.png)
+
 Correct errors before proceeding. A warning can identify a questionable setting without necessarily making the profile invalid. A valid profile means the configuration is acceptable; it does not establish that the selected source has been interpreted correctly.
 
 ### Inspect Source Record Preview
 
-The preview shows normalized columns according to your current mappings, including configured custom fields and an **Unmapped Custom Fields** column. Select a **row in the preview table** to inspect its original text under **Selected Raw Source**.
+The preview shows normalized columns according to your current mappings, including configured custom fields and an **Unmapped Custom Fields** column.
+
+![Unmapped custom fields](screenshots/importing-logs-unmapped-custom-fields.png)
+
+Select a **row in the preview table** to inspect its original text under **Selected Raw Source**.
+
+![Selected raw source](screenshots/importing-logs-raw-source.png)
 
 Use these two views together:
 
@@ -201,11 +308,17 @@ Use these two views together:
 
 The preview is deliberately limited to **50 processed records** by default. This is a sampling limit, not a limit on the subsequent full import. When previewing a rotated source family, TraceScope distributes the preview allowance among the selected physical sources; a **Source** column identifies the origin of each displayed preview record.
 
+![Source column](screenshots/importing-logs-source-column.png)
+
 **Interpreting the counts:** *Processed* records are the records considered by the preview; *imported* records were admitted as investigation records; *skipped* records were processed but not imported. A diagnostic indicates something worth checking, such as an invalid value or parsing problem. After import, you can include captured import diagnostics in an offline HTML report by enabling **Include technical import/profile appendix** in the report settings. Do not treat a successful preview of a few records as proof that every later record in the file has the same structure.
 
 ### Large structured documents have an explicit preview action
 
-For **Structured JSON** or **Structured XML** files larger than **16 MiB**, TraceScope does not generate the usual automatic preview. Instead, choose **Refresh Preview** to generate a limited preview in the background. The same rule applies if any selected member of a structured source family exceeds that threshold.
+For **Structured JSON** or **Structured XML** files larger than **16 MiB**, TraceScope does not generate the usual automatic preview. Instead, choose **Refresh Preview** to generate a limited preview in the background.
+
+![Refresh preview](screenshots/importing-logs-refresh-preview.png)
+
+The same rule applies if any selected member of a structured source family exceeds that threshold.
 
 Wait for the result before deciding whether your mappings work. You can continue interacting with Import Configuration while the background preview is being generated. This protects the configuration interface from the cost of automatically previewing large structured documents every time a setting changes.
 
@@ -216,10 +329,34 @@ If the preview is empty or misleading, correct the configuration and preview aga
 Some applications move older records into rotated files while continuing to write to an active file. You can import related physical files as one logical source family rather than investigating them in isolation.
 
 1. In **Source**, select the **active log file**: the path that the application currently uses for new writes.
-2. Look beside **Likely format**. If TraceScope detects related rotated files, it offers **Include rotations** with the detected count. Select **Review...** to inspect the proposed family before including it.
-3. In **Rotated Source Files**, check **Naming scheme** and, where applicable, **Numeric chronology**. Available schemes include numeric suffixes, numeric names before the extension, date/timestamp-based names, and configurable custom patterns.
+2. Look beside **Likely format**. If TraceScope detects related rotated files, it offers **Include rotations** with the detected count.
+
+    ![Detected rotations](screenshots/importing-logs-detected-rotations.png)
+
+    Select **Review...** to inspect the proposed family before including it.
+
+    ![Review rotations](screenshots/importing-logs-review-rotations.png)
+3. In **Rotated Source Files**, check **Naming scheme**
+    
+    ![Rotation naming scheme](screenshots/importing-logs-rotation-naming.png)
+    
+    and, where applicable, **Numeric chronology**.
+    
+    ![Rotation numeric chronology](screenshots/importing-logs-rotation-chronology.png)
+    
+    Available schemes include numeric suffixes, numeric names before the extension, date/timestamp-based names, and configurable custom patterns.
 4. Review the listed physical files and their roles. Check that the files really belong to the same logical source and that their order represents the source's chronology. For a custom scheme, configure the regular expression and ordering options as needed.
-5. Enable **Include rotated source files** and select **Use This Source Family**. Back in Import Configuration, verify that rotations are included and inspect the family preview before selecting **Import**.
+
+    ![Custom rotation schemes](screenshots/importing-logs-custom-rotation.png)
+5. Enable **Include rotated source files**
+    
+    ![Include rotated source files](screenshots/importing-logs-include-rotated-source-files.png)
+    
+    and select **Use This Source Family**.
+    
+    ![Use this source family](screenshots/importing-logs-use-source-family.png)
+
+    Back in Import Configuration, verify that rotations are included and inspect the family preview before selecting **Import**.
 
 A conventional sequence might be `service.log.3`, `service.log.2`, `service.log.1`, followed by the active `service.log`. Other producers number or timestamp rotations differently, so review the chronology rather than assuming it.
 
@@ -232,6 +369,8 @@ The family configuration concerns which files to **import**. It does not, by its
 ## 7. Import large files
 
 A full import runs outside the main UI thread. For importers that report measurable progress, TraceScope shows percentage and processed-record progress; operations without such measurements can display indeterminate progress. Use **Cancel** in the import-progress dialog if you do not want to finish the operation.
+
+![Canceling large imports](screenshots/importing-logs-large-imports.png)
 
 Cancelling an import does not install a partially imported investigation. If you are reloading an existing investigation and cancel, its previous contents remain available.
 
