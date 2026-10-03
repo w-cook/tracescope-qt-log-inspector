@@ -57,7 +57,17 @@ For this walkthrough, **make a copy** of the sample log before importing it. We 
 1. Find `samples/order-fulfillment-incident.jsonl` in the main TraceScope sample collection.
 2. Copy it to a writable demonstration folder, such as `TraceScope-Persistence-Demo/`, and name the copy `order-fulfillment-demo.jsonl`.
 3. Keep the matching sample profile, `samples/profiles/order-fulfillment-incident-profile.json`, available. You can load it directly from your samples collection.
-4. In TraceScope, choose **File > Open Log File...**, select your *copied* log, and load the matching profile in **Import Configuration**. Select **Import**.
+4. In TraceScope, choose **File > Open Log File...**,
+
+    ![Open a log file](screenshots/saving-and-restoring-open-log.png)
+
+    select your *copied* log, and load the matching profile in **Import Configuration**.
+    
+    ![File and profile](screenshots/saving-and-restoring-file-and-profile.png)
+    
+    Select **Import**.
+
+    ![Import](screenshots/saving-and-restoring-import.png)
 
 Using a copy is important: neither the original bundled sample nor any important personal log needs to be renamed or modified to try the recovery exercise.
 
@@ -66,16 +76,37 @@ Using a copy is important: neither the original bundled sample nor any important
 In the imported investigation:
 
 1. Filter the **Telemetry Events** table to `WARN` and `ERROR`.
+
+    ![Severity filters](screenshots/saving-and-restoring-severity-filters.png)
 2. Select a `DB_POOL_HIGH` event and inspect it in **Event Details**.
-3. Select **Bookmark Event** and change **Finding status** from **None** to **Open**.
-4. Select **Add Note** and save a brief observation, such as `Investigate database connection-pool pressure alongside the subsequent timeout events.`
+
+    ![Select event](screenshots/saving-and-restoring-select-event.png)
+3. Select **Bookmark Event**
+
+    ![Bookmark event](screenshots/saving-and-restoring-bookmark-event.png)
+
+    and change **Finding status** from **None** to **Open**.
+
+    ![Set finding status](screenshots/saving-and-restoring-finding-status.png)
+4. Select **Add Note**
+
+    ![Add note](screenshots/saving-and-restoring-add-note.png)
+
+    and save a brief observation, such as `Investigate database connection-pool pressure alongside the subsequent timeout events.`
+
+    ![Save note](screenshots/saving-and-restoring-save-note.png)
 5. Open **Findings** and verify that the Open finding now displays your note.
+
+    ![Findings tab and note](screenshots/saving-and-restoring-findings-note.png)
 
 You have now created several distinct pieces of workspace state: a source/profile association, an active filter, a bookmark, a finding status, a note, and a selected investigation context.
 
 ### Save the workspace
 
 1. Choose **File > Save Workspace** (`Ctrl+S` on Windows).
+
+    ![Save workspace](screenshots/saving-and-restoring-save-workspace.png)
+
 2. If this workspace has not been saved before, choose a location in your demonstration folder and name it `order-fulfillment-review.tsw`.
 3. Confirm that the `.tsw` file and its `order-fulfillment-review.sessions/` folder now exist beside each other.
 
@@ -85,13 +116,25 @@ TraceScope captures a durable evidence snapshot for each investigation when savi
 
 ### Reopen the saved workspace
 
-1. Choose **File > New Workspace** to close the current workspace. If TraceScope indicates that you have unsaved changes, resolve that prompt before proceeding.
-2. Choose **File > Open Workspace...**, select `order-fulfillment-review.tsw`, and let TraceScope restore it.
+1. Choose **File > New Workspace** to close the current workspace.
+
+    ![New workspace](screenshots/saving-and-restoring-new-workspace.png)
+
+    If TraceScope indicates that you have unsaved changes, resolve that prompt before proceeding.
+2. Choose **File > Open Workspace...**,
+
+    ![Open workspace](screenshots/saving-and-restoring-open-workspace.png)
+
+    select `order-fulfillment-review.tsw`, and let TraceScope restore it.
 3. Return to the relevant investigation. Check the severity filter, `DB_POOL_HIGH` bookmark, Open finding, and saved analyst note.
+
+    ![Restored workspace](screenshots/saving-and-restoring-restored-workspace.png)
 
 Because your copied external file still exists, this SourceBacked investigation ordinarily reconstructs its records from that file using the saved profile. The saved workspace restores the investigation context and applicable annotations.
 
 You can also access previously saved workspaces through **File > Recent Workspaces**.
+
+![Recent workspaces](screenshots/saving-and-restoring-recent-workspaces.png)
 
 **A note on record identity:** annotations are associated with stable record identities, not simply row numbers. When a SourceBacked investigation is rebuilt from its external file, annotations remain associated with records whose identities still match. If the source has since been rewritten or replaced, do not assume every previously annotated record can be reconstructed from it. The next sections explain how to use preserved evidence instead.
 
@@ -102,18 +145,38 @@ This exercise demonstrates why a complete workspace includes saved evidence in a
 **Use only the disposable copy from the previous walkthrough.** Do not move the original sample or a real application's actively written log.
 
 1. With the workspace safely saved, choose **File > New Workspace** so the SourceBacked investigation is no longer open.
+
+    ![New workspace](screenshots/saving-and-restoring-new-workspace.png)
 2. Outside TraceScope, rename `order-fulfillment-demo.jsonl` to something like `order-fulfillment-temporarily-hidden.jsonl`. Leave `order-fulfillment-review.tsw` and its `.sessions/` folder untouched.
-3. In TraceScope, choose **File > Open Workspace...** and select `order-fulfillment-review.tsw`.
+3. In TraceScope, choose **File > Open Workspace...** 
+
+    ![Open workspace](screenshots/saving-and-restoring-open-workspace.png)
+
+    and select `order-fulfillment-review.tsw`.
 4. TraceScope should present **Workspace Source File Missing** for the affected SourceBacked investigation. Because you saved this workspace with a durable snapshot, choose **Open Saved Snapshot**.
+
+    ![Open saved snapshot](screenshots/saving-and-restoring-restore-from-snapshot.png)
 5. TraceScope restores that investigation as **SnapshotBacked**. Inspect the recovered records and verify that your bookmark, finding, note, and saved filter are still present.
+
+    ![Restored workspace](screenshots/saving-and-restoring-restored-snapshot-workspace.png)
 
 The restored snapshot is authoritative for this recovered investigation; the unavailable external file is no longer required to inspect its saved records.
 
 Other choices in the missing-source prompt are useful in different circumstances:
 
-- **Locate File...** lets you select the source if it was moved or is otherwise available at a different location. Use the correct original file or appropriate continuation of that source.
-- **Skip Session** omits that investigation from this opening attempt rather than preventing other recoverable workspace content from opening. Previously captured comparison documents retain their independent analysis even if an original source investigation is skipped; they do not require that session to be reopened to display their earlier results.
+- **Locate File...** lets you select the source if it was moved or is otherwise available at a different location.
+
+    ![Locate File](screenshots/saving-and-restoring-locate-file.png)
+
+    Use the correct original file or appropriate continuation of that source.
+- **Skip Session** omits that investigation from this opening attempt rather than preventing other recoverable workspace content from opening.
+
+    ![Skip session](screenshots/saving-and-restoring-skip-session.png)
+
+    Previously captured comparison documents retain their independent analysis even if an original source investigation is skipped; they do not require that session to be reopened to display their earlier results.
 - **Cancel** abandons opening the workspace.
+
+    ![Cancel workspace open](screenshots/saving-and-restoring-cancel-open.png)
 
 The **Open Saved Snapshot** option appears when a usable saved snapshot is available. If a snapshot is missing or cannot be read, that particular recovery option may not be available.
 
@@ -131,11 +194,17 @@ A standalone snapshot is useful when you need a fixed copy of the evidence colle
 
 1. Make the investigation you want to capture active.
 2. Choose **File > Save Investigation Snapshot...**.
+
+    ![Save snapshot](screenshots/saving-and-restoring-save-snapshot.png)
 3. Choose a destination for the `.tsinv` file.
 
 TraceScope captures the currently admitted investigation evidence. If the investigation was following a file, this command **does not stop live following or switch its backing mode**. The `.tsinv` represents the captured point in time; subsequent incoming records do not silently modify that saved file.
 
-You can later choose **File > Open Investigation Snapshot...** to open a `.tsinv` as a separate SnapshotBacked investigation. No original external log is needed to inspect the evidence contained in that snapshot.
+You can later choose **File > Open Investigation Snapshot...** to open a `.tsinv` as a separate SnapshotBacked investigation.
+
+![Open investigation snapshot](screenshots/saving-and-restoring-open-snapshot.png)
+
+No original external log is needed to inspect the evidence contained in that snapshot.
 
 The standalone snapshot includes the normalized records and the supporting import and source information that was captured. It is not a substitute for saving analyst work: if you also need bookmarks, notes, finding dispositions, active filters, comparison documents, or layout, **save the `.tsw` workspace**.
 
@@ -151,7 +220,11 @@ The backing mode answers one essential question: **What is the authoritative sou
 | **SnapshotBacked** | Durable TraceScope snapshot evidence. | You opened a standalone `.tsinv`, recovered an unavailable source from a saved workspace snapshot, or deliberately preserved an open investigation as snapshot-only. |
 | **Hybrid** | Saved snapshot evidence forms the durable baseline; a verified connected external source can contribute continuation records. | You reconnect a suitable external source to a SnapshotBacked investigation while retaining the evidence that was already preserved. |
 
-TraceScope exposes the current backing mode and source information in the investigation's tab presentation and tooltip. The distinction is especially important if a producer truncates or replaces a file: a SourceBacked reload follows the external source, whereas SnapshotBacked evidence does not depend on the source's current contents.
+TraceScope exposes the current backing mode and source information in the investigation's tab presentation and tooltip. 
+
+![Tab tooltip](screenshots/saving-and-restoring-tab-tooltip.png)
+
+The distinction is especially important if a producer truncates or replaces a file: a SourceBacked reload follows the external source, whereas SnapshotBacked evidence does not depend on the source's current contents.
 
 ### Preserve an open investigation as snapshot-only
 
@@ -159,6 +232,8 @@ Use this when keeping all **currently admitted evidence** is more important than
 
 1. Right-click the investigation's **workspace tab**.
 2. Open **Source > Preserve as Snapshot Only...**.
+
+    ![Preserve as snaphot only](screenshots/saving-and-restoring-preserve-snapshot-only.png)
 3. Let TraceScope capture the evidence and complete the transition.
 
 This changes the *open investigation* from SourceBacked or Hybrid to **SnapshotBacked**. If live following was active, the transition establishes a stable capture boundary and does not resume following after it succeeds. The investigation no longer depends on the external source to retain its captured evidence.
@@ -172,7 +247,11 @@ This operation differs from **Save Investigation Snapshot...**: saving a standal
 Some SnapshotBacked investigations retain sufficient information about their previous physical source to reconnect safely.
 
 1. Restore the recorded source file at its original path, or use **Source > Redefine Source Path...** if you have a verifiable relocated copy and that action is available.
+
+    ![Redefine source path](screenshots/saving-and-restoring-redefine-source.png)
 2. Right-click the investigation tab and choose **Source > Reconnect Source**.
+
+    ![Reconnect source](screenshots/saving-and-restoring-reconnect-source.png)
 3. If TraceScope verifies the source and reconstructs the continuation successfully, the investigation becomes **Hybrid**.
 
 A successful reconnection keeps the saved evidence as its baseline instead of replacing it with whatever happens to remain in the external file. Reconnection is not always available: a snapshot may lack the required source-continuity information, the file may be unavailable, or verification may fail. Do not treat an arbitrary similarly named file as a safe replacement.
@@ -181,13 +260,19 @@ A successful reconnection keeps the saved evidence as its baseline instead of re
 
 For a Hybrid investigation, **Source > Use Source as Authoritative...** offers a different and potentially destructive choice: reconstruct the investigation entirely from the verified connected external source and return to **SourceBacked**.
 
+![Use source as authoritative](screenshots/saving-and-restoring-authoritative.png)
+
 Use it only when you intend the current source to replace snapshot-only evidence. If the external source no longer contains older log generations, those records may not be part of the resulting SourceBacked investigation. Applicable annotations can be retained for record identities that survive, but evidence or annotations tied to absent records should not be assumed to remain available.
 
 If you need the accumulated Hybrid evidence instead, leave the snapshot authoritative or choose **Preserve as Snapshot Only...**. Save your workspace before making a significant source-authority decision.
 
 ## 6. Reload, relocate, and resume work deliberately
 
-Choose **File > Reload Current Session** when you intentionally want to reconstruct the active investigation according to its backing mode. Reload does not mean the same thing in every mode:
+Choose **File > Reload Current Session** when you intentionally want to reconstruct the active investigation according to its backing mode.
+
+![Reload](screenshots/saving-and-restoring-reload.png)
+
+Reload does not mean the same thing in every mode:
 
 - **SourceBacked:** re-imports the authoritative external source using the saved profile and applicable rotated-family configuration. If the source was truncated or replaced, old evidence no longer available from the source should not be assumed to reappear. Stable identities allow applicable investigation state to be retained for surviving records.
 - **SnapshotBacked:** reloads from its durable investigation snapshot, without requiring the original source file.
@@ -199,9 +284,21 @@ Where supported, reload preparation occurs before the current investigation is r
 
 A moved source is different from a changed source. Use the correct recovery path for the situation:
 
-- **Reopening a saved SourceBacked workspace whose file is missing:** use **Locate File...** at the missing-source prompt, or **Open Saved Snapshot** to recover saved evidence instead.
-- **Changing the recorded location of an already open investigation:** right-click its tab and look under **Source > Redefine Source Path...**. When enabled, this action verifies a candidate file against retained physical-source identity before changing the source path. The logical source identity is retained.
+- **Reopening a saved SourceBacked workspace whose file is missing:** use **Locate File...** at the missing-source prompt,
+
+    ![Locate File](screenshots/saving-and-restoring-locate-file.png)
+
+    or **Open Saved Snapshot** to recover saved evidence instead.
+
+    ![Open saved snapshot](screenshots/saving-and-restoring-restore-from-snapshot.png)
+- **Changing the recorded location of an already open investigation:** right-click its tab and look under **Source > Redefine Source Path...**. 
+
+    ![Redefine source path](screenshots/saving-and-restoring-redefine-source.png)
+
+    When enabled, this action verifies a candidate file against retained physical-source identity before changing the source path. The logical source identity is retained.
 - **Reconnecting SnapshotBacked evidence:** reconnect only when continuity information is available and the recorded or safely redefined source can be verified.
+
+    ![Reconnect source](screenshots/saving-and-restoring-reconnect-source.png)
 
 Source-family discovery may also need to find the related rotated files. Do not rename or delete rotation members casually if you expect a subsequent source-based reload to reconstruct them.
 
