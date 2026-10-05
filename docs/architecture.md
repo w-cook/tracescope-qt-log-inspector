@@ -19,93 +19,7 @@ TraceScope is a native, offline Qt/C++ desktop application for investigating fil
 
 TraceScope separates **source interpretation** from the **normalized investigation**, and separates that investigation from its **presentation and durable artifacts**. This allows different source formats to converge on one investigation model without requiring every format to provide the same fields, and allows admitted evidence to remain meaningful even when the original source later changes or becomes unavailable.
 
-```mermaid
-flowchart TD
-
-    subgraph Sources["Sources and ingestion"]
-        Producer["External log producer"]
-        Files["External log file(s)"]
-        SharedRead["Passive shared-read boundary"]
-        SnapshotSource[".tsinv snapshot<br/>opened as investigation source"]
-        Configure["Format detection and<br/>import configuration"]
-        Importer["Importer + import profile"]
-        Result["Import result"]
-        Live["Live-follow coordination"]
-
-        Producer -->|write, append, rotate, or replace| Files
-        Files -->|open without taking ownership| SharedRead
-        SharedRead -->|configure static import| Configure
-        Configure -->|apply profile| Importer
-        Importer -->|normalize records| Result
-        SharedRead -->|observe source growth| Live
-    end
-
-    subgraph Investigation["Normalized investigation"]
-        Session["Investigation session"]
-        Controller["Investigation controller"]
-        Model["Investigation table model"]
-        Proxy["Filter / sort proxy"]
-        SessionView["Investigation view"]
-
-        Session -->|own investigation state| Controller
-        Controller -->|populate source model| Model
-        Model -->|filter and sort through| Proxy
-        Proxy -->|present records| SessionView
-    end
-
-    subgraph Workspace["Workspace and presentation"]
-        WorkspaceModel["Investigation workspace"]
-        CaptureComparison["Comparison capture<br/>Baseline + Comparison"]
-        Comparison["Immutable comparison snapshot<br/>complete or time-scoped"]
-        Documents["Workspace documents"]
-        Host["Document host(s)"]
-        Windows["TraceScope workspace windows"]
-
-        SessionView -->|present investigation| Documents
-        Comparison -->|present captured result| Documents
-        Documents -->|host| Host
-        Host -->|present workspace| Windows
-    end
-
-    subgraph Persistence["Persistence and saved evidence"]
-        SnapshotArtifact["Standalone .tsinv<br/>saved investigation evidence"]
-        SavePackage["Workspace save package"]
-        WorkspaceFiles[".tsw manifest +<br/>managed session snapshots"]
-
-        Session -->|save standalone snapshot| SnapshotArtifact
-        Session -->|capture managed evidence| SavePackage
-        WorkspaceModel -->|capture workspace state| SavePackage
-        Host -->|capture document layout| SavePackage
-        Comparison -->|persist captured result| SavePackage
-        SavePackage -->|write package| WorkspaceFiles
-    end
-
-    subgraph Output["Export and reporting"]
-        ExportInputs["Selected investigation / comparison data"]
-        ReportSnapshot["Frozen report snapshot"]
-        Html["Self-contained offline HTML"]
-        Csv["CSV exports"]
-
-        Session -->|select investigation data| ExportInputs
-        Comparison -->|select captured comparison| ExportInputs
-        ExportInputs -->|freeze report state| ReportSnapshot
-        ReportSnapshot -->|render| Html
-        ExportInputs -->|serialize selected tabular data| Csv
-    end
-
-    Result -->|create investigation| Session
-    SnapshotSource -->|restore captured evidence| Session
-    Live -->|append admitted records| Session
-
-    Session -->|open in workspace| WorkspaceModel
-    WorkspaceModel -->|choose Baseline + Comparison| CaptureComparison
-    Session -->|supply selected populations| CaptureComparison
-    CaptureComparison -->|freeze selected populations| Comparison
-
-    WorkspaceFiles -->|restore workspace| WorkspaceModel
-
-    SnapshotArtifact -.->|same artifact when reopened| SnapshotSource
-```
+![TraceScope system overview](diagrams/system-overview.svg)
 
 The diagram is a conceptual view of the major data and presentation boundaries rather than a literal call graph.
 
@@ -157,50 +71,7 @@ Concurrent access also means that a source can change between observation and ph
 
 This passive-reader rule is part of TraceScope's source boundary: investigating a log should not require the producing application to change its normal file lifecycle for TraceScope.
 
-```mermaid
-flowchart TD
-
-    Producer["External log producer"]
-    Source["External source files"]
-    SharedRead["Passive shared-read boundary"]
-
-    Suggest["Format suggestion"]
-    Config["Import configuration"]
-    Validator["Profile validation"]
-
-    Preview["Import preview"]
-    Registry["Importer registry"]
-    Importer["Configured importer"]
-    PreviewResult["Normalized preview and diagnostics"]
-
-    FullImport["Full import execution"]
-    FamilyImport["Source-family import"]
-    ImportResult["Import result"]
-    Session["Investigation session"]
-
-    Producer -->|writes log data| Source
-    Source -->|passive read access| SharedRead
-
-    SharedRead -->|inspect source| Suggest
-    Suggest -->|suggest configuration| Config
-    Config -->|validate profile| Validator
-
-    Validator -->|valid configuration| Preview
-    SharedRead -->|read preview data| Preview
-    Config -->|supply profile| Preview
-
-    Preview -->|resolve importer| Registry
-    Registry -->|select importer| Importer
-    Importer -->|parse bounded sample| PreviewResult
-
-    Config -->|start import| FullImport
-    SharedRead -->|read source data| FullImport
-    FullImport -->|process source family| FamilyImport
-    FamilyImport -->|resolve importer| Registry
-
-    Importer -->|produce normalized records| ImportResult
-    ImportResult -->|create investigation| Session
-```
+![TraceScope import pipeline](diagrams/import-pipeline.svg)
 
 ### Execution and memory
 
@@ -236,43 +107,7 @@ Investigation and comparison views implement the common `WorkspaceDocument` abst
 
 The visible windows are peers from the user's perspective: document-scoped actions target the window that invoked them, while workspace-level operations apply to the shared workspace. A root host coordinates cross-window document lookup, transfer, and layout internally; it is not a privileged user-facing workspace window.
 
-```mermaid
-flowchart LR
-
-    subgraph Data["Workspace data"]
-        Workspace["Investigation workspace"]
-        Session["Investigation session"]
-        Comparison["Immutable comparison snapshot"]
-
-        Workspace -->|owns sessions| Session
-    end
-
-    subgraph Documents["Workspace documents"]
-        InvestigationView["Investigation view"]
-        ComparisonView["Comparison document"]
-        Document["Workspace document"]
-
-        InvestigationView -->|presents| Session
-        InvestigationView -->|implements| Document
-
-        ComparisonView -->|presents| Comparison
-        ComparisonView -->|implements| Document
-    end
-
-    subgraph WindowOne["Workspace window A"]
-        HostOne["Document host<br/>root coordination role"]
-    end
-
-    subgraph WindowTwo["Workspace window B"]
-        HostTwo["Document host"]
-    end
-
-    Document -->|hosted in one window at a time| HostOne
-    HostOne -->|transfer document| HostTwo
-    Document -.->|same document identity| HostTwo
-
-    HostOne -.->|coordinate lookup, transfer, and layout| HostTwo
-```
+![TraceScope investigation and analysis workspace presentation](diagrams/investigation-and-analysis.svg)
 
 Presentation behavior that must remain consistent across documents is centralized rather than embedded independently in individual panels. `InterfaceScale` provides application-wide user scaling on top of the operating system's display/font scaling, while `InvestigationSectionResizePolicy` centralizes constrained-height resize, collapse, and recovery decisions for the main investigation layout. These mechanisms affect presentation only; they do not alter normalized evidence or analysis semantics.
 
@@ -326,50 +161,7 @@ Backing mode is therefore independent of whether the workspace has recently been
 
 Transitions between these modes are explicit. Preserving an investigation as snapshot-only removes its dependence on the current external source. Reconnecting eligible snapshot evidence to a verified source creates a Hybrid relationship without replacing the saved baseline. Conversely, **Use Source as Authoritative** deliberately abandons snapshot authority and reconstructs from the verified external source; it is not an implicit consequence of ordinary reload or recovery.
 
-```mermaid
-flowchart TD
-
-    subgraph Evidence["Evidence inputs"]
-        External["External log source"]
-        Snapshot["Durable .tsinv evidence<br/>standalone or workspace-managed"]
-    end
-
-    subgraph Modes["Investigation backing modes"]
-        SourceBacked["SourceBacked<br/>authority: external source"]
-        SnapshotBacked["SnapshotBacked<br/>authority: snapshot"]
-        Hybrid["Hybrid<br/>snapshot baseline +<br/>verified source continuation"]
-    end
-
-    External -->|authoritative evidence| SourceBacked
-    Snapshot -->|authoritative evidence| SnapshotBacked
-
-    Snapshot -->|durable baseline| Hybrid
-    External -->|verified continuation| Hybrid
-
-    SourceBacked -->|Preserve as Snapshot Only| SnapshotBacked
-    SnapshotBacked -->|Reconnect verified source| Hybrid
-    Hybrid -->|Preserve as Snapshot Only| SnapshotBacked
-    Hybrid -->|Use Source as Authoritative| SourceBacked
-
-    subgraph Persistence["Workspace persistence and restoration"]
-        Persist["Capture backing mode,<br/>workspace state, and evidence"]
-        Save["Workspace save service"]
-        Package[".tsw manifest +<br/>managed .tsinv snapshots"]
-        Restore["Session restoration"]
-
-        Persist -->|prepare package| Save
-        Save -->|write snapshots, then manifest| Package
-        Package -->|open workspace| Restore
-    end
-
-    SourceBacked -->|save without changing authority| Persist
-    SnapshotBacked -->|save without changing authority| Persist
-    Hybrid -->|save without changing authority| Persist
-
-    Restore -->|SourceBacked| SourceBacked
-    Restore -->|SnapshotBacked| SnapshotBacked
-    Restore -->|Hybrid| Hybrid
-```
+![TraceScope persistence and evidence continuity](diagrams/persistence-and-evidence-continuity.svg)
 
 ### Workspace persistence
 
@@ -405,37 +197,7 @@ Time-scoped comparison capture is deliberately independent of the investigations
 
 This makes a comparison document an analytical artifact in its own right. It can remain meaningful even if one of its original source investigations is later changed, unavailable, or omitted during workspace restoration.
 
-```mermaid
-flowchart TD
-
-    subgraph Mutable["Mutable investigation state"]
-        Baseline["Baseline investigation"]
-        ComparisonSession["Comparison investigation"]
-        SelectedSessions["Selected investigation<br/>report inputs"]
-    end
-
-    subgraph ComparisonCapture["Comparison capture boundary"]
-        CompareBuilder["Comparison snapshot builder"]
-        ComparisonSnapshot["Immutable comparison snapshot<br/>captured scope + analysis"]
-
-        Baseline -->|complete population or selected time range| CompareBuilder
-        ComparisonSession -->|complete population or selected time range| CompareBuilder
-        CompareBuilder -->|freeze populations, context, and analysis| ComparisonSnapshot
-    end
-
-    subgraph ReportCapture["Report capture and rendering"]
-        ReportBuilder["Report snapshot builder"]
-        ReportSnapshot["Frozen report snapshot"]
-        Renderer["HTML report renderer"]
-        Html["Self-contained offline HTML"]
-
-        SelectedSessions -->|capture selected investigation state| ReportBuilder
-        ComparisonSnapshot -->|reuse captured scope + analysis| ReportBuilder
-        ReportBuilder -->|freeze report state| ReportSnapshot
-        ReportSnapshot -->|render captured data only| Renderer
-        Renderer -->|write document| Html
-    end
-```
+![TraceScope comparison and reporting](diagrams/comparison-and-reporting.svg)
 
 ### Report capture
 

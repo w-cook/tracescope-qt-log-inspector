@@ -1,0 +1,85 @@
+flowchart TD
+
+    subgraph Sources["Sources and ingestion"]
+        Producer["External log producer"]
+        Files["External log file(s)"]
+        SharedRead["Passive shared-read boundary"]
+        SnapshotSource[".tsinv snapshot<br/>opened as investigation source"]
+        Configure["Format detection and<br/>import configuration"]
+        Importer["Importer + import profile"]
+        Result["Import result"]
+        Live["Live-follow coordination"]
+
+        Producer -->|write, append, rotate, or replace| Files
+        Files -->|open without taking ownership| SharedRead
+        SharedRead -->|configure static import| Configure
+        Configure -->|apply profile| Importer
+        Importer -->|normalize records| Result
+        SharedRead -->|observe source growth| Live
+    end
+
+    subgraph Investigation["Normalized investigation"]
+        Session["Investigation session"]
+        Controller["Investigation controller"]
+        Model["Investigation table model"]
+        Proxy["Filter / sort proxy"]
+        SessionView["Investigation view"]
+
+        Session -->|own investigation state| Controller
+        Controller -->|populate source model| Model
+        Model -->|filter and sort through| Proxy
+        Proxy -->|present records| SessionView
+    end
+
+    subgraph Workspace["Workspace and presentation"]
+        WorkspaceModel["Investigation workspace"]
+        CaptureComparison["Comparison capture<br/>Baseline + Comparison"]
+        Comparison["Immutable comparison snapshot<br/>complete or time-scoped"]
+        Documents["Workspace documents"]
+        Host["Document host(s)"]
+        Windows["TraceScope workspace windows"]
+
+        SessionView -->|present investigation| Documents
+        Comparison -->|present captured result| Documents
+        Documents -->|host| Host
+        Host -->|present workspace| Windows
+    end
+
+    subgraph Persistence["Persistence and saved evidence"]
+        SnapshotArtifact["Standalone .tsinv<br/>saved investigation evidence"]
+        SavePackage["Workspace save package"]
+        WorkspaceFiles[".tsw manifest +<br/>managed session snapshots"]
+
+        Session -->|save standalone snapshot| SnapshotArtifact
+        Session -->|capture managed evidence| SavePackage
+        WorkspaceModel -->|capture workspace state| SavePackage
+        Host -->|capture document layout| SavePackage
+        Comparison -->|persist captured result| SavePackage
+        SavePackage -->|write package| WorkspaceFiles
+    end
+
+    subgraph Output["Export and reporting"]
+        ExportInputs["Selected investigation / comparison data"]
+        ReportSnapshot["Frozen report snapshot"]
+        Html["Self-contained offline HTML"]
+        Csv["CSV exports"]
+
+        Session -->|select investigation data| ExportInputs
+        Comparison -->|select captured comparison| ExportInputs
+        ExportInputs -->|freeze report state| ReportSnapshot
+        ReportSnapshot -->|render| Html
+        ExportInputs -->|serialize selected tabular data| Csv
+    end
+
+    Result -->|create investigation| Session
+    SnapshotSource -->|restore captured evidence| Session
+    Live -->|append admitted records| Session
+
+    Session -->|open in workspace| WorkspaceModel
+    WorkspaceModel -->|choose Baseline + Comparison| CaptureComparison
+    Session -->|supply selected populations| CaptureComparison
+    CaptureComparison -->|freeze selected populations| Comparison
+
+    WorkspaceFiles -->|restore workspace| WorkspaceModel
+
+    SnapshotArtifact -.->|same artifact when reopened| SnapshotSource

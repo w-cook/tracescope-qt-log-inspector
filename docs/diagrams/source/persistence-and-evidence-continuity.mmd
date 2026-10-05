@@ -1,0 +1,42 @@
+flowchart TD
+
+    subgraph Evidence["Evidence inputs"]
+        External["External log source"]
+        Snapshot["Durable .tsinv evidence<br/>standalone or workspace-managed"]
+    end
+
+    subgraph Modes["Investigation backing modes"]
+        SourceBacked["SourceBacked<br/>authority: external source"]
+        SnapshotBacked["SnapshotBacked<br/>authority: snapshot"]
+        Hybrid["Hybrid<br/>snapshot baseline +<br/>verified source continuation"]
+    end
+
+    External -->|authoritative evidence| SourceBacked
+    Snapshot -->|authoritative evidence| SnapshotBacked
+
+    Snapshot -->|durable baseline| Hybrid
+    External -->|verified continuation| Hybrid
+
+    SourceBacked -->|Preserve as Snapshot Only| SnapshotBacked
+    SnapshotBacked -->|Reconnect verified source| Hybrid
+    Hybrid -->|Preserve as Snapshot Only| SnapshotBacked
+    Hybrid -->|Use Source as Authoritative| SourceBacked
+
+    subgraph Persistence["Workspace persistence and restoration"]
+        Persist["Capture backing mode,<br/>workspace state, and evidence"]
+        Save["Workspace save service"]
+        Package[".tsw manifest +<br/>managed .tsinv snapshots"]
+        Restore["Session restoration"]
+
+        Persist -->|prepare package| Save
+        Save -->|write snapshots, then manifest| Package
+        Package -->|open workspace| Restore
+    end
+
+    SourceBacked -->|save without changing authority| Persist
+    SnapshotBacked -->|save without changing authority| Persist
+    Hybrid -->|save without changing authority| Persist
+
+    Restore -->|SourceBacked| SourceBacked
+    Restore -->|SnapshotBacked| SnapshotBacked
+    Restore -->|Hybrid| Hybrid
