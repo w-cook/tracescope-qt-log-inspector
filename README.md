@@ -54,7 +54,7 @@ You can compare the complete evidence currently admitted to each investigation o
 
 Each comparison captures the selected populations and results at the moment you create it. You can continue filtering, following, or otherwise working in the source investigations without changing that saved comparison, then return to the original investigations when a difference gives you something worth examining more closely.
 
-![TraceScope investigation comparison](docs/screenshots/readme-comparison.png)
+![TraceScope investigation comparison](docs/media/comparing-sessions-overview.gif)
 
 [Comparing Sessions](docs/comparing-sessions.md)
 

@@ -2,6 +2,8 @@
 
 A log file can reveal what happened during one run. **Session Comparison** helps you identify how two recorded runs differ—for example, a known-good engineering capture and a later degraded capture. TraceScope compares the normalized records in both investigations and presents differences in event codes, severity, elevated activity, selected source-specific attributes, and optionally detected bursts.
 
+![Comparing investigation sessions](media/comparing-sessions-overview.gif)
+
 This guide uses the fictional **Field Gateway Support Sessions** supplied with TraceScope. The two captures represent a known-good run and a degraded run of the same gateway. They are deliberately matched for a reproducible exercise, but a difference between two logs is an investigative observation, **not proof of what caused a failure**.
 
 **Having trouble comparing sessions?** [Jump straight to Troubleshooting](#troubleshooting).
@@ -42,10 +44,36 @@ The samples use key-value/logfmt records. Their matching profile maps timestamps
 
 Both sessions must be open in the **same TraceScope workspace** before you create a comparison.
 
-1. Choose **File > Open Log File...**, select `field-gateway-known-good.log`, and load `field-gateway-support-session-profile.json` using **Load Profile...** in **Import Configuration**.
-2. Confirm that the selected format is **Key-Value / logfmt**, inspect the preview, and select **Import**.
+1. Choose **File > Open Log File...**,
+
+    ![Open log file](screenshots/comparing-sessions-open-log-file.png)
+
+    select `field-gateway-known-good.log`,
+    
+    ![Select the log](screenshots/comparing-sessions-known-good.png)
+    
+    and load `field-gateway-support-session-profile.json`using **Load Profile...** in **Import Configuration**.
+
+    ![Load profile](screenshots/comparing-sessions-load-profile.png)
+2. Confirm that the selected format is **Key-Value / logfmt**,
+
+    ![Confirm the format](screenshots/comparing-sessions-format.png)
+
+    inspect the preview,
+    
+    ![Inspect the preview](screenshots/comparing-sessions-preview.png)
+    
+    and select **Import**.
+
+    ![Select import](screenshots/comparing-sessions-import.png)
 3. Repeat those steps for `field-gateway-degraded.log`, using **the same profile**.
-4. Confirm that both investigation tabs are present. Leave the degraded investigation active for the next step.
+
+    ![Repeat for the degraded run log](screenshots/comparing-sessions-degraded.png)
+4. Confirm that both investigation tabs are present.
+
+    ![Confirm both are present](screenshots/comparing-sessions-both-tabs.png)
+
+    Leave the degraded investigation active for the next step.
 
 If you are using the packaged Windows release, look under its included `samples/` directory. For the Linux AppImage, obtain the separate static samples archive or use the repository's sample files, as explained in [Getting Started](getting-started.md#2-find-the-example-log-and-its-profile).
 
@@ -55,28 +83,56 @@ You can inspect and filter either investigation before proceeding. **By default*
 
 With the degraded investigation active:
 
-1. Choose **Investigation > Compare Sessions...**. The command is available when at least two investigation sessions are open. You can also right-click an investigation's workspace tab and choose **Create Comparison...**.
+1. Choose **Investigation > Compare Sessions...**. 
+
+    ![Compare sessions](screenshots/comparing-sessions-compare.png)
+
+    The command is available when at least two investigation sessions are open. You can also right-click an investigation's workspace tab and choose **Create Comparison...**.
+
+    ![Compare sessions](screenshots/comparing-sessions-compare-2.png)
 2. In **Compare Investigation Sessions**, set **Baseline** to `field-gateway-known-good.log` and **Comparison** to `field-gateway-degraded.log`.
+
+    ![Set baseline and comparison](screenshots/comparing-sessions-baseline.png)
 3. Read the orientation above the selectors: every displayed delta is **Comparison − Baseline**. Use **Swap Baseline / Comparison** if the sessions are reversed.
-4. Leave both **Use this session's active time range** checkboxes unchecked for the first walkthrough, so the known-good and degraded captures are compared in full. See [Optionally compare selected time ranges](#optionally-compare-selected-time-ranges) when you want to focus on particular periods instead.
+
+    ![Swap baseline and comparison](screenshots/comparing-sessions-swap.png)
+4. Leave both **Use this session's active time range** checkboxes unchecked for the first walkthrough, so the known-good and degraded captures are compared in full.
+
+    ![Unchecked active time ranges](screenshots/comparing-sessions-active-time-range.png)
+
+    See [Optionally compare selected time ranges](#optionally-compare-selected-time-ranges) when you want to focus on particular periods instead.
 5. Review **Burst Comparison**, which is enabled by default, and decide whether to keep it for this exercise. You can leave its suggested settings as they are for your first comparison.
+
+    ![Burst comparison settings](screenshots/comparing-sessions-burst-comparison.png)
 6. Select **OK** to create a new comparison document.
+
+    ![Confirm creation](screenshots/comparing-sessions-confirm.png)
 
 TraceScope prevents you from selecting the same investigation for both roles. The active session normally defaults to **Comparison**, while another open session is suggested as **Baseline**. Right-clicking a different session's tab can also suggest that clicked session as the baseline; always verify both selectors before continuing.
 
 The comparison appears as its **own workspace document**, with a compact title indicating `Baseline → Comparison`. It does not replace or merge the original investigations.
 
+![Comparison document](screenshots/comparing-sessions-document.png)
+
 ### Optionally compare selected time ranges
 
 You can compare different periods of two investigations without applying their other temporary Event Table filters to the comparison. Configure the desired **Time Range** filter separately in each source investigation *before* opening **Compare Sessions...**, then use the independent **Use this session's active time range** checkbox under Baseline, Comparison, or both.
 
-Each checkbox starts unchecked. It becomes available only when its selected investigation has at least one valid active time boundary and that boundary selects one or more records. Checked boundaries are inclusive: a start-only or end-only scope is valid, as is a bounded start–end interval. The selected records come from that session's **complete currently admitted population**, ignoring every other active filter. Records without usable timestamps cannot belong to a time-scoped selection.
+![Set time range filter](screenshots/comparing-sessions-set-time-range.png)
+
+Each checkbox starts unchecked. It becomes available only when its selected investigation has at least one valid active time boundary and that boundary selects one or more records. Checked boundaries are inclusive: a start-only or end-only scope is valid, as is a bounded start–end interval.
+
+![Checked active time ranges](screenshots/comparing-sessions-active-time-range-2.png)
+
+The selected records come from that session's **complete currently admitted population**, ignoring every other active filter. Records without usable timestamps cannot belong to a time-scoped selection.
 
 You can scope just one side and leave the other as a complete session. The resulting comparison permanently captures each side's scope and selected records; it is not a live connection to the source investigations' evolving filters. A time range selecting no records cannot be used to create a comparison. If you later want different boundaries or newly admitted live evidence, create another comparison.
 
 ### Decide whether to include burst comparison
 
 The **Burst Comparison** section is optional. It applies the **same explicit settings to both sessions**, rather than allowing each run's separate automatic timing to produce measurements on different scales.
+
+![Burst comparison settings](screenshots/comparing-sessions-burst-comparison.png)
 
 The setup dialog recommends shared **Window** and **Merge gap** values from the records selected for each side. If a scoped population contains too little timing information for an adaptive recommendation, that side falls back to its complete session's cadence; if that is also too sparse, the existing static recommendation applies. The dialog uses the larger of the two resulting recommendations for each shared setting. You can adjust those values and the **WARN/ERROR/CRITICAL events** and **ERROR/CRITICAL events** thresholds before creating the comparison. **Actual burst analysis always uses the selected comparison populations and the same explicit settings on both sides**; the fallback affects recommendations only.
 
@@ -86,11 +142,15 @@ For this exercise, leaving the default burst option enabled provides another per
 
 Start with **Comparison Sources** at the top of the new document. It identifies each source and its import context, reports whether that side used the **complete imported session** or a **captured active time range**, and shows any captured start and end boundaries (including unbounded boundaries) and the number of records actually compared. These details matter especially when the two sides have different scopes.
 
+![Comparison sources](screenshots/comparing-sessions-sources.png)
+
 Immediately below, the document reiterates two important rules: all deltas are **Comparison − Baseline**, and the result is an **immutable snapshot** of the selected record populations as they existed when you created it.
 
 ### Key Differences: look for changes worth investigating
 
 The **Key Differences** section focuses on differences rather than repeating every unchanged value. Its tables show baseline counts, comparison counts, and directional deltas where appropriate. Larger absolute differences generally appear earlier within the applicable result groups, but the presentation order is not a root-cause ranking.
+
+![Key differences section](media/comparing-sessions-key-differences.gif)
 
 Read the available subsections together:
 
@@ -117,7 +177,11 @@ For this exercise, the profile's **Firmware** field provides useful categorical 
 
 ## 5. Interpret Burst Comparison
 
-If you enabled burst analysis in the setup dialog, scroll to **Burst Comparison**. The document displays the shared configuration used for both sessions and, when the data supports comparison, includes:
+If you enabled burst analysis in the setup dialog, scroll to **Burst Comparison**.
+
+![Burst comparison section](screenshots/comparing-sessions-burst-comparison-2.png)
+
+The document displays the shared configuration used for both sessions and, when the data supports comparison, includes:
 
 - **Detected Bursts** and **Elevated Records in Bursts**.
 - **Peak Burst Elevated Count** and **Longest Burst**.
@@ -131,7 +195,11 @@ Unlike the **Auto** timing option in an individual investigation's Analytics tab
 
 ## 6. Use Session Context to keep the differences in perspective
 
-The **Session Context** table includes **Total Records**, **Duration**, and **Observed Records / Minute**, with directional deltas where they can be meaningfully calculated. When at least one side has a valid, bounded time range with a positive duration, it also shows **Window-Average Records / Minute**.
+The **Session Context** table includes **Total Records**, **Duration**, and **Observed Records / Minute**, with directional deltas where they can be meaningfully calculated.
+
+![Session context section](screenshots/comparing-sessions-session-context.png)
+
+When at least one side has a valid, bounded time range with a positive duration, it also shows **Window-Average Records / Minute**.
 
 **Duration** and **Observed Records / Minute** use the span between the first and last usable timestamps **among the selected records**. The observed rate divides the number of timestamped records by that span; it is unavailable without a positive-duration interval. By contrast, a **window-average rate** divides the selected timestamped-record count by the entire explicitly captured start–end interval, including quiet periods before the first or after the last selected event. Start-only, end-only, and zero-duration scopes do not have a finite window-average rate. A dash marks an unavailable side, and a window-average delta is displayed only when **both** sides have qualifying bounded windows. An unscoped complete session does not acquire a window-average rate merely because its records have first and last timestamps.
 
@@ -161,11 +229,19 @@ This is intentional: an existing result must keep its original meaning, includin
 
 ## 8. Save or share the comparison
 
-Choose **File > Save Workspace** to preserve the open investigations **and** comparison documents in a `.tsw` workspace. The saved workspace also has a companion `<workspace-name>.sessions/` folder holding the investigations' durable evidence snapshots. Keep the `.tsw` file and its matching folder together when moving or backing up your work; see [Saving and Restoring](saving-and-restoring.md).
+Choose **File > Save Workspace** to preserve the open investigations **and** comparison documents in a `.tsw` workspace.
+
+![Save workspace](screenshots/comparing-sessions-save-workspace.png)
+
+The saved workspace also has a companion `<workspace-name>.sessions/` folder holding the investigations' durable evidence snapshots. Keep the `.tsw` file and its matching folder together when moving or backing up your work; see [Saving and Restoring](saving-and-restoring.md).
 
 A saved comparison contains an independent point-in-time result, including the original selected populations' analysis and any independently captured time boundaries. It can still be restored as part of the workspace even if one of its original investigations cannot be reopened and you choose to skip that session during missing-source recovery. A saved comparison is not a substitute for keeping the original source evidence when you need to inspect individual events again.
 
-For an offline handoff that recipients can read **without TraceScope**, you can create a self-contained HTML report and include the comparison among its selected documents. A report is another fixed snapshot—not a live connection to either investigation or to the saved comparison document. The separate [Reporting and Exporting](reporting-and-export.md) guide covers report options and the distinctions among reports, findings CSV, filtered-record CSV, and saved workspaces.
+For an offline handoff that recipients can read **without TraceScope**, you can create a self-contained HTML report and include the comparison among its selected documents.
+
+![HTML report](screenshots/comparing-sessions-html-report.png)
+
+A report is another fixed snapshot—not a live connection to either investigation or to the saved comparison document. The separate [Reporting and Exporting](reporting-and-export.md) guide covers report options and the distinctions among reports, findings CSV, filtered-record CSV, and saved workspaces.
 
 ## Troubleshooting
 
