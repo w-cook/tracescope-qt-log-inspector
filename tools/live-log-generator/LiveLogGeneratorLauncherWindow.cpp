@@ -19,6 +19,10 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#ifdef Q_OS_WIN
+#include <QtCore/qt_windows.h>
+#endif
+
 namespace
 {
 QWidget *pathRow(
@@ -65,6 +69,17 @@ LiveLogGeneratorLauncherWindow::
         );
 
     setMinimumWidth(720);
+
+#ifdef Q_OS_WIN
+    process->setCreateProcessArgumentsModifier(
+        [](
+            QProcess::CreateProcessArguments *arguments
+            ) {
+            arguments->flags |=
+                CREATE_NO_WINDOW;
+        }
+        );
+#endif
 
     scenarioPathEdit =
         new QLineEdit(this);

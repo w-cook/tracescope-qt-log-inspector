@@ -53,6 +53,14 @@ target_link_libraries(
         Qt6::Widgets
 )
 
+if(WIN32)
+    set_target_properties(
+        TraceScopeLiveLogGeneratorLauncher
+        PROPERTIES
+            WIN32_EXECUTABLE ON
+    )
+endif()
+
 add_dependencies(
     TraceScopeLiveLogGeneratorLauncher
     TraceScopeLiveLogGenerator

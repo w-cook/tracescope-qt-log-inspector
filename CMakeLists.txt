@@ -292,6 +292,14 @@ target_link_libraries(TraceScope
         Qt6::Concurrent
 )
 
+if(WIN32)
+    set_target_properties(
+        TraceScope
+        PROPERTIES
+            WIN32_EXECUTABLE ON
+    )
+endif()
+
 add_subdirectory(tools/live-log-generator)
 
 enable_testing()
