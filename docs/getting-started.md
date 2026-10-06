@@ -2,6 +2,8 @@
 
 TraceScope is an offline desktop application for inspecting and investigating file-based diagnostic and telemetry logs. This guide takes you from launching the application to saving your first investigation, using a fictional software incident supplied with the project.
 
+![TraceScope overview](screenshots/getting-started-overview.png)
+
 You do not need to write code, run a server, or use the separate Live-Log Generator for this walkthrough.
 
 **In this guide, you will:**
@@ -62,28 +64,31 @@ The `.jsonl` extension means **JSON Lines**: each line holds an individual JSON 
 
 1. In TraceScope, choose **File > Open Log File...** (`Ctrl+O` on Windows).
 
-![Opening a log from the file menu](screenshots/getting-started-open-log.png)
+   ![Opening a log from the file menu](screenshots/getting-started-open-log.png)
+2. In the **Import Configuration** dialog, select **Browse...**
 
-2. In the **Import Configuration** dialog, select **Browse...** and choose `order-fulfillment-incident.jsonl`.
+   ![Browse for a log file](screenshots/getting-started-browse.png)
 
-![Browse for a log file](screenshots/getting-started-browse.png)
+   and choose `order-fulfillment-incident.jsonl`.
 
+   ![Browse for a log file](screenshots/getting-started-filename.png)
 3. Select **Load Profile...** and choose `order-fulfillment-incident-profile.json` from the `samples/profiles/` directory.
 
-![Loading a log profile](screenshots/getting-started-load-profile.png)
+   ![Loading a log profile](screenshots/getting-started-load-profile.png)
 
-4. Confirm that the profile is named **Order Fulfillment Incident**, the selected format is **JSON Lines**, and the configuration reports that the profile is valid.
+4. Confirm that the profile is named **Order Fulfillment Incident**, the selected format is **JSON Lines**,
 
-![Order Fulfillment Incident profile](screenshots/getting-started-profile-and-format.png)
-![Profile validation](screenshots/getting-started-profile-validation.png)
+   ![Order Fulfillment Incident profile](screenshots/getting-started-profile-and-format.png)
 
+   and the configuration reports that the profile is valid.
+
+   ![Profile validation](screenshots/getting-started-profile-validation.png)
 5. Examine the preview. You should see recognizable timestamps, severities, subsystems, and messages rather than having to interpret raw JSON yourself.
 
-![Profile preview](screenshots/getting-started-profile-preview.png)
-
+   ![Profile preview](screenshots/getting-started-profile-preview.png)
 6. Select **Import** to open the investigation.
 
-![Import profile](screenshots/getting-started-import.png)
+   ![Import profile](screenshots/getting-started-import.png)
 
 The Import Configuration layout may differ according to your window size. Its controls and validation have the same purpose in the wide and compact layouts.
 
@@ -93,23 +98,22 @@ The Import Configuration layout may differ according to your window size. Its co
 
 After the import, the log is displayed as an investigation. Take a moment to explore the main areas:
 
-- **Event table:** Browse, sort, and select normalized records. Source-specific fields appear alongside recognized investigation fields where available. Active categorical filter values appear bold within records.
+- **Event table:** Browse, sort, and select normalized records.
 
-![Event table](screenshots/getting-started-event-table.png)
+   ![Event table](screenshots/getting-started-event-table.png)
 
+   Source-specific fields appear alongside recognized investigation fields where available. Active categorical filter values appear bold within records.
 - **Filters and search:** Narrow the event table by severity, subsystem, event code, and other available fields, or search across the records.
 
-![Filters and search](screenshots/getting-started-filters-and-search.png)
+   ![Filters and search](screenshots/getting-started-filters-and-search.png)
+- **Event Details:** Select a record row in **Telemetry Events**. The separate **Event Details** panel shows the record's mapped values and **Custom Attributes** before **Source / Provenance**.
 
-- **Event Details:** Select a record row in **Telemetry Events**. The separate **Event Details** panel shows the record's mapped values and **Custom Attributes** before **Source / Provenance**. If you later save an analyst note, it appears above the record information in this same panel. This is also where you can bookmark and annotate evidence.
+   ![Event details](screenshots/getting-started-event-details.png)
 
-![Event details](screenshots/getting-started-event-details.png)
-
+   If you later save an analyst note, it appears above the record information in this same panel. This is also where you can bookmark and annotate evidence.
 - **Timeline and analysis:** Explore how recorded activity changes over time and use the available summary and analytical views to investigate patterns.
 
-![Timeline](screenshots/getting-started-timeline.png)
-![Issue Summary](screenshots/getting-started-issue-summary.png)
-![Analytics](screenshots/getting-started-analytics.png)
+   ![Timeline and analysis](screenshots/getting-started-timeline-and-analysis.png)
 
 ### Adjust the layout for your screen
 
@@ -118,13 +122,16 @@ The investigation may look different on your computer depending on your window s
 If you want more room or need to change the size of the interface:
 
 1. Try maximizing or enlarging the TraceScope window.
-2. Open **View > Interface Scale**. The **100% (System)** option uses the operating system's display scaling without an additional TraceScope multiplier. If the interface is too large for your available space, try **90%**, **80%**, or another smaller option. If controls and text are too small, choose a larger percentage instead. Changes take effect while the application is open.
+2. Open **View > Interface Scale**.
 
-![Interface scale](screenshots/getting-started-interface-scale.png)
+   ![Interface scale](screenshots/getting-started-interface-scale.png)
 
-3. Use the small **chevron near the right side of each section's title** to collapse or expand the Timeline, Telemetry Events, or the entire lower investigation area. You can also drag the dividers between expanded sections to distribute the available space.
+   The **100% (System)** option uses the operating system's display scaling without an additional TraceScope multiplier. If the interface is too large for your available space, try **90%**, **80%**, or another smaller option. If controls and text are too small, choose a larger percentage instead. Changes take effect while the application is open.
+3. Use the small **chevron near the right side of each section's title** to collapse or expand the Timeline, Telemetry Events, or the entire lower investigation area.
 
-![Section chevron](screenshots/getting-started-chevron.png)
+   ![Section chevron](screenshots/getting-started-chevron.png)
+
+   You can also drag the dividers between expanded sections to distribute the available space.
 
 **When space is limited:** Expanding one section may cause a different section to collapse so the requested area can fit. If a section cannot expand, give the window more vertical space or reduce Interface Scale. You can also leave sections collapsed and open only the area you need; there is no requirement to match a particular layout to complete this walkthrough.
 
@@ -135,17 +142,23 @@ The lower investigation area contains the **Issue Summary**, **Findings**, and *
 The sample begins with routine processing and later includes elevated database activity and other operational problems. Rather than reading every line, start by narrowing the investigation.
 
 1. Open the severity filter, initially labeled **All severities**.
-2. Select `WARN` and `ERROR` to limit the visible records to those severity levels. Notice that the severity values **WARN** and **ERROR** now appear in **bold** in the Event Table. This indicates that those values are included in your active severity filter.
 
-![Severity filtering](screenshots/getting-started-severity-filtering.png)
+   ![Severity filter](screenshots/getting-started-all-severities.png)
+2. Select `WARN` and `ERROR` to limit the visible records to those severity levels.
 
+   ![Severity filtering](screenshots/getting-started-severity-filtering.png)
+
+   Notice that the severity values **WARN** and **ERROR** now appear in **bold** in the Event Table. This indicates that those values are included in your active severity filter.
+
+   ![Active severity filters](screenshots/getting-started-severity-filtering-2.png)
 3. Inspect the remaining events in the **Telemetry Events** table. Find a record with the event code `DB_POOL_HIGH`; the associated message reports elevated database connection-pool utilization.
 
-![Elevated event](screenshots/getting-started-elevated-event.png)
+   ![Elevated event](screenshots/getting-started-elevated-event.png)
+4. Select that **record row in the Event Table**, then look at the separate **Event Details** panel below.
 
-4. Select that **record row in the Event Table**, then look at the separate **Event Details** panel below. Pay particular attention to its timestamp, subsystem, event code, message, source-record context, and any relevant custom attributes.
+   ![Elevated event details](screenshots/getting-started-elevated-event-details.png)
 
-![Elevated event details](screenshots/getting-started-elevated-event-details.png)
+   Pay particular attention to its timestamp, subsystem, event code, message, source-record context, and any relevant custom attributes.
 
 You have now moved from an entire source file to a specific record worth examining. The filter limits what you see; it does not remove records from the imported investigation.
 
@@ -159,30 +172,41 @@ You can use **Reset Filters** whenever you want to return to the full visible da
 
 With the `DB_POOL_HIGH` record still selected in the Event Table:
 
-1. In **Event Details**, select **Bookmark Event**. Look back at the Event Table: a **star (★) appears beside that record's event number to indicate its new Bookmarked status**.
+1. In **Event Details**, select **Bookmark Event**.
 
-![Bookmark event](screenshots/getting-started-bookmark-event.png)
-![Bookmark star](screenshots/getting-started-bookmark-star.png)
+   ![Bookmark event](screenshots/getting-started-bookmark-event.png)
 
-2. In **Event Details**, change **Finding status** from **None** to **Open**. A bookmark marks a record for your attention; assigning a finding status also adds it to your formal findings list.
+   Look back at the Event Table: a **star (★) appears beside that record's event number to indicate its new Bookmarked status**.
 
-![Finding status](screenshots/getting-started-finding-status.png)
+   ![Bookmark star](screenshots/getting-started-bookmark-star.png)
+2. In **Event Details**, change **Finding status** from **None** to **Open**.
 
+   ![Finding status](screenshots/getting-started-finding-status.png)
+
+   A bookmark marks a record for your attention; assigning a finding status also adds it to your formal findings list.
 3. In the lower investigation area, select the **Findings** tab. If that area is collapsed, expand it using its chevron first. Find your newly created **Open** finding in the list. Its text initially begins with **(No analyst note)** and includes the event's code and message.
 
-![New finding](screenshots/getting-started-new-finding.png)
+   ![New finding](screenshots/getting-started-new-finding.png)
+4. Return to **Event Details** for the selected record and select **Add Note**.
 
-4. Return to **Event Details** for the selected record and select **Add Note**. Enter a brief observation, such as: `Review this database-pool warning alongside subsequent order-processing and dependency failures.` Select **Save** in the note editor. The text appears immediately in an **Analyst Note** block above the record details, and the button changes to **Edit Note**.
+   ![Add note](screenshots/getting-started-add-note.png)
 
-![Add note](screenshots/getting-started-add-note.png)
-![Save note](screenshots/getting-started-save-note.png)
-![Edit note](screenshots/getting-started-edit-note.png)
+   Enter a brief observation, such as: `Review this database-pool warning alongside subsequent order-processing and dependency failures.` Select **Save** in the note editor.
+   
+   ![Save note](screenshots/getting-started-save-note.png)
+   
+   The text appears immediately in an **Analyst Note** block above the record details, and the button changes to **Edit Note**.
 
-5. Look at the **Findings** tab again. The entry's default **(No analyst note)** description has been replaced by **your note**. This demonstrates how the Event Table, Event Details, and Findings tab represent the same underlying record and investigation state.
+   ![Edit note](screenshots/getting-started-edit-note.png)
+5. Look at the **Findings** tab again. The entry's default **(No analyst note)** description has been replaced by **your note**.
 
-![Noted finding](screenshots/getting-started-noted-finding.png)
+   ![Noted finding](screenshots/getting-started-noted-finding.png)
+
+   This demonstrates how the Event Table, Event Details, and Findings tab represent the same underlying record and investigation state.
 
 You have now bookmarked a source record, classified it as an unresolved finding, and attached an observation directly to that evidence. You can return to it through the bookmark and finding controls as you continue investigating.
+
+![Bookmark and finding filters](screenshots/getting-started-bookmark-and-finding-filters.png)
 
 ## 7. Save your workspace
 
@@ -198,13 +222,17 @@ To verify this workflow, you can use **File > Open Workspace...** to reopen the 
 
 **What happens to the log evidence when you save?** Saving a workspace creates both the `.tsw` workspace file and a **companion folder containing a durable `.tsinv` snapshot for each open investigation**. The snapshots preserve each investigation's normalized evidence as it existed when you saved; the `.tsw` file preserves the broader workspace and investigation state. Keep the companion `<workspace-name>.sessions/` folder together with the `.tsw` file if you move, back up, or share the saved workspace; the `.tsw` file alone is not the complete saved package.
 
-An investigation that was **SourceBacked** remains SourceBacked when you save: its original external log is still the authoritative source for normal reopening and reloading. If that source is missing when you reopen the workspace, TraceScope offers **Open Saved Snapshot** so you can recover the saved evidence without the original log. Choosing that option restores the affected investigation as **SnapshotBacked**. Saving therefore *does* preserve the investigation's log evidence; it does not automatically change that document's source-backing mode.
+An investigation that was **SourceBacked** remains SourceBacked when you save: its original external log is still the authoritative source for normal reopening and reloading. If that source is missing when you reopen the workspace, TraceScope offers **Open Saved Snapshot** so you can recover the saved evidence without the original log.
 
 ![Restore saved investigation snapshot](screenshots/getting-started-restore-snapshot.png)
 
-You can also save an individual investigation as a standalone `.tsinv` snapshot, separately from the full workspace. The detailed distinctions among source backing, saved snapshots, and recovery are covered in [Saving and Restoring](saving-and-restoring.md).
+Choosing that option restores the affected investigation as **SnapshotBacked**. Saving therefore *does* preserve the investigation's log evidence; it does not automatically change that document's source-backing mode.
+
+You can also save an individual investigation as a standalone `.tsinv` snapshot, separately from the full workspace.
 
 ![Save investigation snapshot](screenshots/getting-started-save-snapshot.png)
+
+The detailed distinctions among source backing, saved snapshots, and recovery are covered in [Saving and Restoring](saving-and-restoring.md).
 
 ## What you've accomplished
 
