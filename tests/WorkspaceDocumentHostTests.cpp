@@ -1466,8 +1466,8 @@ void WorkspaceDocumentHostTests::
     detachedWindow->setGeometry(
         120,
         140,
-        720,
-        480
+        800,
+        520
         );
 
     detachedWindow->show();
