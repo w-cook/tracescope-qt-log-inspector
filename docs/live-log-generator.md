@@ -32,6 +32,8 @@ The generator is intended for reproducible manual verification, demonstrations, 
 
 `TraceScopeLiveLogGeneratorLauncher` provides a thin graphical front end for the command-line generator.
 
+![Live-Log Generator Overview](screenshots/live-following-generator-overview.png)
+
 Use it when manually exercising TraceScope and there is no need to construct command-line arguments directly.
 
 The launcher exposes:
