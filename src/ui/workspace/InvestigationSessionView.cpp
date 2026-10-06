@@ -2677,6 +2677,8 @@ void InvestigationSessionView::
         ->setInvestigationState(
             state
             );
+
+    scheduleSectionCollapseControlGeometryUpdate();
 }
 
 void InvestigationSessionView::

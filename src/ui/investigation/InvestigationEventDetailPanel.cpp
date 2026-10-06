@@ -1008,42 +1008,66 @@ void InvestigationEventDetailPanel::
             .width()
         );
 
-    const int statusRowWidth =
-        m_findingStatusLabel
-            ->sizeHint()
-            .width()
-        + horizontalSpacing
-        + m_findingStatusCombo
-              ->sizeHint()
-              .width();
-
-    const int actionRowWidth =
-        m_noteButton
-            ->minimumWidth()
-        + horizontalSpacing
-        + m_bookmarkButton
-            ->minimumWidth();
-
-    const int controlWidth =
+    /*
+    * The compact presentation uses a two-column grid:
+     *
+     *   Finding status: [Status]
+     *   [Note action]   [Bookmark action]
+     *
+     * QGridLayout shares each column's width across both
+     * rows, so the true minimum is the sum of the widest
+     * control in each column rather than the wider of the
+     * two individual row totals.
+     */
+    const int firstColumnWidth =
         std::max(
-            statusRowWidth,
-            actionRowWidth
+            m_findingStatusLabel
+                ->sizeHint()
+                .width(),
+            m_noteButton
+                ->minimumWidth()
             );
 
-    int horizontalMargins = 0;
+    const int secondColumnWidth =
+        std::max(
+            m_findingStatusCombo
+                ->sizeHint()
+                .width(),
+            m_bookmarkButton
+                ->minimumWidth()
+            );
+
+    const int controlWidth =
+        firstColumnWidth
+        + horizontalSpacing
+        + secondColumnWidth;
+
+    int horizontalOverhead = 0;
 
     if (layout() != nullptr) {
-        const QMargins margins =
-            layout()->contentsMargins();
-
-        horizontalMargins =
-            margins.left()
-            + margins.right();
+        /*
+         * Account for the complete horizontal space outside
+         * the layout's usable contents area, including both
+         * layout margins and any QGroupBox/style content
+         * inset.
+         *
+         * Using only QLayout::contentsMargins() can
+         * underestimate the true panel requirement by a
+         * pixel or two on Windows at fractional scaling.
+         */
+        horizontalOverhead =
+            std::max(
+                0,
+                width()
+                    - layout()
+                          ->contentsRect()
+                          .width()
+                );
     }
 
     const int requiredWidth =
         controlWidth
-        + horizontalMargins;
+        + horizontalOverhead;
 
     if (minimumWidth()
         != requiredWidth) {
