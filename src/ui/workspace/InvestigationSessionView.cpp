@@ -1103,6 +1103,15 @@ InvestigationSessionView::
         }
         );
 
+    connect(
+        m_bottomSplitter,
+        &QSplitter::splitterMoved,
+        this,
+        [this](int, int) {
+            updateSectionCollapseControlGeometry();
+        }
+        );
+
     m_constrainedResizeSettleTimer->setSingleShot(
         true
         );
@@ -1361,8 +1370,15 @@ InvestigationSessionView::
         &InvestigationReviewPanel::
         currentTabChanged,
         this,
-        &InvestigationSessionView::
-        updateReviewSplitter
+        [this](
+            InvestigationReviewTab tab
+            ) {
+            updateReviewSplitter(
+                tab
+                );
+
+            scheduleSectionCollapseControlGeometryUpdate();
+        }
         );
 
     connect(
@@ -4262,9 +4278,13 @@ void InvestigationSessionView::
      * ---------------------------------------------------------
      *
      * The lower control represents the complete
-     * horizontal Review / Selected Event Details
-     * region, so parent it to m_bottomSplitter rather
-     * than either individual child.
+     * horizontal Review / Selected Event Details region.
+     *
+     * It is parented to Event Details so it can overlay
+     * the right edge without becoming splitter-managed
+     * content. Its local X position therefore depends on
+     * the current Event Details width and must be refreshed
+     * whenever the horizontal splitter moves.
      */
     const int lowerTitleBandHeight =
         std::max(
