@@ -14,6 +14,8 @@ private:
     using Section =
         Policy::Section;
 
+    static constexpr int AllSectionsCapacity = 3;
+
     const Policy::ResizeLimits limits{
         220, // Timeline preferred
         160, // Timeline minimum
@@ -75,6 +77,11 @@ private slots:
     void finalEventCollapseBoundaryIsReversible();
 
     void fullShrinkGrowRoundTripRestoresOriginalGeometry();
+
+    void maximumOpenSectionsForcesCollapseEvenWithSurplus();
+    void maximumOpenSectionsStopsGrowthAtOne();
+    void maximumOpenSectionsStopsGrowthAtTwo();
+    void zeroCapacityKeepsAllSectionsCollapsed();
 };
 
 void InvestigationSectionResizePolicyTests::
@@ -1245,6 +1252,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             -489
             );
 
@@ -1321,6 +1329,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             600
             );
 
@@ -1399,6 +1408,7 @@ void InvestigationSectionResizePolicyTests::
             true,
             false,
             false,
+            AllSectionsCapacity,
             500
             );
 
@@ -1459,6 +1469,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             true,
+            AllSectionsCapacity,
             500
             );
 
@@ -1519,6 +1530,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             true,
             false,
+            AllSectionsCapacity,
             400
             );
 
@@ -1583,6 +1595,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             true,
             false,
+            AllSectionsCapacity,
             -70
             );
 
@@ -1637,6 +1650,7 @@ void InvestigationSectionResizePolicyTests::
             true,
             true,
             true,
+            AllSectionsCapacity,
             200
             );
 
@@ -1702,6 +1716,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             -1
             );
 
@@ -1781,6 +1796,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             -1
             );
 
@@ -1795,6 +1811,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             1
             );
 
@@ -1872,6 +1889,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             -1
             );
 
@@ -1914,6 +1932,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             1
             );
 
@@ -1972,6 +1991,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             -1
             );
 
@@ -2014,6 +2034,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             1
             );
 
@@ -2089,6 +2110,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             -400
             );
 
@@ -2116,6 +2138,7 @@ void InvestigationSectionResizePolicyTests::
             false,
             false,
             false,
+            AllSectionsCapacity,
             400
             );
 
@@ -2153,6 +2176,179 @@ void InvestigationSectionResizePolicyTests::
 
     QCOMPARE(
         restored.unconsumedDelta,
+        0
+        );
+}
+
+void InvestigationSectionResizePolicyTests::
+    maximumOpenSectionsForcesCollapseEvenWithSurplus()
+{
+    /*
+     * All sections have plenty of usable height.
+     *
+     * The capacity coordinator has nevertheless determined
+     * that only two sections can be supported at the new
+     * outer-window height.
+     *
+     * Capacity therefore owns the section-count decision:
+     * one section must collapse even though ordinary
+     * minimum-based shrinking would not require it yet.
+     */
+    const Policy::AutomaticResizeResult result =
+        Policy::resizeAutomatically(
+            {
+                true,
+                true,
+                true
+            },
+            {
+                220,
+                250,
+                240
+            },
+            limits,
+            compact,
+            false,
+            false,
+            false,
+            2,
+            -1
+            );
+
+    QCOMPARE(
+        result.transitions,
+        QList<Section>({
+            Section::Timeline
+        })
+        );
+
+    QVERIFY(!result.openSections.timeline);
+    QVERIFY(result.openSections.events);
+    QVERIFY(result.openSections.lowerDetails);
+
+    QCOMPARE(
+        result.unconsumedDelta,
+        0
+        );
+}
+
+void InvestigationSectionResizePolicyTests::
+    maximumOpenSectionsStopsGrowthAtOne()
+{
+    const Policy::AutomaticResizeResult result =
+        Policy::resizeAutomatically(
+            {
+                false,
+                false,
+                false
+            },
+            {
+                compact.timeline,
+                100,
+                compact.lowerDetails
+            },
+            limits,
+            compact,
+            false,
+            false,
+            false,
+            1,
+            600
+            );
+
+    QCOMPARE(
+        result.transitions,
+        QList<Section>({
+            Section::Events
+        })
+        );
+
+    QVERIFY(!result.openSections.timeline);
+    QVERIFY(result.openSections.events);
+    QVERIFY(!result.openSections.lowerDetails);
+
+    QCOMPARE(
+        result.unconsumedDelta,
+        0
+        );
+}
+
+void InvestigationSectionResizePolicyTests::
+    maximumOpenSectionsStopsGrowthAtTwo()
+{
+    const Policy::AutomaticResizeResult result =
+        Policy::resizeAutomatically(
+            {
+                false,
+                false,
+                false
+            },
+            {
+                compact.timeline,
+                100,
+                compact.lowerDetails
+            },
+            limits,
+            compact,
+            false,
+            false,
+            false,
+            2,
+            600
+            );
+
+    QCOMPARE(
+        result.transitions,
+        QList<Section>({
+            Section::Events,
+            Section::LowerDetails
+        })
+        );
+
+    QVERIFY(!result.openSections.timeline);
+    QVERIFY(result.openSections.events);
+    QVERIFY(result.openSections.lowerDetails);
+
+    QCOMPARE(
+        result.unconsumedDelta,
+        0
+        );
+}
+
+void InvestigationSectionResizePolicyTests::
+    zeroCapacityKeepsAllSectionsCollapsed()
+{
+    const Policy::AutomaticResizeResult result =
+        Policy::resizeAutomatically(
+            {
+                false,
+                false,
+                false
+            },
+            {
+                compact.timeline,
+                100,
+                compact.lowerDetails
+            },
+            limits,
+            compact,
+            false,
+            false,
+            false,
+            0,
+            200
+            );
+
+    QVERIFY(
+        result.transitions.isEmpty()
+        );
+
+    QVERIFY(!result.openSections.timeline);
+    QVERIFY(!result.openSections.events);
+    QVERIFY(!result.openSections.lowerDetails);
+
+    QCOMPARE(
+        result.unconsumedDelta,
         0
         );
 }

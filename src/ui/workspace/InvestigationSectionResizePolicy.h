@@ -177,6 +177,7 @@ public:
         bool timelinePreferredCollapsed,
         bool eventsPreferredCollapsed,
         bool lowerPreferredCollapsed,
+        int maximumOpenSections,
         int delta
         );
 };

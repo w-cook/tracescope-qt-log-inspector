@@ -158,6 +158,9 @@ InvestigationEventPanel::
     auto *layout =
         new QVBoxLayout(this);
 
+    m_expandedContentsMargins =
+        layout->contentsMargins();
+
     layout->setSpacing(
         InterfaceScale::pixels(
             4,
@@ -1707,10 +1710,22 @@ void InvestigationEventPanel::
 
         if (layout() != nullptr) {
             layout()->activate();
+
+            layout()->setContentsMargins(
+                InterfaceScale::margins(
+                    4,
+                    2,
+                    4,
+                    2,
+                    this
+                    )
+                );
+
+            layout()->invalidate();
         }
 
         const int height =
-            minimumSizeHint().height();
+            compactHeightHint();
 
         setMinimumHeight(
             height
@@ -1892,10 +1907,22 @@ void InvestigationEventPanel::
 
         if (layout() != nullptr) {
             layout()->activate();
+
+            layout()->setContentsMargins(
+                InterfaceScale::margins(
+                    4,
+                    2,
+                    4,
+                    2,
+                    this
+                    )
+                );
+
+            layout()->invalidate();
         }
 
         const int height =
-            minimumSizeHint().height();
+            compactHeightHint();
 
         setMinimumHeight(
             height
@@ -1912,6 +1939,14 @@ void InvestigationEventPanel::
         setMaximumHeight(
             QWIDGETSIZE_MAX
             );
+
+        if (layout() != nullptr) {
+            layout()->setContentsMargins(
+                m_expandedContentsMargins
+                );
+
+            layout()->invalidate();
+        }
 
         if (m_table != nullptr) {
             m_table->setVisible(
@@ -1947,6 +1982,48 @@ int InvestigationEventPanel::
     return 0;
 }
 
+int InvestigationEventPanel::
+    compactHeightHint() const
+{
+    QGroupBox probe(
+        title()
+        );
+
+    probe.setFont(
+        font()
+        );
+
+    probe.setFlat(
+        isFlat()
+        );
+
+    QVBoxLayout probeLayout(
+        &probe
+        );
+
+    probeLayout.setContentsMargins(
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            2,
+            this
+            )
+        );
+
+    probeLayout.setSpacing(
+        InterfaceScale::pixels(
+            4,
+            this
+            )
+        );
+
+    probe.ensurePolished();
+
+    return probe
+        .minimumSizeHint()
+        .height();
+}
 
 bool InvestigationEventPanel::
     eventFilter(

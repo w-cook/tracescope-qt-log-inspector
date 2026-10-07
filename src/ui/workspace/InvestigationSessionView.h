@@ -19,6 +19,7 @@ class InvestigationReviewPanel;
 class InvestigationSession;
 class InvestigationSessionSummaryPanel;
 class InvestigationTimelinePanel;
+class QGroupBox;
 class QSplitter;
 class QResizeEvent;
 class QTimer;
@@ -288,7 +289,15 @@ private:
         InvestigationSection section
         ) const;
 
+    int groupBoxCompactHeight(
+        const QGroupBox *groupBox
+        ) const;
+
     int minimumUsefulExpandedHeight(
+        InvestigationSection section
+        ) const;
+
+    int minimumRealizableExpandedHeight(
         InvestigationSection section
         ) const;
 
@@ -496,6 +505,9 @@ private:
 
     int m_constrainedLowerPreferredHeight =
         0;
+
+    qreal m_eventExpandedMinimumLogicalHeight =
+        0.0;
 
     bool m_constrainedLowerPreferredHeightRecovered =
         false;

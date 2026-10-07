@@ -262,6 +262,21 @@ applyGrowthWithoutTransitions(
                )
         .heights;
 }
+
+int openSectionCount(
+    const Policy::OpenSections &openSections
+    )
+{
+    return static_cast<int>(
+               openSections.timeline
+               )
+           + static_cast<int>(
+               openSections.events
+               )
+           + static_cast<int>(
+               openSections.lowerDetails
+               );
+}
 }
 
 QList<InvestigationSectionResizePolicy::Section>
@@ -895,10 +910,18 @@ InvestigationSectionResizePolicy::
         bool timelinePreferredCollapsed,
         bool eventsPreferredCollapsed,
         bool lowerPreferredCollapsed,
+        int maximumOpenSections,
         int delta
         )
 {
     AutomaticResizeResult result;
+
+    maximumOpenSections =
+        std::clamp(
+            maximumOpenSections,
+            0,
+            3
+            );
 
     result.openSections =
         openSections;
@@ -918,6 +941,55 @@ InvestigationSectionResizePolicy::
     if (delta < 0) {
         int remainingLoss =
             -delta;
+
+        /*
+         * Capacity is a physical guarantee, independent of which
+         * particular sections happen to be open.
+         *
+         * If the new outer-window height crosses a capacity
+         * boundary, collapse enough sections synchronously before
+         * performing ordinary continuous shrink.
+         */
+        while (
+            openSectionCount(
+                result.openSections
+                )
+            > maximumOpenSections
+            ) {
+            const QList<Section> collapseOrder =
+                automaticCollapseOrder(
+                    result.openSections
+                    );
+
+            if (collapseOrder.isEmpty()) {
+                break;
+            }
+
+            const Section candidate =
+                collapseOrder.first();
+
+            const TransitionResult transition =
+                automaticCollapseSection(
+                    result.openSections,
+                    result.heights,
+                    compactHeights,
+                    candidate
+                    );
+
+            if (!transition.completed) {
+                break;
+            }
+
+            result.openSections =
+                transition.openSections;
+
+            result.heights =
+                transition.heights;
+
+            result.transitions.append(
+                candidate
+                );
+        }
 
         while (remainingLoss > 0) {
             /*
@@ -1040,6 +1112,25 @@ InvestigationSectionResizePolicy::
         delta;
 
     while (remainingGrowth > 0) {
+        if (
+            openSectionCount(
+                result.openSections
+                )
+            >= maximumOpenSections
+            ) {
+            result.heights =
+                applyGrowthWithoutTransitions(
+                    result.openSections,
+                    result.heights,
+                    limits,
+                    remainingGrowth
+                    );
+
+            remainingGrowth = 0;
+
+            break;
+        }
+
         const std::optional<Section> candidate =
             nextAutomaticOpenCandidate(
                 result.openSections,

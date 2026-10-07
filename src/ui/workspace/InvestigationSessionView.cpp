@@ -4910,6 +4910,48 @@ void InvestigationSessionView::
             false;
     }
 
+    if (collapsed) {
+        int expandedMinimum =
+            minimumUsefulExpandedHeight(
+                InvestigationSection::Events
+                );
+
+        expandedMinimum =
+            std::max(
+                expandedMinimum,
+                m_eventSectionContainer
+                    ->minimumHeight()
+                );
+
+        if (
+            m_eventSectionContainer
+                ->sizePolicy()
+                .verticalPolicy()
+            != QSizePolicy::Ignored
+            ) {
+            expandedMinimum =
+                std::max(
+                    expandedMinimum,
+                    m_eventSectionContainer
+                        ->minimumSizeHint()
+                        .height()
+                    );
+        }
+
+        const qreal scaleFactor =
+            InterfaceScale::geometryFactor(
+                this
+                );
+
+        if (scaleFactor > 0.0) {
+            m_eventExpandedMinimumLogicalHeight =
+                static_cast<qreal>(
+                    expandedMinimum
+                    )
+                / scaleFactor;
+        }
+    }
+
     m_eventCollapsed =
         collapsed;
 
@@ -6181,16 +6223,16 @@ bool InvestigationSessionView::
     const ResizePolicy::ResizeLimits
         limits{
             m_timelineExpandedHeight,
-            minimumUsefulExpandedHeight(
+            minimumRealizableExpandedHeight(
                 InvestigationSection::Timeline
                 ),
 
-            minimumUsefulExpandedHeight(
+            minimumRealizableExpandedHeight(
                 InvestigationSection::Events
                 ),
 
             m_lowerRegionExpandedHeight,
-            minimumUsefulExpandedHeight(
+            minimumRealizableExpandedHeight(
                 InvestigationSection::LowerDetails
                 )
         };
@@ -6221,18 +6263,33 @@ bool InvestigationSessionView::
                 )
         };
 
+    const InvestigationSectionCapacity
+        targetCapacity =
+        sectionCapacityForAvailableHeight();
+
+    m_sectionCapacity =
+        targetCapacity;
+
+    const int maximumOpenSections =
+        static_cast<int>(
+            targetCapacity
+            );
+
+    updateSectionCollapseControls();
+
     const ResizePolicy::AutomaticResizeResult
         result =
-        ResizePolicy::resizeAutomatically(
-            openSections,
-            currentHeights,
-            limits,
-            compactHeights,
-            m_timelinePreferredCollapsed,
-            m_eventPreferredCollapsed,
-            m_lowerRegionPreferredCollapsed,
-            delta
-            );
+            ResizePolicy::resizeAutomatically(
+                openSections,
+                currentHeights,
+                limits,
+                compactHeights,
+                m_timelinePreferredCollapsed,
+                m_eventPreferredCollapsed,
+                m_lowerRegionPreferredCollapsed,
+                maximumOpenSections,
+                delta
+                );
 
     QList<int> targetSizes{
         result.heights.timeline,
@@ -6480,38 +6537,29 @@ int InvestigationSessionView::
 
     switch (section) {
     case InvestigationSection::Timeline:
-        if (
-            m_timelineCollapsed
-            && m_timelinePanel != nullptr
-            && m_timelinePanel->height() > 0
-            ) {
-            /*
-             * Once Timeline is actually collapsed, its
-             * settled native geometry is authoritative.
-             *
-             * The authored fallback exists only for cases
-             * where no usable collapsed measurement is
-             * available yet.
-             */
-            return m_timelinePanel->height();
-        }
+    {
+        const int nativeHeight =
+            groupBoxCompactHeight(
+                m_timelinePanel
+                );
 
-        return fallback;
+        return nativeHeight > 0
+                   ? nativeHeight
+                   : fallback;
+    }
 
     case InvestigationSection::Events:
-        if (
-            m_eventCollapsed
-            && m_eventPanel != nullptr
-            ) {
-            const int collapsedHeight =
-                m_eventPanel->collapsedHeight();
+    {
+        const int nativeHeight =
+            m_eventPanel != nullptr
+                ? m_eventPanel
+                      ->compactHeightHint()
+                : 0;
 
-            if (collapsedHeight > 0) {
-                return collapsedHeight;
-            }
-        }
-
-        return fallback;
+        return nativeHeight > 0
+                   ? nativeHeight
+                   : fallback;
+    }
 
     case InvestigationSection::LowerDetails:
     {
@@ -6521,19 +6569,18 @@ int InvestigationSessionView::
             measuredHeight =
                 std::max(
                     measuredHeight,
-                    m_reviewPanel->collapsedHeight()
+                    m_reviewPanel
+                        ->collapsedHeight()
                     );
         }
 
-        if (
-            m_lowerRegionCollapsed
-            && m_eventDetailPanel != nullptr
-            ) {
+        if (m_eventDetailPanel != nullptr) {
             measuredHeight =
                 std::max(
                     measuredHeight,
-                    m_eventDetailPanel
-                        ->collapsedHeight()
+                    groupBoxCompactHeight(
+                        m_eventDetailPanel
+                        )
                     );
         }
 
@@ -6544,6 +6591,52 @@ int InvestigationSessionView::
     }
 
     return fallback;
+}
+
+int InvestigationSessionView::
+    groupBoxCompactHeight(
+        const QGroupBox *groupBox
+        ) const
+{
+    if (groupBox == nullptr) {
+        return 0;
+    }
+
+    QGroupBox probe(
+        groupBox->title()
+        );
+
+    probe.setFont(
+        groupBox->font()
+        );
+
+    probe.setFlat(
+        groupBox->isFlat()
+        );
+
+    QVBoxLayout probeLayout(
+        &probe
+        );
+
+    if (groupBox->layout() != nullptr) {
+        probeLayout.setContentsMargins(
+            groupBox
+                ->layout()
+                ->contentsMargins()
+            );
+
+        probeLayout.setSpacing(
+            groupBox
+                ->layout()
+                ->spacing()
+            );
+    }
+
+    probe.ensurePolished();
+
+    return probe
+        .minimumSizeHint()
+        .height();
 }
 
 int InvestigationSessionView::
@@ -6577,6 +6670,91 @@ int InvestigationSessionView::
             this
             )
         );
+}
+
+int InvestigationSessionView::
+    minimumRealizableExpandedHeight(
+        InvestigationSection section
+        ) const
+{
+    int minimumHeight =
+        minimumUsefulExpandedHeight(
+            section
+            );
+
+    if (
+        section == InvestigationSection::Events
+        && m_eventExpandedMinimumLogicalHeight > 0.0
+        ) {
+        minimumHeight =
+            std::max(
+                minimumHeight,
+                qCeil(
+                    m_eventExpandedMinimumLogicalHeight
+                    * InterfaceScale::geometryFactor(
+                          this
+                          )
+                    )
+                );
+    }
+
+    if (
+        section == InvestigationSection::LowerDetails
+        && m_reviewPanel != nullptr
+        ) {
+        minimumHeight =
+            std::max(
+                minimumHeight,
+                m_reviewPanel
+                    ->minimumUsefulExpandedHeight()
+                );
+    }
+
+    QWidget *splitterChild = nullptr;
+
+    switch (section) {
+    case InvestigationSection::Timeline:
+        splitterChild =
+            m_timelinePanel;
+        break;
+
+    case InvestigationSection::Events:
+        splitterChild =
+            m_eventSectionContainer;
+        break;
+
+    case InvestigationSection::LowerDetails:
+        splitterChild =
+            m_lowerRegionContainer;
+        break;
+    }
+
+    if (splitterChild == nullptr) {
+        return minimumHeight;
+    }
+
+    minimumHeight =
+        std::max(
+            minimumHeight,
+            splitterChild->minimumHeight()
+            );
+
+    if (
+        splitterChild
+            ->sizePolicy()
+            .verticalPolicy()
+        != QSizePolicy::Ignored
+        ) {
+        minimumHeight =
+            std::max(
+                minimumHeight,
+                splitterChild
+                    ->minimumSizeHint()
+                    .height()
+                );
+    }
+
+    return minimumHeight;
 }
 
 int InvestigationSessionView::
@@ -7029,136 +7207,59 @@ InvestigationSessionView::
         + lowerCompact
         + handleSpace;
 
-    /*
- * Capacity priority follows user intent first.
- *
- * Sections the user wants open participate in threshold
- * calculations before sections the user has explicitly
- * chosen to keep collapsed.
- *
- * Normal priority is still:
- *
- *   Events
- *   Lower Details
- *   Timeline
- *
- * Examples:
- *
- *   all preferred open:
- *       Events, Lower, Timeline
- *
- *   Lower manually closed:
- *       Events, Timeline, Lower
- *
- *   Timeline manually closed:
- *       Events, Lower, Timeline
- *
- *   Events manually closed:
- *       Lower, Timeline, Events
- *
- * This keeps manually closed sections from delaying the
- * restoration of sections the user actually wants open.
- */
-    const QList<InvestigationSection>
-        normalPriority{
-            InvestigationSection::Events,
-            InvestigationSection::LowerDetails,
-            InvestigationSection::Timeline
-        };
-
-    QList<InvestigationSection>
-        capacityPriority;
-
-    /*
- * User-preferred open sections first.
- */
-    for (
-        const InvestigationSection section
-        : normalPriority
-        ) {
-        if (
-            !isSectionPreferredCollapsed(
-                section
+    QList<int> expansionDeltas{
+        std::max(
+            0,
+            minimumRealizableExpandedHeight(
+                InvestigationSection::Timeline
                 )
-            ) {
-            capacityPriority.append(
-                section
-                );
-        }
-    }
+                - timelineCompact
+            ),
+        std::max(
+            0,
+            minimumRealizableExpandedHeight(
+                InvestigationSection::Events
+                )
+                - eventCompact
+            ),
+        std::max(
+            0,
+            minimumRealizableExpandedHeight(
+                InvestigationSection::LowerDetails
+                )
+                - lowerCompact
+            )
+    };
+
+    std::sort(
+        expansionDeltas.begin(),
+        expansionDeltas.end(),
+        std::greater<int>()
+        );
 
     /*
-     * Manually closed sections remain part of the eventual
-     * physical three-section capacity calculation, but only
-     * after every section the user currently wants open.
+     * Capacity describes what the available space can support
+     * regardless of which particular sections the user wants
+     * open.
+     *
+     * Capacity One means any one section can be expanded.
+     * Capacity Two means any pair can be expanded.
+     * Capacity Three means all three can be expanded.
+     *
+     * Therefore each threshold is based on the largest
+     * expanded-over-compact deltas, not presentation priority.
      */
-    for (
-        const InvestigationSection section
-        : normalPriority
-        ) {
-        if (
-            isSectionPreferredCollapsed(
-                section
-                )
-            ) {
-            capacityPriority.append(
-                section
-                );
-        }
-    }
-
-    const auto compactHeightForSection =
-        [timelineCompact,
-         eventCompact,
-         lowerCompact](
-            InvestigationSection section
-            ) {
-            switch (section) {
-            case InvestigationSection::Timeline:
-                return timelineCompact;
-
-            case InvestigationSection::Events:
-                return eventCompact;
-
-            case InvestigationSection::LowerDetails:
-                return lowerCompact;
-            }
-
-            return 0;
-        };
-
-    const auto expandedDelta =
-        [this, &compactHeightForSection](
-            InvestigationSection section
-            ) {
-            return std::max(
-                0,
-                minimumUsefulExpandedHeight(
-                    section
-                    )
-                    - compactHeightForSection(
-                        section
-                        )
-                );
-        };
-
     const int oneSectionHeight =
         allCollapsedHeight
-        + expandedDelta(
-            capacityPriority.at(0)
-            );
+        + expansionDeltas.at(0);
 
     const int twoSectionHeight =
         oneSectionHeight
-        + expandedDelta(
-            capacityPriority.at(1)
-            );
+        + expansionDeltas.at(1);
 
     const int threeSectionHeight =
         twoSectionHeight
-        + expandedDelta(
-            capacityPriority.at(2)
-            );
+        + expansionDeltas.at(2);
 
     /*
      * Growing requires a little more room than
@@ -8410,13 +8511,6 @@ void InvestigationSessionView::
 
         targetSizes[1] +=
             excessHeight;
-
-        qInfo()
-            << "[RECOVERY PARTIAL]"
-            << "current="
-            << m_mainSplitter->sizes()
-            << "target="
-            << targetSizes;
 
         applyMainSplitterSizes(
             targetSizes

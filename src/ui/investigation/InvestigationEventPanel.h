@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QGroupBox>
+#include <QMargins>
 #include <QMetaObject>
 #include <QSet>
 #include <QString>
@@ -72,6 +73,8 @@ public:
     bool isCollapsed() const;
 
     int collapsedHeight() const;
+
+    int compactHeightHint() const;
 
 signals:
     void selectedRecordChanged();
@@ -156,6 +159,8 @@ private:
 
     bool m_collapsed =
         false;
+
+    QMargins m_expandedContentsMargins;
 
     bool m_headerMouseDown = false;
     QSet<int> m_manuallyResizedColumns;
