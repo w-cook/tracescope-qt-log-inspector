@@ -8,7 +8,7 @@ The utility includes:
 
 - `TraceScopeLiveLogGenerator` — the command-line generator and authoritative playback implementation
 - `TraceScopeLiveLogGeneratorLauncher` — a small Qt Widgets launcher for convenient manual playback
-- deterministic scenario files under `samples/live/`
+- deterministic scenario files under `samples/scenarios/`
 - renderers for the source families used in TraceScope live-follow testing
 
 The generator is intended for reproducible manual verification, demonstrations, and regression testing. It is not a load generator, fuzzing framework, monitoring service, or TraceScope runtime dependency.
@@ -84,7 +84,7 @@ Example:
 
 ```text
 TraceScopeLiveLogGenerator
-    --scenario samples/live/field-gateway-live-scenario.json
+    --scenario samples/scenarios/field-gateway-live-scenario.json
     --output live-test.jsonl
     --format jsonl
     --speed 4
@@ -152,7 +152,7 @@ Continuous append example:
 
 ```text
 TraceScopeLiveLogGenerator
-    --scenario samples/live/checkout-api-payment-regression-live-scenario.json
+    --scenario samples/scenarios/checkout-api-payment-regression-live-scenario.json
     --output checkout.jsonl
     --format jsonl
     --speed 0.5
@@ -163,7 +163,7 @@ Restart example:
 
 ```text
 TraceScopeLiveLogGenerator
-    --scenario samples/live/checkout-api-payment-regression-live-scenario.json
+    --scenario samples/scenarios/checkout-api-payment-regression-live-scenario.json
     --output checkout.jsonl
     --format jsonl
     --speed 0.5
@@ -377,7 +377,7 @@ There is no separate `burst` step. Bursts are represented explicitly by determin
 
 ## 4. Bundled scenario library
 
-The repository includes five scenarios under `samples/live/`.
+The repository includes five scenarios under `samples/scenarios/`.
 
 Each has a specific role. They are intentionally readable and deterministic rather than large randomized datasets.
 
@@ -698,7 +698,7 @@ tools/live-log-generator/
 The scenarios live under:
 
 ```text
-samples/live/
+samples/scenarios/
 ```
 
 The generator is part of the root TraceScope CMake project but is not required to run TraceScope.

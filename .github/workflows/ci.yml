@@ -11,9 +11,11 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   BUILD_TYPE: Release
-  WINDOWS_PACKAGE_NAME: TraceScope-v0.16.0-windows-x64
-  LINUX_PACKAGE_NAME: TraceScope-v0.16.0-linux-x86_64
-  SAMPLES_PACKAGE_NAME: TraceScope-v0.16.0-samples
+  WINDOWS_PACKAGE_NAME: TraceScope-v1.0.0-windows-x64
+  LINUX_PACKAGE_NAME: TraceScope-v1.0.0-linux-x86_64
+  SAMPLES_PACKAGE_NAME: TraceScope-v1.0.0-samples
+  WINDOWS_GENERATOR_PACKAGE_NAME: TraceScope-v1.0.0-live-log-generator-windows-x64
+  LINUX_GENERATOR_PACKAGE_NAME: TraceScope-v1.0.0-live-log-generator-linux-x86_64
 
 jobs:
   windows-build-and-test:
@@ -87,6 +89,32 @@ jobs:
           Copy-Item "LICENSE" $deployDir
           Copy-Item "samples" $deployDir -Recurse
 
+          $generatorScenarios = Join-Path $deployDir "samples\scenarios"
+
+          if (Test-Path $generatorScenarios) {
+            Remove-Item $generatorScenarios -Recurse -Force
+          }
+
+          $generatorProfiles = @(
+            "field-gateway-live-profile.json",
+            "live-generator-regex-text-profile.json",
+            "live-generator-structured-json-profile.json",
+            "live-generator-structured-xml-profile.json",
+            "live-generator-syslog-rfc3164-profile.json",
+            "live-generator-syslog-rfc5424-profile.json",
+            "live-generator-windows-event-xml-profile.json"
+          )
+
+          foreach ($profile in $generatorProfiles) {
+            $profilePath = Join-Path `
+              $deployDir `
+              "samples\profiles\$profile"
+
+            if (Test-Path $profilePath) {
+              Remove-Item $profilePath -Force
+            }
+          }
+
           windeployqt `
             --release `
             --compiler-runtime `
@@ -152,6 +180,27 @@ jobs:
           $requiredFiles | ForEach-Object {
             Write-Host " - $_"
           }
+
+          $excludedGeneratorPaths = @(
+            "samples\scenarios",
+            "samples\profiles\field-gateway-live-profile.json",
+            "samples\profiles\live-generator-regex-text-profile.json",
+            "samples\profiles\live-generator-structured-json-profile.json",
+            "samples\profiles\live-generator-structured-xml-profile.json",
+            "samples\profiles\live-generator-syslog-rfc3164-profile.json",
+            "samples\profiles\live-generator-syslog-rfc5424-profile.json",
+            "samples\profiles\live-generator-windows-event-xml-profile.json"
+          )
+
+          foreach ($relativePath in $excludedGeneratorPaths) {
+            $fullPath = Join-Path $deployDir $relativePath
+
+            if (Test-Path $fullPath) {
+              throw "Generator-only asset was included in the main TraceScope package: $relativePath"
+            }
+          }
+
+          Write-Host "Verified generator-only assets are excluded."
 
       - name: Create portable Windows ZIP
         shell: pwsh
@@ -224,6 +273,195 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           path: dist/${{ env.WINDOWS_PACKAGE_NAME }}.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build portable Windows Live-Log Generator
+        shell: pwsh
+        run: >
+          cmake
+          --build build
+          --target TraceScopeLiveLogGeneratorPortable
+          --parallel
+
+      - name: Assemble Windows Live-Log Generator package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $portableDir = Join-Path $PWD "build\live-log-generator-portable"
+          $packageDir = Join-Path $PWD "dist\$env:WINDOWS_GENERATOR_PACKAGE_NAME"
+
+          if (-not (Test-Path $portableDir)) {
+            throw "Portable generator deployment was not created."
+          }
+
+          if (Test-Path $packageDir) {
+            Remove-Item $packageDir -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+
+          Copy-Item `
+            "$portableDir\*" `
+            $packageDir `
+            -Recurse
+
+          Copy-Item `
+            "docs\live-log-generator.md" `
+            (Join-Path $packageDir "README.md")
+
+          Copy-Item `
+            "LICENSE" `
+            $packageDir
+
+          $profilesDir = Join-Path $packageDir "samples\profiles"
+          $scenariosDir = Join-Path $packageDir "samples\scenarios"
+
+          New-Item -ItemType Directory -Path $profilesDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $scenariosDir -Force | Out-Null
+
+          $generatorProfiles = @(
+            "field-gateway-live-profile.json",
+            "live-generator-regex-text-profile.json",
+            "live-generator-structured-json-profile.json",
+            "live-generator-structured-xml-profile.json",
+            "live-generator-syslog-rfc3164-profile.json",
+            "live-generator-syslog-rfc5424-profile.json",
+            "live-generator-windows-event-xml-profile.json"
+          )
+
+          foreach ($profile in $generatorProfiles) {
+            Copy-Item `
+              (Join-Path $PWD "samples\profiles\$profile") `
+              $profilesDir
+          }
+
+          Copy-Item `
+            "samples\scenarios\*.json" `
+            $scenariosDir
+
+      - name: Verify Windows Live-Log Generator package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $packageDir = Join-Path $PWD "dist\$env:WINDOWS_GENERATOR_PACKAGE_NAME"
+
+          $requiredFiles = @(
+            "TraceScopeLiveLogGenerator.exe",
+            "TraceScopeLiveLogGeneratorLauncher.exe",
+            "Qt6Core.dll",
+            "Qt6Gui.dll",
+            "Qt6Widgets.dll",
+            "platforms\qwindows.dll",
+            "README.md",
+            "LICENSE",
+            "samples\profiles\field-gateway-live-profile.json",
+            "samples\profiles\live-generator-regex-text-profile.json",
+            "samples\profiles\live-generator-structured-json-profile.json",
+            "samples\profiles\live-generator-structured-xml-profile.json",
+            "samples\profiles\live-generator-syslog-rfc3164-profile.json",
+            "samples\profiles\live-generator-syslog-rfc5424-profile.json",
+            "samples\profiles\live-generator-windows-event-xml-profile.json",
+            "samples\scenarios\checkout-api-healthy-baseline-live-scenario.json",
+            "samples\scenarios\checkout-api-payment-regression-live-scenario.json",
+            "samples\scenarios\field-gateway-live-scenario.json",
+            "samples\scenarios\warehouse-sync-deployment-rotation-live-scenario.json",
+            "samples\scenarios\web-access-live-scenario.json"
+          )
+
+          foreach ($relativePath in $requiredFiles) {
+            $fullPath = Join-Path $packageDir $relativePath
+
+            if (-not (Test-Path $fullPath)) {
+              throw "Required generator package file is missing: $relativePath"
+            }
+          }
+
+          Write-Host "Verified Windows Live-Log Generator package contents."
+
+      - name: Create Windows Live-Log Generator ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $packageDir = Join-Path $PWD "dist\$env:WINDOWS_GENERATOR_PACKAGE_NAME"
+          $zipPath = Join-Path $PWD "dist\$env:WINDOWS_GENERATOR_PACKAGE_NAME.zip"
+
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+
+          Compress-Archive `
+            -Path $packageDir `
+            -DestinationPath $zipPath `
+            -CompressionLevel Optimal
+
+          if (-not (Test-Path $zipPath)) {
+            throw "Windows Live-Log Generator ZIP was not created."
+          }
+
+          Get-Item $zipPath |
+            Format-List FullName, Length
+
+      - name: Smoke-test Windows Live-Log Generator CLI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $packageDir = Join-Path $PWD "dist\$env:WINDOWS_GENERATOR_PACKAGE_NAME"
+          $generator = Join-Path $packageDir "TraceScopeLiveLogGenerator.exe"
+
+          $env:QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES = "1"
+
+          $process = Start-Process `
+            -FilePath $generator `
+            -ArgumentList "--help" `
+            -WorkingDirectory $packageDir `
+            -PassThru
+
+          if (-not $process.WaitForExit(10000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "Live-Log Generator CLI did not exit within 10 seconds."
+          }
+
+          if ($process.ExitCode -ne 0) {
+            throw "Live-Log Generator CLI smoke test failed with exit code $($process.ExitCode)."
+          }
+
+          Write-Host "Packaged Live-Log Generator CLI started and exited successfully."
+
+      - name: Smoke-test Windows Live-Log Generator launcher
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $packageDir = Join-Path $PWD "dist\$env:WINDOWS_GENERATOR_PACKAGE_NAME"
+          $launcher = Join-Path $packageDir "TraceScopeLiveLogGeneratorLauncher.exe"
+
+          $env:QT_QPA_PLATFORM = "offscreen"
+
+          $process = Start-Process `
+            -FilePath $launcher `
+            -WorkingDirectory $packageDir `
+            -PassThru
+
+          Start-Sleep -Seconds 3
+
+          if ($process.HasExited) {
+            throw "Live-Log Generator launcher exited during startup with code $($process.ExitCode)."
+          }
+
+          Stop-Process -Id $process.Id -Force
+
+          Write-Host "Packaged Live-Log Generator launcher started successfully."
+
+      - name: Upload Windows Live-Log Generator ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.WINDOWS_GENERATOR_PACKAGE_NAME }}.zip
           archive: false
           if-no-files-found: error
           retention-days: 14
@@ -306,9 +544,21 @@ jobs:
           cp LICENSE AppDir/usr/share/doc/tracescope/
           cp -R samples/. AppDir/usr/share/tracescope/samples/
 
+          rm -rf \
+            AppDir/usr/share/tracescope/samples/scenarios
+
+          rm -f \
+            AppDir/usr/share/tracescope/samples/profiles/field-gateway-live-profile.json \
+            AppDir/usr/share/tracescope/samples/profiles/live-generator-regex-text-profile.json \
+            AppDir/usr/share/tracescope/samples/profiles/live-generator-structured-json-profile.json \
+            AppDir/usr/share/tracescope/samples/profiles/live-generator-structured-xml-profile.json \
+            AppDir/usr/share/tracescope/samples/profiles/live-generator-syslog-rfc3164-profile.json \
+            AppDir/usr/share/tracescope/samples/profiles/live-generator-syslog-rfc5424-profile.json \
+            AppDir/usr/share/tracescope/samples/profiles/live-generator-windows-event-xml-profile.json
+
           export PATH="$PWD/packaging-tools:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export VERSION="0.16.0"
+          export VERSION="1.0.0"
           export ARCH="x86_64"
           export OUTPUT="$PWD/dist/$LINUX_PACKAGE_NAME.AppImage"
           export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
@@ -363,6 +613,16 @@ jobs:
           test -f AppDir/usr/share/tracescope/samples/windows-event-engineering-session.xml
           test -f AppDir/usr/share/tracescope/samples/profiles/windows-event-engineering-session-profile.json
 
+          test ! -e AppDir/usr/share/tracescope/samples/scenarios
+
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/field-gateway-live-profile.json
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/live-generator-regex-text-profile.json
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/live-generator-structured-json-profile.json
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/live-generator-structured-xml-profile.json
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/live-generator-syslog-rfc3164-profile.json
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/live-generator-syslog-rfc5424-profile.json
+          test ! -e AppDir/usr/share/tracescope/samples/profiles/live-generator-windows-event-xml-profile.json
+
           test -x "dist/$LINUX_PACKAGE_NAME.AppImage"
 
           find AppDir -name 'libQt6Core.so*' -print -quit | grep -q .
@@ -410,6 +670,191 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Assemble Linux Live-Log Generator AppImage
+        run: |
+          set -euxo pipefail
+
+          rm -rf GeneratorAppDir generator-packaging
+          mkdir -p GeneratorAppDir
+          mkdir -p generator-packaging
+
+          generator_cli="$PWD/build/tools/live-log-generator/TraceScopeLiveLogGenerator"
+          generator_launcher="$PWD/build/tools/live-log-generator/TraceScopeLiveLogGeneratorLauncher"
+
+          test -x "$generator_cli"
+          test -x "$generator_launcher"
+
+          cat > generator-packaging/tracescope-live-log-generator.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=TraceScope Live-Log Generator
+          Exec=TraceScopeLiveLogGeneratorLauncher
+          Icon=tracescope-live-log-generator
+          Categories=Development;
+          Terminal=false
+          EOF
+
+          cp \
+            packaging/linux/tracescope.svg \
+            generator-packaging/tracescope-live-log-generator.svg
+
+          export PATH="$PWD/packaging-tools:$PATH"
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export VERSION="1.0.0"
+          export ARCH="x86_64"
+          export OUTPUT="$PWD/dist/TraceScopeLiveLogGenerator.AppImage"
+          export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
+
+          test -x "$QMAKE"
+
+          packaging-tools/linuxdeploy-x86_64.AppImage \
+            --appimage-extract-and-run \
+            --appdir GeneratorAppDir \
+            --executable "$generator_launcher" \
+            --executable "$generator_cli" \
+            --desktop-file generator-packaging/tracescope-live-log-generator.desktop \
+            --icon-file generator-packaging/tracescope-live-log-generator.svg \
+            --plugin qt \
+            --output appimage
+
+      - name: Verify Linux Live-Log Generator AppImage contents
+        run: |
+          set -euxo pipefail
+
+          test -x GeneratorAppDir/usr/bin/TraceScopeLiveLogGenerator
+          test -x GeneratorAppDir/usr/bin/TraceScopeLiveLogGeneratorLauncher
+
+          find GeneratorAppDir -name 'libQt6Core.so*' -print -quit | grep -q .
+          find GeneratorAppDir -name 'libQt6Gui.so*' -print -quit | grep -q .
+          find GeneratorAppDir -name 'libQt6Widgets.so*' -print -quit | grep -q .
+          find GeneratorAppDir -path '*/platforms/libqxcb.so' -print -quit | grep -q .
+          find GeneratorAppDir -path '*/platforms/libqoffscreen.so' -print -quit | grep -q .
+
+          test -x dist/TraceScopeLiveLogGenerator.AppImage
+
+          GeneratorAppDir/usr/bin/TraceScopeLiveLogGenerator --help
+
+      - name: Assemble Linux Live-Log Generator package
+        run: |
+          set -euxo pipefail
+
+          package_dir="dist/$LINUX_GENERATOR_PACKAGE_NAME"
+
+          rm -rf "$package_dir"
+
+          mkdir -p "$package_dir/samples/profiles"
+          mkdir -p "$package_dir/samples/scenarios"
+
+          cp \
+            dist/TraceScopeLiveLogGenerator.AppImage \
+            "$package_dir/"
+
+          cp \
+            docs/live-log-generator.md \
+            "$package_dir/README.md"
+
+          cp \
+            LICENSE \
+            "$package_dir/"
+
+          generator_profiles=(
+            field-gateway-live-profile.json
+            live-generator-regex-text-profile.json
+            live-generator-structured-json-profile.json
+            live-generator-structured-xml-profile.json
+            live-generator-syslog-rfc3164-profile.json
+            live-generator-syslog-rfc5424-profile.json
+            live-generator-windows-event-xml-profile.json
+          )
+
+          for profile in "${generator_profiles[@]}"; do
+            cp \
+              "samples/profiles/$profile" \
+              "$package_dir/samples/profiles/"
+          done
+
+          cp \
+            samples/scenarios/*.json \
+            "$package_dir/samples/scenarios/"
+
+      - name: Verify Linux Live-Log Generator package
+        run: |
+          set -euxo pipefail
+
+          package_dir="dist/$LINUX_GENERATOR_PACKAGE_NAME"
+
+          test -x "$package_dir/TraceScopeLiveLogGenerator.AppImage"
+          test -f "$package_dir/README.md"
+          test -f "$package_dir/LICENSE"
+
+          test -f "$package_dir/samples/profiles/field-gateway-live-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-regex-text-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-structured-json-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-structured-xml-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-syslog-rfc3164-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-syslog-rfc5424-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-windows-event-xml-profile.json"
+
+          test -f "$package_dir/samples/scenarios/checkout-api-healthy-baseline-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/checkout-api-payment-regression-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/field-gateway-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/warehouse-sync-deployment-rotation-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/web-access-live-scenario.json"
+
+      - name: Smoke-test Linux Live-Log Generator launcher
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+
+          appimage="$PWD/dist/$LINUX_GENERATOR_PACKAGE_NAME/TraceScopeLiveLogGenerator.AppImage"
+          log="$RUNNER_TEMP/tracescope-generator-appimage-smoke-test.log"
+
+          APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" >"$log" 2>&1 &
+          process_id=$!
+
+          sleep 3
+
+          if ! kill -0 "$process_id" 2>/dev/null; then
+            wait "$process_id" || true
+            cat "$log"
+            echo "The packaged Live-Log Generator launcher exited during startup."
+            exit 1
+          fi
+
+          kill "$process_id"
+          wait "$process_id" || true
+
+          cat "$log"
+          echo "Packaged Live-Log Generator launcher started successfully."
+
+      - name: Create Linux Live-Log Generator ZIP
+        run: |
+          set -euxo pipefail
+
+          archive_path="$PWD/dist/$LINUX_GENERATOR_PACKAGE_NAME.zip"
+
+          rm -f "$archive_path"
+
+          cd dist
+
+          zip \
+            -r \
+            -9 \
+            "$LINUX_GENERATOR_PACKAGE_NAME.zip" \
+            "$LINUX_GENERATOR_PACKAGE_NAME"
+
+          test -f "$LINUX_GENERATOR_PACKAGE_NAME.zip"
+          du -h "$LINUX_GENERATOR_PACKAGE_NAME.zip"
+
+      - name: Upload Linux Live-Log Generator ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.LINUX_GENERATOR_PACKAGE_NAME }}.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
   package-samples:
     name: Samples — Package and Verify
     runs-on: ubuntu-22.04
@@ -450,6 +895,20 @@ jobs:
           test -f samples/profiles/structured-xml-engineering-session-profile.json
           test -f samples/windows-event-engineering-session.xml
           test -f samples/profiles/windows-event-engineering-session-profile.json
+
+          test -f samples/profiles/field-gateway-live-profile.json
+          test -f samples/profiles/live-generator-regex-text-profile.json
+          test -f samples/profiles/live-generator-structured-json-profile.json
+          test -f samples/profiles/live-generator-structured-xml-profile.json
+          test -f samples/profiles/live-generator-syslog-rfc3164-profile.json
+          test -f samples/profiles/live-generator-syslog-rfc5424-profile.json
+          test -f samples/profiles/live-generator-windows-event-xml-profile.json
+
+          test -f samples/scenarios/checkout-api-healthy-baseline-live-scenario.json
+          test -f samples/scenarios/checkout-api-payment-regression-live-scenario.json
+          test -f samples/scenarios/field-gateway-live-scenario.json
+          test -f samples/scenarios/warehouse-sync-deployment-rotation-live-scenario.json
+          test -f samples/scenarios/web-access-live-scenario.json
 
           sample_count="$(find samples -type f | wc -l)"
           test "$sample_count" -gt 0
@@ -524,6 +983,21 @@ jobs:
           test -f "$package_dir/samples/profiles/structured-xml-engineering-session-profile.json"
           test -f "$package_dir/samples/windows-event-engineering-session.xml"
           test -f "$package_dir/samples/profiles/windows-event-engineering-session-profile.json"
+
+          test -f "$package_dir/samples/profiles/field-gateway-live-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-regex-text-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-structured-json-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-structured-xml-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-syslog-rfc3164-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-syslog-rfc5424-profile.json"
+          test -f "$package_dir/samples/profiles/live-generator-windows-event-xml-profile.json"
+
+          test -f "$package_dir/samples/scenarios/checkout-api-healthy-baseline-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/checkout-api-payment-regression-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/field-gateway-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/warehouse-sync-deployment-rotation-live-scenario.json"
+          test -f "$package_dir/samples/scenarios/web-access-live-scenario.json"
+
           test -f "$archive_path"
 
           source_count="$(find samples -type f | wc -l)"
@@ -569,6 +1043,18 @@ jobs:
               f"{package_name}/samples/profiles/structured-xml-engineering-session-profile.json",
               f"{package_name}/samples/windows-event-engineering-session.xml",
               f"{package_name}/samples/profiles/windows-event-engineering-session-profile.json",
+              f"{package_name}/samples/profiles/field-gateway-live-profile.json",
+              f"{package_name}/samples/profiles/live-generator-regex-text-profile.json",
+              f"{package_name}/samples/profiles/live-generator-structured-json-profile.json",
+              f"{package_name}/samples/profiles/live-generator-structured-xml-profile.json",
+              f"{package_name}/samples/profiles/live-generator-syslog-rfc3164-profile.json",
+              f"{package_name}/samples/profiles/live-generator-syslog-rfc5424-profile.json",
+              f"{package_name}/samples/profiles/live-generator-windows-event-xml-profile.json",
+              f"{package_name}/samples/scenarios/checkout-api-healthy-baseline-live-scenario.json",
+              f"{package_name}/samples/scenarios/checkout-api-payment-regression-live-scenario.json",
+              f"{package_name}/samples/scenarios/field-gateway-live-scenario.json",
+              f"{package_name}/samples/scenarios/warehouse-sync-deployment-rotation-live-scenario.json",
+              f"{package_name}/samples/scenarios/web-access-live-scenario.json",
           }
 
           with ZipFile(archive_path) as archive:
