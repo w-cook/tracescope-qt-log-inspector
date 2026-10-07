@@ -3,19 +3,22 @@
 #include <algorithm>
 #include <utility>
 
+#include <QAbstractItemView>
+#include <QAction>
 #include <QComboBox>
+#include <QGridLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSignalBlocker>
-#include <QStringList>
-#include <QVBoxLayout>
-#include <QGridLayout>
 #include <QResizeEvent>
 #include <QScrollBar>
-#include <QAction>
-#include <QMenu>
-#include <QMargins>
+#include <QSignalBlocker>
+#include <QStringList>
+#include <QStyle>
+#include <QStyleOptionComboBox>
+#include <QTimer>
+#include <QVBoxLayout>
 
 #include "../InterfaceScale.h"
 #include "../ScaleAwareComboBox.h"
@@ -208,6 +211,8 @@ InvestigationEventDetailPanel::
             FindingStatus::Dismissed
             )
         );
+
+    refreshFindingStatusSizing();
 
     m_findingStatusCombo->setToolTip(
         tr(
@@ -716,6 +721,25 @@ void InvestigationEventDetailPanel::
 
     updateGeometry();
     update();
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            /*
+         * QApplication's font changes before existing
+         * widgets receive their inherited FontChange.
+         * Delay font-derived sizing until that propagation
+         * has completed.
+         */
+            refreshFindingStatusSizing();
+
+            updateResponsiveControls();
+
+            updateGeometry();
+            update();
+        }
+        );
 }
 
 void InvestigationEventDetailPanel::
@@ -822,40 +846,86 @@ void InvestigationEventDetailPanel::
 
     updateMinimumUsableWidth();
 
-    const int horizontalSpacing =
-        InterfaceScale::pixels(
-            6,
+    const int availableWidth =
+        m_stateLayout
+            ->geometry()
+            .width();
+
+    /*
+     * During initial construction/layout there may not yet
+     * be meaningful grid geometry. Wait for the normal
+     * layout/resize path rather than changing presentation
+     * based on a zero-width transient.
+     */
+    if (availableWidth <= 0) {
+        return;
+    }
+
+    const qreal geometryFactor =
+        InterfaceScale::geometryFactor(
             this
             );
 
-    const int wideLayoutPadding =
-        InterfaceScale::pixels(
-            20,
-            this
-            );
+    bool compact;
 
-    const int requiredWideWidth =
-        m_findingStatusLabel
-            ->sizeHint()
-            .width()
-        + m_findingStatusCombo
-              ->sizeHint()
-              .width()
-        + m_noteButton
-              ->sizeHint()
-              .width()
-        + m_bookmarkButton
-              ->sizeHint()
-              .width()
-        + horizontalSpacing * 3
-        + wideLayoutPadding;
+    if (!m_compactControls) {
+        /*
+         * While wide, Qt knows the exact native minimum
+         * required by the current grid arrangement,
+         * including control hints, column behavior,
+         * spacing, font metrics, and platform style.
+         */
+        const int wideMinimumWidth =
+            m_stateLayout
+                ->minimumSize()
+                .width();
 
-    const bool compact =
-        contentsRect().width()
-        < requiredWideWidth;
+        if (
+            wideMinimumWidth > 0
+            && geometryFactor > 0.0
+            ) {
+            m_wideControlsMinimumLogicalWidth =
+                static_cast<qreal>(
+                    wideMinimumWidth
+                    )
+                / geometryFactor;
+        }
 
-    if (compact
-        == m_compactControls) {
+        compact =
+            availableWidth
+            < wideMinimumWidth;
+    } else {
+        /*
+         * Once compact, QGridLayout::minimumSize()
+         * describes the compact two-row arrangement,
+         * so retain the last measured wide requirement.
+         *
+         * Add a small intentional hysteresis before
+         * reopening. This keeps the layout from toggling
+         * repeatedly at the exact boundary.
+         */
+        const int wideMinimumWidth =
+            geometryFactor > 0.0
+                    && m_wideControlsMinimumLogicalWidth > 0.0
+                ? qRound(
+                      m_wideControlsMinimumLogicalWidth
+                      * geometryFactor
+                      )
+                : availableWidth;
+
+        const int reopenHysteresis =
+            InterfaceScale::pixels(
+                8,
+                this
+                );
+
+        compact =
+            availableWidth
+            < wideMinimumWidth
+                  + reopenHysteresis;
+    }
+
+    if (compact == m_compactControls) {
         return;
     }
 
@@ -1107,4 +1177,92 @@ void InvestigationEventDetailPanel::
     }
 
     m_detailText->setPlainText(text);
+}
+
+void InvestigationEventDetailPanel::
+    refreshFindingStatusSizing()
+{
+    if (m_findingStatusCombo == nullptr) {
+        return;
+    }
+
+    QStyleOptionComboBox option;
+    option.initFrom(m_findingStatusCombo);
+    option.editable =
+        m_findingStatusCombo->isEditable();
+    option.frame = true;
+
+    int requiredClosedWidth = 0;
+    int widestTextWidth = 0;
+
+    const QFontMetrics metrics =
+        m_findingStatusCombo->fontMetrics();
+
+    for (
+        int index = 0;
+        index < m_findingStatusCombo->count();
+        ++index
+        ) {
+        const QString text =
+            m_findingStatusCombo->itemText(index);
+
+        const int textWidth =
+            metrics.horizontalAdvance(text);
+
+        widestTextWidth =
+            std::max(
+                widestTextWidth,
+                textWidth
+                );
+
+        /*
+         * Ask the active native style how much complete
+         * combo-box width this text requires, including
+         * frame and drop-down indicator.
+         */
+        const QSize styledSize =
+            m_findingStatusCombo
+                ->style()
+                ->sizeFromContents(
+                    QStyle::CT_ComboBox,
+                    &option,
+                    QSize(
+                        textWidth,
+                        metrics.height()
+                        ),
+                    m_findingStatusCombo
+                    );
+
+        requiredClosedWidth =
+            std::max(
+                requiredClosedWidth,
+                styledSize.width()
+                );
+    }
+
+    m_findingStatusCombo
+        ->setMinimumWidth(
+            requiredClosedWidth
+            );
+
+    /*
+     * The popup needs additional room for its own
+     * list-view margins/chrome.
+     */
+    if (m_findingStatusCombo->view() != nullptr) {
+        m_findingStatusCombo
+            ->view()
+            ->setMinimumWidth(
+                std::max(
+                    requiredClosedWidth,
+                    widestTextWidth
+                        + InterfaceScale::pixels(
+                            40,
+                            m_findingStatusCombo
+                            )
+                    )
+                );
+    }
+
+    m_findingStatusCombo->updateGeometry();
 }

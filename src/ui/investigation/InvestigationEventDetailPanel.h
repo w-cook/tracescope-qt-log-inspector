@@ -74,6 +74,8 @@ private:
 
     void refreshDetailText();
 
+    void refreshFindingStatusSizing();
+
     QGridLayout *m_stateLayout =
         nullptr;
 
@@ -82,6 +84,8 @@ private:
 
     bool m_compactControls =
         false;
+
+    qreal m_wideControlsMinimumLogicalWidth = 0.0;
 
     QPlainTextEdit *m_detailText = nullptr;
 
@@ -92,7 +96,6 @@ private:
 
     bool m_collapsed =
         false;
-
 
     QString m_recordDetailText;
     QString m_analystNote;

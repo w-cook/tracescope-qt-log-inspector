@@ -3691,29 +3691,10 @@ void InvestigationSessionView::
         return;
     }
 
-    /*
-     * Vertical investigation-section sizing is handled
-     * synchronously by ResizeAwareSplitter after
-     * QSplitter::resizeEvent().
-     *
-     * This deferred work is only for the independent
-     * horizontal Review / Selected Event Details splitter.
-     */
     QTimer::singleShot(
         0,
         this,
         [this]() {
-            if (
-                m_reviewPanel != nullptr
-                && m_bottomSplitter != nullptr
-                && !m_lowerRegionCollapsed
-                ) {
-                updateReviewSplitter(
-                    m_reviewPanel
-                        ->currentTab()
-                    );
-            }
-
             updateSectionCollapseControlGeometry();
         }
         );
@@ -5152,11 +5133,6 @@ void InvestigationSessionView::
                 if (m_lowerRegionCollapsed) {
                     return;
                 }
-
-                updateReviewSplitter(
-                    m_reviewPanel
-                        ->currentTab()
-                    );
 
                 scheduleSectionCollapseControlGeometryUpdate();
             }
