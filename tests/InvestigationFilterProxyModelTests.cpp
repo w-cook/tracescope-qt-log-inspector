@@ -1543,7 +1543,17 @@ void InvestigationFilterProxyModelTests::
                       Qt::Vertical,
                       Qt::DisplayRole
                       ).toString(),
-        QStringLiteral("★ 3")
+        QStringLiteral("3")
+        );
+
+    QCOMPARE(
+        proxyModel.headerData(
+                      0,
+                      Qt::Vertical,
+                      InvestigationFilterProxyModel::
+                      BookmarkedHeaderRole
+                      ).toBool(),
+        true
         );
 }
 

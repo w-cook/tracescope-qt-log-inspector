@@ -1,164 +1,261 @@
 # TraceScope Live-Log Generator
 
-## Purpose
+The TraceScope Live-Log Generator is a standalone utility for producing deterministic log-file activity that can be observed by TraceScope under realistic live-follow conditions.
 
-The TraceScope live-log generator is a small standalone test utility used to exercise the live-file-following behavior completed in Phase 15 and released in `v0.16.0` under realistic, reproducible conditions. It provides both a command-line generator and a thin Qt Widgets launcher for convenient manual playback.
+It behaves like an independent application writing logs to disk. TraceScope has no direct connection to the generator and receives no special testing hooks or injected records; it sees only the physical files the generator creates and modifies.
 
-The generator behaves like an external application writing logs to disk. TraceScope has no knowledge of or dependency on the generator; it observes only the resulting file.
+The utility includes:
 
-The utility is intended as a permanent manual test artifact rather than a secondary application or generalized synthetic-data framework.
+- `TraceScopeLiveLogGenerator` — the command-line generator and authoritative playback implementation
+- `TraceScopeLiveLogGeneratorLauncher` — a small Qt Widgets launcher for convenient manual playback
+- deterministic scenario files under `samples/scenarios/`
+- renderers for the source families used in TraceScope live-follow testing
 
-Its primary goals are to:
+The generator is intended for reproducible manual verification, demonstrations, and regression testing. It is not a load generator, fuzzing framework, monitoring service, or TraceScope runtime dependency.
 
-* produce deterministic, human-readable live-log scenarios
-* render the same semantic scenario into multiple TraceScope-supported formats where practical
-* exercise realistic file-writing behavior such as ordinary appends, bursts, idle periods, partial writes, truncation, replacement, and rotation
-* make live-follow manual verification and regression testing repeatable
-* document the kinds of live-file conditions TraceScope has been tested against
+## Find the information you need
 
-## Architecture
+| I want to... | Go to |
+| --- | --- |
+| Run a scenario without using the command line | [1. Graphical launcher](#1-graphical-launcher) |
+| Run the generator directly | [2. Command-line usage](#2-command-line-usage) |
+| Understand what a scenario contains | [3. Scenario model](#3-scenario-model) |
+| Choose one of the bundled scenarios | [4. Bundled scenario library](#4-bundled-scenario-library) |
+| Choose an output format | [5. Output formats and fidelity](#5-output-formats-and-fidelity) |
+| Understand truncation, replacement, rotation, and structured streams | [6. File-lifecycle behavior](#6-file-lifecycle-behavior) |
+| Create or modify a scenario | [7. Scenario authoring](#7-scenario-authoring) |
+| Use the generator to test TraceScope | [8. Using the generator with TraceScope](#8-using-the-generator-with-tracescope) |
+| Build or obtain the utility | [9. Building and distribution](#9-building-and-distribution) |
+| Understand what the utility deliberately does not do | [10. Scope boundaries](#10-scope-boundaries) |
 
-The generator separates scenario meaning, playback behavior, and format serialization.
+## 1. Graphical launcher
+
+`TraceScopeLiveLogGeneratorLauncher` provides a thin graphical front end for the command-line generator.
+
+![Live-Log Generator Overview](screenshots/live-following-generator-overview.png)
+
+Use it when manually exercising TraceScope and there is no need to construct command-line arguments directly.
+
+The launcher exposes:
+
+- scenario-file selection
+- output-file selection
+- output-format selection
+- playback-speed selection
+- optional looping
+- append or restart behavior between loop iterations
+- Play and Stop controls
+- playback status
+- captured standard output and error output from the generator process
+
+The available playback-speed presets are:
+
+- `0.5x`
+- `1x`
+- `2x`
+- `4x`
+- `10x`
+- `25x`
+- `50x`
+
+The launcher starts `TraceScopeLiveLogGenerator` through `QProcess` and passes the selected settings as ordinary command-line arguments. The generator executable is expected to be in the same application directory as the launcher.
+
+The launcher does **not** contain a second scenario interpreter or playback engine. Scenario loading, validation, format selection, file lifecycle operations, looping, and serialization all remain in the command-line generator.
+
+While playback is active, the scenario, output, format, speed, and loop controls are disabled. Stop terminates the child generator process; if graceful termination does not complete promptly, the launcher ends it forcibly.
+
+For careful interactive observation, `0.5x` or `1x` is usually easiest to follow. Higher speeds are useful for repeated regression checks or quickly producing a completed dataset.
+
+## 2. Command-line usage
+
+The command-line interface has three required options and three optional playback controls.
 
 ```text
-Prewritten semantic scenario
-          ↓
-Generic scenario player
-   timing / bursts / waits
- partial writes / truncate
-       rotate / replace
-          ↓
-Runtime-selected renderer
- JSONL / CSV / logfmt / Syslog / ...
-          ↓
-Actual file on disk
-          ↓
-TraceScope Live Follow
+TraceScopeLiveLogGenerator
+    --scenario <path>
+    --output <path>
+    --format <format-id>
+    [--speed <multiplier>]
+    [--loop]
+    [--loop-mode <append|restart>]
 ```
 
-TraceScope and the generator remain separate processes.
+Example:
 
-The core generator uses Qt Core for JSON handling, command-line parsing, timestamps, and file operations. A separate Qt Widgets launcher provides a thin graphical front end and invokes the command-line generator through `QProcess`.
+```text
+TraceScopeLiveLogGenerator
+    --scenario samples/scenarios/field-gateway-live-scenario.json
+    --output live-test.jsonl
+    --format jsonl
+    --speed 4
+```
 
-The launcher does not duplicate scenario loading, renderer validation, playback, looping, or file-lifecycle behavior. The command-line generator remains the single source of truth for those responsibilities.
+### `--scenario`
 
-Neither executable depends on TraceScope investigation, workspace, filtering, comparison, or UI classes.
+Path to a versioned live-log scenario JSON file.
 
-## Semantic Record Model
+### `--output`
 
-Scenario records represent log meaning rather than preformatted source text.
+Path to the active physical log file written by the generator.
 
-The initial semantic record model contains:
+Lifecycle steps in the scenario may truncate, replace, or rotate this file during playback.
 
-* timestamp offset
-* severity
-* subsystem
-* event code
-* entity ID
-* message
-* custom attributes
+### `--format`
+
+Selects the renderer used to serialize semantic records.
+
+Supported format IDs are listed in [Output formats and fidelity](#5-output-formats-and-fidelity).
+
+### `--speed`
+
+Positive finite playback-speed multiplier.
+
+The default is:
+
+```text
+1
+```
+
+Examples:
+
+- `0.5` — half-speed playback
+- `1` — normal playback speed, with scenario delays unscaled
+- `2` — twice as fast
+- `10` — ten times as fast
+
+Playback speed affects real delays such as `wait` steps and partial-write hold periods. It does **not** change the semantic timestamps represented by generated records.
+
+### `--loop`
+
+Replays the scenario continuously after each completed iteration.
+
+Without `--loop`, playback completes once and exits.
+
+### `--loop-mode`
+
+Controls what happens to the physical output file between loop iterations.
+
+Supported values are:
+
+- `append` — continue writing into the same active physical source
+- `restart` — recreate the active output file before the next iteration
+
+The default is:
+
+```text
+append
+```
+
+`--loop-mode` does not alter explicit lifecycle steps inside a scenario. A scenario can still truncate, replace, or rotate its source regardless of the selected loop behavior.
+
+Continuous append example:
+
+```text
+TraceScopeLiveLogGenerator
+    --scenario samples/scenarios/checkout-api-payment-regression-live-scenario.json
+    --output checkout.jsonl
+    --format jsonl
+    --speed 0.5
+    --loop
+```
+
+Restart example:
+
+```text
+TraceScopeLiveLogGenerator
+    --scenario samples/scenarios/checkout-api-payment-regression-live-scenario.json
+    --output checkout.jsonl
+    --format jsonl
+    --speed 0.5
+    --loop
+    --loop-mode restart
+```
+
+In append mode, the generator advances the semantic scenario-start time deterministically between iterations. The next iteration's first record is timestamped one millisecond after the latest timestamp offset from the preceding iteration. This avoids restarting the scenario's semantic timestamps while continuing to append to the same physical output. Explicit lifecycle steps inside the scenario still apply.
+
+In restart mode, each new iteration uses a fresh UTC scenario-start time instead of continuing the previous iteration's semantic timestamp sequence. The active output is recreated, and rotation numbering is reset for the new iteration.
+
+## 3. Scenario model
+
+The generator separates **what happened** from **how it is serialized** and **when bytes reach disk**.
 
 Conceptually:
 
-```cpp
-struct LiveLogRecord
-{
-    qint64 timestampOffsetMs = 0;
-
-    QString severity;
-    QString subsystem;
-    QString eventCode;
-    QString entityId;
-    QString message;
-
-    QHash<QString, QVariant> attributes;
-};
+```text
+deterministic semantic scenario
+            ↓
+      scenario player
+  timing + file lifecycle
+            ↓
+      selected renderer
+            ↓
+    physical log file(s)
+            ↓
+     TraceScope observes
 ```
 
-The generator should not reuse `InvestigationRecord` directly. `InvestigationRecord` represents TraceScope's normalized investigation domain and contains TraceScope-specific identity, raw-source, and source-metadata state that does not belong in an external log producer.
+### Semantic records
 
-Custom attributes should initially be limited to values that serialize naturally across representative formats:
+A scenario record contains:
 
-* string
-* number
-* boolean
-* null
+- `timestampOffsetMs`
+- `severity`
+- `subsystem`
+- `eventCode`
+- `entityId`
+- `message`
+- optional custom `attributes`
 
-Nested object and array attributes are outside the initial generator scope because many supported line-oriented formats cannot represent them consistently.
+`timestampOffsetMs` is relative to the start of the scenario rather than an absolute date/time. At runtime, the renderer combines that offset with the scenario's actual start time.
 
-## Time Model
+The five semantic text fields remain part of each scenario record even when the selected output format cannot naturally represent all of them. Renderers decide which values can be expressed faithfully in their target format.
 
-Scenario playback time and semantic event time are separate concepts.
+Custom attribute values may be:
 
-`timestampOffsetMs` defines the timestamp of a generated record relative to the beginning of the scenario.
+- strings
+- numbers
+- booleans
+- `null`
 
-Playback directives define when bytes are actually written to disk.
+Nested objects and arrays are not supported as custom scenario-attribute values.
 
-This allows playback speed to be accelerated or slowed without changing the logical timing represented by the incident itself.
+### Semantic time versus playback time
 
-For example, an incident representing five minutes of application activity may be played at `10x` speed in approximately thirty seconds while still producing timestamps spanning five minutes.
+Semantic record time and playback time are separate.
 
-## Scenario Format
+For example, a scenario can represent several minutes of system activity while being played at `10x` speed. The resulting records still contain timestamps spanning the original semantic interval; only the real waits between physical writes are shortened.
 
-Scenarios use versioned JSON.
+This distinction makes it possible to accelerate manual testing without changing the incident being investigated.
 
-Example:
+### Scenario root
+
+Scenarios use JSON schema version `1`.
+
+A scenario contains:
 
 ```json
 {
   "schemaVersion": 1,
   "name": "Field Gateway Live Degradation",
   "description": "Deterministic gateway degradation and recovery scenario.",
-  "steps": [
-    {
-      "type": "record",
-      "record": {
-        "timestampOffsetMs": 0,
-        "severity": "INFO",
-        "subsystem": "Gateway",
-        "eventCode": "GW_START",
-        "entityId": "gateway-17",
-        "message": "Gateway startup completed.",
-        "attributes": {
-          "site": "north-yard",
-          "firmware": "4.2.1"
-        }
-      }
-    },
-    {
-      "type": "wait",
-      "durationMs": 2000
-    },
-    {
-      "type": "record",
-      "record": {
-        "timestampOffsetMs": 2000,
-        "severity": "WARN",
-        "subsystem": "Transport",
-        "eventCode": "UPSTREAM_LATENCY",
-        "entityId": "gateway-17",
-        "message": "Upstream response latency exceeded expected range.",
-        "attributes": {
-          "latencyMs": 1840,
-          "endpoint": "collector-a"
-        }
-      }
-    }
-  ]
+  "steps": []
 }
 ```
 
-### Scenario Step Types
+The loader requires:
 
-The scenario language supports:
+- `schemaVersion` to be the supported integer version
+- `name` to be a non-empty string
+- `description` to be a string
+- `steps` to be a non-empty array
+
+### Scenario step types
+
+Five step types control playback.
 
 #### `record`
 
-Writes one semantic log record through the selected format renderer.
-
-A record may optionally request special write behavior.
-
-Example normal record:
+Serializes and writes one semantic record.
 
 ```json
 {
@@ -171,13 +268,20 @@ Example normal record:
     "entityId": "gateway-17",
     "message": "Upstream response latency exceeded expected range.",
     "attributes": {
-      "latencyMs": 1840
+      "latencyMs": 1840,
+      "endpoint": "collector-a"
     }
   }
 }
 ```
 
-Example partial write:
+`timestampOffsetMs` must be a non-negative integer.
+
+`severity`, `subsystem`, `eventCode`, `entityId`, and `message` are strings. They may map differently depending on the selected renderer.
+
+##### Partial record writes
+
+A `record` can be physically written in two parts.
 
 ```json
 {
@@ -198,11 +302,17 @@ Example partial write:
 }
 ```
 
-The renderer produces the complete serialized record first. The scenario player then controls how those bytes reach disk.
+The renderer first creates the complete serialized record. The player then writes the configured first fraction, waits, and writes the remainder.
+
+`splitFraction` must be greater than `0` and less than `1`.
+
+`holdMs` must be a non-negative integer and is scaled by the runtime playback-speed multiplier.
+
+This behavior is used to verify that TraceScope does not admit incomplete trailing records or structured fragments prematurely.
 
 #### `wait`
 
-Pauses playback before processing the next step.
+Pauses physical playback before processing the next step.
 
 ```json
 {
@@ -211,320 +321,217 @@ Pauses playback before processing the next step.
 }
 ```
 
-Wait duration is affected by the runtime playback-speed multiplier.
+`durationMs` must be a non-negative integer and is affected by the runtime speed multiplier.
 
 #### `truncate`
 
-Truncates the currently active output file and then continues playback.
+Truncates the currently active output file in place and continues writing to the same path.
 
-Formats that require a header or document prefix must restore whatever structural content is required before subsequent records are written.
+```json
+{
+  "type": "truncate"
+}
+```
+
+If the selected format requires a header or outer-container prefix, the generator writes fresh initial content after truncation.
 
 #### `replace`
 
-Replaces the active file with a newly created file at the same path.
+Closes and removes the current active file, then creates a new physical file at the same output path.
 
-This tests the case where an application recreates its current log rather than truncating the existing file in place.
+```json
+{
+  "type": "replace"
+}
+```
+
+This is distinct from in-place truncation even though the user-visible path remains the same.
 
 #### `rotate`
 
-Moves the current output file to a rotated filename and creates a new active file at the original output path.
+Preserves the current active file under a numbered rotated filename and creates a fresh active file at the original path.
 
-This represents common file-rotation behavior while allowing TraceScope to continue observing the configured path.
-
-No dedicated `burst` step is required. A burst is represented by several deterministic `record` steps separated by short waits.
-
-## Scenario Library
-
-The repository includes a small permanent library of deterministic scenarios under `samples/live/`.
-
-These scenarios are intended to serve two related purposes:
-
-* provide repeatable manual-test inputs for TraceScope live-file-following behavior
-* provide realistic, presentation-quality data for screenshots and demonstrations of live following, filtering, analytics, navigation, and comparison behavior
-
-Scenario content should therefore remain technically deterministic without looking like artificial test fixtures. Service names, event codes, entities, messages, and attributes should form a coherent fictional production story that a TraceScope user could reasonably imagine investigating.
-
-The scenario library is intentionally small. Each scenario has a distinct role rather than attempting to make every scenario exercise every file lifecycle behavior or every output format.
-
-| Scenario | Primary story and demonstration role | Lifecycle emphasis | Intended format families |
-| -------- | ------------------------------------ | ------------------ | ------------------------ |
-| `field-gateway-live-scenario.json` | A production field gateway moves from healthy telemetry delivery into rising upstream latency, retries, timeout pressure, queue growth, and recovery. Useful for live-follow, filtering, severity/event-code analysis, timeline activity, and investigation screenshots. | ordinary growth, waits, partial write, burst-like degradation, in-place truncation, recovery | JSON Lines, CSV, TSV, key-value / logfmt, generic regex text, Syslog RFC 5424, Syslog RFC 3164, Structured JSON, Structured XML, Windows Event XML |
-| `web-access-live-scenario.json` | Representative production web traffic including health checks, page and asset requests, authenticated API activity, query traffic, 401/403/404 responses, a brief 503 failure burst, and recovery. Useful for access-log live-follow demonstrations. | ordinary growth, waits, partial write, short request/error bursts | IIS W3C, Apache Common, Apache Combined, Nginx Combined |
-| `checkout-api-healthy-baseline-live-scenario.json` | Healthy checkout processing with inventory reservation, payment authorization, and order creation. Intended primarily as a clean baseline for live-comparison demonstrations. | ordinary growth and realistic service-to-service timing | application-oriented and operational formats |
-| `checkout-api-payment-regression-live-scenario.json` | A related checkout session in which a release is followed by elevated payment-provider latency, retry behavior, timeout, checkout failure, circuit-breaker activity, and eventual recovery. Intended as the regression side of live-comparison screenshots and demonstrations. | ordinary growth, warning/error burst, partial write, recovery | application-oriented and operational formats |
-| `warehouse-sync-deployment-rotation-live-scenario.json` | A warehouse synchronization worker is replaced during a rolling deployment, processes accumulated backlog in a catch-up burst, and continues under sustained load before returning to steady state. | same-path replacement, catch-up burst, partial write, multiple rotations, recovery | application-oriented and operational formats |
-
-### Scenario Roles
-
-The five scenarios are complementary.
-
-`field-gateway-live-scenario.json` remains the primary truncation scenario. Its in-place truncation deliberately discards earlier active-file content before the gateway continues writing recovery records to the same path.
-
-`warehouse-sync-deployment-rotation-live-scenario.json` is the primary replacement and rotation scenario. Records written before the replacement are intentionally discarded. After replacement, the scenario produces a catch-up burst and then rotates the active file twice, producing sequential `.1` and `.2` artifacts before continuing in the active file.
-
-The two checkout scenarios form an intentional baseline/regression pair. They describe related versions of the same fictional production system so that a comparison view can show a meaningful contrast rather than two unrelated synthetic sessions.
-
-`web-access-live-scenario.json` is intentionally access-log specific. It uses neutral HTTP attributes that can be rendered naturally into IIS W3C, Apache Common, Apache Combined, and Nginx Combined output without forcing application-domain severity or subsystem concepts into formats that do not naturally contain them.
-
-### Scenario Library Coverage
-
-Taken together, the scenario library exercises:
-
-* ordinary append growth
-* deterministic waits and semantic timing
-* short record bursts
-* partial physical writes
-* in-place truncation
-* same-path replacement
-* single and multiple rotation
-* recovery after degraded behavior
-* healthy-versus-regressed comparison material
-* realistic warning/error distributions
-* multiple subsystems, event codes, and entities
-* HTTP success, client-error, authorization-error, and server-error traffic
-
-The library is not a load-testing corpus and is not intended to generate large random datasets. Scenarios should remain readable enough that a developer can inspect the JSON and understand the complete incident story.
-
-Renderer-specific tests remain responsible for validating serialization details. The scenario library provides realistic cross-format and lifecycle inputs for manual verification and demonstrations.
-
-## Graphical Launcher
-
-`TraceScopeLiveLogGeneratorLauncher` provides a small Qt Widgets interface for manually running the generator without entering command-line arguments.
-
-The launcher exposes:
-
-* scenario-file selection
-* output-file selection
-* output-format selection
-* playback-speed selection
-* optional looping
-* selectable loop behavior: continuous append or output restart
-* Play and Stop controls
-* playback status
-* captured generator standard output and error output
-
-The launcher provides a compact manual-test surface for selecting a deterministic scenario, choosing its output format and destination, controlling playback speed and looping behavior, and observing generator output while TraceScope follows the resulting file independently.
-
-![TraceScope Live-Log Generator Launcher](screenshots/tracescope-live-log-generator-launcher.png)
-
-The launcher starts `TraceScopeLiveLogGenerator` as a child process through `QProcess`. The generator executable is expected to reside in the same application directory as the launcher.
-
-Starting playback constructs the same arguments that may be supplied directly to the command-line interface. The launcher therefore does not introduce a separate playback path or alternate interpretation of scenarios.
-
-While playback is active, scenario, output, format, speed, loop, and loop-behavior controls are disabled. The loop-behavior control is available only when looping is enabled. Normal completion restores the controls and reports that playback completed.
-
-For looping scenarios, Stop intentionally terminates the child generator process and reports the stop as an expected user action rather than a playback failure. Closing the launcher while playback is active also terminates the child process so the generator is not left running independently.
-
-The launcher is intentionally limited to playback convenience. It does not provide:
-
-* scenario editing
-* scenario history
-* saved launcher presets
-* generated-record counters
-* advanced progress tracking
-* renderer configuration
-* TraceScope integration
-
-Those features would add a second application surface without materially improving live-follow verification.
-
-The command-line executable remains available for automated tests, direct invocation, and any workflow where a graphical launcher is unnecessary.
-
-## Runtime Options
-
-The command-line interface supports:
-
-```text
-TraceScopeLiveLogGenerator
-    --scenario <path>
-    --output <path>
-    --format <format-id>
-    [--speed <multiplier>]
-    [--loop]
-    [--loop-mode <append|restart>]
-```
-
-Example:
-
-```text
-TraceScopeLiveLogGenerator
-    --scenario samples/live/field-gateway-live-scenario.json
-    --output live-test.jsonl
-    --format jsonl
-    --speed 4
-```
-
-### `--scenario`
-
-Path to the scenario JSON file.
-
-### `--output`
-
-Path to the file written by the generator.
-
-### `--format`
-
-Selects the runtime renderer.
-
-### `--speed`
-
-Playback-speed multiplier.
-
-A value of:
-
-* `1` means scenario playback time
-* `2` means twice as fast
-* `0.5` means half speed
-
-Playback speed affects waits and partial-write hold periods. It does not alter semantic record timestamps.
-
-### `--loop`
-
-Continuously replays the scenario after each completed iteration.
-
-Looping is optional. Finite execution remains the default so scenarios are deterministic and easy to verify.
-
-By default, looping uses `append` behavior. The next scenario iteration continues writing to the same active physical output file without truncating or recreating it. Record-separator state and other active-file state therefore continue across the iteration boundary.
-
-Each new iteration receives a fresh scenario start timestamp while retaining the same physical source unless the scenario itself performs an explicit truncate, replacement, or rotation step.
-
-### `--loop-mode`
-
-Selects the physical output behavior between loop iterations.
-
-Supported values are:
-
-* `append` — continues the next scenario iteration in the current active output file. This is the default and represents an application continuing to produce workload into the same live source.
-* `restart` — finalizes the completed iteration where required by the renderer, recreates the active output file, and begins the next scenario iteration from a fresh source. This preserves the generator's original looping behavior for testing source restarts and whole-file rewrites.
-
-`--loop-mode` defaults to `append`.
-
-Explicit scenario lifecycle steps remain independent of the selected loop mode. A scenario may still truncate, replace, or rotate its active source during an iteration.
-
-Continuous append looping:
-
-```text
-TraceScopeLiveLogGenerator
-    --scenario samples/live/checkout-api-payment-regression-live-scenario.json
-    --output live-test.jsonl
-    --format jsonl
-    --speed 0.5
-    --loop
-```
-
-Explicit restart looping:
-
-```text
-TraceScopeLiveLogGenerator
-    --scenario samples/live/checkout-api-payment-regression-live-scenario.json
-    --output live-test.jsonl
-    --format jsonl
-    --speed 0.5
-    --loop
-    --loop-mode restart
-```
-
-Additional controls such as starting from a particular step should be added only if future live-follow testing demonstrates a concrete need.
-
-## Renderer Boundary
-
-Playback behavior and serialization must remain separate.
-
-A renderer is responsible for expressing semantic records and any format-specific file boundaries required to produce a realistic live source.
-
-Conceptually:
-
-```cpp
-class ILogRecordRenderer
+```json
 {
-public:
-    virtual ~ILogRecordRenderer() = default;
-
-    virtual QByteArray initialContent() const = 0;
-
-    virtual QByteArray recordSeparator() const
-    {
-        return {};
-    }
-
-    virtual QByteArray renderRecord(
-        const LiveLogRecord &record,
-        const QDateTime &scenarioStart
-        ) const = 0;
-
-    virtual QByteArray finalContent() const
-    {
-        return {};
-    }
-};
+  "type": "rotate"
+}
 ```
 
-The four renderer boundaries have distinct purposes:
+For an output path such as:
 
-* `initialContent()` is written when an output file is first created and after a truncate, replacement, or rotation creates a fresh active file.
-* `recordSeparator()` is written only between complete records. Most line-oriented renderers return no separator because their record output already contains its own line termination. Structured JSON uses this boundary for commas between array elements.
-* `renderRecord()` serializes one semantic record.
-* `finalContent()` closes any outer format container required for a normally completed file. It is written at normal playback completion and before a rotated file is preserved.
+```text
+service.log
+```
 
-Renderers remain stateless. The scenario player tracks the number of completed records written to the current file so separator behavior resets correctly after truncation, replacement, and rotation.
+successive rotations produce:
 
-The scenario player owns:
+```text
+service.log.1
+service.log.2
+service.log.3
+```
 
-* delays
-* playback-speed scaling
-* writing bytes
-* flushing
-* partial writes
-* record-separator placement
-* truncation
-* replacement
-* rotation
-* structured-file finalization
-* looping
+Existing files at the corresponding rotation destination are replaced.
 
-Loop boundaries are also owned by the scenario player. In `append` mode, an ordinary iteration boundary does not finalize, truncate, replace, or reopen the active output file; playback simply continues into the same source. In `restart` mode, the completed iteration is finalized where required and the active output file is recreated before the next iteration begins.
+Formats that require closing content are finalized before the old file is preserved.
 
-This distinction allows ordinary looping to model continuous application workload while retaining the previous whole-file restart behavior as an explicit test mode.
+There is no separate `burst` step. Bursts are represented explicitly by deterministic sequences of records with short waits between them.
 
-A partial record does not count as complete until its final bytes are written.
+## 4. Bundled scenario library
 
-Truncation and replacement intentionally do not finalize the previous structured document before discarding it. These steps model abrupt source lifecycle behavior. Rotation does finalize the previous structured document before preserving it, so the rotated file is independently valid.
+The repository includes five scenarios under `samples/scenarios/`.
 
-Renderers should not sleep, manipulate the output file, or know about scenario playback state.
+Each has a specific role. They are intentionally readable and deterministic rather than large randomized datasets.
 
-## Format and Live-Behavior Capability Matrix
+| Scenario | Primary use | Lifecycle emphasis |
+| --- | --- | --- |
+| `field-gateway-live-scenario.json` | General application-log live-follow investigation with rising latency, retries, timeout pressure, queue growth, and recovery | Ordinary growth, waits, partial writes, degradation burst, in-place truncation, recovery |
+| `warehouse-sync-deployment-rotation-live-scenario.json` | Source-continuity testing around a rolling deployment and backlog catch-up | Same-path replacement, catch-up burst, partial write, multiple rotations, recovery |
+| `checkout-api-healthy-baseline-live-scenario.json` | Healthy comparison baseline for checkout processing | Ordinary growth and realistic service-to-service timing |
+| `checkout-api-payment-regression-live-scenario.json` | Regression side of the checkout comparison pair | Elevated latency, retries, warning/error burst, partial write, failure, recovery |
+| `web-access-live-scenario.json` | Web-access live-follow testing | Health checks, page/API traffic, client errors, authorization failures, 503 burst, partial write, recovery |
 
-`v0.16.0` live following supports all current TraceScope source families when the configured import behavior identifies a usable repeatable record structure. The physical ingestion strategy differs by format; live support does not require every format to behave like a newline-delimited text file.
+### Field gateway
 
-The generator should exercise both line-oriented append streams and structured open-container streams.
+`field-gateway-live-scenario.json` is the main truncation scenario.
 
-| Format             | TraceScope importer path | Semantic fidelity               | Live strategy                              | Partial-record test | Truncate / replacement / rotation                  | Generator status |
-| ------------------ | ------------------------ | ------------------------------- | ------------------------------------------ | ------------------- | -------------------------------------------------- | ---------------- |
-| JSON Lines         | `json-lines`             | Full                            | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| CSV                | `csv`                    | Full with fixed scenario schema | Line-oriented append with header           | Yes                 | Yes, with header regeneration                      | Implemented      |
-| TSV                | `tsv`                    | Full with fixed scenario schema | Line-oriented append with header           | Yes                 | Yes, with header regeneration                      | Implemented      |
-| key-value / logfmt | `key-value`              | Full                            | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| generic regex text | `regex-text`             | Full with matching profile      | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| Syslog RFC 5424    | `syslog-rfc5424`                 | High                            | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| Syslog RFC 3164    | `syslog-rfc3164`                 | Reduced                         | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| IIS W3C            | `iis-w3c`                | Access-log oriented             | Line-oriented append with header           | Yes                 | Yes, with header regeneration                      | Implemented      |
-| Apache Common      | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| Apache Combined    | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| Nginx Combined     | `regex-text` preset      | Access-log oriented             | Line-oriented append                       | Yes                 | Yes                                                | Implemented      |
-| Structured JSON    | `structured-json`        | Full                            | Profiled open record-array container       | Yes                 | Yes, with fresh container / rewrite reconciliation | Implemented      |
-| Structured XML     | `xml`                    | Full                            | Profiled open repeated-record container    | Yes                 | Yes, with fresh container / rewrite reconciliation | Implemented      |
-| Windows Event XML  | `xml` preset             | High                            | Profiled open `Events`-style container     | Yes                 | Yes, with fresh container / rewrite reconciliation | Implemented      |
+It begins with healthy telemetry activity, moves through upstream latency and retry pressure, performs an in-place truncation, and then continues with recovery records at the same active path.
 
-### Line-Oriented Sources
+It is useful for testing:
 
-Line-oriented sources expose complete records through ordinary file growth.
+- live append
+- partial records
+- filtering
+- severity and event-code analysis
+- timeline updates
+- same-path source-generation changes
+- preserved evidence after truncation
 
-An incomplete trailing record remains pending until its physical write finishes. Header-based formats regenerate their initial header content whenever a lifecycle event creates a fresh active file.
+### Warehouse synchronization
 
-### Structured Open-Container Sources
+`warehouse-sync-deployment-rotation-live-scenario.json` is the main replacement-and-rotation scenario.
 
-Structured JSON, structured XML, and Windows Event XML are not excluded from true live following.
+It models:
 
-When a profile identifies a repeatable record structure, the producer may keep an outer document container open while complete child records are appended.
+- same-path replacement during deployment
+- backlog catch-up traffic
+- a partial write
+- multiple rotations
+- continued writes to the active source
+- return to steady state
+
+Its rotations produce sequential numbered artifacts while the configured active path continues to receive new output.
+
+### Checkout comparison pair
+
+The two checkout scenarios describe related runs of the same fictional production system.
+
+The healthy scenario provides a baseline.
+
+The payment-regression scenario introduces provider latency, retries, timeout behavior, checkout failure, circuit-breaker activity, and recovery.
+
+Together they provide deterministic source data for creating a Baseline → Comparison document from related investigation sessions, rather than comparing unrelated synthetic systems.
+
+### Web access
+
+`web-access-live-scenario.json` is designed for web-access formats.
+
+Its semantic data is based on HTTP-oriented attributes that can be represented naturally in IIS W3C, Apache Common/Combined, and Nginx Combined output.
+
+It does not rely on forcing application-specific severity, subsystem, or entity concepts into access-log formats that do not naturally carry them.
+
+## 5. Output formats and fidelity
+
+The generator supports these format identifiers:
+
+| Format ID | Output family | TraceScope import path | Notes |
+| --- | --- | --- | --- |
+| `jsonl` | JSON Lines | JSON Lines importer | High semantic fidelity; line-oriented |
+| `csv` | CSV | CSV importer | Fixed columns derived from the scenario; header regenerated for fresh files |
+| `tsv` | TSV | TSV importer | Fixed columns derived from the scenario; header regenerated for fresh files |
+| `logfmt` | key-value / logfmt | Key-value importer | High semantic fidelity; line-oriented |
+| `regex-text` | generic text | Regex-text importer with matching profile | Scenario fields rendered into a deterministic text structure |
+| `syslog-rfc5424` | Syslog RFC 5424 | Syslog importer | Structured operational representation with format-specific validation |
+| `syslog-rfc3164` | Syslog RFC 3164 | Syslog importer | Reduced structured metadata compared with RFC 5424 |
+| `iis-w3c` | IIS W3C | IIS W3C importer | HTTP/access-log oriented; header-based |
+| `apache-common` | Apache Common | Regex-text preset | HTTP/access-log oriented |
+| `apache-combined` | Apache Combined | Regex-text preset | HTTP/access-log oriented |
+| `nginx-combined` | Nginx Combined | Regex-text preset | HTTP/access-log oriented |
+| `structured-json` | Structured JSON | Structured JSON importer | Open repeated-record container during live playback |
+| `structured-xml` | Structured XML | XML importer | Open repeated-record container during live playback |
+| `windows-event-xml` | Windows Event XML | XML preset | Event-oriented structured XML representation |
+
+### Scenario compatibility
+
+Not every scenario is meaningful in every renderer.
+
+The renderer factory validates the scenario against format-specific constraints before playback. Examples include:
+
+- required HTTP attributes for access-log formats
+- three-digit HTTP status values
+- token/quoting restrictions needed for safe access-log output
+- RFC 5424 APP-NAME, MSGID, and structured-data naming rules
+- RFC 3164 tag restrictions
+- whitespace restrictions in fields whose target syntax cannot represent it safely
+
+If a scenario cannot be represented safely in the selected format, the generator returns an error rather than silently producing misleading output.
+
+### Fidelity is format-dependent
+
+The scenario describes one semantic incident, but output formats do not all contain the same concepts.
+
+Application-oriented formats can preserve most or all of:
+
+- timestamp
+- severity
+- subsystem
+- event code
+- entity ID
+- message
+- custom attributes
+
+Operational formats intentionally expose different structures.
+
+For example:
+
+- access logs emphasize request, response, client, and timing fields
+- RFC 3164 carries less structured metadata than RFC 5424
+- Windows Event XML does not provide a universal application-domain equivalent for every semantic field
+
+The generator preserves useful meaning that belongs naturally in the selected format rather than inventing fields solely to make formats look equivalent.
+
+## 6. File-lifecycle behavior
+
+The scenario player, rather than the renderer, owns physical file behavior.
+
+Its responsibilities include:
+
+- waits
+- playback-speed scaling
+- physical writes and flushing
+- partial writes
+- record separators
+- truncation
+- replacement
+- rotation
+- structured-file initialization/finalization
+- looping
+
+Renderers are responsible for serializing records and providing any format-specific initial, separator, or final content.
+
+This separation means the same lifecycle step has consistent semantics across compatible output families.
+
+### Line-oriented sources
+
+For line-oriented formats, complete records become available through ordinary file growth.
+
+A partial record remains physically incomplete until the second write occurs. TraceScope can therefore be tested against an actual trailing fragment rather than a special simulated state.
+
+Header-based formats such as CSV, TSV, and IIS W3C regenerate their required initial content whenever truncation, replacement, rotation, or restart creates a fresh active file.
+
+### Structured open-container sources
+
+Structured JSON, Structured XML, and Windows Event XML can model a producer that keeps an outer document open while complete child records are appended.
 
 Conceptually:
 
@@ -532,183 +539,235 @@ Conceptually:
 outer container
     complete record
     complete record
-    partially written record   ← pending
+    partially written record    ← not complete yet
 EOF
 ```
 
-Completed records are independently usable even though the trailing record and outer container are not yet complete.
+During playback, the outer document may therefore be temporarily incomplete even though earlier child records are complete and usable.
 
-For structured JSON, live append behavior requires a profiled repeatable record array. The generator writes the array/container prefix through `initialContent()`, inserts separators only between completed elements, writes each record independently, and closes the structure through `finalContent()` after normal completion.
+Structured JSON uses an open repeated-record array.
 
-For structured XML and Windows Event XML, live append behavior requires a profiled repeated-record element path. The generator writes the document/container prefix, appends complete record elements, and leaves the outer container intentionally open during playback.
+Structured XML and Windows Event XML use repeated record elements within an open outer container.
 
-Partial-write behavior applies to structured formats exactly as it does to line-oriented formats: the renderer first produces the complete serialized record, then the scenario player exposes only the configured first fraction of its bytes during the hold interval.
+A normal finite playback finalizes the document so the resulting source is independently valid.
 
-A normally completed structured playback must leave a valid standalone document. Rotation finalizes the old document before preserving it and starts a fresh container at the active path. Truncation and replacement intentionally model abrupt lifecycle events and therefore start a fresh container without first repairing the discarded document.
+### Lifecycle events for structured sources
 
-Structured sources may also be maintained by a producer that repeatedly rewrites, truncates, or replaces a formally closed document. TraceScope handles those cases through the corresponding file-lifecycle and reconciliation behavior rather than requiring byte-append semantics.
+The lifecycle operations intentionally differ:
 
-Appending an unrelated second complete JSON or XML document after an already closed document is not a supported live-source model.
+- **truncate** discards the existing active contents and writes a fresh container prefix
+- **replace** removes the existing physical file and creates a fresh container at the same path
+- **rotate** finalizes the old structured document before preserving it, then initializes a fresh active container
+- **normal completion** writes final container content
+- **append looping** keeps the current source active across loop boundaries
+- **restart looping** finalizes the completed iteration where required and recreates the source before the next iteration
 
-## Format Fidelity
+Truncation and replacement deliberately do not repair the discarded old structured document first. They model abrupt source lifecycle changes.
 
-The scenario describes one semantic incident, but not every output format needs to preserve every canonical field.
+Appending a second unrelated complete JSON or XML document after an already closed document is not the generator's structured live-source model.
 
-Application-oriented formats such as JSON Lines, CSV, TSV, key-value, and configured regex text can preserve the complete semantic model.
+## 7. Scenario authoring
 
-Operational formats may intentionally expose a different subset.
+Bundled scenarios are ordinary versioned JSON files and can be copied or modified for focused testing.
 
-Examples include:
+A useful scenario should remain:
 
-* Apache/Nginx access logs, where HTTP request information is more natural than severity or subsystem
-* IIS W3C logs, where HTTP fields are primary
-* Syslog RFC 3164, which has less structured metadata than RFC 5424
-* Windows Event XML, which does not provide a universal application-domain entity identifier
+- deterministic
+- human-readable
+- internally coherent
+- small enough to inspect manually
+- focused on a specific investigation or source-lifecycle question
 
-Renderers should preserve as much useful scenario meaning as the target format naturally supports without inventing misleading fields.
+Avoid randomizing failures, event codes, entities, or incident timing when repeatability matters.
 
-## Determinism
+### Minimal example
 
-Scenarios are deterministic by default.
+```json
+{
+  "schemaVersion": 1,
+  "name": "Simple Service Degradation",
+  "description": "Small deterministic degradation and recovery sequence.",
+  "steps": [
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 0,
+        "severity": "INFO",
+        "subsystem": "Worker",
+        "eventCode": "START",
+        "entityId": "worker-1",
+        "message": "Worker started.",
+        "attributes": {
+          "region": "east"
+        }
+      }
+    },
+    {
+      "type": "wait",
+      "durationMs": 1000
+    },
+    {
+      "type": "record",
+      "record": {
+        "timestampOffsetMs": 1000,
+        "severity": "ERROR",
+        "subsystem": "Worker",
+        "eventCode": "REQUEST_FAILED",
+        "entityId": "worker-1",
+        "message": "Upstream request failed.",
+        "attributes": {
+          "retryCount": 2
+        }
+      }
+    }
+  ]
+}
+```
 
-The generator should not randomly choose:
+### Authoring rules enforced by the loader
 
-* severity
-* incident timing
-* failed entities
-* event codes
-* recovery behavior
-* file disruptions
+The loader rejects scenarios that violate the basic schema.
 
-When a scenario describes a degradation followed by an error burst and recovery, the same sequence should occur on every run.
+Important rules include:
 
-Runtime-generated values may include:
+- schema version must be `1`
+- scenario name must not be empty
+- at least one step is required
+- step `type` must be recognized
+- `timestampOffsetMs` must be a non-negative integer
+- `wait.durationMs` must be a non-negative integer
+- partial `splitFraction` must be greater than `0` and less than `1`
+- partial `holdMs` must be a non-negative integer
+- custom attributes must contain only scalar string, number, boolean, or null values
 
-* absolute timestamps derived from the run start
-* file rotation suffixes
-* optional sequence values required by a target format
+The selected renderer may impose additional format-specific validation beyond these scenario-schema rules.
 
-These values must not alter the semantic incident story.
+### Prefer explicit records to synthetic algorithms
 
-## Live-Follow Verification Role
+A scenario should describe the event sequence directly.
 
-The generator and scenario library support repeatable manual verification of:
+For example, represent a failure burst as several explicit record steps rather than asking the generator to invent a random burst of errors.
 
-* appended-record following for every supported line-oriented source family
-* structured JSON record-array following
-* structured XML repeated-record following
-* Windows Event XML repeated-record following
-* pause
-* resume
-* catch-up after resume
-* incomplete trailing-line handling
-* incomplete structured JSON record handling
-* incomplete structured XML / Windows Event XML record handling
-* still-open structured outer containers
-* normal structured-stream finalization
-* truncation handling
-* file replacement
-* file rotation
-* fresh header or container creation after lifecycle events
-* valid finalized structured files after rotation
-* burst ingestion
-* filtering while records arrive
-* summary updates
-* analytics updates
+This keeps the expected output understandable before TraceScope is opened and makes repeated runs directly comparable.
 
-The generator itself does not verify TraceScope behavior. It creates known external conditions against which TraceScope can be observed and tested.
+## 8. Using the generator with TraceScope
 
-## Building and Release Distribution
+The generator is most useful when treated exactly like an external application producing a log.
 
-The Live-Log Generator source is part of the TraceScope `v0.16.0` source tree under `tools/live-log-generator/`, and the deterministic scenarios used by the generator are stored under `samples/live/`. The tagged source is the authoritative version of the utility.
+A typical workflow is:
 
-The generator is separate from the main TraceScope application packages. It is not required to run TraceScope and is not bundled into the primary Windows ZIP or Linux AppImage.
+1. Choose a scenario and compatible output format.
+2. Choose a disposable output path.
+3. Start generator playback.
+4. Open or import the active output file in TraceScope using the matching format/profile.
+5. Start Live Following where appropriate.
+6. Observe records, source lifecycle changes, filters, analyses, findings, and provenance as the scenario progresses.
+7. Save an investigation session snapshot or workspace when testing evidence continuity.
+8. Repeat the same deterministic scenario when verifying a regression or comparing behavior across builds.
 
-The source tree defines two generator executables:
+The generator can be used to exercise:
 
-- `TraceScopeLiveLogGenerator` — the command-line generator and authoritative playback implementation
-- `TraceScopeLiveLogGeneratorLauncher` — the thin Qt Widgets launcher that starts the command-line generator as a child process
+- ordinary appended-record following
+- incomplete trailing records
+- partial structured records
+- open structured containers
+- pause and resume
+- catch-up after resume
+- in-place truncation
+- same-path replacement
+- rotation and rotated source families
+- fresh headers/containers after lifecycle changes
+- source generations and physical provenance
+- filtering while records arrive
+- contextual filtering while new records arrive
+- analytics frequency drilldowns during or after live ingestion
+- timeline and analytical refresh
+- Follow Newest behavior in the event table and timeline
+- findings and annotations on live evidence
+- persistence/recovery after source changes
+- recovery and continued investigation using preserved snapshot evidence after source changes
+- comparison capture from known scenarios
+- report/export behavior after live ingestion
 
-The launcher expects the command-line executable to be available alongside it.
+The generator itself does **not** decide whether TraceScope behaved correctly. It establishes deterministic external conditions so the resulting TraceScope behavior can be inspected and tested.
 
-On Windows, the CMake project also provides the `TraceScopeLiveLogGeneratorPortable` target. That target collects both executables and uses `windeployqt` to assemble the Qt and compiler runtime dependencies required for a self-contained portable directory.
+For the broader verification strategy, see [Testing](testing.md). For TraceScope's source-generation and evidence-continuity architecture, see [Architecture](architecture.md). For the user-facing live workflow, see [Live Following](live-following.md).
 
-The `v0.16.0` release provides one supplemental generator convenience package:
+## 9. Building and distribution
 
-- `TraceScope-v0.16.0-live-log-generator-windows-x64.zip`
+The generator source lives under:
 
-This Windows package is separate from the primary TraceScope packages produced by the repository's automated release workflow. It was assembled locally from the tagged `v0.16.0` generator source using the portable generator target and was smoke-tested again after extraction.
+```text
+tools/live-log-generator/
+```
 
-No Linux generator convenience package is provided for `v0.16.0`. Linux users of this prerelease should build the generator from the tagged source with a native Qt 6 toolchain. A corresponding Linux convenience package is planned as part of the final `v1.0.0` packaging work.
+The scenarios live under:
 
-This distinction affects packaging provenance only. The generator source, renderer behavior, scenario format, and deterministic scenario library are the same `v0.16.0` implementation documented in this file.
+```text
+samples/scenarios/
+```
 
-## Generator Completion Boundary
+The generator is built as part of the root TraceScope CMake project but remains a separate utility. Neither its CLI nor its launcher is required to run TraceScope.
 
-The generator is complete for the `v0.16.0` live-follow milestone and is treated as a stable permanent test harness rather than an actively expanding secondary product.
+### Build from source
 
-The live-log generator is not complete merely because a representative subset of renderers works.
+Build the CLI:
 
-Before TraceScope's live-follow ingestion and presentation work began, the utility was completed to provide reproducible generation for every currently supported source family using the appropriate live strategy.
+```sh
+cmake --build build --target TraceScopeLiveLogGenerator
+```
 
-The completed generator provides representative coverage for:
+Build the launcher:
 
-* JSON Lines
-* CSV
-* TSV
-* key-value / logfmt
-* generic regex text
-* Syslog RFC 5424
-* Syslog RFC 3164
-* IIS W3C
-* Apache Common
-* Apache Combined
-* Nginx Combined
-* Structured JSON
-* Structured XML
-* Windows Event XML
+```sh
+cmake --build build --target TraceScopeLiveLogGeneratorLauncher
+```
 
-Across those formats, the generator exercises the lifecycle behaviors relevant to the format:
+See [Building from Source](building-from-source.md) for complete Qt/CMake setup instructions.
 
-* ordinary record growth
-* deterministic semantic timing independent of playback speed
-* partial physical writes
-* truncation
-* replacement
-* rotation
-* header regeneration where required
-* structured-container initialization, record separation, and normal finalization where required
+### Windows local portable target
 
-The implemented renderer set, five-scenario library, and graphical launcher provide the completed source-family, lifecycle, and manual-playback inputs for this boundary. The generator was frozen before TraceScope live-follow implementation proceeded, with the standing rule that new generator features should be added only when real TraceScope testing exposes a concrete missing capability.
+Windows builds also expose:
 
-That completion boundary was satisfied before TraceScope's live-follow implementation proceeded and remains the basis for ongoing manual regression testing.
+```text
+TraceScopeLiveLogGeneratorPortable
+```
 
-## Stable Snapshot Boundaries
+Build it with:
 
-Live following does not weaken existing immutable behavior.
+```powershell
+cmake --build build --target TraceScopeLiveLogGeneratorPortable
+```
 
-A live investigation session may continue changing as its source file grows, rotates, is replaced, or is reconciled with preserved snapshot evidence.
+This development convenience target assembles the CLI and launcher with their required Qt/compiler runtime dependencies using the active Qt installation's `windeployqt`.
 
-However:
+### Release packages
 
-* an existing immutable comparison snapshot remains unchanged
-* an already-generated report remains unchanged
-* persisted immutable comparisons retain their captured meaning
+The v1.0 release provides separate Live-Log Generator convenience packages for Windows and Linux.
 
-Phase 15 explicitly evaluated continuously updating comparison behavior and did not add it to `v0.16.0`. Existing comparisons remain point-in-time immutable snapshots. A future live-comparison workflow, if added, would require a separate bounded analysis model and lifecycle rather than mutating the existing Baseline → Comparison semantics.
+They remain separate from the primary TraceScope application packages because the generator is a testing and demonstration utility rather than an application dependency.
 
-## Scope Discipline
+The release workflow is authoritative for exact package names and contents.
 
-The live-log generator is not intended to become:
+## 10. Scope boundaries
 
-* a general synthetic-data platform
-* a configurable log-design application
-* a fuzzing framework
-* a load-testing system
-* a network log collector
-* a monitoring service
-* a TraceScope runtime dependency
+The Live-Log Generator is intentionally small.
 
-Features should be added only when they materially improve reproducible live-follow verification or regression testing.
+It is designed to provide known, repeatable physical log behavior that is easy to understand and trust.
 
-The utility remains intentionally small enough that its behavior can be easily understood and trusted.
+It is **not** intended to become:
+
+- a general synthetic-data platform
+- a scenario-editing application
+- a fuzzing framework
+- a load- or stress-testing system
+- a network log collector
+- an observability service
+- a production log forwarder
+- a TraceScope runtime dependency
+
+The launcher likewise remains a playback convenience surface rather than a second application. It does not provide scenario editing, saved launcher presets, advanced progress tracking, renderer configuration, or direct TraceScope integration.
+
+New generator behavior should serve a concrete reproducible testing need while preserving the central boundary:
+
+> **The generator writes ordinary files. TraceScope independently observes those files.**

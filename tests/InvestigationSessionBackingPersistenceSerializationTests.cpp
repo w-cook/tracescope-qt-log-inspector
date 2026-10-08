@@ -112,6 +112,7 @@ private slots:
     void invalidBackingCombinationIsRejected();
     void invalidSourceIdentityIsRejected();
     void missingLogicalSourceKeyFallsBackToSourcePath();
+    void snapshotBackedRoundTripsWithReconnectHint();
 };
 
 void
@@ -642,6 +643,80 @@ void
         QStringLiteral(
             "C:/logs/live.jsonl"
             )
+        );
+}
+
+void
+    InvestigationSessionBackingPersistenceSerializationTests::
+    snapshotBackedRoundTripsWithReconnectHint()
+{
+    PersistedInvestigationSessionBacking
+        backing;
+
+    backing.mode =
+        PersistedInvestigationSessionBackingMode::
+        SnapshotBacked;
+
+    backing.snapshotReference =
+        QStringLiteral(
+            "sessions/snapshot-only.tsinv"
+            );
+
+    backing.externalSourceBinding =
+        externalBinding();
+
+    InvestigationSessionBackingPersistenceSerializer
+        serializer;
+
+    const auto result =
+        serializer.deserialize(
+            serializer.serialize(
+                backing
+                )
+            );
+
+    QVERIFY2(
+        result.isSuccess(),
+        qPrintable(
+            result.errorMessage
+            )
+        );
+
+    QVERIFY(
+        result.backing->mode
+        == PersistedInvestigationSessionBackingMode::
+        SnapshotBacked
+        );
+
+    QVERIFY(
+        result
+            .backing
+            ->snapshotReference
+            .has_value()
+        );
+
+    QVERIFY(
+        result
+            .backing
+            ->externalSourceBinding
+            .has_value()
+        );
+
+    QCOMPARE(
+        result
+            .backing
+            ->externalSourceBinding
+            ->sourcePath,
+        QStringLiteral(
+            "C:/logs/live.jsonl"
+            )
+        );
+
+    QVERIFY(
+        !result
+             .backing
+             ->sourceImportProfile
+             .has_value()
         );
 }
 

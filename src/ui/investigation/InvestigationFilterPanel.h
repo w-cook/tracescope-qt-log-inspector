@@ -17,9 +17,11 @@ class MultiSelectFilterComboBox;
 class QCheckBox;
 class QDateTimeEdit;
 class QDialog;
+class QHBoxLayout;
 class QLineEdit;
 class QMenu;
 class QPushButton;
+class QSpacerItem;
 class QTimer;
 class QGridLayout;
 class QResizeEvent;
@@ -76,6 +78,14 @@ public:
         const QString &subsystem
         );
 
+    bool configureEventCodeDrillDown(
+        const QString &eventCode
+        );
+
+    bool configureEntityDrillDown(
+        const QString &entity
+        );
+
     bool configureBurstDrillDown(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp
@@ -92,6 +102,18 @@ public:
     bool bookmarksOnly() const;
 
     void refreshAvailableOptions();
+
+    void refreshInterfaceScale();
+
+    bool toggleEventTableValueFilter(
+        const QString &columnKey,
+        const QString &value
+        );
+
+    bool toggleEventTableTimeBoundary(
+        const QDateTime &timestamp,
+        bool startBoundary
+        );
 
 signals:
     /*
@@ -215,4 +237,10 @@ private:
 
     bool m_secondaryLayoutCompact =
         false;
+
+    QHBoxLayout *m_primaryFilterLayout =
+        nullptr;
+
+    QSpacerItem *m_timeRangeSpacing =
+        nullptr;
 };

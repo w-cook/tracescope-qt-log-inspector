@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(TraceScope VERSION 0.16.0 LANGUAGES CXX)
+project(TraceScope VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -268,6 +268,20 @@ qt_add_executable(TraceScope
     src/workspace/InvestigationSessionRestorationService.cpp
     src/workspace/WorkspaceSavePackageService.h
     src/workspace/WorkspaceSavePackageService.cpp
+    src/ui/InterfaceScale.h
+    src/ui/InterfaceScale.cpp
+    src/ui/InterfaceScaleStyle.h
+    src/ui/InterfaceScaleStyle.cpp
+    src/preferences/InterfaceScaleSettingsStore.h
+    src/preferences/InterfaceScaleSettingsStore.cpp
+    src/workspace/WorkspaceWorkingArtifactStore.h
+    src/workspace/WorkspaceWorkingArtifactStore.cpp
+    src/ui/ItemViewFocusDelegate.h
+    src/ui/workspace/InvestigationSectionResizePolicy.h
+    src/ui/workspace/InvestigationSectionResizePolicy.cpp
+    src/ui/ScaleAwareComboBox.h
+    src/workspace/InvestigationComparisonTimeRange.h
+    src/workspace/InvestigationComparisonWindowRate.h
 
 )
 
@@ -277,6 +291,14 @@ target_link_libraries(TraceScope
         Qt6::Charts
         Qt6::Concurrent
 )
+
+if(WIN32)
+    set_target_properties(
+        TraceScope
+        PROPERTIES
+            WIN32_EXECUTABLE ON
+    )
+endif()
 
 add_subdirectory(tools/live-log-generator)
 

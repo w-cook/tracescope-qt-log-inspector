@@ -36,6 +36,12 @@ struct InvestigationEventTablePresentationState
 
     QVector<int> columnWidths;
 
+    QVector<int> manuallyResizedColumns;
+
+    // Zero indicates a legacy workspace without
+    // recorded column-width scaling information.
+    qreal columnWidthScaleFactor = 0.0;
+
     int sortColumn = -1;
     Qt::SortOrder sortOrder =
         Qt::AscendingOrder;

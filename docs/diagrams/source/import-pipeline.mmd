@@ -1,0 +1,42 @@
+flowchart TD
+
+    Producer["External log producer"]
+    Source["External source files"]
+    SharedRead["Passive shared-read boundary"]
+
+    Suggest["Format suggestion"]
+    Config["Import configuration"]
+    Validator["Profile validation"]
+
+    Preview["Import preview"]
+    Registry["Importer registry"]
+    Importer["Configured importer"]
+    PreviewResult["Normalized preview and diagnostics"]
+
+    FullImport["Full import execution"]
+    FamilyImport["Source-family import"]
+    ImportResult["Import result"]
+    Session["Investigation session"]
+
+    Producer -->|writes log data| Source
+    Source -->|passive read access| SharedRead
+
+    SharedRead -->|inspect source| Suggest
+    Suggest -->|suggest configuration| Config
+    Config -->|validate profile| Validator
+
+    Validator -->|valid configuration| Preview
+    SharedRead -->|read preview data| Preview
+    Config -->|supply profile| Preview
+
+    Preview -->|resolve importer| Registry
+    Registry -->|select importer| Importer
+    Importer -->|parse bounded sample| PreviewResult
+
+    Config -->|start import| FullImport
+    SharedRead -->|read source data| FullImport
+    FullImport -->|process source family| FamilyImport
+    FamilyImport -->|resolve importer| Registry
+
+    Importer -->|produce normalized records| ImportResult
+    ImportResult -->|create investigation| Session

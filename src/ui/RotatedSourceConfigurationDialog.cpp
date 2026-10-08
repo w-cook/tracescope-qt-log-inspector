@@ -22,6 +22,9 @@
 
 #include "../preferences/RotatedSourceSettingsStore.h"
 
+#include "InterfaceScale.h"
+#include "ItemViewFocusDelegate.h"
+
 namespace
 {
 bool rotatedSourceRulesEqual(
@@ -149,8 +152,11 @@ RotatedSourceConfigurationDialog::
         );
 
     resize(
-        700,
-        480
+        InterfaceScale::size(
+            700,
+            480,
+            this
+            )
         );
 
     buildLayout();
@@ -489,6 +495,12 @@ void RotatedSourceConfigurationDialog::
             1,
             QHeaderView::ResizeToContents
             );
+
+    m_sourceTable->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_sourceTable
+            )
+        );
 
     mainLayout->addWidget(
         m_sourceTable,

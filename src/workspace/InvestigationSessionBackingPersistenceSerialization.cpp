@@ -851,8 +851,16 @@ bool validateBacking(
 
     case PersistedInvestigationSessionBackingMode::
         SnapshotBacked:
+        /*
+         * SnapshotBacked requires durable snapshot
+         * evidence and must not carry an active
+         * SourceBacked import profile.
+         *
+         * An external-source binding is optional here.
+         * When present, it is a dormant reconnect hint,
+         * not an active source dependency.
+         */
         return hasSnapshot
-               && !hasExternal
                && !hasSourceProfile;
 
     case PersistedInvestigationSessionBackingMode::

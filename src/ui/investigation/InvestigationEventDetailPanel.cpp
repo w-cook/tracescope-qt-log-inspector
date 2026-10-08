@@ -3,20 +3,25 @@
 #include <algorithm>
 #include <utility>
 
+#include <QAbstractItemView>
+#include <QAction>
 #include <QComboBox>
+#include <QGridLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSignalBlocker>
-#include <QStringList>
-#include <QVBoxLayout>
-#include <QGridLayout>
 #include <QResizeEvent>
 #include <QScrollBar>
-#include <QAction>
-#include <QMenu>
-#include <QMargins>
+#include <QSignalBlocker>
+#include <QStringList>
+#include <QStyle>
+#include <QStyleOptionComboBox>
+#include <QTimer>
+#include <QVBoxLayout>
 
+#include "../InterfaceScale.h"
+#include "../ScaleAwareComboBox.h"
 #include "../../domain/RecordSeverity.h"
 
 InvestigationEventDetailPanel::
@@ -24,14 +29,14 @@ InvestigationEventDetailPanel::
         QWidget *parent
         )
     : QGroupBox(
-          tr("Selected Event Details"),
+          tr("Event Details"),
           parent
           ),
     m_detailText(
         new QPlainTextEdit(this)
         ),
     m_findingStatusCombo(
-        new QComboBox(this)
+        new ScaleAwareComboBox(this)
         ),
     m_noteButton(
         new QPushButton(
@@ -52,7 +57,7 @@ InvestigationEventDetailPanel::
 
     m_detailText->setPlaceholderText(
         tr(
-            "Select a telemetry event to "
+            "Select an event or finding to "
             "view its details."
             )
         );
@@ -138,7 +143,10 @@ InvestigationEventDetailPanel::
         new QVBoxLayout(this);
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     /*
@@ -157,11 +165,17 @@ InvestigationEventDetailPanel::
         );
 
     m_stateLayout->setHorizontalSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     m_stateLayout->setVerticalSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_findingStatusLabel =
@@ -198,23 +212,25 @@ InvestigationEventDetailPanel::
             )
         );
 
+    refreshFindingStatusSizing();
+
     m_findingStatusCombo->setToolTip(
         tr(
             "Set the investigation finding status "
-            "for the selected event"
+            "for this event"
             )
         );
 
     m_noteButton->setToolTip(
         tr(
             "Add an analyst note to "
-            "the selected event"
+            "this event"
             )
         );
 
     m_bookmarkButton->setToolTip(
         tr(
-            "Bookmark the selected event "
+            "Bookmark this event "
             "for later investigation"
             )
         );
@@ -352,35 +368,6 @@ void InvestigationEventDetailPanel::
         QString()
         );
 
-    lines << QString();
-    lines << QStringLiteral("Source:");
-
-    if (!record.source.sourceName.isEmpty()) {
-        lines << QStringLiteral("Name: %1")
-        .arg(
-            record.source.sourceName
-            );
-    }
-
-    if (!record.source.sourcePath.isEmpty()) {
-        lines << QStringLiteral("Path: %1")
-        .arg(
-            record.source.sourcePath
-            );
-    }
-
-    if (record.source.recordNumber > 0) {
-        lines << QStringLiteral("Source Record: %1")
-        .arg(
-            record.source.recordNumber
-            );
-    }
-
-    lines << QStringLiteral("Source Generation: %1")
-                 .arg(
-                     record.source.sourceGeneration
-                     );
-
     if (!record.customAttributes.isEmpty()) {
         lines << QString();
         lines << QStringLiteral(
@@ -419,17 +406,49 @@ void InvestigationEventDetailPanel::
         }
     }
 
-    m_detailText->setPlainText(
-        lines.join(
-            QStringLiteral("\n")
-            )
+    lines << QString();
+    lines << QStringLiteral("Source / Provenance:");
+
+    if (!record.source.sourceName.isEmpty()) {
+        lines << QStringLiteral("Name: %1")
+        .arg(
+            record.source.sourceName
+            );
+    }
+
+    if (!record.source.sourcePath.isEmpty()) {
+        lines << QStringLiteral("Path: %1")
+        .arg(
+            record.source.sourcePath
+            );
+    }
+
+    if (record.source.recordNumber > 0) {
+        lines << QStringLiteral("Source Record: %1")
+        .arg(
+            record.source.recordNumber
+            );
+    }
+
+    lines << QStringLiteral("Source Generation: %1")
+                 .arg(
+                     record.source.sourceGeneration
+                     );
+
+    m_recordDetailText = lines.join(
+        QStringLiteral("\n")
         );
+
+    refreshDetailText();
 }
 
 void InvestigationEventDetailPanel::
     clearRecord()
 {
-    m_detailText->clear();
+    m_recordDetailText.clear();
+    m_analystNote.clear();
+
+    refreshDetailText();
 }
 
 void InvestigationEventDetailPanel::
@@ -459,6 +478,9 @@ void InvestigationEventDetailPanel::
     m_noteButton->setEnabled(
         false
         );
+
+    m_analystNote.clear();
+    refreshDetailText();
 
     m_noteButton->setText(
         tr("Add Note")
@@ -511,13 +533,16 @@ void InvestigationEventDetailPanel::
     const bool hasNote =
         !state.note.trimmed().isEmpty();
 
+    m_analystNote = state.note;
+    refreshDetailText();
+
     m_noteButton->setEnabled(
         true
         );
 
     m_noteButton->setText(
         hasNote
-            ? tr("View/Edit Note")
+            ? tr("Edit Note")
             : tr("Add Note")
         );
 
@@ -626,6 +651,193 @@ void InvestigationEventDetailPanel::
 }
 
 void InvestigationEventDetailPanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_stateLayout != nullptr) {
+        m_stateLayout->setHorizontalSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_stateLayout->setVerticalSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        m_stateLayout->invalidate();
+    }
+
+    /*
+     * Recalculate content-derived minimum widths and
+     * the compact/wide breakpoint using the new font,
+     * style metrics, and Interface Scale.
+     */
+    updateResponsiveControls();
+
+    if (m_detailText != nullptr) {
+        m_detailText->updateGeometry();
+        m_detailText->viewport()->update();
+    }
+
+    if (m_collapsed) {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int height =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    }
+
+    updateGeometry();
+    update();
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            /*
+         * QApplication's font changes before existing
+         * widgets receive their inherited FontChange.
+         * Delay font-derived sizing until that propagation
+         * has completed.
+         */
+            refreshFindingStatusSizing();
+
+            updateResponsiveControls();
+
+            updateGeometry();
+            update();
+        }
+        );
+}
+
+void InvestigationEventDetailPanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    /*
+     * Preserve the native QGroupBox title while
+     * removing all lower-section contents.
+     */
+    for (
+        QWidget *control
+        : {
+            static_cast<QWidget *>(
+                m_findingStatusLabel
+                ),
+            static_cast<QWidget *>(
+                m_findingStatusCombo
+                ),
+            static_cast<QWidget *>(
+                m_noteButton
+                ),
+            static_cast<QWidget *>(
+                m_bookmarkButton
+                ),
+            static_cast<QWidget *>(
+                m_detailText
+                )
+        }
+        ) {
+        if (control != nullptr) {
+            control->setVisible(
+                !collapsed
+                );
+        }
+    }
+
+    if (collapsed) {
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int height =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        updateResponsiveControls();
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationEventDetailPanel::
+    isCollapsed() const
+{
+    return m_collapsed;
+}
+
+int InvestigationEventDetailPanel::
+    collapsedHeight() const
+{
+    if (m_collapsed) {
+        return maximumHeight();
+    }
+
+    /*
+     * This is only needed by the surrounding
+     * lower-region coordinator after collapse, so
+     * the expanded fallback is deliberately zero.
+     */
+    return 0;
+}
+
+void InvestigationEventDetailPanel::
     updateResponsiveControls()
 {
     if (m_stateLayout == nullptr) {
@@ -634,28 +846,86 @@ void InvestigationEventDetailPanel::
 
     updateMinimumUsableWidth();
 
-    const int requiredWideWidth =
-        m_findingStatusLabel
-            ->sizeHint()
-            .width()
-        + m_findingStatusCombo
-              ->sizeHint()
-              .width()
-        + m_noteButton
-              ->sizeHint()
-              .width()
-        + m_bookmarkButton
-              ->sizeHint()
-              .width()
-        + 6 * 3
-        + 20;
+    const int availableWidth =
+        m_stateLayout
+            ->geometry()
+            .width();
 
-    const bool compact =
-        contentsRect().width()
-        < requiredWideWidth;
+    /*
+     * During initial construction/layout there may not yet
+     * be meaningful grid geometry. Wait for the normal
+     * layout/resize path rather than changing presentation
+     * based on a zero-width transient.
+     */
+    if (availableWidth <= 0) {
+        return;
+    }
 
-    if (compact
-        == m_compactControls) {
+    const qreal geometryFactor =
+        InterfaceScale::geometryFactor(
+            this
+            );
+
+    bool compact;
+
+    if (!m_compactControls) {
+        /*
+         * While wide, Qt knows the exact native minimum
+         * required by the current grid arrangement,
+         * including control hints, column behavior,
+         * spacing, font metrics, and platform style.
+         */
+        const int wideMinimumWidth =
+            m_stateLayout
+                ->minimumSize()
+                .width();
+
+        if (
+            wideMinimumWidth > 0
+            && geometryFactor > 0.0
+            ) {
+            m_wideControlsMinimumLogicalWidth =
+                static_cast<qreal>(
+                    wideMinimumWidth
+                    )
+                / geometryFactor;
+        }
+
+        compact =
+            availableWidth
+            < wideMinimumWidth;
+    } else {
+        /*
+         * Once compact, QGridLayout::minimumSize()
+         * describes the compact two-row arrangement,
+         * so retain the last measured wide requirement.
+         *
+         * Add a small intentional hysteresis before
+         * reopening. This keeps the layout from toggling
+         * repeatedly at the exact boundary.
+         */
+        const int wideMinimumWidth =
+            geometryFactor > 0.0
+                    && m_wideControlsMinimumLogicalWidth > 0.0
+                ? qRound(
+                      m_wideControlsMinimumLogicalWidth
+                      * geometryFactor
+                      )
+                : availableWidth;
+
+        const int reopenHysteresis =
+            InterfaceScale::pixels(
+                8,
+                this
+                );
+
+        compact =
+            availableWidth
+            < wideMinimumWidth
+                  + reopenHysteresis;
+    }
+
+    if (compact == m_compactControls) {
         return;
     }
 
@@ -808,42 +1078,66 @@ void InvestigationEventDetailPanel::
             .width()
         );
 
-    const int statusRowWidth =
-        m_findingStatusLabel
-            ->sizeHint()
-            .width()
-        + horizontalSpacing
-        + m_findingStatusCombo
-              ->sizeHint()
-              .width();
-
-    const int actionRowWidth =
-        m_noteButton
-            ->minimumWidth()
-        + horizontalSpacing
-        + m_bookmarkButton
-            ->minimumWidth();
-
-    const int controlWidth =
+    /*
+    * The compact presentation uses a two-column grid:
+     *
+     *   Finding status: [Status]
+     *   [Note action]   [Bookmark action]
+     *
+     * QGridLayout shares each column's width across both
+     * rows, so the true minimum is the sum of the widest
+     * control in each column rather than the wider of the
+     * two individual row totals.
+     */
+    const int firstColumnWidth =
         std::max(
-            statusRowWidth,
-            actionRowWidth
+            m_findingStatusLabel
+                ->sizeHint()
+                .width(),
+            m_noteButton
+                ->minimumWidth()
             );
 
-    int horizontalMargins = 0;
+    const int secondColumnWidth =
+        std::max(
+            m_findingStatusCombo
+                ->sizeHint()
+                .width(),
+            m_bookmarkButton
+                ->minimumWidth()
+            );
+
+    const int controlWidth =
+        firstColumnWidth
+        + horizontalSpacing
+        + secondColumnWidth;
+
+    int horizontalOverhead = 0;
 
     if (layout() != nullptr) {
-        const QMargins margins =
-            layout()->contentsMargins();
-
-        horizontalMargins =
-            margins.left()
-            + margins.right();
+        /*
+         * Account for the complete horizontal space outside
+         * the layout's usable contents area, including both
+         * layout margins and any QGroupBox/style content
+         * inset.
+         *
+         * Using only QLayout::contentsMargins() can
+         * underestimate the true panel requirement by a
+         * pixel or two on Windows at fractional scaling.
+         */
+        horizontalOverhead =
+            std::max(
+                0,
+                width()
+                    - layout()
+                          ->contentsRect()
+                          .width()
+                );
     }
 
     const int requiredWidth =
         controlWidth
-        + horizontalMargins;
+        + horizontalOverhead;
 
     if (minimumWidth()
         != requiredWidth) {
@@ -863,4 +1157,112 @@ void InvestigationEventDetailPanel::
         );
 
     updateResponsiveControls();
+}
+
+void InvestigationEventDetailPanel::
+    refreshDetailText()
+{
+    QString text = m_recordDetailText;
+
+    if (
+        !m_recordDetailText.isEmpty()
+        && !m_analystNote.trimmed().isEmpty()
+        ) {
+        text =
+            tr("Analyst Note:")
+            + QStringLiteral("\n")
+            + m_analystNote
+            + QStringLiteral("\n\n")
+            + m_recordDetailText;
+    }
+
+    m_detailText->setPlainText(text);
+}
+
+void InvestigationEventDetailPanel::
+    refreshFindingStatusSizing()
+{
+    if (m_findingStatusCombo == nullptr) {
+        return;
+    }
+
+    QStyleOptionComboBox option;
+    option.initFrom(m_findingStatusCombo);
+    option.editable =
+        m_findingStatusCombo->isEditable();
+    option.frame = true;
+
+    int requiredClosedWidth = 0;
+    int widestTextWidth = 0;
+
+    const QFontMetrics metrics =
+        m_findingStatusCombo->fontMetrics();
+
+    for (
+        int index = 0;
+        index < m_findingStatusCombo->count();
+        ++index
+        ) {
+        const QString text =
+            m_findingStatusCombo->itemText(index);
+
+        const int textWidth =
+            metrics.horizontalAdvance(text);
+
+        widestTextWidth =
+            std::max(
+                widestTextWidth,
+                textWidth
+                );
+
+        /*
+         * Ask the active native style how much complete
+         * combo-box width this text requires, including
+         * frame and drop-down indicator.
+         */
+        const QSize styledSize =
+            m_findingStatusCombo
+                ->style()
+                ->sizeFromContents(
+                    QStyle::CT_ComboBox,
+                    &option,
+                    QSize(
+                        textWidth,
+                        metrics.height()
+                        ),
+                    m_findingStatusCombo
+                    );
+
+        requiredClosedWidth =
+            std::max(
+                requiredClosedWidth,
+                styledSize.width()
+                );
+    }
+
+    m_findingStatusCombo
+        ->setMinimumWidth(
+            requiredClosedWidth
+            );
+
+    /*
+     * The popup needs additional room for its own
+     * list-view margins/chrome.
+     */
+    if (m_findingStatusCombo->view() != nullptr) {
+        m_findingStatusCombo
+            ->view()
+            ->setMinimumWidth(
+                std::max(
+                    requiredClosedWidth,
+                    widestTextWidth
+                        + InterfaceScale::pixels(
+                            40,
+                            m_findingStatusCombo
+                            )
+                    )
+                );
+    }
+
+    m_findingStatusCombo->updateGeometry();
 }

@@ -1,9 +1,11 @@
 #include "MainWindow.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDragEnterEvent>
@@ -19,6 +21,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPromise>
 #include <QProgressDialog>
 #include <QPushButton>
@@ -35,6 +38,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -48,8 +52,10 @@
 #include "persistence/InvestigationSessionSnapshotFile.h"
 #include "sources/RotatedSourceDiscoveryService.h"
 #include "ui/ImportConfigurationDialog.h"
+#include "ui/InterfaceScale.h"
 #include "ui/InvestigationComparisonDialog.h"
 #include "ui/InvestigationReportExportDialog.h"
+#include "ui/workspace/DetachedWorkspaceDocumentWindow.h"
 #include "ui/workspace/InvestigationComparisonDocument.h"
 #include "ui/workspace/InvestigationReportWorkspaceContext.h"
 #include "ui/workspace/InvestigationSessionView.h"
@@ -121,10 +127,10 @@ public:
             itemOption.text;
 
         /*
-     * Let Qt paint the normal cell background,
-     * selection, focus state, etc., but suppress
-     * its single-line text painting.
-     */
+         * Let Qt paint the normal cell background,
+         * selection, focus state, etc., but suppress
+         * its single-line text painting.
+         */
         itemOption.text.clear();
 
         style->drawControl(
@@ -159,8 +165,17 @@ public:
             text
             );
 
-        constexpr int horizontalPadding = 8;
-        constexpr int verticalPadding = 4;
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                4,
+                itemOption.widget
+                );
 
         document.setTextWidth(
             std::max(
@@ -171,10 +186,10 @@ public:
             );
 
         /*
-     * Choose the text color explicitly rather than
-     * relying on QTextDocument to infer it from the
-     * view's changing active/inactive palette.
-     */
+         * Choose the text color explicitly rather than
+         * relying on QTextDocument to infer it from the
+         * view's changing active/inactive palette.
+         */
         QPalette::ColorGroup colorGroup;
 
         if (!(itemOption.state
@@ -214,10 +229,10 @@ public:
             itemOption.palette;
 
         /*
-     * QTextDocument normally uses Text, but setting
-     * both roles makes the intended foreground
-     * unambiguous across platform styles.
-     */
+         * QTextDocument normally uses Text, but setting
+         * both roles makes the intended foreground
+         * unambiguous across platform styles.
+         */
         context.palette.setColor(
             QPalette::Text,
             textColor
@@ -243,8 +258,16 @@ public:
         painter->save();
 
         painter->translate(
-            option.rect.left() + 4,
-            option.rect.top() + 2
+            option.rect.left()
+                + InterfaceScale::pixels(
+                    4,
+                    itemOption.widget
+                    ),
+            option.rect.top()
+                + InterfaceScale::pixels(
+                    2,
+                    itemOption.widget
+                    )
             );
 
         document
@@ -296,10 +319,23 @@ public:
             itemOption.text
             );
 
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                6,
+                itemOption.widget
+                );
+
         document.setTextWidth(
             std::max(
                 1,
-                itemOption.rect.width() - 8
+                itemOption.rect.width()
+                    - horizontalPadding
                 )
             );
 
@@ -307,7 +343,8 @@ public:
             itemOption.rect.width(),
             static_cast<int>(
                 document.size().height()
-                ) + 6
+                )
+                + verticalPadding
             );
     }
 };
@@ -496,18 +533,146 @@ struct MainWindow::WorkspaceOpenOperation
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     settings(),
+    interfaceScaleSettingsStore(settings),
     recentItemsStore(settings),
     filterPresetStore(settings),
     rotatedSourceSettingsStore(settings),
     workspace(new InvestigationWorkspace(this))
 {
-    setWindowTitle("TraceScope — Qt Telemetry Log Inspector");
-    resize(1100, 760);
+    setWindowTitle(
+        tr(
+            "TraceScope — Unsaved Workspace"
+            )
+        );
+
+    resize(
+        InterfaceScale::size(
+            1100,
+            760,
+            this
+            )
+        );
+
+    setMinimumWidth(
+        InterfaceScale::pixels(
+            720,
+            this
+            )
+        );
 
     setAcceptDrops(true);
 
     createMenus();
     buildLayout();
+
+    refreshRecentFilesMenu();
+    refreshRecentWorkspacesMenu();
+    updateWorkspaceSaveActionState();
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+            userFactorChanged,
+        this,
+        [this](qreal) {
+            setMinimumWidth(
+                InterfaceScale::pixels(
+                    720,
+                    this
+                    )
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        detachedWindowCreated,
+        this,
+        &MainWindow::
+        configureDetachedWindow
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        workspaceLayoutChanged,
+        this,
+        [this]() {
+            markWorkspaceDirty();
+            updateWorkspaceSaveActionState();
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        openLogRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openLogFile(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        openSnapshotRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openInvestigationSnapshot(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        openWorkspaceRequested,
+        this,
+        [this]() {
+            openWorkspace();
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        recentFilesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu,
+            WorkspaceDocumentHost *targetHost
+            ) {
+            populateRecentFilesMenu(
+                menu,
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        workspaceDocumentHost,
+        &WorkspaceDocumentHost::
+        recentWorkspacesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu
+            ) {
+            populateRecentWorkspacesMenu(
+                menu
+                );
+        }
+        );
 
     connect(
         workspace,
@@ -519,9 +684,13 @@ MainWindow::MainWindow(QWidget *parent)
             InvestigationSession *session =
                 workspace->sessionAt(index);
 
+            WorkspaceDocumentHost *targetHost =
+                sessionDocumentTargetHost != nullptr
+                    ? sessionDocumentTargetHost
+                    : workspaceDocumentHost;
+
             if (session == nullptr
-                || workspaceDocumentHost
-                       == nullptr) {
+                || targetHost == nullptr) {
                 return;
             }
 
@@ -540,6 +709,15 @@ MainWindow::MainWindow(QWidget *parent)
                 updateReloadActionState
                 );
 
+            connect(
+                sessionView,
+                &InvestigationSessionView::
+                workspaceContentChanged,
+                this,
+                &MainWindow::
+                markWorkspaceDirty
+                );
+
             /*
              * InvestigationWorkspace::addSession()
              * emits sessionAdded before it activates
@@ -547,16 +725,34 @@ MainWindow::MainWindow(QWidget *parent)
              * selection get ahead of workspace state.
              */
             const QSignalBlocker blocker(
-                workspaceDocumentHost
+                targetHost
                 );
 
-            if (!workspaceDocumentHost
+            if (!targetHost
                      ->addDocument(
                          sessionView,
                          false
                          )) {
                 delete sessionView;
+                return;
             }
+
+            /*
+             * Adding an investigation changes the substantive
+             * workspace contents.
+             *
+             * During .tsw restoration markWorkspaceDirty()
+             * is suppressed by the workspace-restoration guard,
+             * so restored sessions still begin clean.
+             */
+            markWorkspaceDirty();
+
+            /*
+             * addDocument() ran while targetHost signals were
+             * intentionally blocked, so workspaceLayoutChanged()
+             * could not update the global workspace-save state.
+             */
+            updateWorkspaceSaveActionState();
         }
         );
 
@@ -566,6 +762,14 @@ MainWindow::MainWindow(QWidget *parent)
         this,
         [this](int) {
             updateComparisonActionState();
+
+            /*
+             * InvestigationWorkspace owns session removal,
+             * while the corresponding document cleanup below
+             * deliberately blocks host signals. Record the
+             * substantive workspace mutation explicitly.
+             */
+            markWorkspaceDirty();
 
             if (workspaceDocumentHost
                 == nullptr) {
@@ -622,6 +826,13 @@ MainWindow::MainWindow(QWidget *parent)
                     removed->deleteLater();
                 }
             }
+
+            /*
+             * removeDocument() above runs while root-host signals
+             * are intentionally blocked, so synchronize workspace
+             * save availability explicitly after removal.
+             */
+            updateWorkspaceSaveActionState();
         }
         );
 
@@ -688,6 +899,8 @@ MainWindow::MainWindow(QWidget *parent)
             if (sessionView != nullptr) {
                 sessionView->refreshSession();
             }
+
+            markWorkspaceDirty();
         }
         );
 
@@ -710,13 +923,20 @@ MainWindow::MainWindow(QWidget *parent)
                     documentId
                     );
 
-            if (sessionIndex < 0) {
-                return;
+            if (sessionIndex >= 0) {
+                workspace->setActiveSession(
+                    sessionIndex
+                    );
             }
 
-            workspace->setActiveSession(
-                sessionIndex
-                );
+            /*
+             * Even when the document is not an
+             * InvestigationSessionView, command state
+             * must change. For example, Save Snapshot
+             * and Reload are unavailable while a
+             * comparison document is current.
+             */
+            updateReloadActionState();
         }
         );
 
@@ -728,34 +948,60 @@ MainWindow::MainWindow(QWidget *parent)
         [this](
             const QString &documentId
             ) {
-            const int sessionIndex =
-                workspace->indexOfSession(
-                    documentId
-                    );
+            if (workspaceDocumentHost == nullptr
+                || workspaceDocumentHost
+                       ->documentById(
+                           documentId
+                           )
+                       == nullptr) {
+                return;
+            }
 
-            if (sessionIndex >= 0) {
-                workspace->closeSession(
-                    sessionIndex
+            const bool closingFinalDocument =
+                workspaceDocumentHost
+                    ->documents()
+                    .size()
+                == 1;
+
+            if (!closingFinalDocument) {
+                closeWorkspaceDocument(
+                    documentId
                     );
 
                 return;
             }
 
             /*
-             * Non-session workspace documents, such as
-             * immutable comparisons, are owned directly
-             * by the document workspace rather than by
-             * InvestigationWorkspace.
+             * Closing the final document is semantically
+             * closing the current workspace.
+             *
+             * Give the user the same unsaved-change
+             * protection used by New/Open Workspace and
+             * final application closure.
              */
-            WorkspaceDocument *document =
-                workspaceDocumentHost
-                    ->removeDocument(
-                        documentId
-                        );
-
-            if (document != nullptr) {
-                document->deleteLater();
+            if (!confirmWorkspaceReplacement()) {
+                return;
             }
+
+            const bool previousMutationSuppression =
+                workspaceMutationTrackingSuppressed;
+
+            workspaceMutationTrackingSuppressed =
+                true;
+
+            closeWorkspaceDocument(
+                documentId
+                );
+
+            workspaceMutationTrackingSuppressed =
+                previousMutationSuppression;
+
+            /*
+             * Preserve whichever TraceScope peer was the
+             * user's final working window. It now becomes
+             * the start surface for a fresh workspace.
+             */
+            resetWorkspaceIdentity();
         }
         );
 
@@ -800,6 +1046,12 @@ MainWindow::MainWindow(QWidget *parent)
 
             menu->addSeparator();
 
+            WorkspaceDocumentHost *targetHost =
+                workspaceDocumentHost
+                    ->documentHostForId(
+                        documentId
+                        );
+
             QAction *comparisonAction =
                 menu->addAction(
                     tr(
@@ -811,7 +1063,11 @@ MainWindow::MainWindow(QWidget *parent)
                 comparisonAction,
                 &QAction::triggered,
                 menu,
-                [this, documentId]() {
+                [
+                    this,
+                    documentId,
+                    targetHost
+                ]() {
                     const InvestigationSession
                         *activeSession =
                         workspace
@@ -835,7 +1091,8 @@ MainWindow::MainWindow(QWidget *parent)
                     }
 
                     createSessionComparison(
-                        preferredBaselineId
+                        preferredBaselineId,
+                        targetHost
                         );
                 }
                 );
@@ -856,6 +1113,35 @@ void MainWindow::createMenus()
 {
     auto *fileMenu = menuBar()->addMenu("&File");
 
+    newWorkspaceAction =
+        new QAction(
+            tr("&New Workspace"),
+            this
+            );
+
+    newWorkspaceAction->setShortcut(
+        QKeySequence::New
+        );
+
+    newWorkspaceAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        newWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            newWorkspace();
+        }
+        );
+
+    fileMenu->addAction(
+        newWorkspaceAction
+        );
+
+    fileMenu->addSeparator();
+
     openAction =
         new QAction(
             "&Open Log File...",
@@ -864,7 +1150,7 @@ void MainWindow::createMenus()
     openAction->setShortcut(QKeySequence::Open);
 
     openAction->setShortcutContext(
-        Qt::ApplicationShortcut
+        Qt::WindowShortcut
         );
 
     connect(openAction, &QAction::triggered, this, [this]() {
@@ -972,7 +1258,9 @@ void MainWindow::createMenus()
         &QAction::triggered,
         this,
         [this]() {
-            saveInvestigationSnapshot();
+            saveInvestigationSnapshot(
+                workspaceDocumentHost
+                );
         }
         );
 
@@ -997,7 +1285,9 @@ void MainWindow::createMenus()
         &QAction::triggered,
         this,
         [this]() {
-            reloadActiveSession();
+            reloadActiveSession(
+                workspaceDocumentHost
+                );
         }
         );
 
@@ -1018,7 +1308,7 @@ void MainWindow::createMenus()
         );
 
     saveWorkspaceAction->setShortcutContext(
-        Qt::ApplicationShortcut
+        Qt::WindowShortcut
         );
 
     connect(
@@ -1045,7 +1335,7 @@ void MainWindow::createMenus()
         );
 
     saveWorkspaceAsAction->setShortcutContext(
-        Qt::ApplicationShortcut
+        Qt::WindowShortcut
         );
 
     connect(
@@ -1059,6 +1349,150 @@ void MainWindow::createMenus()
 
     fileMenu->addAction(
         saveWorkspaceAsAction
+        );
+
+    fileMenu->addSeparator();
+
+    auto *exitAction =
+        new QAction(
+            tr("E&xit TraceScope"),
+            this
+            );
+
+    exitAction->setShortcut(
+        QKeySequence::Quit
+        );
+
+    exitAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        exitAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            requestApplicationClose();
+        }
+        );
+
+    fileMenu->addAction(
+        exitAction
+        );
+
+    auto *viewMenu =
+        menuBar()->addMenu(
+            tr("&View")
+            );
+
+    auto *interfaceScaleMenu =
+        viewMenu->addMenu(
+            tr("Interface &Scale")
+            );
+
+    auto *interfaceScaleGroup =
+        new QActionGroup(
+            interfaceScaleMenu
+            );
+
+    interfaceScaleGroup->setExclusive(
+        true
+        );
+
+    for (
+        const qreal factor
+        : InterfaceScale::presetUserFactors()
+        ) {
+        const int percentage =
+            qRound(
+                factor * 100.0
+                );
+
+        const QString label =
+            qFuzzyCompare(
+                factor,
+                1.0
+                )
+                ? tr("%1% (System)")
+                      .arg(
+                          percentage
+                          )
+                : tr("%1%")
+                      .arg(
+                          percentage
+                          );
+
+        QAction *action =
+            interfaceScaleMenu->addAction(
+                label
+                );
+
+        action->setCheckable(
+            true
+            );
+
+        action->setData(
+            factor
+            );
+
+        action->setChecked(
+            qFuzzyCompare(
+                factor,
+                InterfaceScale::userFactor()
+                )
+            );
+
+        interfaceScaleGroup->addAction(
+            action
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [this, factor](
+                bool checked
+                ) {
+                if (!checked) {
+                    return;
+                }
+
+                applyInterfaceScale(
+                    factor
+                    );
+            }
+            );
+    }
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+            userFactorChanged,
+        interfaceScaleMenu,
+        [
+            interfaceScaleGroup
+        ](
+            qreal factor
+            ) {
+            for (
+                QAction *action
+                : interfaceScaleGroup
+                      ->actions()
+                ) {
+                if (action == nullptr) {
+                    continue;
+                }
+
+                action->setChecked(
+                    qFuzzyCompare(
+                        action
+                            ->data()
+                            .toDouble(),
+                        factor
+                        )
+                    );
+            }
+        }
         );
 
     auto *exportingMenu =
@@ -1124,7 +1558,10 @@ void MainWindow::createMenus()
         &QAction::triggered,
         this,
         [this]() {
-            createSessionComparison();
+            createSessionComparison(
+                QString(),
+                workspaceDocumentHost
+                );
         }
         );
 
@@ -1139,8 +1576,24 @@ void MainWindow::createMenus()
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(
             this,
-            "About TraceScope",
-            "TraceScope is a Qt/C++ telemetry log inspector for loading, filtering, visualizing, and exporting structured diagnostic log files."
+            tr("About TraceScope"),
+            tr(
+                "TraceScope is a desktop log investigation "
+                "tool for importing, normalizing, filtering, "
+                "analyzing, and reviewing diagnostic data "
+                "from multiple structured and text-based "
+                "log formats.<br><br>"
+                "Built with C++ and Qt, TraceScope supports "
+                "interactive timelines, investigation findings, "
+                "analytics, saved workspaces and snapshots, "
+                "and live file following.<br><br>"
+                "<div align=\"center\">"
+                "<a href=\"https://github.com/w-cook/"
+                "tracescope-qt-log-inspector\">"
+                "View the TraceScope repository on GitHub"
+                "</a>"
+                "</div>"
+                )
             );
     });
 
@@ -1179,7 +1632,460 @@ void MainWindow::buildLayout()
         );
 }
 
-void MainWindow::openLogFile(const QString &initialFilePath)
+InvestigationSession *
+MainWindow::sessionForHost(
+    WorkspaceDocumentHost *host
+    ) const
+{
+    if (workspace == nullptr) {
+        return nullptr;
+    }
+
+    /*
+     * A null host preserves the old coordinator-level
+     * fallback for internal callers that genuinely mean
+     * the globally active investigation.
+     */
+    if (host == nullptr) {
+        return workspace->activeSession();
+    }
+
+    WorkspaceDocument *document =
+        host->currentDocument();
+
+    if (document == nullptr) {
+        return nullptr;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            document->documentId()
+            );
+
+    if (sessionIndex < 0) {
+        /*
+         * The current document may be a comparison or
+         * another non-session workspace document.
+         */
+        return nullptr;
+    }
+
+    return workspace->sessionAt(
+        sessionIndex
+        );
+}
+
+void MainWindow::configureDetachedWindow(
+    DetachedWorkspaceDocumentWindow *window
+    )
+{
+    if (window == nullptr) {
+        return;
+    }
+
+    window->setWorkspaceWindowTitle(
+        workspaceWindowTitle()
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        newWorkspaceRequested,
+        this,
+        [this]() {
+            newWorkspace();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        openLogRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openLogFile(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        openSnapshotRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            openInvestigationSnapshot(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        openWorkspaceRequested,
+        this,
+        [this]() {
+            openWorkspace();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        saveWorkspaceRequested,
+        this,
+        [this]() {
+            saveWorkspace();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        saveWorkspaceAsRequested,
+        this,
+        [this]() {
+            saveWorkspaceAs();
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        recentFilesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu,
+            WorkspaceDocumentHost *targetHost
+            ) {
+            populateRecentFilesMenu(
+                menu,
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        recentWorkspacesMenuAboutToShow,
+        this,
+        [this](
+            QMenu *menu
+            ) {
+            populateRecentWorkspacesMenu(
+                menu
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        saveSnapshotRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            saveInvestigationSnapshot(
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        reloadRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            reloadActiveSession(
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+            interfaceScaleRequested,
+        this,
+        [this](qreal factor) {
+            applyInterfaceScale(
+                factor
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        compareSessionsRequested,
+        this,
+        [this](
+            WorkspaceDocumentHost *targetHost
+            ) {
+            createSessionComparison(
+                QString(),
+                targetHost
+                );
+        }
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+        applicationCloseRequested,
+        this,
+        &MainWindow::
+        requestApplicationClose
+        );
+
+    connect(
+        window,
+        &DetachedWorkspaceDocumentWindow::
+            workspaceWindowCloseRequested,
+        this,
+        [
+            this,
+            window
+        ]() {
+            if (window == nullptr) {
+                return;
+            }
+
+            requestWorkspaceWindowClose(
+                window->documentHost()
+                );
+        }
+        );
+
+    const bool fileOperationAvailable =
+        importWatcher == nullptr
+        && !workspaceOpenInProgress
+        && !sessionReloadInProgress
+        && !snapshotOpenInProgress;
+
+    window->setFileOperationsEnabled(
+        fileOperationAvailable
+        );
+
+    window->setCompareEnabled(
+        workspace != nullptr
+        && workspace->sessionCount()
+               >= 2
+        );
+
+    window->setWorkspaceSaveEnabled(
+        workspaceDocumentHost != nullptr
+        && !workspaceDocumentHost
+                ->documents()
+                .isEmpty()
+        );
+
+    if (window->documentHost()
+        != nullptr) {
+        window
+            ->documentHost()
+            ->setRecentFilesAvailable(
+                !recentItemsStore
+                     .recentFiles()
+                     .isEmpty()
+                );
+
+        window
+            ->documentHost()
+            ->setRecentWorkspacesAvailable(
+                !recentItemsStore
+                     .recentWorkspaces()
+                     .isEmpty()
+                );
+    }
+
+    /*
+     * Also initializes Save Snapshot / Reload for the
+     * new window. The window may still be empty here;
+     * insertion of its first document will refresh
+     * these states again.
+     */
+    updateReloadActionState();
+}
+
+QString MainWindow::workspaceWindowTitle()
+    const
+{
+    QString workspaceName =
+        tr("Unsaved Workspace");
+
+    if (!currentWorkspacePath
+             .trimmed()
+             .isEmpty()) {
+        const QString fileName =
+            QFileInfo(
+                currentWorkspacePath
+                )
+                .fileName();
+
+        if (!fileName.isEmpty()) {
+            workspaceName =
+                fileName;
+        }
+    }
+
+    if (workspaceDirty) {
+        workspaceName +=
+            QStringLiteral("*");
+    }
+
+    return tr(
+        "TraceScope — %1"
+        )
+        .arg(
+            workspaceName
+            );
+}
+
+void MainWindow::
+    updateWorkspaceWindowTitles()
+{
+    const QString title =
+        workspaceWindowTitle();
+
+    setWindowTitle(
+        title
+        );
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window != nullptr) {
+            window->setWorkspaceWindowTitle(
+                title
+                );
+        }
+    }
+}
+
+QWidget *MainWindow::
+    workspaceDialogParent() const
+{
+    QWidget *activeWindow =
+        QApplication::activeWindow();
+
+    /*
+     * Prefer the currently active TraceScope peer.
+     * MainWindow remains the internal coordinator,
+     * but dialogs should visually belong to the
+     * window from which the user invoked the command.
+     */
+    if (activeWindow == this) {
+        return const_cast<MainWindow *>(
+            this
+            );
+    }
+
+    if (workspaceDocumentHost != nullptr) {
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : workspaceDocumentHost
+                  ->detachedWindows()
+            ) {
+            if (window != nullptr
+                && activeWindow == window) {
+                return window;
+            }
+        }
+    }
+
+    /*
+     * Fall back to the coordinator when no visible
+     * workspace peer currently owns activation.
+     */
+    return const_cast<MainWindow *>(
+        this
+        );
+}
+
+void MainWindow::setWorkspaceDirty(
+    bool dirty
+    )
+{
+    workspaceDirty =
+        dirty;
+
+    /*
+     * Always refresh titles, even when the dirty
+     * value itself did not change. The workspace path
+     * may have changed because of Save As or Open.
+     */
+    updateWorkspaceWindowTitles();
+}
+
+void MainWindow::markWorkspaceDirty()
+{
+    if (workspaceMutationTrackingSuppressed) {
+        return;
+    }
+
+    setWorkspaceDirty(
+        true
+        );
+}
+
+int MainWindow::addSessionToWorkspace(
+    std::unique_ptr<InvestigationSession> session,
+    WorkspaceDocumentHost *targetHost
+    )
+{
+    if (workspace == nullptr
+        || !session) {
+        return -1;
+    }
+
+    /*
+     * addSession() emits sessionAdded synchronously.
+     * Set the desired presentation host only for the
+     * duration of that operation, then restore the
+     * previous value so workspace restoration and any
+     * future nested use remain deterministic.
+     */
+    WorkspaceDocumentHost *previousTarget =
+        sessionDocumentTargetHost;
+
+    sessionDocumentTargetHost =
+        targetHost != nullptr
+            ? targetHost
+            : workspaceDocumentHost;
+
+    const int sessionIndex =
+        workspace->addSession(
+            std::move(session)
+            );
+
+    sessionDocumentTargetHost =
+        previousTarget;
+
+    return sessionIndex;
+}
+
+void MainWindow::openLogFile(
+    const QString &initialFilePath,
+    WorkspaceDocumentHost *targetHost
+    )
 {
     if (importWatcher != nullptr
         || workspaceOpenInProgress
@@ -1199,8 +2105,13 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         return;
     }
 
+    QWidget *dialogParent =
+        targetHost != nullptr
+            ? targetHost->window()
+            : this;
+
     ImportConfigurationDialog dialog(
-        this,
+        dialogParent,
         &recentItemsStore,
         &rotatedSourceSettingsStore
         );
@@ -1244,12 +2155,14 @@ void MainWindow::openLogFile(const QString &initialFilePath)
         QString(),
         std::move(
             sourceFamilyConfiguration
-            )
+            ),
+        targetHost
         );
 }
 
 void MainWindow::openInvestigationSnapshot(
-    const QString &initialFilePath
+    const QString &initialFilePath,
+    WorkspaceDocumentHost *targetHost
     )
 {
     if (importWatcher != nullptr
@@ -1318,12 +2231,25 @@ void MainWindow::openInvestigationSnapshot(
         fileInfo.absoluteFilePath();
 
     /*
-     * Standalone snapshot opening intentionally uses
-     * the same SnapshotBacked restoration path used
-     * when restoring a saved workspace.
+     * A secondary TraceScope window may disappear
+     * while restoration runs asynchronously. QPointer
+     * lets completion safely fall back to the root host
+     * instead of retaining a dangling widget pointer.
+     */
+    const QPointer<WorkspaceDocumentHost>
+        targetHostGuard(
+            targetHost
+            );
+
+    /*
+     * The selected snapshot is an external input artifact,
+     * not permanent backing owned by this workspace.
      *
-     * The absolute snapshot reference means no
-     * workspace-relative resolution is required.
+     * Preparation may read it directly by absolute path.
+     * Once it has been loaded and validated successfully,
+     * completion will reserialize the prepared snapshot
+     * into this workspace's temporary working-artifact
+     * store before materializing the new session.
      */
     PersistedInvestigationSession
         persistedSession;
@@ -1408,7 +2334,9 @@ void MainWindow::openInvestigationSnapshot(
             this,
             watcher,
             progressDialog,
-            persistedSession
+            persistedSession,
+            targetHostGuard,
+            absoluteSnapshotPath
         ]() mutable {
             const bool cancelled =
                 watcher->isCanceled();
@@ -1491,6 +2419,95 @@ void MainWindow::openInvestigationSnapshot(
             }
 
             /*
+             * Snapshot preparation has already loaded and
+             * validated the external .tsinv.
+             *
+             * Before creating the live InvestigationSession,
+             * adopt that value into this workspace's own
+             * provisional storage. The session must never retain
+             * an operational dependency on the external snapshot
+             * selected by the user.
+             */
+            PreparedSnapshotBackedInvestigationSession
+                *preparedSnapshot =
+                preparation
+                        .preparedData
+                        .has_value()
+                    ? std::get_if<
+                          PreparedSnapshotBackedInvestigationSession>(
+                          &*preparation.preparedData
+                          )
+                    : nullptr;
+
+            if (preparedSnapshot == nullptr) {
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope loaded the selected snapshot, "
+                        "but the restoration result did not contain "
+                        "Snapshot-backed investigation data."
+                        )
+                    );
+
+                return;
+            }
+
+            const WorkspaceWorkingSnapshotSaveResult
+                adoptionResult =
+                workspaceWorkingArtifactStore
+                    .saveSnapshot(
+                        preparedSnapshot->snapshot
+                        );
+
+            if (!adoptionResult.isSuccess()) {
+                setSnapshotOpenInProgress(
+                    false
+                    );
+
+                QMessageBox::warning(
+                    this,
+                    tr(
+                        "Open Investigation Snapshot Failed"
+                        ),
+                    tr(
+                        "TraceScope loaded the selected snapshot, "
+                        "but could not create an independent "
+                        "working copy for the current workspace."
+                        "\n\n"
+                        "Reason:\n%1"
+                        )
+                        .arg(
+                            adoptionResult
+                                    .errorMessage
+                                    .trimmed()
+                                    .isEmpty()
+                                ? tr(
+                                      "Temporary workspace storage "
+                                      "could not be created."
+                                      )
+                                : adoptionResult.errorMessage
+                            )
+                    );
+
+                return;
+            }
+
+            /*
+             * Materialization now binds the new session to the
+             * workspace-owned provisional artifact rather than
+             * to the external file that was selected for import.
+             */
+            preparedSnapshot->snapshotPath =
+                adoptionResult.snapshotPath;
+
+            /*
              * InvestigationSession and its Qt model
              * graph are materialized back on the UI
              * thread.
@@ -1550,15 +2567,22 @@ void MainWindow::openInvestigationSnapshot(
                     ->importedRecordCount()
                 == 0;
 
-            workspace->addSession(
+            addSessionToWorkspace(
                 std::move(
                     restoration.session
-                    )
+                    ),
+                targetHostGuard.data()
                 );
 
             setSnapshotOpenInProgress(
                 false
                 );
+
+            recentItemsStore.addRecentFile(
+                absoluteSnapshotPath
+                );
+
+            refreshRecentFilesMenu();
 
             if (emptySnapshot) {
                 QMessageBox::warning(
@@ -1620,7 +2644,9 @@ void MainWindow::openInvestigationSnapshot(
         );
 }
 
-void MainWindow::saveInvestigationSnapshot()
+void MainWindow::saveInvestigationSnapshot(
+    WorkspaceDocumentHost *targetHost
+    )
 {
     if (workspace == nullptr
         || importWatcher != nullptr
@@ -1631,11 +2657,18 @@ void MainWindow::saveInvestigationSnapshot()
     }
 
     InvestigationSession *session =
-        workspace->activeSession();
+        sessionForHost(
+            targetHost
+            );
 
     if (session == nullptr) {
         return;
     }
+
+    QWidget *dialogParent =
+        targetHost != nullptr
+            ? targetHost->window()
+            : this;
 
     /*
      * Freeze the investigation evidence immediately.
@@ -1682,7 +2715,7 @@ void MainWindow::saveInvestigationSnapshot()
 
     QString filePath =
         QFileDialog::getSaveFileName(
-            this,
+            dialogParent,
             tr(
                 "Save Investigation Snapshot"
                 ),
@@ -1723,7 +2756,7 @@ void MainWindow::saveInvestigationSnapshot()
 
     if (!saveResult.isSuccess()) {
         QMessageBox::warning(
-            this,
+            dialogParent,
             tr(
                 "Save Investigation Snapshot Failed"
                 ),
@@ -1740,8 +2773,14 @@ void MainWindow::saveInvestigationSnapshot()
         return;
     }
 
+    recentItemsStore.addRecentFile(
+        filePath
+        );
+
+    refreshRecentFilesMenu();
+
     QMessageBox::information(
-        this,
+        dialogParent,
         tr(
             "Investigation Snapshot Saved"
             ),
@@ -1764,7 +2803,8 @@ void MainWindow::loadLogFile(
     const ImportProfile &profile,
     const QString &reloadSessionId,
     SourceFamilyConfiguration
-        sourceFamilyConfiguration
+        sourceFamilyConfiguration,
+    WorkspaceDocumentHost *targetHost
     )
 {
     const QString activeFilePath =
@@ -1804,6 +2844,16 @@ void MainWindow::loadLogFile(
             profile
             );
 
+    /*
+     * Imports complete asynchronously. A window may
+     * disappear while the import is running, so do not
+     * retain an unchecked raw QWidget pointer.
+     */
+    const QPointer<WorkspaceDocumentHost>
+        targetHostGuard(
+            targetHost
+            );
+
     startLogFileImport(
         activeFilePath,
         orderedSourcePaths,
@@ -1814,8 +2864,9 @@ void MainWindow::loadLogFile(
             profile,
             reloadSessionId,
             initialLiveFollowByteOffset,
+            targetHostGuard,
             resolved =
-            std::move(resolved)
+                std::move(resolved)
         ](
             std::optional<ImportResult> result
             ) mutable {
@@ -1831,7 +2882,8 @@ void MainWindow::loadLogFile(
                 std::move(
                     result.value()
                     ),
-                reloadSessionId
+                reloadSessionId,
+                targetHostGuard.data()
                 );
         }
         );
@@ -1924,19 +2976,9 @@ bool MainWindow::startLogFileImport(
         false
         );
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(false);
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(false);
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(false);
-    }
-
-    setAcceptDrops(false);
+    setFileOperationsEnabled(
+        false
+        );
 
     connect(
         progressDialog,
@@ -2013,19 +3055,9 @@ bool MainWindow::startLogFileImport(
                     nullptr;
             }
 
-            if (openAction != nullptr) {
-                openAction->setEnabled(true);
-            }
-
-            if (openSnapshotAction != nullptr) {
-                openSnapshotAction->setEnabled(true);
-            }
-
-            if (openWorkspaceAction != nullptr) {
-                openWorkspaceAction->setEnabled(true);
-            }
-
-            setAcceptDrops(true);
+            setFileOperationsEnabled(
+                true
+                );
 
             updateReloadActionState();
 
@@ -2203,7 +3235,8 @@ void MainWindow::completeLogFileImport(
         sourceFamilyConfiguration,
     qint64 initialLiveFollowByteOffset,
     ImportResult result,
-    const QString &reloadSessionId
+    const QString &reloadSessionId,
+    WorkspaceDocumentHost *targetHost
     )
 {
     if (result.cancelled) {
@@ -2227,8 +3260,9 @@ void MainWindow::completeLogFileImport(
             initialLiveFollowByteOffset
             );
 
-        workspace->addSession(
-            std::move(session)
+        addSessionToWorkspace(
+            std::move(session),
+            targetHost
             );
     } else {
         const int sessionIndex =
@@ -2349,21 +3383,73 @@ void MainWindow::closeEvent(
     QCloseEvent *event
     )
 {
+    if (applicationShutdownInProgress) {
+        /*
+         * Application shutdown has already been approved.
+         * Do not interpret teardown as another independent
+         * workspace-window close operation.
+         */
+        QMainWindow::closeEvent(
+            event
+            );
+
+        return;
+    }
+
+    if (workspaceDocumentHost != nullptr
+        && workspaceDocumentHost
+               ->hasOtherVisibleWorkspaceWindow(
+                   this
+                   )) {
+        /*
+         * This is one peer among multiple visible
+         * TraceScope windows.
+         *
+         * An empty peer can simply disappear. A peer
+         * containing documents requires an explicit
+         * preserve-versus-close decision.
+         */
+        event->ignore();
+
+        if (workspaceDocumentHost
+                ->documentCount()
+            == 0) {
+            hide();
+            return;
+        }
+
+        requestWorkspaceWindowClose(
+            workspaceDocumentHost
+            );
+
+        return;
+    }
+
     /*
-     * Detached workspace windows are independent
-     * top-level windows. Tear down the complete
-     * document workspace before accepting closure
-     * of the primary application window so no
-     * detached TraceScope windows remain alive.
+     * Closing the final visible TraceScope window is
+     * application closure. Protect the complete
+     * workspace before allowing shutdown.
      */
-    clearCurrentWorkspace();
+    if (!confirmWorkspaceReplacement()) {
+        event->ignore();
+        return;
+    }
+
+    /*
+     * The workspace-level exit decision is complete.
+     * Mark all remaining TraceScope peers as shutdown
+     * participants before Qt begins tearing them down.
+     */
+    beginApplicationShutdown();
 
     QMainWindow::closeEvent(
         event
         );
 }
 
-void MainWindow::reloadActiveSession()
+void MainWindow::reloadActiveSession(
+    WorkspaceDocumentHost *targetHost
+    )
 {
     if (workspace == nullptr
         || importWatcher != nullptr
@@ -2373,7 +3459,9 @@ void MainWindow::reloadActiveSession()
     }
 
     InvestigationSession *session =
-        workspace->activeSession();
+        sessionForHost(
+            targetHost
+            );
 
     if (session == nullptr) {
         return;
@@ -2522,8 +3610,18 @@ void MainWindow::reloadActiveSession()
                 const bool cancelled =
                     watcher->isCanceled();
 
-                progressDialog->hide();
-                progressDialog->deleteLater();
+                /*
+                 * Destroy the progress dialog before opening any
+                 * modal completion/error dialog.
+                 *
+                 * deleteLater() is not sufficient here because a
+                 * following QMessageBox starts its own nested event
+                 * loop. Keeping the progress surface alive until that
+                 * deferred deletion can leave stale progress UI visible
+                 * during terminal reload handling.
+                 */
+                progressDialog->close();
+                delete progressDialog;
 
                 setSessionReloadInProgress(
                     false
@@ -2981,8 +4079,18 @@ void MainWindow::reloadActiveSession()
             const bool cancelled =
                 watcher->isCanceled();
 
-            progressDialog->hide();
-            progressDialog->deleteLater();
+            /*
+             * Destroy the progress dialog before opening any
+             * modal completion/error dialog.
+             *
+             * deleteLater() is not sufficient here because a
+             * following QMessageBox starts its own nested event
+             * loop. Keeping the progress surface alive until that
+             * deferred deletion can leave stale progress UI visible
+             * during terminal reload handling.
+             */
+            progressDialog->close();
+            delete progressDialog;
 
             setSessionReloadInProgress(
                 false
@@ -5064,19 +6172,26 @@ void MainWindow::populateSessionSourceMenu(
 
 void MainWindow::
     createSessionComparison(
-        const QString &preferredBaselineSessionId
+        const QString &preferredBaselineSessionId,
+        WorkspaceDocumentHost *targetHost
         )
 {
+    WorkspaceDocumentHost *destinationHost =
+        targetHost != nullptr
+            ? targetHost
+            : workspaceDocumentHost;
+
     if (workspace == nullptr
-        || workspaceDocumentHost
-               == nullptr
+        || destinationHost == nullptr
         || workspace->sessionCount()
                < 2) {
         return;
     }
 
     const InvestigationSession *activeSession =
-        workspace->activeSession();
+        sessionForHost(
+            destinationHost
+            );
 
     if (activeSession == nullptr) {
         return;
@@ -5115,7 +6230,7 @@ void MainWindow::
         workspace,
         initialBaselineSessionId,
         initialComparisonSessionId,
-        this
+        destinationHost->window()
         );
 
     if (
@@ -5165,19 +6280,33 @@ void MainWindow::
 
     InvestigationComparisonSnapshotBuilder builder;
 
-    InvestigationComparisonSnapshot snapshot =
-        builder.build(
+    std::optional<InvestigationComparisonSnapshot>
+        capturedSnapshot;
+
+    try {
+        capturedSnapshot = builder.build(
             *baselineSession,
             *comparisonSession,
-            dialog.burstSettings()
+            dialog.burstSettings(),
+            dialog.baselineTimeRange(),
+            dialog.comparisonTimeRange()
             );
+    } catch (const std::invalid_argument &error) {
+        QMessageBox::warning(
+            destinationHost->window(),
+            tr("Cannot Create Comparison"),
+            QString::fromUtf8(error.what())
+            );
+
+        return;
+    }
 
     auto *document =
         new InvestigationComparisonDocument(
-            std::move(snapshot)
+            std::move(*capturedSnapshot)
             );
 
-    if (!workspaceDocumentHost
+    if (!destinationHost
              ->addDocument(
                  document,
                  true
@@ -5189,15 +6318,30 @@ void MainWindow::
 void MainWindow::
     updateComparisonActionState()
 {
-    if (compareAction == nullptr) {
+    const bool enabled =
+        workspace != nullptr
+        && workspace->sessionCount()
+               >= 2;
+
+    if (compareAction != nullptr) {
+        compareAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (workspaceDocumentHost == nullptr) {
         return;
     }
 
-    compareAction->setEnabled(
-        workspace != nullptr
-        && workspace->sessionCount()
-               >= 2
-        );
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window != nullptr) {
+            window->setCompareEnabled(
+                enabled
+                );
+        }
+    }
 }
 
 void MainWindow::setWorkspaceOpenInProgress(
@@ -5213,25 +6357,7 @@ void MainWindow::setWorkspaceOpenInProgress(
         && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    setAcceptDrops(
+    setFileOperationsEnabled(
         fileOperationAvailable
         );
 
@@ -5251,25 +6377,7 @@ void MainWindow::setSessionReloadInProgress(
         && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    setAcceptDrops(
+    setFileOperationsEnabled(
         fileOperationAvailable
         );
 
@@ -5289,25 +6397,7 @@ void MainWindow::setSnapshotOpenInProgress(
         && !snapshotOpenInProgress
         && importWatcher == nullptr;
 
-    if (openAction != nullptr) {
-        openAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openSnapshotAction != nullptr) {
-        openSnapshotAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    if (openWorkspaceAction != nullptr) {
-        openWorkspaceAction->setEnabled(
-            fileOperationAvailable
-            );
-    }
-
-    setAcceptDrops(
+    setFileOperationsEnabled(
         fileOperationAvailable
         );
 
@@ -5316,167 +6406,203 @@ void MainWindow::setSnapshotOpenInProgress(
 
 void MainWindow::updateReloadActionState()
 {
-    InvestigationSession *session =
-        workspace != nullptr
-            ? workspace->activeSession()
-            : nullptr;
-
     const bool fileOperationAvailable =
         importWatcher == nullptr
         && !workspaceOpenInProgress
         && !sessionReloadInProgress
         && !snapshotOpenInProgress;
 
+    auto reloadAvailable =
+        [
+            fileOperationAvailable
+        ](
+            InvestigationSession *session
+            ) {
+            if (session == nullptr
+                || !fileOperationAvailable) {
+                return false;
+            }
+
+            const LiveSessionFollowCoordinator
+                *coordinator =
+                session
+                    ->liveFollowCoordinator();
+
+            const bool liveFollowActive =
+                coordinator != nullptr
+                && !coordinator
+                        ->state()
+                        .isStopped();
+
+            return !liveFollowActive;
+        };
+
+    InvestigationSession *rootSession =
+        sessionForHost(
+            workspaceDocumentHost
+            );
+
     if (saveSnapshotAction != nullptr) {
         saveSnapshotAction->setEnabled(
-            session != nullptr
+            rootSession != nullptr
             && fileOperationAvailable
             );
     }
 
-    if (reloadAction == nullptr) {
+    if (reloadAction != nullptr) {
+        reloadAction->setEnabled(
+            reloadAvailable(
+                rootSession
+                )
+            );
+    }
+
+    if (workspaceDocumentHost == nullptr) {
         return;
     }
 
-    bool liveFollowActive = false;
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window == nullptr) {
+            continue;
+        }
 
-    if (session != nullptr) {
-        const LiveSessionFollowCoordinator
-            *coordinator =
-            session->liveFollowCoordinator();
+        InvestigationSession *session =
+            sessionForHost(
+                window->documentHost()
+                );
 
-        liveFollowActive =
-            coordinator != nullptr
-            && !coordinator
-                    ->state()
-                    .isStopped();
+        window->setSaveSnapshotEnabled(
+            session != nullptr
+            && fileOperationAvailable
+            );
+
+        window->setReloadEnabled(
+            reloadAvailable(
+                session
+                )
+            );
+    }
+}
+
+void MainWindow::
+    updateWorkspaceSaveActionState()
+{
+    const bool enabled =
+        workspaceDocumentHost != nullptr
+        && !workspaceDocumentHost
+                ->documents()
+                .isEmpty();
+
+    if (saveWorkspaceAction != nullptr) {
+        saveWorkspaceAction->setEnabled(
+            enabled
+            );
     }
 
-    reloadAction->setEnabled(
-        session != nullptr
-        && fileOperationAvailable
-        && !liveFollowActive
-        );
+    if (saveWorkspaceAsAction != nullptr) {
+        saveWorkspaceAsAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (
+        DetachedWorkspaceDocumentWindow *window
+        : workspaceDocumentHost
+              ->detachedWindows()
+        ) {
+        if (window != nullptr) {
+            window->setWorkspaceSaveEnabled(
+                enabled
+                );
+        }
+    }
 }
 
 void MainWindow::refreshRecentFilesMenu()
 {
-    if (recentFilesMenu == nullptr) {
-        return;
-    }
+    populateRecentFilesMenu(
+        recentFilesMenu,
+        workspaceDocumentHost
+        );
 
-    recentFilesMenu->clear();
+    const bool available =
+        !recentItemsStore
+             .recentFiles()
+             .isEmpty();
 
-    const QStringList recentFiles =
-        recentItemsStore.recentFiles();
-
-    int validItemCount = 0;
-
-    for (const QString &filePath
-         : recentFiles) {
-        const QFileInfo fileInfo(filePath);
-
-        if (!fileInfo.exists()
-            || !fileInfo.isFile()) {
-            recentItemsStore
-                .removeRecentFile(
-                    filePath
-                    );
-
-            continue;
-        }
-
-        QAction *action =
-            recentFilesMenu->addAction(
-                fileInfo.fileName()
+    if (workspaceDocumentHost != nullptr) {
+        workspaceDocumentHost
+            ->setRecentFilesAvailable(
+                available
                 );
 
-        action->setToolTip(
-            filePath
-            );
-
-        connect(
-            action,
-            &QAction::triggered,
-            this,
-            [this, filePath]() {
-                openRecentFile(
-                    filePath
-                    );
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : workspaceDocumentHost
+                  ->detachedWindows()
+            ) {
+            if (window != nullptr
+                && window->documentHost()
+                       != nullptr) {
+                window
+                    ->documentHost()
+                    ->setRecentFilesAvailable(
+                        available
+                        );
             }
-            );
-
-        ++validItemCount;
+        }
     }
-
-    recentFilesMenu->setEnabled(
-        validItemCount > 0
-        );
 }
 
 void MainWindow::refreshRecentWorkspacesMenu()
 {
-    if (recentWorkspacesMenu == nullptr) {
-        return;
-    }
-
-    recentWorkspacesMenu->clear();
-
-    const QStringList recentWorkspaces =
-        recentItemsStore.recentWorkspaces();
-
-    int validItemCount = 0;
-
-    for (const QString &filePath
-         : recentWorkspaces) {
-        const QFileInfo fileInfo(
-            filePath
-            );
-
-        if (!fileInfo.exists()
-            || !fileInfo.isFile()) {
-            recentItemsStore
-                .removeRecentWorkspace(
-                    filePath
-                    );
-
-            continue;
-        }
-
-        QAction *action =
-            recentWorkspacesMenu
-                ->addAction(
-                    fileInfo.fileName()
-                    );
-
-        action->setToolTip(
-            filePath
-            );
-
-        connect(
-            action,
-            &QAction::triggered,
-            this,
-            [this, filePath]() {
-                openRecentWorkspace(
-                    filePath
-                    );
-            }
-            );
-
-        ++validItemCount;
-    }
-
-    recentWorkspacesMenu->setEnabled(
-        validItemCount > 0
+    populateRecentWorkspacesMenu(
+        recentWorkspacesMenu
         );
+
+    const bool available =
+        !recentItemsStore
+             .recentWorkspaces()
+             .isEmpty();
+
+    if (workspaceDocumentHost != nullptr) {
+        workspaceDocumentHost
+            ->setRecentWorkspacesAvailable(
+                available
+                );
+
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : workspaceDocumentHost
+                  ->detachedWindows()
+            ) {
+            if (window != nullptr
+                && window->documentHost()
+                       != nullptr) {
+                window
+                    ->documentHost()
+                    ->setRecentWorkspacesAvailable(
+                        available
+                        );
+            }
+        }
+    }
 }
 
 void MainWindow::openRecentFile(
-    const QString &filePath
+    const QString &filePath,
+    WorkspaceDocumentHost *targetHost
     )
 {
-    const QFileInfo fileInfo(filePath);
+    const QFileInfo fileInfo(
+        filePath
+        );
 
     if (!fileInfo.exists()
         || !fileInfo.isFile()) {
@@ -5487,21 +6613,49 @@ void MainWindow::openRecentFile(
 
         refreshRecentFilesMenu();
 
+        QWidget *dialogParent =
+            targetHost != nullptr
+                ? targetHost->window()
+                : this;
+
         QMessageBox::warning(
-            this,
+            dialogParent,
             tr("Recent File Not Found"),
             tr(
-                "The recent log file no longer "
+                "The recent file no longer "
                 "exists at:\n%1"
                 )
-                .arg(filePath)
+                .arg(
+                    filePath
+                    )
+            );
+
+        return;
+    }
+
+    const bool isSnapshot =
+        fileInfo
+            .suffix()
+            .compare(
+                QStringLiteral(
+                    "tsinv"
+                    ),
+                Qt::CaseInsensitive
+                )
+        == 0;
+
+    if (isSnapshot) {
+        openInvestigationSnapshot(
+            filePath,
+            targetHost
             );
 
         return;
     }
 
     openLogFile(
-        filePath
+        filePath,
+        targetHost
         );
 }
 
@@ -5646,97 +6800,11 @@ MainWindow::captureWorkspaceState() const
 }
 
 bool MainWindow::saveWorkspaceToFile(
-    const QString &filePath,
-    const QString &snapshotOnlySessionId,
-    QString *snapshotOnlyPath
+    const QString &filePath
     )
 {
     WorkspacePersistenceState state =
         captureWorkspaceState();
-
-    if (snapshotOnlyPath != nullptr) {
-        snapshotOnlyPath->clear();
-    }
-
-    /*
-     * A source-lifecycle transition is being persisted
-     * atomically with this workspace save.
-     *
-     * Runtime backing has not changed yet. Only the staged
-     * persisted representation becomes SnapshotBacked.
-     */
-    if (!snapshotOnlySessionId.isEmpty()) {
-        bool targetFound = false;
-
-        for (PersistedInvestigationSession
-                 &persistedSession
-             : state.sessions) {
-            if (persistedSession.sessionId
-                != snapshotOnlySessionId) {
-                continue;
-            }
-
-            targetFound = true;
-
-            const auto mode =
-                persistedSession
-                    .backing
-                    .mode;
-
-            if (mode
-                    != PersistedInvestigationSessionBackingMode::
-                    SourceBacked
-                && mode
-                       != PersistedInvestigationSessionBackingMode::
-                       Hybrid) {
-                QMessageBox::warning(
-                    this,
-                    tr("Preserve Snapshot Failed"),
-                    tr(
-                        "The selected investigation is "
-                        "not currently source-backed."
-                        )
-                    );
-
-                return false;
-            }
-
-            /*
-             * Keep externalSourceBinding.
-             *
-             * In SnapshotBacked persistence it becomes the
-             * dormant reconnect hint rather than an active
-             * dependency.
-             */
-            persistedSession.backing.mode =
-                PersistedInvestigationSessionBackingMode::
-                SnapshotBacked;
-
-            /*
-             * SnapshotBacked uses the .tsinv import profile
-             * as authoritative.
-             */
-            persistedSession
-                .backing
-                .sourceImportProfile
-                .reset();
-
-            break;
-        }
-
-        if (!targetFound) {
-            QMessageBox::warning(
-                this,
-                tr("Preserve Snapshot Failed"),
-                tr(
-                    "The investigation could not be found "
-                    "in the workspace being saved."
-                    )
-                );
-
-            return false;
-        }
-    }
 
     QVector<WorkspaceSessionSnapshotSaveItem>
         sessionSnapshots;
@@ -5870,24 +6938,6 @@ bool MainWindow::saveWorkspaceToFile(
                 snapshotPathIterator.value();
 
             /*
-             * The target session's persisted backing has
-             * already been committed as SnapshotBacked.
-             *
-             * Do not change its runtime backing here.
-             * preserveSessionAsSnapshotOnly() will perform
-             * that transition after this save returns.
-             */
-            if (session->id()
-                == snapshotOnlySessionId) {
-                if (snapshotOnlyPath != nullptr) {
-                    *snapshotOnlyPath =
-                        newSnapshotPath;
-                }
-
-                continue;
-            }
-
-            /*
              * Existing SnapshotBacked / Hybrid sessions
              * follow the newly committed workspace-owned
              * snapshot as before.
@@ -5896,15 +6946,56 @@ bool MainWindow::saveWorkspaceToFile(
              * which is intentional: their saved snapshot
              * remains only a recovery fallback.
              */
-            session->updateSnapshotBackingPath(
-                newSnapshotPath
-                );
+            const bool backingPathUpdated =
+                session->updateSnapshotBackingPath(
+                    newSnapshotPath
+                    );
+
+            if (backingPathUpdated
+                && workspaceDocumentHost != nullptr) {
+                WorkspaceDocument *document =
+                    workspaceDocumentHost
+                        ->documentById(
+                            session->id()
+                            );
+
+                auto *sessionView =
+                    qobject_cast<
+                        InvestigationSessionView *>(
+                        document
+                        );
+
+                if (sessionView != nullptr) {
+                    sessionView
+                        ->refreshTabPresentation();
+                }
+            }
         }
     }
+
+    /*
+     * Every runtime SnapshotBacked / Hybrid investigation
+     * now points at the newly committed workspace-owned
+     * snapshot generation.
+     *
+     * No live session depends on provisional working
+     * artifacts anymore, so the complete temporary
+     * working store can now be garbage-collected.
+     *
+     * Cleanup failure does not invalidate the successful
+     * workspace save. WorkspaceWorkingArtifactStore keeps
+     * the directory alive so destruction or a later reset
+     * can retry removal.
+     */
+    workspaceWorkingArtifactStore.reset();
 
     currentWorkspacePath =
         QFileInfo(filePath)
             .absoluteFilePath();
+
+    setWorkspaceDirty(
+        false
+        );
 
     recentItemsStore.addRecentWorkspace(
         currentWorkspacePath
@@ -5915,19 +7006,18 @@ bool MainWindow::saveWorkspaceToFile(
     return true;
 }
 
-void MainWindow::saveWorkspace()
+bool MainWindow::saveWorkspace()
 {
     if (currentWorkspacePath.isEmpty()) {
-        saveWorkspaceAs();
-        return;
+        return saveWorkspaceAs();
     }
 
-    saveWorkspaceToFile(
+    return saveWorkspaceToFile(
         currentWorkspacePath
         );
 }
 
-void MainWindow::saveWorkspaceAs()
+bool MainWindow::saveWorkspaceAs()
 {
     QString initialPath =
         currentWorkspacePath;
@@ -5941,7 +7031,7 @@ void MainWindow::saveWorkspaceAs()
 
     const QString filePath =
         QFileDialog::getSaveFileName(
-            this,
+            workspaceDialogParent(),
             tr("Save TraceScope Workspace"),
             initialPath,
             tr(
@@ -5952,10 +7042,10 @@ void MainWindow::saveWorkspaceAs()
             );
 
     if (filePath.isEmpty()) {
-        return;
+        return false;
     }
 
-    saveWorkspaceToFile(
+    return saveWorkspaceToFile(
         filePath
         );
 }
@@ -6429,7 +7519,7 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
     if (filePath.isEmpty()) {
         filePath =
             QFileDialog::getOpenFileName(
-                this,
+                workspaceDialogParent(),
                 tr("Open TraceScope Workspace"),
                 currentWorkspacePath,
                 tr(
@@ -6504,34 +7594,8 @@ void MainWindow::openWorkspace(const QString &initialFilePath)
             result.workspace.value()
             );
 
-    /*
-     * Don't silently destroy the investigation the
-     * user is currently working in.
-     */
-    if (workspaceDocumentHost != nullptr
-        && !workspaceDocumentHost
-                ->documents()
-                .isEmpty()) {
-        const QMessageBox::StandardButton choice =
-            QMessageBox::question(
-                this,
-                tr("Replace Current Workspace"),
-                tr(
-                    "Opening this workspace will "
-                    "replace the workspace that is "
-                    "currently open.\n\n"
-                    "Save the current workspace first "
-                    "if you want to keep any changes.\n\n"
-                    "Continue?"
-                    ),
-                QMessageBox::Yes
-                    | QMessageBox::Cancel,
-                QMessageBox::Cancel
-                );
-
-        if (choice != QMessageBox::Yes) {
-            return;
-        }
+    if (!confirmWorkspaceReplacement()) {
+        return;
     }
 
     int skippedSessionCount = 0;
@@ -7159,12 +8223,21 @@ void MainWindow::installOpenedWorkspace(
         return;
     }
 
+    const bool previousMutationSuppression =
+        workspaceMutationTrackingSuppressed;
+
+    workspaceMutationTrackingSuppressed =
+        true;
+
     /*
      * Every recoverable source has now completed its
      * import. This is the first point where replacing
      * the existing workspace is safe.
      */
     clearCurrentWorkspace();
+
+    workspaceDocumentHost
+        ->resetWindowLayout();
 
     for (int index = 0;
          index < operation->state
@@ -7202,7 +8275,7 @@ void MainWindow::installOpenedWorkspace(
         const QString sessionId =
             session->id();
 
-        workspace->addSession(
+        addSessionToWorkspace(
             std::move(
                 session
                 )
@@ -7335,6 +8408,13 @@ void MainWindow::installOpenedWorkspace(
 
     currentWorkspacePath =
         operation->workspacePath;
+
+    workspaceMutationTrackingSuppressed =
+        previousMutationSuppression;
+
+    setWorkspaceDirty(
+        false
+        );
 
     recentItemsStore.addRecentWorkspace(
         currentWorkspacePath
@@ -7632,7 +8712,8 @@ void MainWindow::
     if (workspace == nullptr
         || importWatcher != nullptr
         || workspaceOpenInProgress
-        || sessionReloadInProgress) {
+        || sessionReloadInProgress
+        || snapshotOpenInProgress) {
         return;
     }
 
@@ -7666,49 +8747,6 @@ void MainWindow::
         return;
     }
 
-    QString standaloneSnapshotPath;
-
-    /*
-     * Without a saved workspace there is no
-     * application-owned sidecar directory.
-     *
-     * The user therefore owns this standalone .tsinv
-     * artifact and chooses where it lives.
-     */
-    if (currentWorkspacePath.isEmpty()) {
-        standaloneSnapshotPath =
-            QFileDialog::getSaveFileName(
-                this,
-                tr(
-                    "Save Investigation Snapshot"
-                    ),
-                QStringLiteral(
-                    "investigation.tsinv"
-                    ),
-                tr(
-                    "TraceScope Investigation Snapshot "
-                    "(*.tsinv);;All Files (*)"
-                    )
-                );
-
-        if (standaloneSnapshotPath.isEmpty()) {
-            return;
-        }
-
-        if (QFileInfo(
-                standaloneSnapshotPath
-                )
-                .suffix()
-                .compare(
-                    QStringLiteral("tsinv"),
-                    Qt::CaseInsensitive
-                    )
-            != 0) {
-            standaloneSnapshotPath +=
-                QStringLiteral(".tsinv");
-        }
-    }
-
     LiveSessionFollowCoordinator
         *liveCoordinator =
         session->liveFollowCoordinator();
@@ -7724,7 +8762,8 @@ void MainWindow::
      *
      * A live session must not admit records after the
      * snapshot has been captured but before that
-     * snapshot becomes authoritative.
+     * snapshot becomes authoritative for the working
+     * investigation.
      */
     if (wasFollowing
         && !liveCoordinator->pause()) {
@@ -7748,105 +8787,86 @@ void MainWindow::
         [
             liveCoordinator,
             wasFollowing
-    ]() {
+        ]() {
             if (wasFollowing
                 && liveCoordinator != nullptr) {
                 liveCoordinator->resume();
             }
         };
 
-    QString committedSnapshotPath;
+    /*
+     * Source-state transitions belong to the current
+     * unsaved working workspace.
+     *
+     * Never modify the committed .tsw or its sidecars
+     * merely because the user changes backing mode.
+     * The new SnapshotBacked state instead receives its
+     * own provisional workspace artifact.
+     */
+    const WorkspaceWorkingSnapshotSaveResult
+        saveResult =
+        workspaceWorkingArtifactStore
+            .saveSnapshot(
+                snapshot
+                );
 
-    if (!currentWorkspacePath.isEmpty()) {
-        /*
-         * The workspace package owns this snapshot.
-         *
-         * The staged manifest is written as
-         * SnapshotBacked before runtime state changes.
-         */
-        if (!saveWorkspaceToFile(
-                currentWorkspacePath,
-                sessionId,
-                &committedSnapshotPath
-                )) {
-            resumeAfterFailure();
-            return;
-        }
+    if (!saveResult.isSuccess()) {
+        resumeAfterFailure();
 
-        if (committedSnapshotPath.isEmpty()) {
-            resumeAfterFailure();
-
-            QMessageBox::warning(
-                this,
-                tr("Preserve Snapshot Failed"),
-                tr(
-                    "The workspace was saved, but "
-                    "TraceScope could not identify the "
-                    "new investigation snapshot."
+        QMessageBox::warning(
+            this,
+            tr("Preserve Snapshot Failed"),
+            tr(
+                "TraceScope could not create a "
+                "temporary investigation snapshot for "
+                "the current working workspace."
+                "\n\n"
+                "Reason:\n%1"
+                )
+                .arg(
+                    saveResult
+                            .errorMessage
+                            .trimmed()
+                            .isEmpty()
+                        ? tr(
+                              "Temporary workspace storage "
+                              "could not be created."
+                              )
+                        : saveResult.errorMessage
                     )
-                );
+            );
 
-            return;
-        }
-    } else {
-        /*
-         * Standalone snapshot ownership belongs to the
-         * user. TraceScope must never garbage-collect
-         * this path merely because a future workspace
-         * creates its own managed copy.
-         */
-        const InvestigationSessionSnapshotSaveResult
-            saveResult =
-            InvestigationSessionSnapshotFile()
-                .save(
-                    standaloneSnapshotPath,
-                    snapshot
-                    );
-
-        if (!saveResult.isSuccess()) {
-            resumeAfterFailure();
-
-            QMessageBox::warning(
-                this,
-                tr("Save Investigation Snapshot Failed"),
-                saveResult.errorMessage.isEmpty()
-                    ? tr(
-                          "TraceScope could not save "
-                          "the investigation snapshot."
-                          )
-                    : saveResult.errorMessage
-                );
-
-            return;
-        }
-
-        committedSnapshotPath =
-            QFileInfo(
-                standaloneSnapshotPath
-                ).absoluteFilePath();
+        return;
     }
 
     /*
-     * Persistence has succeeded.
+     * The provisional snapshot now exists durably for
+     * the lifetime of this working workspace.
      *
-     * This runtime mutation performs no I/O and is the
-     * final commit boundary for the open investigation.
+     * Switching runtime backing performs no additional
+     * file I/O.
      */
     if (!workspace
              ->applySnapshotOnlyTransition(
                  sessionId,
-                 committedSnapshotPath,
+                 saveResult.snapshotPath,
                  snapshot.sourceFidelity
                  )) {
         resumeAfterFailure();
 
+        /*
+         * Leave the unused provisional snapshot in the
+         * working-artifact store. Whole-workspace
+         * cleanup will safely remove it later.
+         */
         QMessageBox::critical(
             this,
             tr("Preserve Snapshot Failed"),
             tr(
-                "The snapshot was saved successfully, "
-                "but the open investigation could not "
-                "be switched to Snapshot-backed mode."
+                "The temporary snapshot was created "
+                "successfully, but the open "
+                "investigation could not be switched "
+                "to Snapshot-backed mode."
                 )
             );
 
@@ -7860,4 +8880,612 @@ void MainWindow::
      * external-source dependency.
      */
     updateReloadActionState();
+
+    /*
+     * The source-state transition exists only in the
+     * current working workspace until the user
+     * explicitly saves.
+     *
+     * The previously committed .tsw and all artifacts
+     * it references remain untouched.
+     */
+    markWorkspaceDirty();
+}
+
+void MainWindow::populateRecentFilesMenu(
+    QMenu *menu,
+    WorkspaceDocumentHost *targetHost
+    )
+{
+    if (menu == nullptr) {
+        return;
+    }
+
+    menu->clear();
+
+    const QStringList recentFiles =
+        recentItemsStore.recentFiles();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentFiles) {
+        const QFileInfo fileInfo(
+            filePath
+            );
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentFile(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            menu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            menu,
+            [
+                this,
+                filePath,
+                targetHost
+            ]() {
+                openRecentFile(
+                    filePath,
+                    targetHost
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    menu->setEnabled(
+        validItemCount > 0
+        );
+}
+
+void MainWindow::populateRecentWorkspacesMenu(
+    QMenu *menu
+    )
+{
+    if (menu == nullptr) {
+        return;
+    }
+
+    menu->clear();
+
+    const QStringList recentWorkspaces =
+        recentItemsStore.recentWorkspaces();
+
+    int validItemCount = 0;
+
+    for (const QString &filePath
+         : recentWorkspaces) {
+        const QFileInfo fileInfo(
+            filePath
+            );
+
+        if (!fileInfo.exists()
+            || !fileInfo.isFile()) {
+            recentItemsStore
+                .removeRecentWorkspace(
+                    filePath
+                    );
+
+            continue;
+        }
+
+        QAction *action =
+            menu->addAction(
+                fileInfo.fileName()
+                );
+
+        action->setToolTip(
+            filePath
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            menu,
+            [
+                this,
+                filePath
+            ]() {
+                openRecentWorkspace(
+                    filePath
+                    );
+            }
+            );
+
+        ++validItemCount;
+    }
+
+    menu->setEnabled(
+        validItemCount > 0
+        );
+}
+
+void MainWindow::setFileOperationsEnabled(
+    bool enabled
+    )
+{
+    if (newWorkspaceAction != nullptr) {
+        newWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (openAction != nullptr) {
+        openAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (openWorkspaceAction != nullptr) {
+        openWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (openSnapshotAction != nullptr) {
+        openSnapshotAction->setEnabled(
+            enabled
+            );
+    }
+
+    setAcceptDrops(
+        enabled
+        );
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    workspaceDocumentHost
+        ->setFileOperationsEnabled(
+            enabled
+            );
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : workspaceDocumentHost
+               ->detachedWindows()) {
+        if (window != nullptr) {
+            window->setFileOperationsEnabled(
+                enabled
+                );
+        }
+    }
+}
+
+void MainWindow::
+    requestCloseDocumentsInHost(
+        WorkspaceDocumentHost *host
+        )
+{
+    if (host == nullptr
+        || workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    /*
+     * Closing one visible TraceScope window closes
+     * the documents in that window only.
+     *
+     * Snapshot IDs first because every close request
+     * may synchronously modify the tab group.
+     */
+    QVector<QString> documentIds;
+
+    documentIds.reserve(
+        host->documentCount()
+        );
+
+    for (int index = 0;
+         index < host->documentCount();
+         ++index) {
+        WorkspaceDocument *document =
+            host->documentAt(
+                index
+                );
+
+        if (document != nullptr) {
+            documentIds.append(
+                document->documentId()
+                );
+        }
+    }
+
+    for (const QString &documentId
+         : documentIds) {
+        emit workspaceDocumentHost
+            ->documentCloseRequested(
+                documentId
+                );
+    }
+}
+
+void MainWindow::
+    requestWorkspaceWindowClose(
+        WorkspaceDocumentHost *host
+        )
+{
+    if (host == nullptr
+        || workspaceDocumentHost == nullptr
+        || host->documentCount() <= 0) {
+        return;
+    }
+
+    QWidget *dialogParent =
+        host->window();
+
+    const int documentCount =
+        host->documentCount();
+
+    QMessageBox prompt(
+        dialogParent
+        );
+
+    prompt.setIcon(
+        QMessageBox::Question
+        );
+
+    prompt.setWindowTitle(
+        tr("Close TraceScope Window")
+        );
+
+    if (documentCount == 1) {
+        prompt.setText(
+            tr(
+                "This window contains 1 open document."
+                )
+            );
+    } else {
+        prompt.setText(
+            tr(
+                "This window contains %1 open documents."
+                )
+                .arg(
+                    documentCount
+                    )
+            );
+    }
+
+    prompt.setInformativeText(
+        tr(
+            "Closing this window can either preserve "
+            "these documents by moving their tabs to "
+            "another open TraceScope window, or close "
+            "the documents themselves.\n\n"
+            "Preserve Open Documents keeps every "
+            "investigation or comparison in the current "
+            "workspace and only changes the window/tab "
+            "layout. The documents will be moved "
+            "together to another open TraceScope window, "
+            "and that window's currently selected tab "
+            "will remain selected.\n\n"
+            "Close Documents removes these documents "
+            "from the current workspace. If you later "
+            "save the workspace, the closed documents "
+            "will no longer be included."
+            )
+        );
+
+    QPushButton *preserveButton =
+        prompt.addButton(
+            tr("Preserve Open Documents"),
+            QMessageBox::AcceptRole
+            );
+
+    QPushButton *closeDocumentsButton =
+        prompt.addButton(
+            tr("Close Documents"),
+            QMessageBox::DestructiveRole
+            );
+
+    QPushButton *cancelButton =
+        prompt.addButton(
+            QMessageBox::Cancel
+            );
+
+    prompt.setDefaultButton(
+        preserveButton
+        );
+
+    prompt.setEscapeButton(
+        cancelButton
+        );
+
+    prompt.exec();
+
+    if (prompt.clickedButton()
+        == preserveButton) {
+        if (!workspaceDocumentHost
+                 ->moveDocumentsToAnotherVisibleWindow(
+                     host
+                     )) {
+            QMessageBox::warning(
+                dialogParent,
+                tr("Unable to Preserve Documents"),
+                tr(
+                    "TraceScope could not move the "
+                    "documents to another open window. "
+                    "No documents were intentionally "
+                    "closed."
+                    )
+                );
+        }
+
+        return;
+    }
+
+    if (prompt.clickedButton()
+        == closeDocumentsButton) {
+        requestCloseDocumentsInHost(
+            host
+            );
+    }
+}
+
+bool MainWindow::
+    confirmWorkspaceReplacement()
+{
+    if (!workspaceDirty) {
+        return true;
+    }
+
+    QMessageBox prompt(
+        workspaceDialogParent()
+        );
+
+    prompt.setIcon(
+        QMessageBox::Warning
+        );
+
+    prompt.setWindowTitle(
+        tr("Unsaved Workspace Changes")
+        );
+
+    prompt.setText(
+        tr(
+            "The current workspace has unsaved changes."
+            )
+        );
+
+    prompt.setInformativeText(
+        tr(
+            "Do you want to save your changes before continuing?"
+            )
+        );
+
+    prompt.setStandardButtons(
+        QMessageBox::Save
+        | QMessageBox::Discard
+        | QMessageBox::Cancel
+        );
+
+    prompt.setDefaultButton(
+        QMessageBox::Save
+        );
+
+    const QMessageBox::StandardButton choice =
+        static_cast<
+            QMessageBox::StandardButton>(
+            prompt.exec()
+            );
+
+    if (choice == QMessageBox::Cancel) {
+        return false;
+    }
+
+    if (choice == QMessageBox::Discard) {
+        return true;
+    }
+
+    if (choice == QMessageBox::Save) {
+        /*
+         * A cancelled Save As dialog or failed save
+         * must cancel the destructive operation too.
+         */
+        return saveWorkspace();
+    }
+
+    return false;
+}
+
+void MainWindow::newWorkspace()
+{
+    if (importWatcher != nullptr
+        || workspaceOpenInProgress
+        || snapshotOpenInProgress
+        || sessionReloadInProgress) {
+        QMessageBox::information(
+            this,
+            tr("File Operation In Progress"),
+            tr(
+                "TraceScope cannot create a new "
+                "workspace while another file "
+                "operation is in progress."
+                )
+            );
+
+        return;
+    }
+
+    if (!confirmWorkspaceReplacement()) {
+        return;
+    }
+
+    const bool previousMutationSuppression =
+        workspaceMutationTrackingSuppressed;
+
+    workspaceMutationTrackingSuppressed =
+        true;
+
+    clearCurrentWorkspace();
+
+    if (workspaceDocumentHost != nullptr) {
+        workspaceDocumentHost
+            ->resetWindowLayout();
+    }
+
+    currentWorkspacePath.clear();
+
+    workspaceMutationTrackingSuppressed =
+        previousMutationSuppression;
+
+    setWorkspaceDirty(
+        false
+        );
+
+    updateComparisonActionState();
+    updateReloadActionState();
+}
+
+void MainWindow::
+    beginApplicationShutdown()
+{
+    if (applicationShutdownInProgress) {
+        return;
+    }
+
+    /*
+     * Once the workspace-level exit decision has been
+     * completed, any subsequent top-level close events
+     * belong to application teardown rather than to
+     * ordinary user window-management behavior.
+     */
+    applicationShutdownInProgress =
+        true;
+
+    if (workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    for (
+        DetachedWorkspaceDocumentWindow *window
+        : workspaceDocumentHost
+              ->detachedWindows()
+        ) {
+        if (window != nullptr) {
+            window
+                ->setApplicationShutdownInProgress(
+                    true
+                    );
+        }
+    }
+}
+
+void MainWindow::
+    requestApplicationClose()
+{
+    /*
+     * Ignore duplicate shutdown requests that may
+     * arrive while Qt is already closing top-level
+     * windows.
+     */
+    if (applicationShutdownInProgress) {
+        return;
+    }
+
+    if (!confirmWorkspaceReplacement()) {
+        return;
+    }
+
+    /*
+     * The user has now made the one workspace-level
+     * decision required for application exit.
+     *
+     * Mark every TraceScope peer as participating in
+     * application shutdown before asking Qt to quit.
+     * Any close events generated during teardown must
+     * bypass ordinary per-window Preserve/Close
+     * Documents behavior.
+     */
+    beginApplicationShutdown();
+
+    QApplication::quit();
+}
+
+void MainWindow::
+    closeWorkspaceDocument(
+        const QString &documentId
+        )
+{
+    if (workspace == nullptr
+        || workspaceDocumentHost == nullptr) {
+        return;
+    }
+
+    const int sessionIndex =
+        workspace->indexOfSession(
+            documentId
+            );
+
+    if (sessionIndex >= 0) {
+        workspace->closeSession(
+            sessionIndex
+            );
+
+        return;
+    }
+
+    WorkspaceDocument *document =
+        workspaceDocumentHost
+            ->removeDocument(
+                documentId
+                );
+
+    if (document != nullptr) {
+        document->deleteLater();
+    }
+}
+
+void MainWindow::resetWorkspaceIdentity()
+{
+    currentWorkspacePath.clear();
+
+    setWorkspaceDirty(
+        false
+        );
+
+    updateComparisonActionState();
+    updateReloadActionState();
+}
+
+void MainWindow::applyInterfaceScale(
+    qreal factor
+    )
+{
+    QApplication *application =
+        qobject_cast<QApplication *>(
+            QCoreApplication::instance()
+            );
+
+    if (application == nullptr) {
+        return;
+    }
+
+    InterfaceScale::applyUserFactor(
+        application,
+        factor
+        );
+
+    interfaceScaleSettingsStore
+        .setUserFactor(
+            InterfaceScale::userFactor()
+            );
 }

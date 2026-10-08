@@ -38,6 +38,8 @@ public:
         QWidget *parent
         );
 
+    virtual void refreshInterfaceScale();
+
 signals:
     void documentTitleChanged(
         const QString &title

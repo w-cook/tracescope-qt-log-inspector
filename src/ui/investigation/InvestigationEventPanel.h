@@ -1,13 +1,17 @@
 #pragma once
 
+#include <QDateTime>
 #include <QGroupBox>
+#include <QMargins>
 #include <QMetaObject>
+#include <QSet>
 #include <QString>
 
 #include "../../workspace/InvestigationPresentationState.h"
 
 class InvestigationRecord;
 class InvestigationSession;
+class QHBoxLayout;
 class QLabel;
 class QPushButton;
 class QTableView;
@@ -51,12 +55,26 @@ public:
         bool enabled
         );
 
+    void handleLiveSessionUpdated();
+
     InvestigationEventTablePresentationState
     capturePresentationState() const;
 
     void restorePresentationState(
         const InvestigationEventTablePresentationState &state
         );
+
+    void refreshInterfaceScale();
+
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
+    int collapsedHeight() const;
+
+    int compactHeightHint() const;
 
 signals:
     void selectedRecordChanged();
@@ -65,6 +83,22 @@ signals:
         const QString &fieldName,
         const QString &value
         );
+
+    void eventTableValueFilterToggleRequested(
+        const QString &columnKey,
+        const QString &value
+        );
+
+    void eventTableTimeBoundaryToggleRequested(
+        const QDateTime &timestamp,
+        bool startBoundary
+        );
+
+protected:
+    bool eventFilter(
+        QObject *watched,
+        QEvent *event
+        ) override;
 
 private:
     void connectSelectionModel();
@@ -78,8 +112,11 @@ private:
         );
 
     void updateRowHeaderWidth();
+    void refreshRowHeights();
 
     void restoreColumnWidths();
+
+    void updateFollowNewestSelectionIntent();
 
     InvestigationSession *m_session =
         nullptr;
@@ -107,4 +144,24 @@ private:
 
     bool m_followNewest =
         false;
+
+    bool m_followNewestSelectionIntent =
+        false;
+
+    bool m_suppressFollowNewestSelectionIntentUpdate =
+        false;
+
+    QHBoxLayout *m_navigationLayout =
+        nullptr;
+
+    qreal m_columnWidthScaleFactor =
+        1.0;
+
+    bool m_collapsed =
+        false;
+
+    QMargins m_expandedContentsMargins;
+
+    bool m_headerMouseDown = false;
+    QSet<int> m_manuallyResizedColumns;
 };

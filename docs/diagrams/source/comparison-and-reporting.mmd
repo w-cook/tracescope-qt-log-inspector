@@ -1,0 +1,29 @@
+flowchart TD
+
+    subgraph Mutable["Mutable investigation state"]
+        Baseline["Baseline investigation"]
+        ComparisonSession["Comparison investigation"]
+        SelectedSessions["Selected investigation<br/>report inputs"]
+    end
+
+    subgraph ComparisonCapture["Comparison capture boundary"]
+        CompareBuilder["Comparison snapshot builder"]
+        ComparisonSnapshot["Immutable comparison snapshot<br/>captured scope + analysis"]
+
+        Baseline -->|complete population or selected time range| CompareBuilder
+        ComparisonSession -->|complete population or selected time range| CompareBuilder
+        CompareBuilder -->|freeze populations, context, and analysis| ComparisonSnapshot
+    end
+
+    subgraph ReportCapture["Report capture and rendering"]
+        ReportBuilder["Report snapshot builder"]
+        ReportSnapshot["Frozen report snapshot"]
+        Renderer["HTML report renderer"]
+        Html["Self-contained offline HTML"]
+
+        SelectedSessions -->|capture selected investigation state| ReportBuilder
+        ComparisonSnapshot -->|reuse captured scope + analysis| ReportBuilder
+        ReportBuilder -->|freeze report state| ReportSnapshot
+        ReportSnapshot -->|render captured data only| Renderer
+        Renderer -->|write document| Html
+    end

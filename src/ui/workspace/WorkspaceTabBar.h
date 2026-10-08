@@ -39,6 +39,12 @@ public:
         const QString &documentId
         );
 
+    void setEmptyDropTargetActive(
+        bool active
+        );
+
+    int normalTabRowHeight() const;
+
 signals:
     void documentDragStarted(
         const QString &documentId
@@ -160,6 +166,9 @@ private:
         m_externalDragPreview;
 
     bool m_workspaceDragOver =
+        false;
+
+    bool m_emptyDropTargetActive =
         false;
 
     QHash<QString, QColor>

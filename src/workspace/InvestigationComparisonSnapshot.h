@@ -7,6 +7,7 @@
 
 #include "../analysis/BurstDetectionSettings.h"
 #include "../analysis/InvestigationSessionComparison.h"
+#include "InvestigationComparisonTimeRange.h"
 #include "InvestigationSession.h"
 
 struct InvestigationComparisonSourceSnapshot
@@ -15,6 +16,14 @@ struct InvestigationComparisonSourceSnapshot
 
     InvestigationSessionSourceMetadata
         sourceMetadata;
+
+    /*
+     * Absent for the legacy/default complete-session
+     * comparison. Present when an active time range
+     * was captured at comparison creation.
+     */
+    std::optional<InvestigationComparisonTimeRange>
+        capturedTimeRange;
 };
 
 class InvestigationComparisonSnapshot

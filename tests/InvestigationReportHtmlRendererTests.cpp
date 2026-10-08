@@ -284,6 +284,7 @@ private slots:
     void omitsLocalSourcePaths();
     void preservesReportSectionOrder();
     void rendersImmutableComparisonProvenance();
+    void rendersComparisonDifferencesInImpactOrder();
     void rendersUnavailableComparisonAnalysisGracefully();
     void rendersCrossSourceClockCaveat();
     void rendersTimelineAndDeterministicAnalytics();
@@ -291,6 +292,7 @@ private slots:
     void neverRendersEvidenceSourcePath();
     void rendersTechnicalImportAppendix();
     void omitsTechnicalProfileWhenDisabled();
+    void rendersTimeScopedComparisonAndPrintGrouping();
 };
 
 void InvestigationReportHtmlRendererTests::
@@ -754,7 +756,7 @@ void InvestigationReportHtmlRendererTests::
     QVERIFY(
         html.contains(
             QStringLiteral(
-                "Record rate"
+                "Observed record rate"
                 )
             )
         );
@@ -1027,6 +1029,263 @@ void InvestigationReportHtmlRendererTests::
             )
         );
 }
+
+
+void InvestigationReportHtmlRendererTests::
+    rendersComparisonDifferencesInImpactOrder()
+{
+    InvestigationReportSnapshot snapshot;
+
+    snapshot.title =
+        QStringLiteral("Comparison Sorting Test");
+
+    snapshot.generatedAtUtc =
+        fixedTimestamp();
+
+    InvestigationReportComparisonSnapshot comparison =
+        makeComparison();
+
+    /*
+     * Intentionally supply unsorted severity changes.
+     * Critical and Error tie on absolute delta;
+     * Critical must appear first.
+     */
+    comparison.analysis.severity.differences = {
+        { RecordSeverity::Warning, 1, 2 },
+        { RecordSeverity::Error, 1, 5 },
+        { RecordSeverity::Critical, 5, 1 }
+    };
+
+    /*
+     * Event codes must be grouped into Appeared,
+     * Disappeared and Changed. Each group is sorted
+     * independently by absolute delta.
+     */
+    comparison.analysis.eventCodes.differences = {
+        { QStringLiteral("Z_CHANGED"), 2, 4 },
+        { QStringLiteral("Z_APPEARED"), 0, 2 },
+        { QStringLiteral("B_DISAPPEARED"), 3, 0 },
+        { QStringLiteral("A_APPEARED"), 0, 5 },
+        { QStringLiteral("A_CHANGED"), 3, 5 },
+        { QStringLiteral("A_DISAPPEARED"), 5, 0 }
+    };
+
+    /*
+     * Equal-magnitude dimension changes use
+     * deterministic alphabetical ordering.
+     */
+    comparison.analysis.elevatedSubsystems.differences = {
+        { QStringLiteral("zeta"), 2, 5 },
+        { QStringLiteral("Alpha"), 4, 1 },
+        { QStringLiteral("beta"), 1, 6 }
+    };
+
+    /*
+     * Categorical values are sorted independently
+     * within each custom field.
+     */
+    comparison.analysis.customFields
+        .categoricalFields[0]
+        .changedValues = {
+        { QStringLiteral("old"), 2, 0 },
+        { QStringLiteral("big"), 0, 6 },
+        { QStringLiteral("Alpha"), 4, 0 },
+        { QStringLiteral("beta"), 0, 4 }
+    };
+
+    snapshot.comparisons.append(comparison);
+
+    InvestigationReportHtmlRenderer renderer;
+
+    const QString html =
+        renderer.render(snapshot);
+
+    /*
+     * Extract individual report sections so
+     * unrelated occurrences of the same text
+     * cannot produce false positives.
+     */
+    const auto sectionBetween =
+        [&html](
+            const QString &begin,
+            const QString &end
+            ) {
+            const qsizetype first =
+                html.indexOf(begin);
+
+            if (first < 0) {
+                return QString();
+            }
+
+            const qsizetype last =
+                html.indexOf(
+                    end,
+                    first + begin.size()
+                    );
+
+            if (last < 0) {
+                return QString();
+            }
+
+            return html.mid(
+                first,
+                last - first
+                );
+        };
+
+    const auto appearsInOrder =
+        [](
+            const QString &content,
+            const QStringList &markers
+            ) {
+            qsizetype position = 0;
+
+            for (const QString &marker : markers) {
+                const qsizetype found =
+                    content.indexOf(
+                        marker,
+                        position
+                        );
+
+                if (found < 0) {
+                    return false;
+                }
+
+                position =
+                    found + marker.size();
+            }
+
+            return true;
+        };
+
+    const QString severity =
+        sectionBetween(
+            QStringLiteral("<h3>Severity Changes</h3>"),
+            QStringLiteral("<h3>Event-Code Changes</h3>")
+            );
+
+    QVERIFY(!severity.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            severity,
+            {
+                QStringLiteral("<td>Critical</td>"),
+                QStringLiteral("<td>Error</td>"),
+                QStringLiteral("<td>Warning</td>")
+            }
+            )
+        );
+
+    const QString eventCodes =
+        sectionBetween(
+            QStringLiteral("<h3>Event-Code Changes</h3>"),
+            QStringLiteral(
+                "<h3>Elevated Subsystem Changes</h3>"
+                )
+            );
+
+    QVERIFY(!eventCodes.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            eventCodes,
+            {
+                QStringLiteral(
+                    "<th colspan=\"4\">Appeared</th>"
+                    ),
+                QStringLiteral("<td>A_APPEARED</td>"),
+                QStringLiteral("<td>Z_APPEARED</td>"),
+                QStringLiteral(
+                    "<th colspan=\"4\">Disappeared</th>"
+                    ),
+                QStringLiteral("<td>A_DISAPPEARED</td>"),
+                QStringLiteral("<td>B_DISAPPEARED</td>"),
+                QStringLiteral(
+                    "<th colspan=\"4\">Changed</th>"
+                    ),
+                QStringLiteral("<td>A_CHANGED</td>"),
+                QStringLiteral("<td>Z_CHANGED</td>")
+            }
+            )
+        );
+
+    const QString subsystems =
+        sectionBetween(
+            QStringLiteral(
+                "<h3>Elevated Subsystem Changes</h3>"
+                ),
+            QStringLiteral(
+                "<h3>Elevated Entity Changes</h3>"
+                )
+            );
+
+    QVERIFY(!subsystems.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            subsystems,
+            {
+                QStringLiteral("<td>beta</td>"),
+                QStringLiteral("<td>Alpha</td>"),
+                QStringLiteral("<td>zeta</td>")
+            }
+            )
+        );
+
+    const QString categorical =
+        sectionBetween(
+            QStringLiteral(
+                "<table class=\"report-table-categorical\">"
+                ),
+            QStringLiteral("</table>")
+            );
+
+    QVERIFY(!categorical.isEmpty());
+
+    QVERIFY(
+        appearsInOrder(
+            categorical,
+            {
+                QStringLiteral("<td>big</td>"),
+                QStringLiteral("<td>Alpha</td>"),
+                QStringLiteral("<td>beta</td>"),
+                QStringLiteral("<td>old</td>")
+            }
+            )
+        );
+
+    /*
+     * Rendering must never reorder or otherwise
+     * mutate the captured comparison snapshot.
+     */
+    const auto &retained =
+        snapshot.comparisons.constFirst().analysis;
+
+    QCOMPARE(
+        retained.severity.differences.constFirst().severity,
+        RecordSeverity::Warning
+        );
+
+    QCOMPARE(
+        retained.eventCodes.differences.constFirst().value,
+        QStringLiteral("Z_CHANGED")
+        );
+
+    QCOMPARE(
+        retained.elevatedSubsystems
+            .differences.constFirst().value,
+        QStringLiteral("zeta")
+        );
+
+    QCOMPARE(
+        retained.customFields.categoricalFields
+            .constFirst().changedValues
+            .constFirst().value,
+        QStringLiteral("old")
+        );
+}
+
 
 void InvestigationReportHtmlRendererTests::
     rendersUnavailableComparisonAnalysisGracefully()
@@ -2213,6 +2472,231 @@ void InvestigationReportHtmlRendererTests::
         !html.contains(
             QStringLiteral(
                 "Complete Import Profile"
+                )
+            )
+        );
+}
+
+void InvestigationReportHtmlRendererTests::
+    rendersTimeScopedComparisonAndPrintGrouping()
+{
+    InvestigationReportSnapshot snapshot;
+
+    snapshot.title =
+        QStringLiteral("Scoped Comparison");
+
+    snapshot.generatedAtUtc =
+        fixedTimestamp();
+
+    InvestigationReportComparisonSnapshot comparison =
+        makeComparison();
+
+    InvestigationComparisonTimeRange baselineRange;
+
+    baselineRange.startTime =
+        fixedTimestamp();
+
+    baselineRange.endTime =
+        fixedTimestamp(1800);
+
+    comparison.baselineTimeRange =
+        baselineRange;
+
+    InvestigationComparisonTimeRange comparisonRange;
+
+    comparisonRange.startTime =
+        fixedTimestamp(60);
+
+    comparison.comparisonTimeRange =
+        comparisonRange;
+
+    snapshot.comparisons.append(comparison);
+
+    InvestigationReportHtmlRenderer renderer;
+
+    const QString html =
+        renderer.render(snapshot);
+
+    /*
+     * Each source's scope must remain within
+     * the protected comparison-route block.
+     */
+    const qsizetype routeStart =
+        html.indexOf(
+            QStringLiteral(
+                "<div class=\"comparison-route\">"
+                )
+            );
+
+    const qsizetype routeEnd =
+        html.indexOf(
+            QStringLiteral(
+                "<div class=\"metrics\">"
+                ),
+            routeStart
+            );
+
+    QVERIFY(routeStart >= 0);
+    QVERIFY(routeEnd > routeStart);
+
+    const QString route =
+        html.mid(
+            routeStart,
+            routeEnd - routeStart
+            );
+
+    QCOMPARE(
+        route.count(
+            QStringLiteral(
+                "Scope: Captured active time range"
+                )
+            ),
+        2
+        );
+
+    QVERIFY(
+        route.contains(
+            QStringLiteral("End: Unbounded")
+            )
+        );
+
+    /*
+     * The short timing table and its optional
+     * explanation share one print-keep block.
+     */
+    const qsizetype timingStart =
+        html.indexOf(
+            QStringLiteral(
+                "<div class=\"print-keep\">"
+                "<h3>Captured Timing</h3>"
+                )
+            );
+
+    const qsizetype timingEnd =
+        html.indexOf(
+            QStringLiteral(
+                "appendComparisonSeverity"
+                ),
+            timingStart
+            );
+
+    QVERIFY(timingStart >= 0);
+
+    const QString timing =
+        html.mid(timingStart);
+
+    QVERIFY(
+        timing.contains(
+            QStringLiteral(
+                "Observed record rate"
+                )
+            )
+        );
+
+    const qsizetype rateStart =
+        timing.indexOf(
+            QStringLiteral(
+                "<tr><th>Window-average record rate</th>"
+                )
+            );
+
+    QVERIFY(rateStart >= 0);
+
+    const qsizetype rateEnd =
+        timing.indexOf(
+            QStringLiteral("</tr>"),
+            rateStart
+            );
+
+    QVERIFY(rateEnd > rateStart);
+
+    const QString rateRow =
+        timing.mid(
+            rateStart,
+            rateEnd - rateStart
+            );
+
+    QVERIFY(
+        rateRow.contains(
+            QStringLiteral("3.33 records/min")
+            )
+        );
+
+    QVERIFY(
+        rateRow.contains(
+            QStringLiteral("<td>—</td>")
+            )
+        );
+
+    QVERIFY(
+        timing.contains(
+            QStringLiteral(
+                "comparison-rate-note"
+                )
+            )
+        );
+
+    QVERIFY(
+        html.contains(
+            QStringLiteral(
+                ".report-main .print-keep {"
+                )
+            )
+        );
+
+    /*
+     * Two bounded ranges produce two rates.
+     */
+    comparisonRange.endTime =
+        fixedTimestamp(960);
+
+    comparison.comparisonTimeRange =
+        comparisonRange;
+
+    snapshot.comparisons.clear();
+    snapshot.comparisons.append(comparison);
+
+    const QString bothBounded =
+        renderer.render(snapshot);
+
+    QVERIFY(
+        bothBounded.contains(
+            QStringLiteral("3.33 records/min")
+            )
+        );
+
+    QVERIFY(
+        bothBounded.contains(
+            QStringLiteral("8.33 records/min")
+            )
+        );
+
+    /*
+     * Legacy complete-session comparisons retain
+     * observed rates without adding a window row.
+     */
+    comparison.baselineTimeRange.reset();
+    comparison.comparisonTimeRange.reset();
+
+    snapshot.comparisons.clear();
+    snapshot.comparisons.append(comparison);
+
+    const QString complete =
+        renderer.render(snapshot);
+
+    QCOMPARE(
+        complete.count(
+            QStringLiteral(
+                "Scope: Complete imported session"
+                )
+            ),
+        2
+        );
+
+    QVERIFY(
+        !complete.contains(
+            QStringLiteral(
+                "Window-average record rate"
                 )
             )
         );

@@ -12,12 +12,15 @@
 #include <QPainter>
 #include <QStyle>
 #include <QStyleOptionTab>
+#include <QPixmap>
 #include <QPointer>
 #include <QLabel>
 #include <QSizePolicy>
 #include <QTimer>
 
 #include <utility>
+
+#include "../InterfaceScale.h"
 
 namespace
 {
@@ -49,10 +52,12 @@ WorkspaceTabBar::WorkspaceTabBar(
         QSizePolicy::Expanding,
         QSizePolicy::Fixed
         );
+}
 
-    setMinimumHeight(
-        emptyDropTargetHeight()
-        );
+int WorkspaceTabBar::
+    normalTabRowHeight() const
+{
+    return emptyDropTargetHeight();
 }
 
 void WorkspaceTabBar::setDocumentTint(
@@ -100,7 +105,8 @@ void WorkspaceTabBar::paintDocumentTint(
     ) const
 {
     if (index < 0
-        || index >= count()) {
+        || index >= count()
+        || rectangle.isEmpty()) {
         return;
     }
 
@@ -133,32 +139,93 @@ void WorkspaceTabBar::paintDocumentTint(
             : 30
         );
 
-    painter.save();
+    /*
+     * tabRect() is only the bounding rectangle for the
+     * native tab. In particular, an inactive tab may
+     * occupy less than that rectangle vertically.
+     *
+     * Build the tint from Qt's own native tab shape
+     * instead of filling the bounding rectangle. This
+     * keeps semantic document color inside the actual
+     * styled tab at every selection state, DPI, and
+     * platform style.
+     */
+    QStyleOptionTab shapeOption;
 
-    painter.fillRect(
-        rectangle,
-        tint
+    initStyleOption(
+        &shapeOption,
+        index
         );
 
-    painter.restore();
+    shapeOption.rect =
+        QRect(
+            QPoint(0, 0),
+            rectangle.size()
+            );
+
+    QPixmap tintLayer(
+        rectangle.size()
+        );
+
+    tintLayer.fill(
+        Qt::transparent
+        );
+
+    {
+        QPainter tintLayerPainter(
+            &tintLayer
+            );
+
+        /*
+         * First render the real native tab shape into
+         * the transparent layer. Pixels outside that
+         * shape remain transparent.
+         */
+        style()->drawControl(
+            QStyle::CE_TabBarTabShape,
+            &shapeOption,
+            &tintLayerPainter,
+            this
+            );
+
+        /*
+         * Replace the rendered shape's color while
+         * retaining its alpha coverage. The resulting
+         * pixmap is therefore a translucent semantic
+         * tint clipped precisely to the native tab.
+         */
+        tintLayerPainter.setCompositionMode(
+            QPainter::CompositionMode_SourceIn
+            );
+
+        tintLayerPainter.fillRect(
+            tintLayer.rect(),
+            tint
+            );
+    }
+
+    painter.drawPixmap(
+        rectangle.topLeft(),
+        tintLayer
+        );
 
     /*
      * The tint is drawn after Qt's normal tab, so
      * redraw the label over it for crisp text/icons.
      */
-    QStyleOptionTab option;
+    QStyleOptionTab labelOption;
 
     initStyleOption(
-        &option,
+        &labelOption,
         index
         );
 
-    option.rect =
+    labelOption.rect =
         rectangle;
 
     style()->drawControl(
         QStyle::CE_TabBarTabLabel,
-        &option,
+        &labelOption,
         &painter,
         this
         );
@@ -884,7 +951,8 @@ void WorkspaceTabBar::paintEvent(
          * documents have simply been closed.
          */
         if (count() == 0
-            && (m_externalDragActive
+            && (m_emptyDropTargetActive
+                || m_externalDragActive
                 || m_workspaceDragOver)) {
             QPainter painter(this);
 
@@ -894,11 +962,17 @@ void WorkspaceTabBar::paintEvent(
                     )
                 );
 
+            const int horizontalPadding =
+                InterfaceScale::pixels(
+                    12,
+                    this
+                    );
+
             painter.drawText(
                 rect().adjusted(
-                    12,
+                    horizontalPadding,
                     0,
-                    -12,
+                    -horizontalPadding,
                     0
                     ),
                 Qt::AlignLeft
@@ -1195,14 +1269,20 @@ int WorkspaceTabBar::
             QStyle::CT_TabBarTab,
             &option,
             QSize(
-                120,
+                InterfaceScale::pixels(
+                    120,
+                    this
+                    ),
                 fontMetrics().height()
                 ),
             this
             );
 
     return qMax(
-        28,
+        InterfaceScale::pixels(
+            28,
+            this
+            ),
         styledSize.height()
         );
 }
@@ -1214,9 +1294,20 @@ QSize WorkspaceTabBar::sizeHint()
         QTabBar::sizeHint();
 
     if (count() == 0) {
+        if (!m_emptyDropTargetActive) {
+            result.setHeight(
+                0
+                );
+
+            return result;
+        }
+
         result.setWidth(
             qMax(
-                180,
+                InterfaceScale::pixels(
+                    180,
+                    this
+                    ),
                 result.width()
                 )
             );
@@ -1239,9 +1330,20 @@ QSize WorkspaceTabBar::minimumSizeHint()
         QTabBar::minimumSizeHint();
 
     if (count() == 0) {
+        if (!m_emptyDropTargetActive) {
+            result.setHeight(
+                0
+                );
+
+            return result;
+        }
+
         result.setWidth(
             qMax(
-                180,
+                InterfaceScale::pixels(
+                    180,
+                    this
+                    ),
                 result.width()
                 )
             );
@@ -1336,4 +1438,25 @@ void WorkspaceTabBar::
         );
 
     update();
+}
+
+void WorkspaceTabBar::
+    setEmptyDropTargetActive(
+        bool active
+        )
+{
+    if (m_emptyDropTargetActive
+        == active) {
+        return;
+    }
+
+    m_emptyDropTargetActive =
+        active;
+
+    updateGeometry();
+    update();
+
+    if (parentWidget() != nullptr) {
+        parentWidget()->updateGeometry();
+    }
 }

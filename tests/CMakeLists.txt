@@ -198,6 +198,27 @@ add_test(
     COMMAND RecordSeverityTests
 )
 
+qt_add_executable(
+    InvestigationSectionResizePolicyTests
+
+    InvestigationSectionResizePolicyTests.cpp
+
+    ../src/ui/workspace/InvestigationSectionResizePolicy.h
+    ../src/ui/workspace/InvestigationSectionResizePolicy.cpp
+)
+
+target_link_libraries(
+    InvestigationSectionResizePolicyTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME InvestigationSectionResizePolicyTests
+    COMMAND InvestigationSectionResizePolicyTests
+)
+
 # ----------------------------------------------------------------------------
 # Source discovery
 # ----------------------------------------------------------------------------
@@ -1662,6 +1683,8 @@ qt_add_executable(
     ../src/models/InvestigationTableModel.h
     ../src/models/InvestigationTableModel.cpp
 
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
     ../src/ui/InvestigationComparisonDialog.h
     ../src/ui/InvestigationComparisonDialog.cpp
 
@@ -1765,6 +1788,43 @@ add_test(
     COMMAND InvestigationComparisonSnapshotBuilderTests
 )
 
+
+qt_add_executable(
+    InvestigationComparisonDocumentTests
+
+    InvestigationComparisonDocumentTests.cpp
+
+    ../src/domain/RecordSeverity.cpp
+
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
+
+    ../src/ui/workspace/WorkspaceDocument.h
+    ../src/ui/workspace/WorkspaceDocument.cpp
+
+    ../src/ui/workspace/InvestigationComparisonDocument.h
+    ../src/ui/workspace/InvestigationComparisonDocument.cpp
+)
+
+target_link_libraries(
+    InvestigationComparisonDocumentTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+        Qt6::Widgets
+)
+
+add_test(
+    NAME InvestigationComparisonDocumentTests
+    COMMAND InvestigationComparisonDocumentTests
+)
+
+set_tests_properties(
+    InvestigationComparisonDocumentTests
+    PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=minimal"
+)
+
 qt_add_executable(
     InvestigationPresentationStateTests
 
@@ -1823,7 +1883,8 @@ qt_add_executable(
     ../src/ui/CustomFieldFilterEditor.cpp
     ../src/ui/MultiSelectFilterComboBox.h
     ../src/ui/MultiSelectFilterComboBox.cpp
-
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
     ../src/ui/investigation/InvestigationAnalyticsPanel.h
     ../src/ui/investigation/InvestigationAnalyticsPanel.cpp
     ../src/ui/investigation/InvestigationEventDetailPanel.h
@@ -1843,6 +1904,8 @@ qt_add_executable(
     ../src/ui/investigation/InvestigationTimelinePanel.h
     ../src/ui/investigation/InvestigationTimelinePanel.cpp
 
+    ../src/ui/workspace/InvestigationSectionResizePolicy.h
+    ../src/ui/workspace/InvestigationSectionResizePolicy.cpp
     ../src/ui/workspace/InvestigationSessionView.h
     ../src/ui/workspace/InvestigationSessionView.cpp
     ../src/ui/workspace/LiveFollowTabControl.h
@@ -2302,6 +2365,9 @@ qt_add_executable(
 
     WorkspaceDocumentHostTests.cpp
 
+    ../src/ui/InterfaceScale.h
+    ../src/ui/InterfaceScale.cpp
+
     ../src/ui/workspace/DetachedWorkspaceDocumentWindow.h
     ../src/ui/workspace/DetachedWorkspaceDocumentWindow.cpp
     ../src/ui/workspace/WorkspaceDocument.h
@@ -2432,6 +2498,49 @@ target_link_libraries(
 add_test(
     NAME WorkspaceSavePackageServiceTests
     COMMAND WorkspaceSavePackageServiceTests
+)
+
+qt_add_executable(
+    WorkspaceWorkingArtifactStoreTests
+
+    WorkspaceWorkingArtifactStoreTests.cpp
+
+    ../src/domain/InvestigationRecord.h
+    ../src/domain/RecordSeverity.h
+    ../src/domain/RecordSeverity.cpp
+    ../src/domain/RecordSourceMetadata.h
+
+    ../src/importing/CanonicalFieldMappings.h
+    ../src/importing/ImportDiagnostic.h
+    ../src/importing/ImportDiagnostic.cpp
+    ../src/importing/ImportProfile.h
+    ../src/importing/ImportProfileSerialization.h
+    ../src/importing/ImportProfileSerialization.cpp
+
+    ../src/persistence/InvestigationRecordSerialization.h
+    ../src/persistence/InvestigationRecordSerialization.cpp
+    ../src/persistence/InvestigationSessionSnapshot.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.h
+    ../src/persistence/InvestigationSessionSnapshotSerialization.cpp
+    ../src/persistence/InvestigationSnapshotContainer.h
+    ../src/persistence/InvestigationSnapshotContainer.cpp
+    ../src/persistence/InvestigationSessionSnapshotFile.h
+    ../src/persistence/InvestigationSessionSnapshotFile.cpp
+
+    ../src/workspace/WorkspaceWorkingArtifactStore.h
+    ../src/workspace/WorkspaceWorkingArtifactStore.cpp
+)
+
+target_link_libraries(
+    WorkspaceWorkingArtifactStoreTests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+    NAME WorkspaceWorkingArtifactStoreTests
+    COMMAND WorkspaceWorkingArtifactStoreTests
 )
 
 qt_add_executable(

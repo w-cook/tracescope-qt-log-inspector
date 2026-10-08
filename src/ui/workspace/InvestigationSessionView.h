@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QList>
 
 #include "WorkspaceDocument.h"
 
@@ -18,9 +19,13 @@ class InvestigationReviewPanel;
 class InvestigationSession;
 class InvestigationSessionSummaryPanel;
 class InvestigationTimelinePanel;
+class QGroupBox;
 class QSplitter;
 class QResizeEvent;
 class QTimer;
+class QToolButton;
+class QVBoxLayout;
+class QWidget;
 
 enum class InvestigationIssueDrillDownType;
 enum class InvestigationReviewTab;
@@ -54,6 +59,13 @@ public:
      */
     void refreshSession();
 
+    /*
+     * Rebuild tab-level presentation derived from the
+     * session backing without refreshing the complete
+     * investigation UI.
+     */
+    void refreshTabPresentation();
+
     InvestigationSessionPresentationState
     capturePresentationState() const;
 
@@ -69,8 +81,20 @@ public:
         QWidget *parent
         ) override;
 
+    void refreshInterfaceScale()
+        override;
+
 signals:
     void liveFollowStateChanged();
+
+    /*
+     * Emitted when substantive investigation state
+     * captured by workspace persistence changes.
+     *
+     * Pure navigation/scrolling is intentionally not
+     * treated as an unsaved-workspace edit.
+     */
+    void workspaceContentChanged();
 
 protected:
     void resizeEvent(
@@ -78,6 +102,21 @@ protected:
         ) override;
 
 private:
+    enum class InvestigationSection
+    {
+        Timeline,
+        Events,
+        LowerDetails
+    };
+
+    enum class InvestigationSectionCapacity
+    {
+        None = 0,
+        One = 1,
+        Two = 2,
+        Three = 3
+    };
+
     void applyFilters();
 
     void updateEventDetailFromSelection();
@@ -85,6 +124,9 @@ private:
 
     const InvestigationRecord *
     selectedEventRecord() const;
+
+    const InvestigationRecord *
+    eventDetailRecord() const;
 
     void updateInvestigationStateControls();
 
@@ -126,8 +168,20 @@ private:
         const QString &recordId
         );
 
+    void previewFinding(
+        const QString &recordId
+        );
+
     void revealFindingRecord(
         const InvestigationRecord &record
+        );
+
+    void drillDownEventCode(
+        const QString &eventCode
+        );
+
+    void drillDownEntity(
+        const QString &entity
         );
 
     void drillDownBurst(
@@ -141,11 +195,163 @@ private:
 
     void exportFilteredResults();
 
-    void refreshDerivedViewsForCurrentFilter();
+    void refreshDerivedViewsForCurrentFilter(
+        bool includeTimeline = true
+        );
+
+    bool liveTimelineFastRefreshEligible() const;
+
+    void scheduleLiveTimelineRefresh();
+
+    void refreshLiveTimelinePresentation();
 
     void scheduleLiveRefresh();
 
     void refreshLiveSessionPresentation();
+
+    void setTimelineCollapsed(
+        bool collapsed
+        );
+
+    void setEventSectionCollapsed(
+        bool collapsed
+        );
+
+    void setLowerRegionCollapsed(
+        bool collapsed
+        );
+
+    void toggleSectionFromUser(
+        InvestigationSection section
+        );
+
+    void setSectionPreferredCollapsed(
+        InvestigationSection section,
+        bool collapsed
+        );
+
+    bool isSectionPreferredCollapsed(
+        InvestigationSection section
+        ) const;
+
+    bool isSectionCollapsed(
+        InvestigationSection section
+        ) const;
+
+    void setSectionCollapsed(
+        InvestigationSection section,
+        bool collapsed
+        );
+
+    void updateEventSectionPresentation();
+
+    void updateSectionCollapseControls();
+
+    void updateSectionCollapseControlGeometry();
+
+    void scheduleSectionCollapseControlGeometryUpdate();
+
+    void allocateCollapsedSectionSpaceToEvents(
+        int sectionIndex,
+        const QList<int> &previousSizes
+        );
+
+    void allocateCollapsedEventSpace(
+        const QList<int> &previousSizes
+        );
+
+    void allocateSingleOpenSection(
+        InvestigationSection openSection
+        );
+
+    void restoreMainSplitterSectionHeight(
+        int sectionIndex,
+        int preferredHeight,
+        const QList<int> &previousSizes
+        );
+
+    void restoreEventSectionUsingAuxiliaryPreferences(
+        const QList<int> &previousSizes
+        );
+
+    void ensureSectionPreferredHeightsInitialized();
+
+    void applyMainSplitterSizes(
+        const QList<int> &sizes
+        );
+
+    InvestigationSectionCapacity
+    sectionCapacityForAvailableHeight() const;
+
+    int availableMainSplitterHeight() const;
+
+    int sectionCompactHeight(
+        InvestigationSection section
+        ) const;
+
+    int groupBoxCompactHeight(
+        const QGroupBox *groupBox
+        ) const;
+
+    int minimumUsefulExpandedHeight(
+        InvestigationSection section
+        ) const;
+
+    int minimumRealizableExpandedHeight(
+        InvestigationSection section
+        ) const;
+
+    int minimumCollapsedMainSplitterHeight() const;
+
+    void updateMinimumConstrainedHeight();
+
+    void updateTimelineMinimumHeight();
+
+    void updateLowerRegionMinimumHeight();
+
+    int constrainedPreferredHeight(
+        InvestigationSection section
+        ) const;
+
+    int constrainedRecoveryMinimumHeight(
+        InvestigationSection section
+        ) const;
+
+    int openSectionCount() const;
+
+    void scheduleSectionCapacityUpdate();
+
+    void applySectionCapacityPolicy();
+
+    void captureConstrainedRestorePriority();
+
+    void rebuildConstrainedRestorePriorityFromCurrentState();
+
+    void updateConstrainedRecoveryCompletion();
+
+    void updateConstrainedRecoveryStretchFactors();
+
+    void resetConstrainedRestoreState();
+
+    bool sectionHasRecoveredPreferredHeight(
+        InvestigationSection section
+        ) const;
+
+    bool canRestoreConstrainedSection(
+        InvestigationSection candidate
+        ) const;
+
+    void applyConstrainedRecoveryLayout();
+
+    bool applyAutomaticOuterResize(
+        const QList<int> &baseSizes,
+        int baseSplitterHeight,
+        int currentSplitterHeight
+        );
+
+    void handleAutomaticMainSplitterResize();
+
+    void finishManualSectionTransition();
 
     InvestigationSession *m_session =
         nullptr;
@@ -165,6 +371,12 @@ private:
     InvestigationEventPanel
         *m_eventPanel = nullptr;
 
+    QWidget *m_eventSectionContainer =
+        nullptr;
+
+    QVBoxLayout *m_eventSectionLayout =
+        nullptr;
+
     InvestigationReviewPanel
         *m_reviewPanel = nullptr;
 
@@ -180,6 +392,14 @@ private:
     InvestigationEventDetailPanel
         *m_eventDetailPanel = nullptr;
 
+    QString m_eventDetailRecordId;
+
+    bool m_findingPreviewActive =
+        false;
+
+    QWidget *m_lowerRegionContainer =
+        nullptr;
+
     QSplitter *m_bottomSplitter =
         nullptr;
 
@@ -189,6 +409,129 @@ private:
     QTimer *m_liveRefreshTimer =
         nullptr;
 
+    QTimer *m_liveTimelineRefreshTimer =
+        nullptr;
+
+    bool m_liveTimelineRefreshPending =
+        false;
+
     bool m_followNewest =
+        false;
+
+    QToolButton *m_timelineCollapseButton =
+        nullptr;
+
+    QToolButton *m_eventCollapseButton =
+        nullptr;
+
+    QToolButton *m_lowerRegionCollapseButton =
+        nullptr;
+
+    bool m_timelineCollapsed =
+        false;
+
+    bool m_eventCollapsed =
+        false;
+
+    bool m_lowerRegionCollapsed =
+        false;
+
+    /*
+     * User-preferred section state.
+     *
+     * These values describe what the user explicitly
+     * requested with the section chevrons. Automatic
+     * constrained-height behavior must never overwrite
+     * them.
+     */
+    bool m_timelinePreferredCollapsed =
+        false;
+
+    bool m_eventPreferredCollapsed =
+        false;
+
+    bool m_lowerRegionPreferredCollapsed =
+        false;
+
+    int m_timelineExpandedHeight =
+        0;
+
+    int m_eventExpandedHeight =
+        0;
+
+    QList<int> m_eventPreCollapseSizes;
+
+    int m_lowerRegionExpandedHeight =
+        0;
+
+    bool m_sectionPreferredHeightsInitialized =
+        false;
+
+    bool m_timelineManuallyResizedWhileEventCollapsed =
+        false;
+
+    bool m_lowerRegionManuallyResizedWhileEventCollapsed =
+        false;
+
+    InvestigationSectionCapacity m_sectionCapacity =
+        InvestigationSectionCapacity::Three;
+
+    bool m_sectionCapacityUpdatePending =
+        false;
+
+    bool m_applyingSectionCapacityPolicy =
+        false;
+
+    bool m_sectionCollapseGeometryUpdatePending =
+        false;
+
+    QList<InvestigationSection>
+        m_constrainedRestorePriority;
+
+    bool m_hasConstrainedRestoreSnapshot =
+        false;
+
+    bool m_constrainedRecoveryComplete =
+        false;
+
+    bool m_constrainedSectionCollapsedDuringCycle =
+        false;
+
+    int m_constrainedTimelinePreferredHeight =
+        0;
+
+    int m_constrainedEventPreferredHeight =
+        0;
+
+    int m_constrainedLowerPreferredHeight =
+        0;
+
+    qreal m_eventExpandedMinimumLogicalHeight =
+        0.0;
+
+    bool m_constrainedLowerPreferredHeightRecovered =
+        false;
+
+    bool m_constrainedWindowResizeActive =
+        false;
+
+    QTimer *m_constrainedResizeSettleTimer =
+        nullptr;
+
+    int m_lastAvailableMainSplitterHeight =
+        -1;
+
+    bool m_automaticOuterResizeReady =
+        false;
+
+    QList<int> m_automaticResizeCanonicalSizes;
+
+    int m_automaticResizeCanonicalSplitterHeight =
+        -1;
+
+    bool m_handlingAutomaticSplitterResize =
+        false;
+
+    bool m_manualSectionTransitionActive =
         false;
 };

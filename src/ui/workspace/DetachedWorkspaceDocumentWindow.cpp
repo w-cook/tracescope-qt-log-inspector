@@ -1,10 +1,14 @@
 #include "DetachedWorkspaceDocumentWindow.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QCloseEvent>
-#include <QToolBar>
+#include <QKeySequence>
 #include <QMenu>
-#include <QToolButton>
+#include <QMenuBar>
+#include <QMessageBox>
+
+#include "../InterfaceScale.h"
 
 #include "WorkspaceDocument.h"
 #include "WorkspaceDocumentHost.h"
@@ -21,13 +25,23 @@ DetachedWorkspaceDocumentWindow::
 {
     setWindowTitle(
         tr(
-            "TraceScope — Detached Workspace"
+            "TraceScope — Unsaved Workspace"
             )
         );
 
     resize(
-        1100,
-        760
+        InterfaceScale::size(
+            1100,
+            760,
+            this
+            )
+        );
+
+    setMinimumWidth(
+        InterfaceScale::pixels(
+            720,
+            this
+            )
         );
 
     m_documentHost =
@@ -40,46 +54,443 @@ DetachedWorkspaceDocumentWindow::
         m_documentHost
         );
 
-    auto *toolBar =
-        addToolBar(
-            tr("Workspace")
+    createMenus();
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        this,
+        [this](qreal) {
+            updateInterfaceScaleGeometry();
+        }
+        );
+}
+
+void DetachedWorkspaceDocumentWindow::
+    createMenus()
+{
+    QMenu *fileMenu =
+        menuBar()->addMenu(
+            tr("&File")
             );
 
-    toolBar->setMovable(
+    m_newWorkspaceAction =
+        new QAction(
+            tr("&New Workspace"),
+            this
+            );
+
+    m_newWorkspaceAction->setShortcut(
+        QKeySequence::New
+        );
+
+    m_newWorkspaceAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_newWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit newWorkspaceRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_newWorkspaceAction
+        );
+
+    fileMenu->addSeparator();
+
+    m_openAction =
+        new QAction(
+            tr("&Open Log File..."),
+            this
+            );
+
+    m_openAction->setShortcut(
+        QKeySequence::Open
+        );
+
+    m_openAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_openAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit openLogRequested(
+                m_documentHost
+                );
+        }
+        );
+
+    fileMenu->addAction(
+        m_openAction
+        );
+
+    m_openSnapshotAction =
+        new QAction(
+            tr(
+                "Open Investigation &Snapshot..."
+                ),
+            this
+            );
+
+    connect(
+        m_openSnapshotAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit openSnapshotRequested(
+                m_documentHost
+                );
+        }
+        );
+
+    fileMenu->addAction(
+        m_openSnapshotAction
+        );
+
+    m_openWorkspaceAction =
+        new QAction(
+            tr("Open &Workspace..."),
+            this
+            );
+
+    connect(
+        m_openWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit openWorkspaceRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_openWorkspaceAction
+        );
+
+    m_recentFilesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Files")
+            );
+
+    m_recentFilesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        m_recentFilesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            emit recentFilesMenuAboutToShow(
+                m_recentFilesMenu,
+                m_documentHost
+                );
+        }
+        );
+
+    m_recentWorkspacesMenu =
+        fileMenu->addMenu(
+            tr("Recent &Workspaces")
+            );
+
+    m_recentWorkspacesMenu->setToolTipsVisible(
+        true
+        );
+
+    connect(
+        m_recentWorkspacesMenu,
+        &QMenu::aboutToShow,
+        this,
+        [this]() {
+            emit recentWorkspacesMenuAboutToShow(
+                m_recentWorkspacesMenu
+                );
+        }
+        );
+
+    fileMenu->addSeparator();
+
+    m_saveSnapshotAction =
+        new QAction(
+            tr(
+                "Save Investigation &Snapshot..."
+                ),
+            this
+            );
+
+    m_saveSnapshotAction->setEnabled(
         false
         );
 
-    auto *exportingButton =
-        new QToolButton(
-            toolBar
+    connect(
+        m_saveSnapshotAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit saveSnapshotRequested(
+                m_documentHost
+                );
+        }
+        );
+
+    fileMenu->addAction(
+        m_saveSnapshotAction
+        );
+
+    m_reloadAction =
+        new QAction(
+            tr("&Reload Current Session"),
+            this
             );
 
-    exportingButton->setText(
-        tr("Exporting")
+    m_reloadAction->setShortcut(
+        QKeySequence::Refresh
         );
 
-    exportingButton->setToolTip(
-        tr(
-            "Export from the current document"
-            )
+    m_reloadAction->setShortcutContext(
+        Qt::WindowShortcut
         );
 
-    exportingButton->setToolButtonStyle(
-        Qt::ToolButtonTextOnly
+    m_reloadAction->setEnabled(
+        false
         );
 
-    exportingButton->setPopupMode(
-        QToolButton::InstantPopup
+    connect(
+        m_reloadAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit reloadRequested(
+                m_documentHost
+                );
+        }
         );
 
-    auto *exportingMenu =
-        new QMenu(
-            exportingButton
+    fileMenu->addAction(
+        m_reloadAction
+        );
+
+    fileMenu->addSeparator();
+
+    m_saveWorkspaceAction =
+        new QAction(
+            tr("&Save Workspace"),
+            this
             );
 
-    exportingButton->setMenu(
-        exportingMenu
+    m_saveWorkspaceAction->setShortcut(
+        QKeySequence::Save
         );
+
+    m_saveWorkspaceAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_saveWorkspaceAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit saveWorkspaceRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_saveWorkspaceAction
+        );
+
+    m_saveWorkspaceAsAction =
+        new QAction(
+            tr("Save Workspace &As..."),
+            this
+            );
+
+    m_saveWorkspaceAsAction->setShortcut(
+        QKeySequence::SaveAs
+        );
+
+    m_saveWorkspaceAsAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        m_saveWorkspaceAsAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit saveWorkspaceAsRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        m_saveWorkspaceAsAction
+        );
+
+    fileMenu->addSeparator();
+
+    auto *exitAction =
+        new QAction(
+            tr("E&xit TraceScope"),
+            this
+            );
+
+    exitAction->setShortcut(
+        QKeySequence::Quit
+        );
+
+    exitAction->setShortcutContext(
+        Qt::WindowShortcut
+        );
+
+    connect(
+        exitAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            emit applicationCloseRequested();
+        }
+        );
+
+    fileMenu->addAction(
+        exitAction
+        );
+
+    QMenu *viewMenu =
+        menuBar()->addMenu(
+            tr("&View")
+            );
+
+    QMenu *interfaceScaleMenu =
+        viewMenu->addMenu(
+            tr("Interface &Scale")
+            );
+
+    auto *interfaceScaleGroup =
+        new QActionGroup(
+            interfaceScaleMenu
+            );
+
+    interfaceScaleGroup->setExclusive(
+        true
+        );
+
+    for (
+        const qreal factor
+        : InterfaceScale::presetUserFactors()
+        ) {
+        const int percentage =
+            qRound(
+                factor * 100.0
+                );
+
+        const QString label =
+            qFuzzyCompare(
+                factor,
+                1.0
+                )
+                ? tr("%1% (System)")
+                      .arg(
+                          percentage
+                          )
+                : tr("%1%")
+                      .arg(
+                          percentage
+                          );
+
+        QAction *action =
+            interfaceScaleMenu->addAction(
+                label
+                );
+
+        action->setCheckable(
+            true
+            );
+
+        action->setData(
+            factor
+            );
+
+        action->setChecked(
+            qFuzzyCompare(
+                factor,
+                InterfaceScale::userFactor()
+                )
+            );
+
+        interfaceScaleGroup->addAction(
+            action
+            );
+
+        connect(
+            action,
+            &QAction::triggered,
+            this,
+            [
+                this,
+                factor
+            ](
+                bool checked
+                ) {
+                if (!checked) {
+                    return;
+                }
+
+                emit interfaceScaleRequested(
+                    factor
+                    );
+            }
+            );
+    }
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        interfaceScaleMenu,
+        [
+            interfaceScaleGroup
+        ](
+            qreal factor
+            ) {
+            for (
+                QAction *action
+                : interfaceScaleGroup
+                      ->actions()
+                ) {
+                if (action == nullptr) {
+                    continue;
+                }
+
+                action->setChecked(
+                    qFuzzyCompare(
+                        action
+                            ->data()
+                            .toDouble(),
+                        factor
+                        )
+                    );
+            }
+        }
+        );
+
+    /*
+     * Export actions belong to WorkspaceDocument
+     * itself, so this menu requires no coordinator
+     * routing. It always operates directly on this
+     * window's current document.
+     */
+    QMenu *exportingMenu =
+        menuBar()->addMenu(
+            tr("&Exporting")
+            );
 
     connect(
         exportingMenu,
@@ -100,11 +511,9 @@ DetachedWorkspaceDocumentWindow::
                     );
             }
 
-            if (
-                exportingMenu
+            if (exportingMenu
                     ->actions()
-                    .isEmpty()
-                ) {
+                    .isEmpty()) {
                 QAction *unavailableAction =
                     exportingMenu->addAction(
                         tr(
@@ -119,31 +528,82 @@ DetachedWorkspaceDocumentWindow::
         }
         );
 
-    toolBar->addWidget(
-        exportingButton
-        );
-
-    QAction *redockAction =
-        toolBar->addAction(
-            tr("Re-dock Window")
+    QMenu *investigationMenu =
+        menuBar()->addMenu(
+            tr("&Investigation")
             );
 
-    redockAction->setToolTip(
-        tr(
-            "Return all tabs in this window "
-            "to the main workspace."
-            )
+    m_compareAction =
+        new QAction(
+            tr("&Compare Sessions..."),
+            this
+            );
+
+    m_compareAction->setEnabled(
+        false
         );
 
     connect(
-        redockAction,
+        m_compareAction,
         &QAction::triggered,
         this,
         [this]() {
-            emit redockAllRequested(
-                this
+            emit compareSessionsRequested(
+                m_documentHost
                 );
         }
+        );
+
+    investigationMenu->addAction(
+        m_compareAction
+        );
+
+    QMenu *helpMenu =
+        menuBar()->addMenu(
+            tr("&Help")
+            );
+
+    QAction *aboutAction =
+        new QAction(
+            tr("&About TraceScope"),
+            this
+            );
+
+    connect(
+        aboutAction,
+        &QAction::triggered,
+        this,
+        [this]() {
+            /*
+             * This text intentionally matches the
+             * current root-window About dialog.
+             */
+            QMessageBox::about(
+                this,
+                tr("About TraceScope"),
+                tr(
+                    "TraceScope is a desktop log investigation "
+                    "tool for importing, normalizing, filtering, "
+                    "analyzing, and reviewing diagnostic data "
+                    "from multiple structured and text-based "
+                    "log formats.<br><br>"
+                    "Built with C++ and Qt, TraceScope supports "
+                    "interactive timelines, investigation findings, "
+                    "analytics, saved workspaces and snapshots, "
+                    "and live file following.<br><br>"
+                    "<div align=\"center\">"
+                    "<a href=\"https://github.com/w-cook/"
+                    "tracescope-qt-log-inspector\">"
+                    "View the TraceScope repository on GitHub"
+                    "</a>"
+                    "</div>"
+                    )
+                );
+        }
+        );
+
+    helpMenu->addAction(
+        aboutAction
         );
 }
 
@@ -155,30 +615,192 @@ WorkspaceDocumentHost *
 }
 
 void DetachedWorkspaceDocumentWindow::
+    setFileOperationsEnabled(
+        bool enabled
+        )
+{
+    if (m_documentHost != nullptr) {
+        m_documentHost
+            ->setFileOperationsEnabled(
+                enabled
+                );
+    }
+
+    if (m_newWorkspaceAction != nullptr) {
+        m_newWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_openAction != nullptr) {
+        m_openAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_openSnapshotAction != nullptr) {
+        m_openSnapshotAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_openWorkspaceAction != nullptr) {
+        m_openWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setSaveSnapshotEnabled(
+        bool enabled
+        )
+{
+    if (m_saveSnapshotAction != nullptr) {
+        m_saveSnapshotAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setReloadEnabled(
+        bool enabled
+        )
+{
+    if (m_reloadAction != nullptr) {
+        m_reloadAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setCompareEnabled(
+        bool enabled
+        )
+{
+    if (m_compareAction != nullptr) {
+        m_compareAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setWorkspaceSaveEnabled(
+        bool enabled
+        )
+{
+    if (m_saveWorkspaceAction != nullptr) {
+        m_saveWorkspaceAction->setEnabled(
+            enabled
+            );
+    }
+
+    if (m_saveWorkspaceAsAction != nullptr) {
+        m_saveWorkspaceAsAction->setEnabled(
+            enabled
+            );
+    }
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setWorkspaceWindowTitle(
+        const QString &title
+        )
+{
+    setWindowTitle(
+        title
+        );
+}
+
+void DetachedWorkspaceDocumentWindow::
+    setApplicationShutdownInProgress(
+        bool inProgress
+        )
+{
+    m_applicationShutdownInProgress =
+        inProgress;
+}
+
+void DetachedWorkspaceDocumentWindow::
     closeEvent(
         QCloseEvent *event
         )
 {
-    if (m_documentHost == nullptr
-        || m_documentHost
-            ->documentCount()
-                == 0) {
-        event->accept();
+    if (m_applicationShutdownInProgress) {
+        /*
+         * The workspace-level exit decision has already
+         * been made. Close events delivered as part of
+         * application shutdown must not be reinterpreted
+         * as independent window-close requests.
+         */
+        QMainWindow::closeEvent(
+            event
+            );
+
         return;
     }
 
     /*
-     * A detached workspace window owns a group of
-     * open document presentations. Closing the
-     * window means closing every document currently
-     * contained in that group.
+     * Closing the final visible TraceScope window is
+     * application closure.
      *
-     * Actual document lifetime remains controlled
-     * by the root workspace close contract.
+     * Route that through the shared coordinator so
+     * unsaved-workspace protection runs before the
+     * application exits.
+     */
+    if (m_documentHost == nullptr
+        || !m_documentHost
+                ->hasOtherVisibleWorkspaceWindow(
+                    this
+                    )) {
+        event->ignore();
+
+        emit applicationCloseRequested();
+
+        return;
+    }
+
+    /*
+     * An empty non-final peer contains no documents
+     * requiring a disposition decision.
+     */
+    if (m_documentHost
+            ->documentCount()
+        == 0) {
+        QMainWindow::closeEvent(
+            event
+            );
+
+        return;
+    }
+
+    /*
+     * Closing a window is distinct from closing the
+     * documents presented in that window.
+     *
+     * Let the shared application coordinator ask the
+     * user whether those documents should be preserved
+     * in another peer or explicitly closed.
      */
     event->ignore();
 
-    emit closeAllRequested(
-        this
+    emit workspaceWindowCloseRequested();
+}
+
+void DetachedWorkspaceDocumentWindow::
+    updateInterfaceScaleGeometry()
+{
+    /*
+     * Preserve the user's current peer-window
+     * rectangle. Only the scaled minimum changes.
+     */
+    setMinimumWidth(
+        InterfaceScale::pixels(
+            720,
+            this
+            )
         );
 }

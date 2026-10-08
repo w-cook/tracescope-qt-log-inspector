@@ -44,6 +44,16 @@ public:
         const InvestigationScrollState &state
         );
 
+    void refreshInterfaceScale();
+
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
+    int collapsedHeight() const;
+
 signals:
     void findingStatusChangeRequested();
     void noteEditRequested();
@@ -62,6 +72,10 @@ private:
 
     void updateMinimumUsableWidth();
 
+    void refreshDetailText();
+
+    void refreshFindingStatusSizing();
+
     QGridLayout *m_stateLayout =
         nullptr;
 
@@ -71,10 +85,18 @@ private:
     bool m_compactControls =
         false;
 
+    qreal m_wideControlsMinimumLogicalWidth = 0.0;
+
     QPlainTextEdit *m_detailText = nullptr;
 
     QComboBox *m_findingStatusCombo = nullptr;
 
     QPushButton *m_noteButton = nullptr;
     QPushButton *m_bookmarkButton = nullptr;
+
+    bool m_collapsed =
+        false;
+
+    QString m_recordDetailText;
+    QString m_analystNote;
 };

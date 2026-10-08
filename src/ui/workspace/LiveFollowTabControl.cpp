@@ -8,6 +8,7 @@
 #include <QSignalBlocker>
 #include <QToolButton>
 
+#include "../InterfaceScale.h"
 #include "../../live/LiveSessionFollowCoordinator.h"
 #include "../../workspace/InvestigationSession.h"
 
@@ -20,6 +21,8 @@ constexpr int CompactBadgeWidth = 30;
 constexpr int ActiveBadgeWidth = 38;
 
 constexpr int ControlButtonSize = 18;
+constexpr int ControlIconCanvasSize = 16;
+constexpr int ControlIconDisplaySize = 14;
 constexpr int ControlSpacing = 1;
 
 enum class ControlIconKind
@@ -97,14 +100,37 @@ LiveControlColors liveControlColors(
 
 QIcon controlIcon(
     ControlIconKind kind,
-    const QColor &color
+    const QColor &color,
+    const QWidget *widget
     )
 {
-    constexpr int size = 16;
+    const int logicalSize =
+        InterfaceScale::pixels(
+            ControlIconCanvasSize,
+            widget
+            );
+
+    const qreal devicePixelRatio =
+        widget != nullptr
+            ? widget->devicePixelRatioF()
+            : 1.0;
+
+    const int physicalSize =
+        qMax(
+            1,
+            qRound(
+                logicalSize
+                * devicePixelRatio
+                )
+            );
 
     QPixmap pixmap(
-        size,
-        size
+        physicalSize,
+        physicalSize
+        );
+
+    pixmap.setDevicePixelRatio(
+        devicePixelRatio
         );
 
     pixmap.fill(
@@ -118,6 +144,22 @@ QIcon controlIcon(
     painter.setRenderHint(
         QPainter::Antialiasing,
         true
+        );
+
+    /*
+     * Keep the icon artwork authored in the original
+     * 16 x 16 coordinate system while scaling the
+     * logical canvas through InterfaceScale.
+     */
+    painter.scale(
+        static_cast<qreal>(
+            logicalSize
+            )
+            / ControlIconCanvasSize,
+        static_cast<qreal>(
+            logicalSize
+            )
+            / ControlIconCanvasSize
         );
 
     painter.setPen(
@@ -187,9 +229,6 @@ QIcon controlIcon(
                 )
             );
 
-        /*
-         * Downward arrow.
-         */
         painter.drawLine(
             QPointF(8.0, 3.0),
             QPointF(8.0, 10.0)
@@ -205,9 +244,6 @@ QIcon controlIcon(
             QPointF(8.0, 10.5)
             );
 
-        /*
-         * Bottom anchor.
-         */
         painter.drawLine(
             QPointF(4.0, 13.0),
             QPointF(12.0, 13.0)
@@ -270,7 +306,10 @@ LiveFollowTabControl::
         );
 
     layout->setSpacing(
-        ControlSpacing
+        InterfaceScale::pixels(
+            ControlSpacing,
+            this
+            )
         );
 
     setSizePolicy(
@@ -284,11 +323,17 @@ LiveFollowTabControl::
      * space when one of the control buttons is hidden.
      */
     m_statusBadge->setFixedHeight(
-        ControlButtonSize
+        InterfaceScale::pixels(
+            ControlButtonSize,
+            this
+            )
         );
 
     m_statusBadge->setFixedWidth(
-        CompactBadgeWidth
+        InterfaceScale::pixels(
+            CompactBadgeWidth,
+            this
+            )
         );
 
     m_statusBadge->setSizePolicy(
@@ -312,6 +357,18 @@ LiveFollowTabControl::
             )
         );
 
+    const int controlButtonSize =
+        InterfaceScale::pixels(
+            ControlButtonSize,
+            this
+            );
+
+    const int controlIconDisplaySize =
+        InterfaceScale::pixels(
+            ControlIconDisplaySize,
+            this
+            );
+
     /*
      * Both action buttons use the same compact
      * geometry so the accessory remains visually
@@ -324,14 +381,14 @@ LiveFollowTabControl::
              m_followNewestButton
          }) {
         button->setFixedSize(
-            ControlButtonSize,
-            ControlButtonSize
+            controlButtonSize,
+            controlButtonSize
             );
 
         button->setIconSize(
             QSize(
-                14,
-                14
+                controlIconDisplaySize,
+                controlIconDisplaySize
                 )
             );
 
@@ -416,6 +473,16 @@ LiveFollowTabControl::
             emit followNewestChanged(
                 enabled
                 );
+        }
+        );
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        this,
+        [this](qreal) {
+            refreshInterfaceScale();
         }
         );
 
@@ -688,11 +755,31 @@ void LiveFollowTabControl::
             == LiveFileFollowStatus::Following
         && !hasError;
 
+    /*
+     * Follow Newest represents user navigation intent.
+     *
+     * A transient polling/read error may temporarily make
+     * live following unavailable, but it does not itself
+     * transition the underlying follower away from the
+     * Following state. Preserve Follow Newest across that
+     * recoverable condition so normal polling can resume
+     * the user's existing navigation behavior.
+     *
+     * Real lifecycle transitions away from Following
+     * (Pause, Stop, failed Start, etc.) still abandon
+     * Follow Newest as before.
+     */
+    const bool shouldClearFollowNewest =
+        status
+        != LiveFileFollowStatus::Following;
+
     bool followNewestWasCleared =
         false;
 
-    if (!activelyFollowing
-        && m_followNewestButton->isChecked()) {
+    if (
+        shouldClearFollowNewest
+        && m_followNewestButton->isChecked()
+        ) {
         {
             const QSignalBlocker blocker(
                 m_followNewestButton
@@ -723,9 +810,12 @@ void LiveFollowTabControl::
      * use the compact badge.
      */
     m_statusBadge->setFixedWidth(
-        activelyFollowing
-            ? ActiveBadgeWidth
-            : CompactBadgeWidth
+        InterfaceScale::pixels(
+            activelyFollowing
+                ? ActiveBadgeWidth
+                : CompactBadgeWidth,
+            this
+            )
         );
 
     QColor badgeColor =
@@ -769,9 +859,18 @@ void LiveFollowTabControl::
     }
 
     const int horizontalPadding =
-        activelyFollowing
-            ? 4
-            : 2;
+        InterfaceScale::pixels(
+            activelyFollowing
+                ? 4
+                : 2,
+            this
+            );
+
+    const int borderRadius =
+        InterfaceScale::pixels(
+            3,
+            this
+            );
 
     const int fontWeight =
         activelyFollowing
@@ -783,14 +882,17 @@ void LiveFollowTabControl::
             "QLabel {"
             " color: %1;"
             " border: 1px solid %1;"
-            " border-radius: 3px;"
-            " padding: 0px %2px;"
-            " font-weight: %3;"
-            " background-color: %4;"
+            " border-radius: %2px;"
+            " padding: 0px %3px;"
+            " font-weight: %4;"
+            " background-color: %5;"
             "}"
             )
             .arg(
                 badgeColor.name()
+                )
+            .arg(
+                borderRadius
                 )
             .arg(
                 horizontalPadding
@@ -836,7 +938,8 @@ void LiveFollowTabControl::
         m_primaryButton->setIcon(
             controlIcon(
                 ControlIconKind::Pause,
-                colors.paused
+                colors.paused,
+                m_primaryButton
                 )
             );
 
@@ -855,7 +958,8 @@ void LiveFollowTabControl::
         m_primaryButton->setIcon(
             controlIcon(
                 ControlIconKind::Play,
-                colors.following
+                colors.following,
+                m_primaryButton
                 )
             );
 
@@ -881,7 +985,8 @@ void LiveFollowTabControl::
     m_stopButton->setIcon(
         controlIcon(
             ControlIconKind::Stop,
-            colors.error
+            colors.error,
+            m_stopButton
             )
         );
 
@@ -908,27 +1013,28 @@ void LiveFollowTabControl::
     m_followNewestButton->setIcon(
         controlIcon(
             ControlIconKind::FollowNewest,
-            followNewestColor
+            followNewestColor,
+            m_followNewestButton
             )
         );
 
     m_followNewestButton->setToolTip(
         followNewest
             ? tr(
-                  "Stop following newest events"
+                  "Stop following newest data"
                   )
             : tr(
-                  "Follow newest events"
+                  "Follow newest data"
                   )
         );
 
     m_followNewestButton->setAccessibleName(
         followNewest
             ? tr(
-                  "Stop following newest events"
+                  "Stop following newest data"
                   )
             : tr(
-                  "Follow newest events"
+                  "Follow newest data"
                   )
         );
 
@@ -937,14 +1043,19 @@ void LiveFollowTabControl::
             QStringLiteral(
                 "QToolButton {"
                 " border: 1px solid %1;"
-                " border-radius: 3px;"
-                " background-color: %2;"
+                " border-radius: %2px;"
+                " background-color: %3;"
                 " padding: 0px;"
                 " margin: 0px;"
                 "}"
                 )
                 .arg(
-                    colors.following.name(),
+                    colors.following.name()
+                    )
+                .arg(
+                    borderRadius
+                    )
+                .arg(
                     rgbaStyleValue(
                         colors.following,
                         40
@@ -1005,4 +1116,72 @@ void LiveFollowTabControl::
     tabBar->refreshTabAccessoryLayout(
         this
         );
+}
+
+void LiveFollowTabControl::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                ControlSpacing,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    const int controlButtonSize =
+        InterfaceScale::pixels(
+            ControlButtonSize,
+            this
+            );
+
+    const int controlIconDisplaySize =
+        InterfaceScale::pixels(
+            ControlIconDisplaySize,
+            this
+            );
+
+    m_statusBadge->setFixedHeight(
+        controlButtonSize
+        );
+
+    for (
+        QToolButton *button
+        : {
+            m_primaryButton,
+            m_stopButton,
+            m_followNewestButton
+        }
+        ) {
+        if (button == nullptr) {
+            continue;
+        }
+
+        button->setFixedSize(
+            controlButtonSize,
+            controlButtonSize
+            );
+
+        button->setIconSize(
+            QSize(
+                controlIconDisplaySize,
+                controlIconDisplaySize
+                )
+            );
+    }
+
+    /*
+     * Rebuild all state-dependent presentation
+     * using the new Interface Scale:
+     *
+     * - status-badge width
+     * - badge padding/radius
+     * - action icons and their logical canvases
+     * - follow-newest styling
+     * - final tab-accessory geometry
+     */
+    refreshPresentation();
 }

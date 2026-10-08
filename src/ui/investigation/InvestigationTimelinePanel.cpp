@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <QAbstractItemView>
+#include <QColor>
 #include <QComboBox>
 #include <QFrame>
 #include <QGraphicsLayout>
@@ -13,15 +14,15 @@
 #include <QLabel>
 #include <QMargins>
 #include <QPainter>
+#include <QResizeEvent>
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QSpacerItem>
+#include <QTimer>
 #include <QTimeZone>
 #include <QVariant>
 #include <QVBoxLayout>
-#include <QColor>
-#include <QResizeEvent>
-#include <QTimer>
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QBarSeries>
@@ -31,12 +32,13 @@
 #include <QtCharts/QLegend>
 #include <QtCharts/QValueAxis>
 
+#include "../InterfaceScale.h"
+#include "../ScaleAwareComboBox.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../workspace/InvestigationSession.h"
 
 namespace
 {
-
 constexpr int TimelineMaximumVisibleBucketCount =
     20;
 
@@ -465,13 +467,13 @@ InvestigationTimelinePanel::
         new QChartView(this)
         ),
     m_intervalCombo(
-        new QComboBox(this)
+        new ScaleAwareComboBox(this)
         ),
     m_breakdownWidget(
         new QWidget(this)
         ),
     m_breakdownCombo(
-        new QComboBox(
+        new ScaleAwareComboBox(
             m_breakdownWidget
             )
         ),
@@ -479,7 +481,7 @@ InvestigationTimelinePanel::
         new QWidget(this)
         ),
     m_subsystemLimitCombo(
-        new QComboBox(
+        new ScaleAwareComboBox(
             m_subsystemShowWidget
             )
         ),
@@ -503,28 +505,37 @@ InvestigationTimelinePanel::
         new QVBoxLayout(this);
 
     timelineLayout->setContentsMargins(
-        4,
-        2,
-        4,
-        2
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            2,
+            this
+            )
         );
 
     timelineLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            this
+            )
         );
 
-    auto *controlsLayout =
+    m_controlsLayout =
         new QHBoxLayout();
 
-    controlsLayout->setContentsMargins(
+    m_controlsLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    controlsLayout->setSpacing(
-        6
+    m_controlsLayout->setSpacing(
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     /*
@@ -677,7 +688,11 @@ InvestigationTimelinePanel::
     m_intervalCombo
         ->view()
         ->setMinimumWidth(
-            intervalPopupWidth + 40
+            intervalPopupWidth
+            + InterfaceScale::pixels(
+                40,
+                m_intervalCombo
+                )
             );
 
     m_intervalCombo->setToolTip(
@@ -690,16 +705,27 @@ InvestigationTimelinePanel::
             )
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         intervalLabel
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_intervalCombo
         );
 
-    controlsLayout->addSpacing(
-        12
+    m_intervalBreakdownSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                12,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    m_controlsLayout->addItem(
+        m_intervalBreakdownSpacing
         );
 
     /*
@@ -720,7 +746,10 @@ InvestigationTimelinePanel::
         );
 
     breakdownLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            m_breakdownWidget
+            )
         );
 
     auto *breakdownLabel =
@@ -735,7 +764,10 @@ InvestigationTimelinePanel::
             .horizontalAdvance(
                 tr("Subsystem")
                 )
-        + 40
+        + InterfaceScale::pixels(
+            40,
+            m_breakdownCombo
+            )
         );
 
     breakdownLayout->addWidget(
@@ -746,7 +778,7 @@ InvestigationTimelinePanel::
         m_breakdownCombo
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_breakdownWidget
         );
 
@@ -768,7 +800,10 @@ InvestigationTimelinePanel::
         );
 
     subsystemShowLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            m_subsystemShowWidget
+            )
         );
 
     auto *subsystemShowLabel =
@@ -787,6 +822,18 @@ InvestigationTimelinePanel::
         10
         );
 
+    m_subsystemLimitCombo->setMinimumWidth(
+        m_subsystemLimitCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Top 10")
+                )
+        + InterfaceScale::pixels(
+            40,
+            m_subsystemLimitCombo
+            )
+        );
+
     subsystemShowLayout->addWidget(
         subsystemShowLabel
         );
@@ -795,7 +842,7 @@ InvestigationTimelinePanel::
         m_subsystemLimitCombo
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_subsystemShowWidget
         );
 
@@ -817,17 +864,28 @@ InvestigationTimelinePanel::
         QSizePolicy::Preferred
         );
 
-    controlsLayout->addSpacing(
-        12
+    m_rangeSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                12,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    m_controlsLayout->addItem(
+        m_rangeSpacing
         );
 
-    controlsLayout->addWidget(
+    m_controlsLayout->addWidget(
         m_rangeLabel,
         1
         );
 
     timelineLayout->addLayout(
-        controlsLayout
+        m_controlsLayout
         );
 
     /*
@@ -849,7 +907,8 @@ InvestigationTimelinePanel::
         );
 
     m_chartView->setRenderHint(
-        QPainter::Antialiasing
+        QPainter::Antialiasing,
+        false
         );
 
     m_chartView
@@ -1117,6 +1176,36 @@ InvestigationTimelinePanel::session() const
     return m_session;
 }
 
+void InvestigationTimelinePanel::
+    setFollowNewestEnabled(
+        bool enabled
+        )
+{
+    if (m_followNewest == enabled) {
+        return;
+    }
+
+    m_followNewest =
+        enabled;
+
+    /*
+     * Follow Newest owns the live navigation position.
+     *
+     * Re-render immediately when it is enabled so an
+     * already scrollable manual-resolution timeline
+     * jumps to its newest visible window without
+     * waiting for the next live refresh.
+     *
+     * Auto resolution has no horizontal navigation
+     * position, so render() will simply retain its
+     * normal zero-range behavior there.
+     */
+    if (m_followNewest
+        && m_session != nullptr) {
+        render();
+    }
+}
+
 void InvestigationTimelinePanel::updateRecords(
     const QVector<InvestigationRecord> &records
     )
@@ -1273,6 +1362,322 @@ void InvestigationTimelinePanel::
      * Re-render using the restored starting bucket.
      */
     render();
+}
+
+void InvestigationTimelinePanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setContentsMargins(
+            InterfaceScale::margins(
+                4,
+                2,
+                4,
+                2,
+                this
+                )
+            );
+
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                2,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_controlsLayout != nullptr) {
+        m_controlsLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_controlsLayout->invalidate();
+    }
+
+    if (m_intervalBreakdownSpacing != nullptr) {
+        m_intervalBreakdownSpacing
+            ->changeSize(
+                InterfaceScale::pixels(
+                    12,
+                    this
+                    ),
+                0,
+                QSizePolicy::Fixed,
+                QSizePolicy::Minimum
+                );
+    }
+
+    if (
+        m_breakdownWidget != nullptr
+        && m_breakdownWidget->layout()
+               != nullptr
+        ) {
+        m_breakdownWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    m_breakdownWidget
+                    )
+                );
+
+        m_breakdownWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (
+        m_subsystemShowWidget != nullptr
+        && m_subsystemShowWidget->layout()
+               != nullptr
+        ) {
+        m_subsystemShowWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    m_subsystemShowWidget
+                    )
+                );
+
+        m_subsystemShowWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (m_rangeSpacing != nullptr) {
+        m_rangeSpacing->changeSize(
+            InterfaceScale::pixels(
+                12,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+    }
+
+    /*
+     * These widths combine current font metrics
+     * with TraceScope-authored padding, so both
+     * portions must be recalculated after the
+     * application font changes.
+     */
+    int intervalPopupWidth = 0;
+
+    for (
+        int index = 0;
+        index < m_intervalCombo->count();
+        ++index
+        ) {
+        intervalPopupWidth =
+            std::max(
+                intervalPopupWidth,
+                m_intervalCombo
+                    ->fontMetrics()
+                    .horizontalAdvance(
+                        m_intervalCombo
+                            ->itemText(
+                                index
+                                )
+                        )
+                );
+    }
+
+    m_intervalCombo
+        ->view()
+        ->setMinimumWidth(
+            intervalPopupWidth
+            + InterfaceScale::pixels(
+                40,
+                m_intervalCombo
+                )
+            );
+
+    m_breakdownCombo->setMinimumWidth(
+        m_breakdownCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Subsystem")
+                )
+        + InterfaceScale::pixels(
+            40,
+            m_breakdownCombo
+            )
+        );
+
+    m_subsystemLimitCombo->setMinimumWidth(
+        m_subsystemLimitCombo
+            ->fontMetrics()
+            .horizontalAdvance(
+                tr("Top 10")
+                )
+        + InterfaceScale::pixels(
+            40,
+            m_subsystemLimitCombo
+            )
+        );
+
+    if (m_collapsed) {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        const int collapsedHeight =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            collapsedHeight
+            );
+
+        setMaximumHeight(
+            collapsedHeight
+            );
+    }
+
+    updateGeometry();
+    update();
+
+    /*
+     * Recreate the chart after layout/font changes.
+     * Existing QChart/QAxis objects were constructed
+     * under the previous application presentation.
+     *
+     * Defer until layouts have settled so responsive
+     * bucket calculations see the new viewport size.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_session != nullptr) {
+                render();
+            } else {
+                showEmptyTimeline();
+            }
+        }
+        );
+}
+
+void InvestigationTimelinePanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    /*
+     * The title belongs to QGroupBox itself. Hide
+     * only the contents so "Event Counts Over Time"
+     * remains as the collapsed section identity.
+     */
+    if (m_controlsLayout != nullptr) {
+        for (
+            int index = 0;
+            index < m_controlsLayout->count();
+            ++index
+            ) {
+            QLayoutItem *item =
+                m_controlsLayout->itemAt(
+                    index
+                    );
+
+            if (
+                item != nullptr
+                && item->widget() != nullptr
+                ) {
+                item->widget()->setVisible(
+                    !collapsed
+                    );
+            }
+        }
+    }
+
+    if (m_chartView != nullptr) {
+        m_chartView->setVisible(
+            !collapsed
+            );
+    }
+
+    if (collapsed) {
+        /*
+         * Horizontal navigation belongs to the
+         * timeline contents and must disappear with
+         * them.
+         */
+        m_scrollBar->setVisible(
+            false
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+        }
+
+        /*
+         * With all content hidden, minimumSizeHint()
+         * describes the native QGroupBox title strip
+         * plus its required frame/margins.
+         */
+        const int collapsedHeight =
+            minimumSizeHint().height();
+
+        setMinimumHeight(
+            collapsedHeight
+            );
+
+        setMaximumHeight(
+            collapsedHeight
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        /*
+         * The generic controls loop made every
+         * controls-layout widget visible. Restore
+         * source-dependent Breakdown/Subsystem
+         * visibility afterward.
+         */
+        rebuildBreakdownControls();
+
+        if (m_session != nullptr) {
+            render();
+        } else {
+            showEmptyTimeline();
+        }
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationTimelinePanel::
+    isCollapsed() const
+{
+    return m_collapsed;
 }
 
 void InvestigationTimelinePanel::
@@ -1447,6 +1852,16 @@ void InvestigationTimelinePanel::
     chart->setTitle(
         tr("No events to display")
         );
+
+    /*
+     * QChartView retains the larger of its existing
+     * minimum and the incoming chart's minimum.
+     *
+     * Clear the previous chart's constraint before
+     * installation so a reduced Interface Scale can
+     * establish its own appropriate minimum.
+     */
+    m_chartView->setMinimumSize(0, 0);
 
     m_chartView->setChart(
         chart
@@ -1764,12 +2179,22 @@ void InvestigationTimelinePanel::render()
                 visibleBucketCount
                 );
 
+        /*
+         * Follow Newest anchors a manually resolved timeline
+         * to the newest available bucket window.
+         *
+         * Without Follow Newest, preserve the user's existing
+         * horizontal navigation position as the timeline range
+         * grows or the viewport changes.
+         */
         int scrollValue =
-            std::clamp(
-                m_scrollBar->value(),
-                0,
-                scrollMaximum
-                );
+            m_followNewest
+                ? scrollMaximum
+                : std::clamp(
+                      m_scrollBar->value(),
+                      0,
+                      scrollMaximum
+                      );
 
         int pageStep =
             1;
@@ -2039,6 +2464,16 @@ void InvestigationTimelinePanel::render()
             axisY
             );
 
+        /*
+         * QChartView retains the larger of its existing
+         * minimum and the incoming chart's minimum.
+         *
+         * Clear the previous chart's constraint before
+         * installation so a reduced Interface Scale can
+         * establish its own appropriate minimum.
+         */
+        m_chartView->setMinimumSize(0, 0);
+
         m_chartView->setChart(
             chart
             );
@@ -2157,6 +2592,16 @@ void InvestigationTimelinePanel::render()
         series->attachAxis(
             axisY
             );
+
+        /*
+         * QChartView retains the larger of its existing
+         * minimum and the incoming chart's minimum.
+         *
+         * Clear the previous chart's constraint before
+         * installation so a reduced Interface Scale can
+         * establish its own appropriate minimum.
+         */
+        m_chartView->setMinimumSize(0, 0);
 
         m_chartView->setChart(
             chart
@@ -2487,6 +2932,16 @@ void InvestigationTimelinePanel::render()
     series->attachAxis(
         axisY
         );
+
+    /*
+     * QChartView retains the larger of its existing
+     * minimum and the incoming chart's minimum.
+     *
+     * Clear the previous chart's constraint before
+     * installation so a reduced Interface Scale can
+     * establish its own appropriate minimum.
+     */
+    m_chartView->setMinimumSize(0, 0);
 
     m_chartView->setChart(
         chart

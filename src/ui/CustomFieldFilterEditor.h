@@ -6,8 +6,10 @@
 #include "../models/InvestigationFilterProxyModel.h"
 
 class QComboBox;
+class QHBoxLayout;
 class QLineEdit;
 class QPushButton;
+class QSpacerItem;
 class QVBoxLayout;
 
 class CustomFieldFilterEditor
@@ -38,6 +40,8 @@ public:
 
     void clearFilters();
 
+    void refreshInterfaceScale();
+
 signals:
     void filtersChanged();
 
@@ -50,6 +54,12 @@ private:
     QVBoxLayout *activeFiltersLayout;
 
     CustomFieldFilterMap m_filters;
+
+    QHBoxLayout *inputLayout =
+        nullptr;
+
+    QSpacerItem *fieldValueSpacing =
+        nullptr;
 
     void addCurrentFilter();
     void removeFilter(

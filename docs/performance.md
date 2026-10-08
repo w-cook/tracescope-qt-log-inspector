@@ -1,37 +1,86 @@
 # TraceScope Performance Notes
 
-TraceScope is designed for offline investigation of file-based application, service, QA, engineering-test, field-support, and diagnostic logs.
+This document records measured performance observations for the TraceScope v1.0 release.
 
-Large-file behavior is measured using representative end-to-end investigation workflows rather than synthetic parser-only throughput tests. The measurements below are observations from one development system and are not maximum supported file-size, record-count, or throughput guarantees.
+The measurements use representative end-to-end investigation workflows rather than parser-only microbenchmarks. They are intended to show how the application behaved on a documented test system under specific workloads.
 
-## Measurement Method
+They are **not** maximum supported file-size, record-count, memory, or throughput guarantees.
 
-Each scenario was tested using a Release build.
+## Find the information you need
 
-Elapsed time was measured manually from clicking **Import** in the Import Configuration dialog until the imported investigation was fully displayed and responsive in the main TraceScope window.
+| I want to... | Go to |
+| --- | --- |
+| Understand what was measured | [1. Measurement method](#1-measurement-method) |
+| See the test environment | [2. Test environment](#2-test-environment) |
+| See the import results | [3. Measured import scenarios](#3-measured-import-scenarios) |
+| Understand progress and cancellation behavior | [4. Progress and cancellation](#4-progress-and-cancellation) |
+| Understand large structured-document preview behavior | [5. Large structured-document preview](#5-large-structured-document-preview) |
+| Understand memory and practical limits | [6. Memory and file-size considerations](#6-memory-and-file-size-considerations) |
+| Understand what the measurements establish | [7. Interpreting the results](#7-interpreting-the-results) |
 
-Each source was imported three times. The median of those three runs is reported.
+## 1. Measurement method
 
-The timing therefore includes more than source parsing alone. It also includes the user-visible work required to install the imported records into the investigation model and refresh the table, filters, summaries, and timeline.
+All measurements were taken with a **Release build of TraceScope v1.0**.
 
-Large structured-document preview behavior was evaluated separately from full import behavior.
+For each import scenario:
 
-## Test Environment
+1. the source and its matching import configuration were selected
+2. elapsed time began when **Import** was activated in the Import Configuration dialog
+3. timing ended when the resulting investigation session was fully displayed and the application was responsive
+4. the import was repeated three times
+5. the median of the three elapsed times was recorded
 
-Measurements were taken on:
+The reported time is therefore an **end-to-end user-visible import measurement**, not parser execution time alone.
 
-- Operating system: Microsoft Windows 10 Home 64-bit, version 10.0.19045
-- Processor: Intel(R) Core(TM) i5-8400 CPU @ 2.80 GHz
-- Processor cores: 6
-- Logical processors: 6
-- Installed memory: 27.9 GB
-- Build configuration: Release
-- Qt: 6.11.1
-- Compiler/toolchain: MinGW 64-bit
+It includes work such as:
 
-These results are specific to this machine and build environment. Different storage devices, processors, memory configurations, operating systems, compiler versions, source layouts, mapping complexity, and record contents can materially affect elapsed time.
+- reading and parsing the source
+- applying the configured field mappings
+- creating normalized investigation records
+- preserving raw-source and source-metadata values
+- installing the normalized records into the investigation session's table/model infrastructure
+- preparing the table and filter state
+- preparing the summary and timeline presentation associated with the completed investigation session
 
-## Measured Import Scenarios
+The measurements were taken manually. The reported tenths of a second are useful for comparing repeated runs of these specific workflows, but they should not be interpreted as high-precision microbenchmark results.
+
+Structured-document preview behavior and cancellation were verified separately and are not included in the import timings.
+
+## 2. Test environment
+
+The v1.0 measurements were taken on:
+
+| Component | Test environment |
+| --- | --- |
+| Operating system | Microsoft Windows 10 Home 64-bit, version 10.0.19045 |
+| Processor | Intel Core i5-8400 @ 2.80 GHz |
+| Physical cores | 6 |
+| Logical processors | 6 |
+| Installed memory | 27.9 GB |
+| Build configuration | Release |
+| Qt | 6.11.1 |
+| Compiler/toolchain | MinGW 64-bit |
+
+Performance on another system can differ materially.
+
+Relevant variables include:
+
+- processor performance
+- available memory
+- storage device and filesystem behavior
+- operating system
+- Qt and compiler versions
+- source format
+- average record size
+- source structure
+- mapping complexity
+- custom-attribute count and size
+- raw-source size
+- investigation size and analysis workload
+
+The figures below should therefore be read together with this environment rather than as hardware-independent expectations.
+
+## 3. Measured import scenarios
 
 | Source family | Records | Approx. source size | Run 1 | Run 2 | Run 3 | Median |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -41,61 +90,153 @@ These results are specific to this machine and build environment. Different stor
 | Windows Event XML collection | 90,000 | ~102 MiB | 14.9 s | 14.8 s | 14.7 s | **14.8 s** |
 | Structured JSON | 120,000 | ~64 MiB | 7.3 s | 6.2 s | 6.5 s | **6.5 s** |
 
-The application remained responsive during import and after the resulting investigation was displayed in all five scenarios.
+All five measured imports completed successfully and produced usable investigation sessions.
 
-Elapsed times should not be compared as parser-throughput benchmarks between formats. Different importers perform different amounts and types of parsing, mapping, raw-source preservation, and structural processing.
+The application also remained responsive during the import operations rather than entering a prolonged non-responsive UI state.
 
-## Progress Reporting
+### Why these are not parser-throughput rankings
 
-The tested JSON Lines, CSV, IIS W3C, and Windows Event XML imports reported determinate progress while processing the source.
+The table should not be converted directly into cross-format MB/s or records-per-second rankings.
 
-The structured JSON scenario used indeterminate progress. Structured JSON documents are currently parsed as complete structured documents rather than through the streamed record-by-record path used by several other importers. The parsing work still executes outside the UI thread so the desktop interface remains responsive.
+The importers perform different work.
 
-TraceScope does not display an artificial percentage when meaningful incremental progress is not available.
+For example:
 
-## Cancellation
+- line-oriented and structured formats have different parsing models
+- some formats contain headers or nested structure
+- mapping work differs by source
+- source records have different average sizes
+- raw-source preservation costs differ
+- structured-document processing can require different memory and traversal behavior
 
-Cancellation was manually verified with representative large JSON Lines and Windows Event XML imports.
+The useful comparison is therefore the observed **complete workflow for each documented source**, not which parser appears fastest after dividing source size by elapsed time.
+
+## 4. Progress and cancellation
+
+### Progress reporting
+
+The measured JSON Lines, CSV, IIS W3C, and Windows Event XML imports reported determinate progress while processing their sources.
+
+The Structured JSON scenario used indeterminate progress.
+
+The measured Structured JSON scenario used complete-document parsing rather than the incremental file-reading path used by several other importers. Structured JSON also supports framing complete records from certain still-open record arrays, but the initial file import still reads the source into memory. The measured import used indeterminate progress, and parsing ran outside the Qt UI thread so the application remained responsive.
+
+TraceScope does not display a fabricated percentage when meaningful incremental progress is not available from the active import path.
+
+### Cancellation
+
+Cancellation was manually verified with representative large:
+
+- JSON Lines
+- Windows Event XML
+
+imports.
 
 In both cases:
 
-- cancellation was responsive
-- the import progress interface closed normally
-- the existing investigation remained loaded
-- partial imported results did not replace the existing investigation
-- the application remained usable immediately afterward
+- cancellation responded while processing was in progress
+- the progress interface closed normally
+- partially imported results did not replace the existing investigation
+- the existing investigation remained available
+- the application was immediately usable afterward
 - another source could be opened or imported without restarting TraceScope
 
-Importers that support cooperative streamed processing check for cancellation while parsing rather than waiting for the complete source to finish.
+Streamed import paths that support cooperative cancellation check for cancellation while processing rather than waiting for the complete source to finish.
 
-## Large Structured-Document Preview
+These checks establish the tested cancellation behavior for the representative paths above; they are not timing measurements.
 
-Automatic preview is disabled for large structured JSON and XML documents once the configured size threshold is exceeded.
+## 5. Large structured-document preview
 
-This keeps the Import Configuration interface available instead of synchronously attempting potentially expensive structured-document preview work on the UI thread.
+Import preview and full import have different performance requirements.
 
-A preview can still be requested explicitly. Manual large-document previews run in the background and are limited to the normal preview record count.
+A preview is intended to help configure a source, so expensive structured-document work should not make the Import Configuration interface unusable before an import has even begun.
 
-Background preview work is cooperatively cancellable. Changing the source or profile invalidates and cancels an obsolete preview rather than allowing stale preview processing to block later configuration work.
+For sufficiently large Structured JSON and XML sources, automatic structured preview is therefore deferred rather than synchronously parsing the complete document whenever configuration changes.
 
-For structured XML, using an appropriate record path also allows the XML importer to stop after the configured preview record limit rather than processing unrelated later records.
+The user can request the preview explicitly.
 
-## Memory and File-Size Claims
+Large structured-document previews:
 
-TraceScope does not currently claim a fixed maximum supported file size or record count.
+- execute outside the UI thread
+- remain limited to the normal preview record count
+- support cooperative cancellation
+- are invalidated when the source or relevant profile configuration changes
 
-Several line-oriented and XML import paths use streamed source reading so the entire source file does not need to be loaded into one source byte buffer before parsing.
+This prevents obsolete preview work from blocking a later configuration request.
 
-This does **not** mean import memory usage is constant. Normalized `InvestigationRecord` objects, raw-source values, dynamic attributes, model data, and analysis state remain available in memory for the active investigation.
+For Structured XML with an appropriate repeated-record path, preview processing can stop after the configured preview record limit rather than traversing unrelated records later in the document.
 
-Structured JSON processing also differs from the streamed import paths because the structured document is parsed as a complete document.
+Preview behavior is evaluated for responsiveness and bounded usefulness rather than included in the full-import timing table.
 
-For these reasons, practical limits depend on source format, record complexity, mapping configuration, machine memory, and the investigation workload rather than file size alone.
+## 6. Memory and file-size considerations
 
-## Interpretation
+TraceScope does not publish a fixed maximum supported file size or record count.
 
-The Phase 7 measurements demonstrate that representative investigations containing tens or hundreds of thousands of records and source files ranging to approximately 100 MiB can remain usable on the documented test system.
+### Streamed input does not mean constant application memory
 
-They should be interpreted as repeatable observed scenarios, not as guarantees that every file of a similar size or record count will perform the same way.
+Several line-oriented and XML paths process source data incrementally. This avoids requiring the complete source file to exist as one in-memory input buffer before parsing.
 
-Future performance work should continue using representative investigation workflows and should extend these measurements when application architecture or supported workflows materially change.
+The imported normalized records and associated investigation session state are still retained in memory.
+
+Memory can therefore grow with:
+
+- normalized `InvestigationRecord` objects
+- raw-source content
+- source metadata
+- dynamic custom attributes
+- table/model state
+- annotations
+- derived analysis state
+- other active investigation data
+
+Streaming reduces one category of input-memory pressure; it does not make an investigation session's memory usage constant.
+
+### Structured JSON has different characteristics
+
+Structured JSON initial imports read the source into memory. Complete documents are parsed as structured JSON, while supported still-open record arrays can use incremental record framing to identify complete records already present in the source. This framing capability does not make the initial file-reading path constant-memory.
+
+Practical memory requirements depend on the source buffer, structured parsing or framing, the number and complexity of normalized records, and the retained investigation session state.
+
+### File size alone is not a sufficient limit
+
+Two files of the same byte size can produce very different investigation workloads.
+
+A file containing many small records may create substantially more model and object overhead than a file containing fewer large records. Likewise, records with many custom fields can require more retained state than simpler records.
+
+Practical limits therefore depend on the combination of:
+
+- file size
+- record count
+- record complexity
+- selected source format
+- import profile
+- available system memory
+- subsequent investigation workload
+
+## 7. Interpreting the results
+
+On the documented v1.0 test system, the measured scenarios covered:
+
+- **90,000 to 220,000 records**
+- approximately **20 MiB to 109 MiB** source files
+- median end-to-end import times from **3.0 to 14.8 seconds**
+
+These observations show that the documented import workloads completed successfully and produced usable investigation sessions on that system.
+
+They do **not** establish:
+
+- a maximum supported file size
+- a maximum supported record count
+- guaranteed import latency
+- guaranteed parser throughput
+- a fixed memory ceiling
+- equivalent performance across source formats
+- equivalent performance on different hardware or operating systems
+- sustained live-follow ingestion capacity
+- performance for arbitrary third-party source structures
+
+These measurements cover initial imports through the point at which the resulting investigation session is displayed and responsive. They do not independently benchmark subsequent interactive operations such as filtering, analytics drilldowns, interface-scale changes, multi-window document movement, or sustained timeline updates during Live Following. Those behaviors require separate measurements if performance claims are made about them.
+
+The results are best understood as reproducible reference workloads for the v1.0 release.
+
+Performance claims should remain tied to measured scenarios like these. Broader limits or throughput guarantees would require separate controlled benchmarking designed specifically to establish those claims.

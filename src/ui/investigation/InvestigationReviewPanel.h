@@ -59,6 +59,20 @@ public:
         const InvestigationReviewPresentationState &state
         );
 
+    void refreshInterfaceScale();
+
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
+
+    int collapsedHeight() const;
+
+    void refreshCollapsedHeight();
+
+    int minimumUsefulExpandedHeight() const;
+
 signals:
     /*
      * Emitted for both user-driven tab changes and
@@ -98,4 +112,7 @@ private:
 
     InvestigationAnalyticsPanel
         *m_analyticsPanel = nullptr;
+
+    bool m_collapsed =
+        false;
 };

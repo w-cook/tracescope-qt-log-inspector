@@ -1,11 +1,14 @@
 {
+    "schemaVersion": 1,
+    "name": "Telemetry Batch TSV",
+    "importerId": "tsv",
     "canonicalFields": {
-        "entityId": "device_id",
-        "eventCode": "event_id",
-        "message": "details",
+        "timestamp": "event_time",
         "severity": "priority",
         "subsystem": "component",
-        "timestamp": "event_time"
+        "eventCode": "event_id",
+        "entityId": "device_id",
+        "message": "details"
     },
     "customFields": [
         {
@@ -29,20 +32,17 @@
             "sourcePath": "health_state"
         }
     ],
-    "importerId": "tsv",
-    "name": "Telemetry Batch TSV",
-    "preserveUnmappedFields": true,
-    "schemaVersion": 1,
     "severityAliases": {
         "CAUTION": "WARN",
-        "FAIL": "TRACE",
+        "FAIL": "ERROR",
         "FATAL": "CRITICAL",
         "NOTICE": "INFO"
     },
     "timestampRules": [
         {
-            "format": "yyyy-MM-dd HH:mm:ss.zzz",
-            "type": "qt-format"
+            "type": "qt-format",
+            "format": "yyyy-MM-dd HH:mm:ss.zzz"
         }
-    ]
+    ],
+    "preserveUnmappedFields": true
 }

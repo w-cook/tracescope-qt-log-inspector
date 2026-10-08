@@ -178,6 +178,19 @@ void InvestigationSessionSummaryPanel::
 }
 
 void InvestigationSessionSummaryPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * Changing Interface Scale updates the font
+     * without necessarily resizing the label.
+     *
+     * Recalculate elision using the current font
+     * metrics and existing available width.
+     */
+    updateDisplayedText();
+}
+
+void InvestigationSessionSummaryPanel::
     updateDisplayedText()
 {
     if (m_label == nullptr) {

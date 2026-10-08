@@ -7,21 +7,114 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QEvent>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QPainter>
 #include <QPushButton>
-#include <QSignalBlocker>
-#include <QTableView>
-#include <QVBoxLayout>
 #include <QScrollBar>
+#include <QSignalBlocker>
+#include <QStyle>
+#include <QStyleOptionHeader>
+#include <QTableView>
+#include <QTimer>
+#include <QVBoxLayout>
 
+#include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../controllers/InvestigationController.h"
 #include "../../models/InvestigationFilterProxyModel.h"
 #include "../../models/InvestigationTableModel.h"
 #include "../../workspace/InvestigationSession.h"
+
+namespace
+{
+
+class BookmarkRowHeader : public QHeaderView
+{
+public:
+    explicit BookmarkRowHeader(QWidget *parent)
+        : QHeaderView(Qt::Vertical, parent)
+    {
+        setHighlightSections(true);
+        setSectionsClickable(true);
+        setSectionResizeMode(QHeaderView::Fixed);
+    }
+
+protected:
+    void paintSection(
+        QPainter *painter,
+        const QRect &rect,
+        int logicalIndex
+        ) const override
+    {
+        // Preserve Qt's native event-number rendering,
+        // selection highlighting, and selected font.
+        QHeaderView::paintSection(
+            painter,
+            rect,
+            logicalIndex
+            );
+
+        if (
+            model() == nullptr
+            || !model()
+                    ->headerData(
+                        logicalIndex,
+                        Qt::Vertical,
+                        InvestigationFilterProxyModel::
+                        BookmarkedHeaderRole
+                        )
+                    .toBool()
+            ) {
+            return;
+        }
+
+        const QString star =
+            QStringLiteral("★");
+
+        const int margin =
+            style()->pixelMetric(
+                QStyle::PM_HeaderMargin,
+                nullptr,
+                this
+                );
+
+        const int inset =
+            margin
+            + InterfaceScale::pixels(2, this);
+
+        const QRect starRect(
+            rect.left() + inset,
+            rect.top(),
+            fontMetrics().horizontalAdvance(star)
+                + InterfaceScale::pixels(2, this),
+            rect.height()
+            );
+
+        painter->save();
+
+        painter->setFont(font());
+
+        painter->setPen(
+            palette().color(QPalette::ButtonText)
+            );
+
+        painter->drawText(
+            starRect,
+            Qt::AlignLeft | Qt::AlignVCenter,
+            star
+            );
+
+        painter->restore();
+    }
+};
+
+}
 
 InvestigationEventPanel::
     InvestigationEventPanel(
@@ -65,8 +158,14 @@ InvestigationEventPanel::
     auto *layout =
         new QVBoxLayout(this);
 
+    m_expandedContentsMargins =
+        layout->contentsMargins();
+
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     /*
@@ -75,18 +174,21 @@ InvestigationEventPanel::
      * ---------------------------------------------------------
      */
 
-    auto *navigationLayout =
+    m_navigationLayout =
         new QHBoxLayout();
 
-    navigationLayout->setContentsMargins(
+    m_navigationLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    navigationLayout->setSpacing(
-        6
+    m_navigationLayout->setSpacing(
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     m_previousEventButton->setToolTip(
@@ -115,17 +217,17 @@ InvestigationEventPanel::
             )
         );
 
-    navigationLayout->addStretch();
+    m_navigationLayout->addStretch();
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_previousEventButton
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_nextEventButton
         );
 
-    navigationLayout->addStretch(
+    m_navigationLayout->addStretch(
         1
         );
 
@@ -133,24 +235,24 @@ InvestigationEventPanel::
         Qt::AlignCenter
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_eventPositionLabel
         );
 
-    navigationLayout->addStretch(
+    m_navigationLayout->addStretch(
         1
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_previousIssueButton
         );
 
-    navigationLayout->addWidget(
+    m_navigationLayout->addWidget(
         m_nextIssueButton
         );
 
     layout->addLayout(
-        navigationLayout
+        m_navigationLayout
         );
 
     /*
@@ -189,6 +291,11 @@ InvestigationEventPanel::
         Qt::AscendingOrder
         );
 
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
     m_table
         ->horizontalHeader()
         ->setResizeContentsPrecision(
@@ -200,6 +307,21 @@ InvestigationEventPanel::
         ->setStretchLastSection(
             true
             );
+
+    m_table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_table,
+            true,
+            InvestigationFilterProxyModel::
+            ActiveFilterValueRole
+            )
+        );
+
+    m_table->setVerticalHeader(
+        new BookmarkRowHeader(m_table)
+        );
+
+    refreshRowHeights();
 
     layout->addWidget(
         m_table
@@ -256,6 +378,24 @@ InvestigationEventPanel::
                 verticalScrollBar
                     ->maximum()
                 );
+        }
+        );
+
+    connect(
+        m_table,
+        &QTableView::clicked,
+        this,
+        [this](
+            const QModelIndex &
+            ) {
+            /*
+             * A click is explicit user selection intent.
+             *
+             * This also handles clicking an already-selected
+             * row, where QItemSelectionModel may not emit a
+             * new selectionChanged signal.
+             */
+            updateFollowNewestSelectionIntent();
         }
         );
 
@@ -317,8 +457,7 @@ InvestigationEventPanel::
 
     connect(
         m_table,
-        &QTableView::
-        customContextMenuRequested,
+        &QTableView::customContextMenuRequested,
         this,
         [this](
             const QPoint &position
@@ -344,23 +483,16 @@ InvestigationEventPanel::
                 return;
             }
 
-            const QString value =
-                proxyIndex
-                    .data(
-                        Qt::DisplayRole
-                        )
-                    .toString();
-
-            InvestigationFilterProxyModel
-                *proxyModel =
+            InvestigationFilterProxyModel *proxyModel =
                 controller->proxyModel();
 
-            InvestigationTableModel
-                *sourceModel =
+            InvestigationTableModel *sourceModel =
                 controller->sourceModel();
 
-            if (proxyModel == nullptr
-                || sourceModel == nullptr) {
+            if (
+                proxyModel == nullptr
+                || sourceModel == nullptr
+                ) {
                 return;
             }
 
@@ -369,20 +501,93 @@ InvestigationEventPanel::
                     proxyIndex
                     );
 
-            const bool customColumn =
-                sourceIndex.isValid()
-                && sourceModel
-                       ->isCustomColumn(
-                           sourceIndex.column()
-                           );
+            if (!sourceIndex.isValid()) {
+                return;
+            }
 
-            const QString customField =
-                customColumn
-                    ? sourceModel
-                          ->columnKey(
-                              sourceIndex.column()
-                              )
-                    : QString();
+            const QString value =
+                proxyIndex
+                    .data(
+                        Qt::DisplayRole
+                        )
+                    .toString();
+
+            const QString columnKey =
+                sourceModel->columnKey(
+                    sourceIndex.column()
+                    );
+
+            const bool customColumn =
+                sourceModel->isCustomColumn(
+                    sourceIndex.column()
+                    );
+
+            const InvestigationRecord *record =
+                sourceModel->recordAt(
+                    sourceIndex.row()
+                    );
+
+            /*
+             * Determine whether the clicked exact value
+             * already participates in its column's active
+             * categorical/custom filter.
+             */
+            bool activeValueFilter =
+                false;
+
+            if (
+                columnKey
+                == QStringLiteral("severity")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->severityFilters()
+                        .contains(
+                            value
+                                .trimmed()
+                                .toUpper()
+                            );
+            } else if (
+                columnKey
+                == QStringLiteral("subsystem")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->subsystemFilters()
+                        .contains(
+                            value
+                            );
+            } else if (
+                columnKey
+                == QStringLiteral("eventCode")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->eventCodeFilters()
+                        .contains(
+                            value
+                            );
+            } else if (
+                columnKey
+                == QStringLiteral("entityId")
+                ) {
+                activeValueFilter =
+                    proxyModel
+                        ->entityFilters()
+                        .contains(
+                            value
+                            );
+            } else if (customColumn) {
+                activeValueFilter =
+                    proxyModel
+                        ->customFieldFilters()
+                        .value(
+                            columnKey
+                            )
+                        .contains(
+                            value
+                            );
+            }
 
             QMenu menu(
                 m_table
@@ -396,16 +601,94 @@ InvestigationEventPanel::
             QAction *filterValueAction =
                 nullptr;
 
-            if (customColumn
-                && !customField.isEmpty()
-                && !value.isEmpty()) {
+            QAction *startTimeAction =
+                nullptr;
+
+            QAction *endTimeAction =
+                nullptr;
+
+            /*
+             * Canonical exact-value filters plus dynamic
+             * custom-field filters.
+             *
+             * Timestamp has its own range-boundary actions
+             * below. Message remains copy-only.
+             */
+            const bool categoricalFilterable =
+                !value.isEmpty()
+                && (
+                    columnKey
+                        == QStringLiteral("severity")
+                    || columnKey
+                           == QStringLiteral("subsystem")
+                    || columnKey
+                           == QStringLiteral("eventCode")
+                    || columnKey
+                           == QStringLiteral("entityId")
+                    || customColumn
+                    );
+
+            if (categoricalFilterable) {
                 menu.addSeparator();
 
                 filterValueAction =
                     menu.addAction(
-                        tr(
-                            "Filter by This Value"
-                            )
+                        activeValueFilter
+                            ? tr("Remove This Filter")
+                            : tr("Filter by This Value")
+                        );
+            }
+
+            /*
+             * Timestamp filtering maps naturally to the
+             * existing inclusive From / To time-range
+             * boundaries rather than an exact-value filter.
+             */
+            if (
+                columnKey
+                    == QStringLiteral("timestamp")
+                && record != nullptr
+                && record->timestamp.has_value()
+                ) {
+                menu.addSeparator();
+
+                const QDateTime timestamp =
+                    record->timestamp.value();
+
+                const bool activeStart =
+                    proxyModel
+                        ->timeRangeStart()
+                        .has_value()
+                    && proxyModel
+                               ->timeRangeStart()
+                               .value()
+                           == timestamp;
+
+                const bool activeEnd =
+                    proxyModel
+                        ->timeRangeEnd()
+                        .has_value()
+                    && proxyModel
+                               ->timeRangeEnd()
+                               .value()
+                           == timestamp;
+
+                startTimeAction =
+                    menu.addAction(
+                        activeStart
+                            ? tr("Remove From Filter")
+                            : tr(
+                                  "Filter From This Timestamp"
+                                  )
+                        );
+
+                endTimeAction =
+                    menu.addAction(
+                        activeEnd
+                            ? tr("Remove Through Filter")
+                            : tr(
+                                  "Filter Through This Timestamp"
+                                  )
                         );
             }
 
@@ -418,8 +701,10 @@ InvestigationEventPanel::
                             )
                     );
 
-            if (selectedAction
-                == copyValueAction) {
+            if (
+                selectedAction
+                == copyValueAction
+                ) {
                 QApplication::clipboard()
                 ->setText(
                     value
@@ -428,13 +713,48 @@ InvestigationEventPanel::
                 return;
             }
 
-            if (filterValueAction != nullptr
+            if (
+                filterValueAction != nullptr
                 && selectedAction
-                       == filterValueAction) {
-                emit customFieldFilterRequested(
-                    customField,
-                    value
-                    );
+                       == filterValueAction
+                ) {
+                emit
+                    eventTableValueFilterToggleRequested(
+                        columnKey,
+                        value
+                        );
+
+                return;
+            }
+
+            if (
+                startTimeAction != nullptr
+                && selectedAction
+                       == startTimeAction
+                && record != nullptr
+                && record->timestamp.has_value()
+                ) {
+                emit
+                    eventTableTimeBoundaryToggleRequested(
+                        record->timestamp.value(),
+                        true
+                        );
+
+                return;
+            }
+
+            if (
+                endTimeAction != nullptr
+                && selectedAction
+                       == endTimeAction
+                && record != nullptr
+                && record->timestamp.has_value()
+                ) {
+                emit
+                    eventTableTimeBoundaryToggleRequested(
+                        record->timestamp.value(),
+                        false
+                        );
             }
         }
         );
@@ -445,12 +765,17 @@ InvestigationEventPanel::
      * ---------------------------------------------------------
      */
 
+    m_table
+        ->horizontalHeader()
+        ->viewport()
+        ->installEventFilter(this);
+
     connect(
         m_table->horizontalHeader(),
         &QHeaderView::sectionResized,
         this,
         [this](
-            int,
+            int logicalIndex,
             int,
             int
             ) {
@@ -458,6 +783,23 @@ InvestigationEventPanel::
                 || m_table->model()
                        == nullptr) {
                 return;
+            }
+
+            /*
+             * Automatic section changes also emit sectionResized.
+             * Only classify changes during interaction with the
+             * horizontal header as potentially manual.
+             *
+             * The stretched final column is excluded because
+             * Qt can resize it as a consequence of resizing
+             * another column.
+             */
+            if (m_headerMouseDown
+                && logicalIndex
+                       != m_table->horizontalHeader()->count() - 1
+                && !m_manuallyResizedColumns.contains(logicalIndex)) {
+
+                m_manuallyResizedColumns.insert(logicalIndex);
             }
 
             const int columnCount =
@@ -490,6 +832,11 @@ InvestigationEventPanel::
                     );
         }
         );
+
+    m_columnWidthScaleFactor =
+        InterfaceScale::geometryFactor(
+            m_table
+            );
 
     refreshPresentation();
 }
@@ -610,6 +957,9 @@ const InvestigationRecord *
 
 void InvestigationEventPanel::clearSelection()
 {
+    m_followNewestSelectionIntent =
+        false;
+
     if (m_table->selectionModel()
         != nullptr) {
         m_table->clearSelection();
@@ -673,12 +1023,30 @@ void InvestigationEventPanel::selectProxyRow(
         return;
     }
 
+    /*
+     * This method is also used for restoration and
+     * automatic live-follow advancement.
+     *
+     * Those programmatic selections must not create or
+     * clear the user's selection-follow intent merely
+     * because the resulting row happens to be newest
+     * or older.
+     */
+    const bool previousSuppression =
+        m_suppressFollowNewestSelectionIntentUpdate;
+
+    m_suppressFollowNewestSelectionIntentUpdate =
+        true;
+
     selectionModel->setCurrentIndex(
         targetIndex,
         QItemSelectionModel::
             ClearAndSelect
             | QItemSelectionModel::Rows
         );
+
+    m_suppressFollowNewestSelectionIntentUpdate =
+        previousSuppression;
 
     m_table->scrollTo(
         targetIndex,
@@ -722,20 +1090,29 @@ void InvestigationEventPanel::selectRecordId(
 void InvestigationEventPanel::
     refreshNavigationState()
 {
+    const auto *model =
+        m_table != nullptr
+            ? m_table->model()
+            : nullptr;
+
     const bool hasInvestigation =
         m_session != nullptr
-        && m_table->model() != nullptr;
+        && model != nullptr;
+
+    const bool showNavigation =
+        hasInvestigation
+        && !m_collapsed;
 
     m_previousEventButton->setVisible(
-        hasInvestigation
+        showNavigation
         );
 
     m_nextEventButton->setVisible(
-        hasInvestigation
+        showNavigation
         );
 
     m_eventPositionLabel->setVisible(
-        hasInvestigation
+        showNavigation
         );
 
     const bool hasIssueNavigation =
@@ -743,11 +1120,13 @@ void InvestigationEventPanel::
         && m_session->hasSeverityData();
 
     m_previousIssueButton->setVisible(
-        hasIssueNavigation
+        showNavigation
+        && hasIssueNavigation
         );
 
     m_nextIssueButton->setVisible(
-        hasIssueNavigation
+        showNavigation
+        && hasIssueNavigation
         );
 
     if (!hasInvestigation) {
@@ -773,9 +1152,7 @@ void InvestigationEventPanel::
     }
 
     const int visibleCount =
-        m_table
-            ->model()
-            ->rowCount();
+        model->rowCount();
 
     const QModelIndex currentIndex =
         m_table->currentIndex();
@@ -899,8 +1276,23 @@ void InvestigationEventPanel::
     m_followNewest =
         enabled;
 
-    if (!m_followNewest
-        || m_table == nullptr
+    /*
+     * Turning Follow Newest off always abandons
+     * selection-follow intent.
+     *
+     * Turning it on does NOT infer selection-follow
+     * from the current selection. The user must
+     * explicitly select the newest visible event
+     * while Follow Newest is active.
+     */
+    if (!m_followNewest) {
+        m_followNewestSelectionIntent =
+            false;
+
+        return;
+    }
+
+    if (m_table == nullptr
         || m_table->verticalScrollBar()
                == nullptr) {
         return;
@@ -914,12 +1306,51 @@ void InvestigationEventPanel::
         );
 }
 
+void InvestigationEventPanel::
+    handleLiveSessionUpdated()
+{
+    if (!m_followNewest
+        || !m_followNewestSelectionIntent
+        || m_table == nullptr
+        || m_table->model() == nullptr) {
+        return;
+    }
+
+    const int rowCount =
+        m_table
+            ->model()
+            ->rowCount();
+
+    if (rowCount <= 0) {
+        return;
+    }
+
+    /*
+     * Follow the newest currently visible event.
+     *
+     * The proxy model already reflects the active
+     * filters and sort order by the time the live
+     * coordinator reports its completed update.
+     *
+     * selectProxyRow() deliberately suppresses intent
+     * recalculation, so this automatic advancement
+     * preserves the user's already-established
+     * selection-follow intent.
+     */
+    selectProxyRow(
+        rowCount - 1
+        );
+}
+
 InvestigationEventTablePresentationState
     InvestigationEventPanel::
     capturePresentationState() const
 {
     InvestigationEventTablePresentationState
         state;
+
+    state.columnWidthScaleFactor =
+        InterfaceScale::geometryFactor(m_table);
 
     if (m_session != nullptr) {
         state.selectedRecordId =
@@ -949,6 +1380,20 @@ InvestigationEventTablePresentationState
                 m_table->columnWidth(column)
                 );
         }
+
+        for (int column : m_manuallyResizedColumns) {
+            if (column >= 0
+                && column < header->count() - 1) {
+                state.manuallyResizedColumns.append(
+                    column
+                    );
+            }
+        }
+
+        std::sort(
+            state.manuallyResizedColumns.begin(),
+            state.manuallyResizedColumns.end()
+            );
     }
 
     if (m_table->horizontalScrollBar()
@@ -988,11 +1433,58 @@ void InvestigationEventPanel::
     QHeaderView *header =
         m_table->horizontalHeader();
 
+    m_headerMouseDown = false;
+    m_manuallyResizedColumns.clear();
+
+    if (header != nullptr) {
+        const int applicableColumns =
+            std::min(
+                header->count(),
+                static_cast<int>(
+                    state.columnWidths.size()
+                    )
+                );
+
+        for (int column
+             : state.manuallyResizedColumns) {
+            if (column >= 0
+                && column < applicableColumns - 1) {
+                m_manuallyResizedColumns.insert(
+                    column
+                    );
+            }
+        }
+    }
+
+
     if (header != nullptr
         && !state.columnWidths.isEmpty()) {
-        const QSignalBlocker blocker(
-            header
-            );
+
+        const qreal currentScale =
+            InterfaceScale::geometryFactor(m_table);
+
+        const qreal savedScale =
+            state.columnWidthScaleFactor;
+
+        /*
+     * Missing scale metadata indicates an older
+     * workspace. Preserve its previous exact-width
+     * restoration behavior.
+     */
+        const bool crossScaleRestore =
+            savedScale > 0.0
+            && currentScale > 0.0
+            && !qFuzzyCompare(
+                currentScale,
+                savedScale
+                );
+
+        const qreal widthRatio =
+            crossScaleRestore
+                ? currentScale / savedScale
+                : 1.0;
+
+        const QSignalBlocker blocker(header);
 
         const int count =
             std::min(
@@ -1002,29 +1494,82 @@ void InvestigationEventPanel::
                     )
                 );
 
-        for (
-            int column = 0;
-            column < count;
-            ++column
-            ) {
-            const int width =
-                state.columnWidths.at(
-                    column
-                    );
+        /*
+         * At a different scale, first remeasure every
+         * column using the current font.
+         *
+         * At the same scale (or with legacy metadata),
+         * retain the existing exact-width behavior.
+         */
+        if (crossScaleRestore) {
+            m_table->resizeColumnsToContents();
+        }
 
-            if (width > 0) {
-                m_table->setColumnWidth(
-                    column,
-                    width
+        for (int column = 0;
+             column < count;
+             ++column) {
+
+            /*
+             * Automatically sized columns keep their
+             * freshly measured widths when the saved
+             * scale differs.
+             */
+            if (crossScaleRestore
+                && !m_manuallyResizedColumns.contains(
+                    column
+                    )) {
+                continue;
+            }
+
+            int width =
+                state.columnWidths.at(column);
+
+            if (width <= 0) {
+                continue;
+            }
+
+            if (crossScaleRestore) {
+                width = std::max(
+                    1,
+                    qRound(
+                        static_cast<qreal>(width)
+                        * widthRatio
+                        )
                     );
             }
-        }
 
-        if (m_session != nullptr) {
-            m_session->setColumnWidths(
-                state.columnWidths
+            m_table->setColumnWidth(
+                column,
+                width
                 );
         }
+
+        /*
+         * Store the widths actually applied, rather
+         * than retaining the old-scale saved values.
+         */
+        if (m_session != nullptr) {
+            QVector<int> effectiveWidths;
+
+            effectiveWidths.reserve(
+                header->count()
+                );
+
+            for (int column = 0;
+                 column < header->count();
+                 ++column) {
+                effectiveWidths.append(
+                    m_table->columnWidth(column)
+                    );
+            }
+
+            m_session->setColumnWidths(
+                std::move(effectiveWidths)
+                );
+        }
+
+        m_columnWidthScaleFactor =
+            currentScale;
     }
 
     /*
@@ -1089,6 +1634,435 @@ void InvestigationEventPanel::
 }
 
 void InvestigationEventPanel::
+    refreshInterfaceScale()
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_navigationLayout != nullptr) {
+        m_navigationLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_navigationLayout->invalidate();
+    }
+
+
+    /*
+     * Auto-sized columns must be remeasured using the
+     * new font. Manually adjusted columns retain their
+     * relative widths across interface-scale changes.
+     *
+     * Perform the actual resizing in the existing
+     * deferred callback after Qt's font settles.
+     */
+    const qreal newScaleFactor =
+        InterfaceScale::geometryFactor(m_table);
+
+    const bool scaleChanged =
+        m_columnWidthScaleFactor > 0.0
+        && !qFuzzyCompare(
+            newScaleFactor,
+            m_columnWidthScaleFactor
+            );
+
+    const qreal manualWidthRatio =
+        scaleChanged
+            ? newScaleFactor / m_columnWidthScaleFactor
+            : 1.0;
+
+    m_columnWidthScaleFactor =
+        newScaleFactor;
+
+    if (m_collapsed) {
+        /*
+         * Release the old scale's collapsed-height
+         * constraint before asking Qt for the new native
+         * QGroupBox title-strip height.
+         */
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+
+            layout()->setContentsMargins(
+                InterfaceScale::margins(
+                    4,
+                    2,
+                    4,
+                    2,
+                    this
+                    )
+                );
+
+            layout()->invalidate();
+        }
+
+        const int height =
+            compactHeightHint();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    }
+
+    updateGeometry();
+    update();
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this, scaleChanged, manualWidthRatio]() {
+            if (m_table == nullptr
+                || m_table->model() == nullptr) {
+                return;
+            }
+
+
+            if (scaleChanged) {
+                QHeaderView *header =
+                    m_table->horizontalHeader();
+
+                const int columnCount =
+                    header->count();
+
+                /*
+                 * Snapshot manual widths before remeasuring
+                 * all columns.
+                 */
+                QVector<int> manualWidths(
+                    columnCount,
+                    -1
+                    );
+
+                for (int column : std::as_const(
+                         m_manuallyResizedColumns)) {
+
+                    if (column < 0
+                        || column >= columnCount) {
+                        continue;
+                    }
+
+                    manualWidths[column] =
+                        std::max(
+                            1,
+                            qRound(
+                                m_table->columnWidth(column)
+                                * manualWidthRatio
+                                )
+                            );
+                }
+
+                /*
+                 * Match the existing fresh-import behavior,
+                 * then restore deliberate manual adjustments.
+                 *
+                 * Suppress sectionResized while applying
+                 * programmatic changes.
+                 */
+                {
+                    const QSignalBlocker blocker(header);
+
+                    m_table->resizeColumnsToContents();
+
+                    for (int column = 0;
+                         column < columnCount;
+                         ++column) {
+
+                        if (manualWidths[column] > 0) {
+                            m_table->setColumnWidth(
+                                column,
+                                manualWidths[column]
+                                );
+                        }
+                    }
+                }
+
+                /*
+                 * Persist the final displayed widths using
+                 * the existing session representation.
+                 */
+                if (m_session != nullptr) {
+                    QVector<int> widths;
+                    widths.reserve(columnCount);
+
+                    for (int column = 0;
+                         column < columnCount;
+                         ++column) {
+                        widths.append(
+                            m_table->columnWidth(column)
+                            );
+                    }
+
+                    m_session->setColumnWidths(
+                        std::move(widths)
+                        );
+                }
+            }
+
+            // Measure using the settled application font.
+            refreshRowHeights();
+            updateRowHeaderWidth();
+
+            // Synchronize the table's header, corner
+            // and viewport geometry.
+            QMetaObject::invokeMethod(
+                m_table,
+                "updateGeometries",
+                Qt::DirectConnection
+                );
+
+            m_table->viewport()->update();
+        }
+        );
+}
+
+void InvestigationEventPanel::
+    setCollapsed(
+        bool collapsed
+        )
+{
+    if (m_collapsed == collapsed) {
+        return;
+    }
+
+    m_collapsed =
+        collapsed;
+
+    /*
+     * Telemetry Events is a QGroupBox, so preserve
+     * its existing title as the collapsed section
+     * identity and remove only its contents.
+     */
+    if (m_table != nullptr) {
+        m_table->setVisible(
+            !collapsed
+            );
+    }
+
+    if (collapsed) {
+        m_previousEventButton->setVisible(
+            false
+            );
+
+        m_nextEventButton->setVisible(
+            false
+            );
+
+        m_eventPositionLabel->setVisible(
+            false
+            );
+
+        m_previousIssueButton->setVisible(
+            false
+            );
+
+        m_nextIssueButton->setVisible(
+            false
+            );
+
+        /*
+         * Remove any previous height constraint while
+         * the hidden-content layout settles. The native
+         * minimum size then describes only the
+         * QGroupBox title/frame presentation.
+         */
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->activate();
+
+            layout()->setContentsMargins(
+                InterfaceScale::margins(
+                    4,
+                    2,
+                    4,
+                    2,
+                    this
+                    )
+                );
+
+            layout()->invalidate();
+        }
+
+        const int height =
+            compactHeightHint();
+
+        setMinimumHeight(
+            height
+            );
+
+        setMaximumHeight(
+            height
+            );
+    } else {
+        setMinimumHeight(
+            0
+            );
+
+        setMaximumHeight(
+            QWIDGETSIZE_MAX
+            );
+
+        if (layout() != nullptr) {
+            layout()->setContentsMargins(
+                m_expandedContentsMargins
+                );
+
+            layout()->invalidate();
+        }
+
+        if (m_table != nullptr) {
+            m_table->setVisible(
+                true
+                );
+        }
+
+        /*
+         * Restore source/session-dependent navigation
+         * visibility rather than blindly showing every
+         * control.
+         */
+        refreshNavigationState();
+    }
+
+    updateGeometry();
+    update();
+}
+
+bool InvestigationEventPanel::
+    isCollapsed() const
+{
+    return m_collapsed;
+}
+
+int InvestigationEventPanel::
+    collapsedHeight() const
+{
+    if (m_collapsed) {
+        return maximumHeight();
+    }
+
+    return 0;
+}
+
+int InvestigationEventPanel::
+    compactHeightHint() const
+{
+    QGroupBox probe(
+        title()
+        );
+
+    probe.setFont(
+        font()
+        );
+
+    probe.setFlat(
+        isFlat()
+        );
+
+    QVBoxLayout probeLayout(
+        &probe
+        );
+
+    probeLayout.setContentsMargins(
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            2,
+            this
+            )
+        );
+
+    probeLayout.setSpacing(
+        InterfaceScale::pixels(
+            4,
+            this
+            )
+        );
+
+    probe.ensurePolished();
+
+    return probe
+        .minimumSizeHint()
+        .height();
+}
+
+bool InvestigationEventPanel::
+    eventFilter(
+        QObject *watched,
+        QEvent *event
+        )
+{
+    if (m_table != nullptr
+        && watched
+               == m_table
+                      ->horizontalHeader()
+                      ->viewport()) {
+
+        if (event->type()
+            == QEvent::MouseButtonPress) {
+            const auto *mouseEvent =
+                static_cast<QMouseEvent *>(event);
+
+            if (mouseEvent->button()
+                == Qt::LeftButton) {
+                m_headerMouseDown = true;
+            }
+        } else if (
+            event->type()
+                == QEvent::MouseButtonRelease
+            || event->type()
+                   == QEvent::UngrabMouse
+            ) {
+            m_headerMouseDown = false;
+        }
+    }
+
+    return QGroupBox::eventFilter(
+        watched,
+        event
+        );
+}
+
+void InvestigationEventPanel::
     connectSelectionModel()
 {
     QObject::disconnect(
@@ -1113,11 +2087,11 @@ void InvestigationEventPanel::
                 const QItemSelection &,
                 const QItemSelection &
                 ) {
-                if (m_session != nullptr) {
-                    const InvestigationRecord
-                        *record =
-                        selectedRecord();
+                const InvestigationRecord
+                    *record =
+                    selectedRecord();
 
+                if (m_session != nullptr) {
                     m_session
                         ->setSelectedRecordId(
                             record != nullptr
@@ -1127,11 +2101,69 @@ void InvestigationEventPanel::
                             );
                 }
 
+                /*
+                 * Ordinary user selection changes can
+                 * establish or clear selection-follow
+                 * intent.
+                 *
+                 * Do not treat an empty selection here
+                 * as user intent. A model reset caused
+                 * by a newly introduced dynamic column
+                 * can temporarily clear Qt's selection
+                 * during live ingestion.
+                 *
+                 * Explicit clearSelection() already
+                 * clears the intent directly.
+                 */
+                if (
+                    !m_suppressFollowNewestSelectionIntentUpdate
+                    && record != nullptr
+                    ) {
+                    updateFollowNewestSelectionIntent();
+                }
+
                 emit selectedRecordChanged();
 
                 refreshNavigationState();
             }
             );
+}
+
+void InvestigationEventPanel::
+    updateFollowNewestSelectionIntent()
+{
+    if (!m_followNewest
+        || m_table == nullptr
+        || m_table->model() == nullptr
+        || m_table->selectionModel()
+               == nullptr) {
+        m_followNewestSelectionIntent =
+            false;
+
+        return;
+    }
+
+    const QModelIndexList selectedRows =
+        m_table
+            ->selectionModel()
+            ->selectedRows();
+
+    if (selectedRows.isEmpty()) {
+        m_followNewestSelectionIntent =
+            false;
+
+        return;
+    }
+
+    const int rowCount =
+        m_table
+            ->model()
+            ->rowCount();
+
+    m_followNewestSelectionIntent =
+        rowCount > 0
+        && selectedRows.first().row()
+               == rowCount - 1;
 }
 
 void InvestigationEventPanel::
@@ -1171,6 +2203,8 @@ void InvestigationEventPanel::
     selectProxyRow(
         targetProxyRow
         );
+
+    updateFollowNewestSelectionIntent();
 }
 
 void InvestigationEventPanel::
@@ -1213,6 +2247,8 @@ void InvestigationEventPanel::
     selectProxyRow(
         targetProxyRow
         );
+
+    updateFollowNewestSelectionIntent();
 }
 
 void InvestigationEventPanel::
@@ -1243,26 +2279,119 @@ void InvestigationEventPanel::
         }
     }
 
-    /*
-     * Always reserve room for the bookmark
-     * indicator so filtering cannot make the
-     * row-header width jump.
-     */
-    const QString widestExpectedText =
-        QStringLiteral("★ %1")
-            .arg(
-                maximumRowNumber
-                );
+    const QString maximumNumberText =
+        QString::number(maximumRowNumber);
 
-    const int textWidth =
-        header
-            ->fontMetrics()
-            .horizontalAdvance(
-                widestExpectedText
-                );
+    const QFontMetrics normalMetrics(
+        header->font()
+        );
+
+    QFont boldFont = header->font();
+    boldFont.setBold(true);
+
+    const QFontMetrics boldMetrics(boldFont);
+
+    const int starWidth =
+        normalMetrics.horizontalAdvance(
+            QStringLiteral("★")
+            );
+
+    const int numberWidth =
+        std::max(
+            normalMetrics.horizontalAdvance(
+                maximumNumberText
+                ),
+            boldMetrics.horizontalAdvance(
+                maximumNumberText
+                )
+            );
+
+    /*
+     * Match the left inset used by BookmarkRowHeader
+     * when painting the star.
+     */
+    const int margin =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderMargin,
+            nullptr,
+            header
+            );
+
+    const int leftInset =
+        margin + InterfaceScale::pixels(2, header);
+
+    const int gap =
+        InterfaceScale::pixels(2, header);
+
+    const int rightInset =
+        margin + InterfaceScale::pixels(1, header);
+
+    /*
+     * Calculate the entire width once.
+     * No additional native sizing calculations.
+     */
+    const int targetWidth =
+        leftInset
+        + starWidth
+        + gap
+        + numberWidth
+        + rightInset;
 
     header->setFixedWidth(
-        textWidth + 8
+        targetWidth
+        );
+
+    header->viewport()->update();
+}
+
+void InvestigationEventPanel::
+    refreshRowHeights()
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    QHeaderView *header =
+        m_table->verticalHeader();
+
+    if (header == nullptr) {
+        return;
+    }
+
+    const int nativeDefault =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderDefaultSectionSizeVertical,
+            nullptr,
+            header
+            );
+
+    const int headerMargin =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderMargin,
+            nullptr,
+            header
+            );
+
+    const int textHeight =
+        header->fontMetrics().height();
+
+    const int contentHeight =
+        textHeight
+        + 2 * headerMargin
+        + InterfaceScale::pixels(
+            4,
+            header
+            );
+
+    const int targetHeight =
+        std::max({
+            nativeDefault,
+            header->minimumSectionSize(),
+            contentHeight
+        });
+
+    header->setDefaultSectionSize(
+        targetHeight
         );
 }
 
@@ -1350,4 +2479,14 @@ void InvestigationEventPanel::
                 true
                 );
     }
+
+    QTimer::singleShot(0, this, [this]() {
+        QVector<int> widths;
+
+        for (int column = 0;
+             column < m_table->model()->columnCount();
+             ++column) {
+            widths.append(m_table->columnWidth(column));
+        }
+    });
 }

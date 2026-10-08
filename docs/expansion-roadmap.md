@@ -1,48 +1,50 @@
-# TraceScope Expansion Roadmap
+# TraceScope Expansion Roadmap — Completed v1.0.0
 
 ## Overview
 
-TraceScope began as a focused Qt/C++ desktop application for inspecting structured JSON Lines telemetry logs. The original prototype provides a complete investigation workflow for its supported schema, including loading, filtering, searching, event inspection, grouped issue analysis, timeline visualization, and CSV export.
+TraceScope began as a focused Qt/C++ desktop application for inspecting structured JSON Lines telemetry logs. The original prototype provided a complete investigation workflow for its supported schema, including loading, filtering, searching, event inspection, grouped issue analysis, timeline visualization, and CSV export.
 
 Through the completed expansion phases, TraceScope has grown into a configurable native desktop workbench for importing, normalizing, inspecting, filtering, comparing, annotating, reporting on, and live-following application and system logs.
 
-The current product position is:
+This document records the **completed v1.0 expansion**, from the original prototype through Phase 16 and the published stable **`v1.0.0` release**. The phases below describe delivered work and historical scope decisions, not outstanding release tasks.
+
+At v1.0.0, the product position is:
 
 > TraceScope supports multiple built-in log formats and reusable import profiles that map source fields into a common investigation model.
 
 TraceScope does not claim automatic understanding of every arbitrary log format. Import behavior remains explicit, configurable, testable, and reproducible.
 
-## Product Principles
+## Principles That Guided the Expansion
 
-Development follows these principles:
+The completed v1.0 development effort followed these principles:
 
-* Remain an offline native desktop application built with C++ and Qt.
-* Support multiple built-in formats through a common importer architecture.
-* Use reusable, versioned import profiles for source-specific field mappings.
-* Treat canonical log fields as optional whenever practical.
-* Preserve unknown source fields as custom attributes.
-* Preserve raw source records and source-location metadata.
-* Limit missing-field effects to features that depend on those fields.
-* Keep analysis deterministic and explainable.
-* Keep prospective-user and employer-facing claims conservative and directly supported by the implementation.
-* Avoid paid infrastructure and unnecessary external services.
-* Complete each phase with passing tests and downloadable Windows and Linux packages.
+* An offline native desktop application built with C++ and Qt.
+* Multiple built-in formats behind a common importer architecture.
+* Reusable, versioned import profiles for source-specific field mappings.
+* Optional canonical log fields wherever practical.
+* Preservation of unknown source fields as custom attributes.
+* Preservation of raw source records and source-location metadata.
+* Missing-field effects limited to the features that depend on those fields.
+* Deterministic, explainable analysis.
+* Conservative prospective-user and employer-facing claims supported by the implementation.
+* No paid infrastructure or unnecessary external services.
+* Passing tests and downloadable Windows and Linux packages at release milestones.
 
-## Product Positioning, Adoption, and Scope Discipline
+## Product Positioning and Scope Decisions
 
-TraceScope remains focused on file-based telemetry and diagnostic investigation for applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. Broader adoption is desirable, but new capabilities should strengthen this primary use case rather than reposition the application around unrelated markets.
+The v1.0 expansion kept TraceScope focused on file-based telemetry and diagnostic investigation for applications, services, simulated devices, sensors, QA runs, field-support packages, and engineering test systems. Feature choices strengthened that primary use case rather than repositioning the application around unrelated markets.
 
 TraceScope occupies the space between raw-file and text-log viewers and centralized observability platforms. Its value is a structured, repeatable, offline investigation workflow without requiring log-shipping infrastructure, a hosted backend, user accounts, or an indexing service.
 
-The project should be evaluated against the tools its intended users may already reach for, including text editors and command-line utilities, fast raw-log viewers, structured desktop log-analysis tools, and centralized observability systems. TraceScope does not need to outperform every category at its specialty. Instead, it should reduce the friction of moving from unfamiliar files to a useful structured investigation while preserving source-specific information and keeping the workflow local and reproducible.
+The positioning exercise considered tools its intended users might already reach for: text editors and command-line utilities, fast raw-log viewers, structured desktop log-analysis tools, and centralized observability systems. The goal was not to outperform every category at its specialty, but to reduce the friction of moving from unfamiliar files to a useful structured investigation while preserving source-specific information and keeping the workflow local and reproducible.
 
-Format breadth is an enabling capability rather than the primary product differentiator. TraceScope should support a practical set of representative structured and operational log families plus reusable configurable import profiles. Additional formats should be added only when they materially reduce friction for the intended audience or reuse existing importer architecture at low incremental cost.
+Format breadth was treated as an enabling capability rather than the primary product differentiator. The expansion delivered a practical set of representative structured and operational log families plus reusable configurable import profiles. Additional formats were deliberately left outside v1.0 unless they justified their cost through clear target-user value or reuse of existing importer architecture.
 
-Once representative ingestion coverage is established, development priority shifts from format count to investigation depth. Large-file responsiveness, multi-session investigation, advanced filtering and navigation, findings, deterministic analytics, session comparison, persistence, reporting, and live following are expected to provide more target-user value than indefinitely expanding the built-in format list.
+After representative ingestion coverage was established, development shifted from format count to investigation depth. The completed phases prioritized large-file responsiveness, multi-session investigation, advanced filtering and navigation, findings, deterministic analytics, session comparison, persistence, reporting, and live following over indefinitely expanding the built-in format list.
 
-Roadmap evolution should normally substitute, reinterpret, or reprioritize planned work rather than increase the overall project scope. New work should earn its place through demonstrated target-user value, architectural leverage, or replacement of lower-value planned work. The expansion should remain finishable on approximately the scale originally intended.
+Scope changes generally substituted, reinterpreted, or reprioritized planned work instead of automatically expanding the project. New work was evaluated against target-user value, architectural leverage, and the opportunity to replace lower-value items. This discipline kept the expansion bounded through its v1.0 completion.
 
-Important target workflows include:
+The completed expansion emphasized these target workflows:
 
 * moving quickly from unfamiliar source files to structured investigation
 * reusing parsing and normalization configuration instead of rebuilding one-off scripts
@@ -54,7 +56,7 @@ Important target workflows include:
 
 ## Original Prototype Baseline
 
-The original prototype uses:
+The original prototype used:
 
 * C++17
 * Qt 6
@@ -64,7 +66,7 @@ The original prototype uses:
 * Qt Test
 * MinGW 64-bit on Windows
 
-Original-prototype capabilities include:
+Original-prototype capabilities included:
 
 * JSON Lines log loading
 * structured telemetry parsing
@@ -82,13 +84,13 @@ Original-prototype capabilities include:
 
 The original prototype began with a fixed telemetry-event presentation, a `QTableWidget` event display, and a `MainWindow` that owned substantial application state and UI orchestration.
 
-Beginning with `v0.2.0`, the ingestion layer introduced a flexible investigation-record and import domain. `v0.3.0` moved JSON Lines behavior behind the common importer architecture, and `v0.4.0` migrated the primary event display to Qt model/view architecture so flexible investigation records and dynamic custom attributes now reach the desktop UI directly.
+Beginning with `v0.2.0`, the ingestion layer introduced a flexible investigation-record and import domain. `v0.3.0` moved JSON Lines behavior behind the common importer architecture, and `v0.4.0` migrated the primary event display to Qt model/view architecture so flexible investigation records and dynamic custom attributes could reach the desktop UI directly.
 
-These original constraints form the starting point for the expansion rather than defects in the completed prototype.
+These original constraints were the starting point for the expansion, not defects in the completed prototype.
 
-## Release Discipline
+## Release and Verification Record
 
-Each completed development phase should produce:
+The expansion used the following release and verification checklist, as applicable to each milestone:
 
 * passing Windows and Linux CI builds
 * passing automated tests on both platforms
@@ -103,7 +105,7 @@ Each completed development phase should produce:
 * attached Windows, Linux, and samples assets
 * clean smoke tests of the downloaded release packages
 
-GitHub Actions artifacts are used for build verification. Approved packages are then attached to GitHub Releases as permanent public downloads for prospective users and as directly verifiable project artifacts for employers and reviewers.
+GitHub Actions artifacts provided build verification. Approved packages were attached to GitHub Releases as public downloads for prospective users and as directly verifiable project artifacts for employers and reviewers.
 
 Completed release milestones:
 
@@ -126,13 +128,16 @@ Completed release milestones:
 | `v0.14.0` | Workspace and Profile Persistence | prerelease |
 | `v0.15.0` | Reporting and Export | prerelease |
 | `v0.16.0` | Live File Following | prerelease |
+| `v1.0.0` | Final UI Polish, Documentation, and Stable Release | stable release — published |
 
-Release assets follow a consistent naming convention:
+Versioned release assets use the following naming convention:
 
 ```text
 TraceScope-v<version>-windows-x64.zip
 TraceScope-v<version>-linux-x86_64.AppImage
 TraceScope-v<version>-samples.zip
+TraceScope-v<version>-live-log-generator-windows-x64.zip
+TraceScope-v<version>-live-log-generator-linux-x86_64.zip
 ```
 
 ## Canonical Investigation Record
@@ -156,13 +161,13 @@ The record also preserves:
 
 Import processing separately returns structured diagnostics that can identify malformed records or canonical values that could not be mapped.
 
-Missing canonical fields do not automatically invalidate an otherwise useful source record. Features that require a timestamp, severity, event code, or another specific field may be unavailable when that field is absent, while unrelated inspection and future search features can continue to use the preserved record content.
+Missing canonical fields do not automatically invalidate an otherwise useful source record. Features that require a timestamp, severity, event code, or another specific field may be unavailable when that field is absent, while unrelated inspection and search features can still use the preserved record content.
 
 The `v0.2.0` implementation includes typed severity parsing, ISO timestamp parsing, dynamic custom attributes, raw-source preservation, source metadata, deterministic stable identities, import results, and import diagnostics.
 
-## Import Architecture
+## Implemented Architecture and Capabilities
 
-Implemented foundations through `v0.16.0`:
+Implemented foundations through `v1.0.0`:
 
 * flexible investigation records with optional canonical fields and preserved source data
 * structured import results and diagnostics
@@ -186,9 +191,9 @@ Implemented foundations through `v0.16.0`:
 * scalable event-count timeline rendering with automatic and manual resolutions, windowed fine-resolution navigation, and bounded on-screen bucket materialization
 * multi-session workspace ownership with independent per-session investigation controllers and retained import context
 * session switching, closing, and in-place reload using stable session identities
-* generic workspace-document hosting that supports session and comparison documents in the main window or detachable/re-dockable workspace windows
+* generic workspace-document hosting for session and comparison documents across equivalent native top-level workspace windows, with detachable/re-dockable documents and window-local command routing
 * tab reordering, tab tear-out, re-docking, movement between detached windows, multi-document detached windows, and deterministic document closing
-* immutable structured comparison snapshots built from complete imported-session records rather than the sessions' current filtered views
+* immutable structured comparison snapshots built from currently admitted per-session records, optionally limited by independently captured active time ranges, without inheriting other active filters
 * directional Baseline → Comparison analysis with explicit Comparison − Baseline deltas and capability-aware unavailable states
 * comparison of event-code appearance/disappearance/change, severity counts, elevated subsystem/entity activity, conservative shared custom fields, session context, and optionally shared-settings burst analysis
 * dedicated comparison documents with impact-first presentation, compact source orientation, and no causal or root-cause claims
@@ -232,7 +237,7 @@ Implemented foundations through `v0.16.0`:
 * atomic HTML writing through `QSaveFile`
 * automated coverage for report configuration/resolution, immutable snapshot construction, findings export, selected-record formatting, HTML escaping/privacy, comparison rendering, sparse-data behavior, report structure/navigation, and end-to-end export integration
 * incremental live-follow ingestion through the existing investigation model, with newly admitted records entering the table and active filters without replacing the session
-* live pause/resume/stop controls, coalesced derived-view refresh, and an optional Follow Newest table anchor for actively growing investigations
+* live pause/resume/stop controls, coalesced derived-view refresh, and optional Follow Newest navigation for the event table and timeline during actively growing investigations
 * live handling for supported line-oriented and structured sources, including incomplete-record deferral where a producer has not yet finished writing a parseable record or document state
 * explicit same-path source-generation handling for truncation and replacement, plus rotated source-family discovery/import while the active physical file remains the live-follow target
 * stable logical-source identity and source-aware record identities so surviving bookmarks, notes, and finding state can persist across reload, reconnection, relocation, and source-family continuation
@@ -241,14 +246,26 @@ Implemented foundations through `v0.16.0`:
 * standalone investigation snapshot open/save, Preserve as Snapshot Only, verified source relocation, source reconnection, and Use Source as Authoritative workflows
 * identity-aware SourceBacked reload and workspace restoration paths that verify source continuity before mutating an open investigation
 * a standalone scenario-driven live-log generator used to reproduce append, truncation, replacement, rotation, structured-document, and continuous producer behavior during manual verification
+* equivalent native workspace-window behavior, explicit empty-workspace/new-workspace lifecycle, unsaved-change tracking, and protection of open documents when a window closes
+* isolated working snapshot artifacts for uncommitted workspace evidence, separate from durable saved workspace packages
+* persisted live Interface Scale preferences, scale-aware event-table presentation and column-width restoration, and fractional/high-DPI layout refinements
+* manually collapsible investigation sections with preserved preferred sizes and automatic constrained-height capacity handling
+* context-menu filtering from event-table values and direct analytics frequency drill-down into supporting investigation records
+* Follow Newest table/timeline coordination, including stable follow intent through transient live-follow errors
+* independent per-side active time-range capture for immutable Baseline → Comparison documents, with scoped context retained in workspace persistence and reports
+* refined self-contained HTML reports with responsive navigation, comparison presentation, expansion controls, and print layout
+* completed v1.0 user guides, format/profile references, architecture and test documentation, performance notes, sample/profile checks, and final README and documentation hub
+* refreshed example reports, diagrams, feature screenshots, and animated workflow demonstrations
+* versioned v1.0 Windows/Linux application packages, separate Windows/Linux Live-Log Generator packages, and a samples archive containing example logs, profiles, and scenarios
+* automated release-package content verification and packaged-application/generator startup smoke testing in CI
 
-Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The desktop workflow now exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
+Reusable import profiles are versioned, human-readable JSON so mappings can be reused, shared, and committed alongside the applications that produce the logs. The completed desktop workflow exposes those profile and preview services directly while keeping import behavior explicit and reproducible.
 
-Importers are registered internally. An external binary plugin ecosystem is not part of the initial expansion.
+Importers are registered internally. An external binary plugin ecosystem was outside the completed v1.0 scope.
 
-Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release keeps supported imports responsive through background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 completed local workspace persistence in `v0.14.0`, allowing source/profile context, investigation state, immutable comparison snapshots, document organization, and detached-window layouts to survive application restarts with explicit missing-source recovery. Phase 14 completed the static investigation handoff workflow in `v0.15.0` with selected-record copy, structured findings export, and self-contained HTML investigation/comparison reporting built from immutable point-in-time capture. Phase 15 completed live file following in `v0.16.0`, extending the same file-oriented investigation model to actively written sources while preserving durable evidence, stable source identity, explicit backing/source lifecycle semantics, and the immutable capture boundaries already established for comparisons and reports. Phase 16 is now active and focuses on final cross-workflow polish, documentation, packaging, claims review, and the stable `v1.0.0` release.
+Phase 6 established the representative ingestion baseline in `v0.7.0`. Phase 7 then shifted attention from format breadth to responsiveness and investigation scalability. The `v0.8.0` release introduced background parsing, progress/cancellation behavior, large-structured-document preview safeguards, and timeline scaling work to keep supported imports responsive. Phase 8 completed the transition from a single replaceable investigation to a multi-session workspace in `v0.9.0`. Phase 9 completed the advanced filtering, preset, navigation, and drill-down workflow in `v0.10.0`. Phase 10 added bookmarks, notes, finding status, findings review, and source navigation in `v0.11.0`. Phase 11 completed deterministic analytics, subsystem/severity trend presentation, adaptive cadence analysis, and configurable burst detection in `v0.12.0`. Phase 12 completed structured session comparison, generalized detachable workspace documents, and the responsive hardening needed to make those documents practical in split-screen and portrait layouts in `v0.13.0`. Phase 13 completed local workspace persistence in `v0.14.0`, allowing source/profile context, investigation state, immutable comparison snapshots, document organization, and detached-window layouts to survive application restarts with explicit missing-source recovery. Phase 14 completed the static investigation handoff workflow in `v0.15.0` with selected-record copy, structured findings export, and self-contained HTML investigation/comparison reporting built from immutable point-in-time capture. Phase 15 completed live file following in `v0.16.0`, extending the same file-oriented investigation model to actively written sources while preserving durable evidence, stable source identity, explicit backing/source lifecycle semantics, and the immutable capture boundaries already established for comparisons and reports. Phase 16 completed the final cross-workflow polish, equal-window workspace and responsive presentation refinements, documentation and visual-reference overhaul, packaging and claims review, and publication of the stable `v1.0.0` release.
 
-## Development Phases
+## Completed Development Phases
 
 ### Phase 0 — CI, Packaging, and Prototype Release Baseline
 
@@ -450,15 +467,15 @@ Additional maintenance completed during the phase:
 * improved subsystem-filter usability for long values
 * expanded CI package verification to cover representative `v0.7.0` source/profile pairs
 
-Phase 6 establishes sufficient ingestion breadth for the current expansion. Native EVTX ingestion, CEF, LEEF, and additional format families are not part of `v0.7.0`. They may be reconsidered later only if target-user demand or architectural leverage justifies replacing higher-cost or lower-value planned work rather than silently increasing total scope.
+Phase 6 established the representative ingestion breadth used by the later expansion phases. Native EVTX ingestion, CEF, LEEF, and additional format families were excluded from `v0.7.0` and remained outside the completed v1.0 scope. Any later reconsideration would be a separate scope decision rather than an unfinished Phase 6 deliverable.
 
 ### Phase 7 — Responsive Large-File Import
 
 **Status: Completed in `v0.8.0`.**
 
-With representative ingestion coverage established in `v0.7.0`, this phase shifts development priority from additional format count to the responsiveness and scalability of practical investigations.
+With representative ingestion coverage established in `v0.7.0`, Phase 7 shifted development priority from additional formats to the responsiveness and scalability of practical investigations.
 
-The goal is to keep the structured investigation workflow usable as representative engineering and diagnostic files grow, while documenting observed behavior conservatively rather than implying a universal maximum file size or throughput guarantee.
+The phase focused on keeping structured investigations usable with larger representative engineering and diagnostic files. Measurements were documented conservatively, without claiming a universal maximum file size or throughput guarantee.
 
 Completed deliverables:
 
@@ -486,7 +503,7 @@ Measured Phase 7 scenarios on the documented Windows development system:
 
 All measured scenarios remained responsive after the resulting investigation was displayed. Cancellation was also manually verified against large JSON Lines and Windows Event XML imports, with the prior investigation preserved and no partial result installed. These observations are evidence from one test system and are not hard limits or guarantees for other files or machines.
 
-Timeline scalability work was pulled forward from the later analytics phase because large-file testing exposed it as part of the same practical responsiveness problem. Completed timeline work now includes:
+Timeline scalability work was pulled forward from the later analytics phase because large-file testing exposed it as part of the same practical responsiveness problem. The completed work included:
 
 * user-selectable timeline resolutions from millisecond through day-scale intervals
 * automatic/adaptive resolution selection based on the investigation time span
@@ -503,7 +520,7 @@ Additional maintenance completed during the phase:
 * made the Import Configuration raw-source preview vertically resizable for multiline structured JSON and XML records
 * corrected large-XML preview behavior discovered during performance verification without weakening conservative Windows Event XML format detection
 
-Performance work should continue to be measured against practical investigation workflows. Future documentation must keep observed test scenarios distinct from unsupported maximum-size, memory, or throughput claims.
+The completed performance notes report practical investigation workflows and distinguish observed test scenarios from unsupported maximum-size, memory, or throughput guarantees. Any future performance claims would require their own supporting measurements.
 
 ### Phase 8 — Multi-Session Investigation Workspace
 
@@ -603,7 +620,7 @@ Completed deliverables:
 
 Added deterministic, explainable investigation summaries that help users recognize timing, frequency, severity, subsystem, entity, and event-code patterns without turning TraceScope into a generalized observability dashboard.
 
-The scalable timeline foundation originally planned for this phase was pulled forward during Phase 7 because large-file verification showed that resolution selection, bounded bucket materialization, and horizontal navigation were required for practical investigations. Phase 11 builds on that foundation and on the grouped-summary/timeline drill-down completed in Phase 9 rather than reimplementing either workflow.
+The scalable timeline foundation originally planned for this phase was pulled forward during Phase 7 because large-file verification showed that resolution selection, bounded bucket materialization, and horizontal navigation were required for practical investigations. Phase 11 built on that foundation and on the grouped-summary/timeline drill-down completed in Phase 9 rather than reimplementing either workflow.
 
 Analytics degrade independently when canonical fields are missing. A source without severity, event code, subsystem, entity ID, or usable timestamps loses only the analysis that depends on that dimension while unrelated inspection and analysis remain available.
 
@@ -673,7 +690,7 @@ Completed deliverables:
 * source-session reload or closure without mutation of already-created comparison snapshots
 * automated coverage for comparison analyzers, immutable snapshot construction, complete-record semantics, source-reload independence, burst-request state, dialog defaults, orientation swapping, validation, and shared burst defaults
 * generalized workspace-document hosting so both investigations and comparison documents can be reordered, detached, re-docked, moved between detached windows, grouped in detached windows, and closed consistently
-* responsive workspace hardening pulled forward from Phase 16 because detachable documents are expected to be used side-by-side and on portrait-oriented secondary displays
+* responsive workspace hardening pulled forward from Phase 16 because detachable documents needed to remain usable side-by-side and on portrait-oriented secondary displays
 * narrow-layout behavior that elides long session summaries without losing full tooltip context, reflows filter and selected-event controls only when constrained, allows review tables to shrink/scroll instead of forcing window width, gives Findings/Analytics appropriate priority over Selected Event Details, and reduces the visible fine-resolution timeline bucket window as horizontal space decreases
 * manual verification in representative horizontally split and portrait-monitor layouts
 * local full-suite regression verification
@@ -759,7 +776,7 @@ Extended TraceScope to support files that are actively receiving new records so 
 
 Live following extends the existing investigation model rather than creating a separate monitoring product. TraceScope remains file-oriented and offline: the external file is still the producer-facing boundary, while the open investigation retains explicit source identity, evidence, annotation, and persistence semantics.
 
-The existing Phase 12/13 comparison documents and Phase 14 report snapshots establish stable point-in-time semantics. An immutable comparison preserves the meaning of a Baseline → Comparison analysis at the moment the comparison is created, while an exported report preserves the selected investigation/comparison state captured when report generation begins. Phase 15 preserves those boundaries for live-followed sessions: later appends, filtering, reloads, source transitions, workspace restoration, or session closure do not silently mutate an existing comparison or generated report.
+The existing Phase 12/13 comparison documents and Phase 14 report snapshots establish stable point-in-time semantics. An immutable comparison preserves the meaning of a Baseline → Comparison analysis at the moment the comparison is created, while an exported report preserves the selected investigation/comparison state captured when report generation begins. Phase 15 preserved those boundaries for live-followed sessions: later appends, filtering, reloads, source transitions, workspace restoration, or session closure do not silently mutate an existing comparison or generated report.
 
 Phase 15 also explicitly evaluated a separate continuously updating comparison workflow. Recomputing the existing whole-session Baseline → Comparison model as a live run grows was rejected because incomplete sessions make cumulative record counts, timing coverage, and several existing comparison dimensions progressively difficult to interpret. A higher-value future design would instead compare a known-good baseline against a bounded recent window of a live-followed run using rate- and change-oriented signals such as elevated-event rates, severity proportions, newly appearing event codes, elevated subsystems or entities, and active burst behavior. That would require a distinct analysis model, live document lifecycle, refresh policy, and persistence semantics, so it remains a potential post-1.0 feature rather than part of the completed Phase 15 scope.
 
@@ -795,36 +812,61 @@ Completed deliverables:
 
 ### Phase 16 — Final UI Polish, Documentation, and 1.0 Release
 
-**Status: In progress.**
+**Status: Completed in `v1.0.0`; stable release published.**
 
-The active final phase focuses on cross-workflow UI polish, user-facing documentation, packaging, and a stable downloadable release that accurately presents TraceScope as a configurable offline log-analysis workbench for engineering and diagnostic use.
+Completed the final cross-workflow work needed to turn the expanded application into a coherent v1.0 desktop release. Phase 12 had already established the initial responsive layout foundation for detachable documents; Phase 16 refined that foundation for equivalent workspace windows, live interface scaling, constrained displays, and the investigation and reporting workflows added afterward.
 
-The foundational constrained-layout work originally planned for this phase was pulled forward and completed during Phase 12 because detachable workspace documents make side-by-side and portrait-oriented use part of the normal investigation workflow rather than a final-release edge case. Phase 16 should build on that responsive foundation instead of reimplementing it.
+The phase also closed several small but consequential workflow gaps discovered during final testing and documentation. It retained TraceScope's offline, file-oriented product boundary and did not introduce a hosted service, generalized monitoring platform, or speculative format expansion.
 
-Final documentation should make the supported-format boundary, optional canonical-field model, profile-driven import architecture, large-file behavior, multi-session and comparison workflows, persistence behavior, reporting capabilities, live-following boundary, and scope exclusions clear enough that prospective users can decide whether TraceScope fits their workflow. Employer-facing material should remain secondary to that product clarity while still making the architecture, testing, CI/release discipline, and conservative engineering decisions directly verifiable.
+Completed deliverables:
 
-Planned deliverables:
+**Workspace lifecycle and evidence safety**
 
-* final cross-workflow UI consistency and small visual cleanup across features completed in earlier phases
-* responsive regression verification for the final persistence, reporting, and live-following surfaces introduced after the Phase 12 hardening pass
-* representative full-width, horizontally split, and portrait-layout regression verification before `v1.0.0`
-* final Windows and Linux TraceScope distributables
-* Windows and Linux Live-Log Generator convenience packages built from the final tagged source, with the generator remaining separate from the primary TraceScope application packages
-* automated release packaging
-* architecture documentation
-* import-profile specification
-* supported-format documentation
-* test strategy
-* performance notes
-* sample investigations
-* polished screenshots
-* final README
-* product and portfolio claims review
-* stable `v1.0.0` release
+* equivalent native top-level workspace windows, with application/workspace commands and file-opening actions routed appropriately from the active peer rather than privileging one visible main window
+* document detaching, re-docking, transfer, and window-close behavior that preserve open investigation and comparison documents when a non-final workspace window closes
+* responsive empty-workspace start state, recent-item access, explicit New Workspace workflow, and appropriate handling of the final document closing
+* workspace identity and unsaved-change tracking, including protection from silently discarding an existing workspace during close, open, or replacement operations
+* disabled workspace saving when no documents are open and preservation of the intended workspace document and selection state across lifecycle transitions
+* temporary working-snapshot isolation for uncommitted workspace evidence so provisional artifacts do not overwrite durable saved snapshots
 
-## Scope Exclusions
+**Interface consistency, responsiveness, and investigation workflow**
 
-The current roadmap does not expand TraceScope into:
+* persisted, live-adjustable Interface Scale with scale-aware layout updates across the investigation workspace, event table, filter controls, tabs, findings, analytics, timeline, and details surfaces
+* high-DPI and constrained-layout polish, including scaled row/header geometry, bookmark and note presentation, consistent control sizing, and corrected splitter and dialog minimum-size behavior
+* manually collapsible Timeline, Telemetry Events, and lower investigation sections, with remembered preferred sizes and responsive section-capacity behavior when available vertical space is limited
+* safeguards against inaccessible or unintentionally collapsed content in Import Configuration, Event Details, Analytics, and other densely populated surfaces
+* preservation and restoration of manually adjusted event-table column widths across Interface Scale changes and workspace persistence
+* contextual **Filter by This Value** and **Remove This Filter** actions for populated event-table categories and custom attributes, with clearer active-filter presentation
+* direct drill-down from deterministic analytics frequency summaries to the supporting filtered investigation records
+* coordinated Follow Newest behavior for the event table and timeline, including selection behavior, manual navigation, and preservation of follow intent through transient live-follow errors
+* independent active time-range capture for either side of a Baseline → Comparison analysis, with explicit immutable scope/context retained in comparison documents, workspace persistence, and generated reports
+* refined HTML report navigation, expandable detail/evidence controls, responsive tables, comparison ordering, and print presentation without changing the report's self-contained offline format
+* final visual and behavior consistency work across Event Table, Event Details, table headers, window controls, import configuration, and comparison presentation
+
+**Documentation, samples, and release presentation**
+
+* complete v1.0 user walkthroughs for getting started, importing, investigating, findings, saving/restoring, Live Following, comparisons, and reporting/export
+* reviewed reference and technical documentation for supported formats, import profiles, architecture, testing, source builds, performance, troubleshooting, and the separate Live-Log Generator
+* verified and corrected bundled sample import profiles and organized generator scenarios and matching profiles under `samples/scenarios/` and `samples/profiles/`
+* redesigned README and documentation landing page around end-user workflows and clear links to detailed reference material
+* refreshed screenshots, animated demonstrations, rendered architecture diagrams, and an illustrative self-contained HTML investigation report with a browser-print PDF example
+* final product, documentation, and employer-facing claims review, retaining explicit supported-format boundaries and conservative performance, analytics, comparison, and live-ingestion claims
+
+**Verification, packaging, and publication**
+
+* expanded automated regression coverage for workspace/window ownership, source and working-artifact persistence, investigation presentation and scale restoration, time-scoped comparisons, filtering/drill-down, and report behavior
+* final local regression and representative manual workflow checks across multi-window, high-scale, split-screen, constrained-height, live-following, comparison, workspace restoration, and reporting behavior
+* v1.0 versioned GitHub Actions packaging for the portable Windows x64 TraceScope ZIP and Linux x86_64 TraceScope AppImage
+* separate Windows and Linux Live-Log Generator convenience distributions, keeping its CLI, launcher, scenarios, and matching profiles independent of the main TraceScope application packages
+* platform-neutral samples ZIP containing representative log files, import profiles, and scenario files
+* CI verification of required package contents, cross-platform automated tests, and startup smoke tests against assembled application and generator packages
+* final v1.0 documentation, release notes, tag, downloadable assets, and publication of the stable **`v1.0.0` GitHub release**
+
+Phase 16 **closed the v1.0 expansion**. The published stable release combines the earlier phases' format-independent investigation architecture, deterministic analysis, durable evidence handling, offline reporting, and live file following with a verified and documented desktop workflow. Ideas considered for later releases remain separate from this completed milestone.
+
+## v1.0 Scope Exclusions
+
+The completed v1.0 expansion did not include:
 
 * a web application
 * an ASP.NET backend
@@ -835,6 +877,6 @@ The current roadmap does not expand TraceScope into:
 * an AI incident-analysis product
 * a packet-capture tool
 * an enterprise observability platform
-* an external binary plugin ecosystem during the initial expansion
+* an external binary plugin ecosystem
 
 TraceScope remains an offline, configurable, native developer tool.

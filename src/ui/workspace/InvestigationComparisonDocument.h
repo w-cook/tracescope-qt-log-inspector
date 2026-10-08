@@ -29,6 +29,9 @@ public:
             &state
         );
 
+    void refreshInterfaceScale()
+        override;
+
 private:
     InvestigationComparisonSnapshot m_snapshot;
 

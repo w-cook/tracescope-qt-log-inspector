@@ -6,9 +6,13 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSizePolicy>
+#include <QSpacerItem>
 #include <QVBoxLayout>
 
 #include <utility>
+
+#include "InterfaceScale.h"
 
 CustomFieldFilterEditor::
     CustomFieldFilterEditor(
@@ -47,10 +51,13 @@ CustomFieldFilterEditor::
         );
 
     mainLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
-    auto *inputLayout =
+    inputLayout =
         new QHBoxLayout();
 
     inputLayout->setContentsMargins(
@@ -61,7 +68,10 @@ CustomFieldFilterEditor::
         );
 
     inputLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     auto *fieldLabel =
@@ -77,11 +87,17 @@ CustomFieldFilterEditor::
             );
 
     fieldCombo->setMinimumWidth(
-        180
+        InterfaceScale::pixels(
+            180,
+            fieldCombo
+            )
         );
 
     valueEdit->setMinimumWidth(
-        220
+        InterfaceScale::pixels(
+            220,
+            valueEdit
+            )
         );
 
     valueEdit->setPlaceholderText(
@@ -100,8 +116,19 @@ CustomFieldFilterEditor::
         fieldCombo
         );
 
-    inputLayout->addSpacing(
-        8
+    fieldValueSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                8,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    inputLayout->addItem(
+        fieldValueSpacing
         );
 
     inputLayout->addWidget(
@@ -129,7 +156,10 @@ CustomFieldFilterEditor::
         );
 
     activeFiltersLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            activeFiltersWidget
+            )
         );
 
     mainLayout->addWidget(
@@ -367,6 +397,76 @@ void CustomFieldFilterEditor::
 }
 
 void CustomFieldFilterEditor::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (inputLayout != nullptr) {
+        inputLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        inputLayout->invalidate();
+    }
+
+    fieldCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            180,
+            fieldCombo
+            )
+        );
+
+    valueEdit->setMinimumWidth(
+        InterfaceScale::pixels(
+            220,
+            valueEdit
+            )
+        );
+
+    if (fieldValueSpacing != nullptr) {
+        fieldValueSpacing->changeSize(
+            InterfaceScale::pixels(
+                8,
+                this
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+    }
+
+    activeFiltersLayout->setSpacing(
+        InterfaceScale::pixels(
+            2,
+            activeFiltersWidget
+            )
+        );
+
+    /*
+     * Active rows own scale-sensitive spacing that
+     * was calculated when each row was constructed.
+     * Rebuilding them is presentation-only and does
+     * not alter the filter model or emit a change.
+     */
+    rebuildActiveFilters();
+
+    updateGeometry();
+    update();
+}
+
+void CustomFieldFilterEditor::
     addCurrentFilter()
 {
     const QString field =
@@ -482,7 +582,10 @@ void CustomFieldFilterEditor::
                 );
 
             rowLayout->setSpacing(
-                6
+                InterfaceScale::pixels(
+                    6,
+                    row
+                    )
                 );
 
             auto *label =

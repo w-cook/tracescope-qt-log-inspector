@@ -2,6 +2,7 @@
 
 #include <QUuid>
 
+#include <stdexcept>
 #include <utility>
 
 #include "../analysis/InvestigationSessionComparisonAnalyzer.h"
@@ -11,20 +12,87 @@ InvestigationComparisonSnapshotBuilder::build(
     const InvestigationSession &baselineSession,
     const InvestigationSession &comparisonSession,
     std::optional<BurstDetectionSettings>
-        burstSettings
+        burstSettings,
+    std::optional<InvestigationComparisonTimeRange>
+        baselineTimeRange,
+    std::optional<InvestigationComparisonTimeRange>
+        comparisonTimeRange
     ) const
 {
     const QVector<InvestigationRecord> &
-        baselineRecords =
+        allBaselineRecords =
         baselineSession
             .investigationController()
             ->allRecords();
 
     const QVector<InvestigationRecord> &
-        comparisonRecords =
+        allComparisonRecords =
         comparisonSession
             .investigationController()
             ->allRecords();
+
+    /*
+     * Complete-session comparisons retain the
+     * existing behavior and avoid unnecessary
+     * copies of the imported record populations.
+     */
+    QVector<InvestigationRecord>
+        selectedBaselineRecords;
+
+    QVector<InvestigationRecord>
+        selectedComparisonRecords;
+
+    if (baselineTimeRange.has_value()) {
+        if (!baselineTimeRange->isValid()) {
+            throw std::invalid_argument(
+                "Invalid baseline time range."
+                );
+        }
+
+        selectedBaselineRecords =
+            selectComparisonTimeRangeRecords(
+                allBaselineRecords,
+                *baselineTimeRange
+                );
+
+        if (selectedBaselineRecords.isEmpty()) {
+            throw std::invalid_argument(
+                "Baseline time range selects no records."
+                );
+        }
+    }
+
+    if (comparisonTimeRange.has_value()) {
+        if (!comparisonTimeRange->isValid()) {
+            throw std::invalid_argument(
+                "Invalid comparison time range."
+                );
+        }
+
+        selectedComparisonRecords =
+            selectComparisonTimeRangeRecords(
+                allComparisonRecords,
+                *comparisonTimeRange
+                );
+
+        if (selectedComparisonRecords.isEmpty()) {
+            throw std::invalid_argument(
+                "Comparison time range selects no records."
+                );
+        }
+    }
+
+    const QVector<InvestigationRecord> &
+        baselineRecords =
+        baselineTimeRange.has_value()
+            ? selectedBaselineRecords
+            : allBaselineRecords;
+
+    const QVector<InvestigationRecord> &
+        comparisonRecords =
+        comparisonTimeRange.has_value()
+            ? selectedComparisonRecords
+            : allComparisonRecords;
 
     InvestigationSessionComparisonAnalyzer analyzer;
 
@@ -35,7 +103,7 @@ InvestigationComparisonSnapshotBuilder::build(
             analyzer.compare(
                 baselineRecords,
                 comparisonRecords,
-                burstSettings.value()
+                *burstSettings
                 );
     } else {
         analysis =
@@ -54,6 +122,9 @@ InvestigationComparisonSnapshotBuilder::build(
     baselineSource.sourceMetadata =
         baselineSession.sourceMetadata();
 
+    baselineSource.capturedTimeRange =
+        std::move(baselineTimeRange);
+
     InvestigationComparisonSourceSnapshot
         comparisonSource;
 
@@ -62,6 +133,9 @@ InvestigationComparisonSnapshotBuilder::build(
 
     comparisonSource.sourceMetadata =
         comparisonSession.sourceMetadata();
+
+    comparisonSource.capturedTimeRange =
+        std::move(comparisonTimeRange);
 
     return InvestigationComparisonSnapshot(
         QUuid::createUuid().toString(

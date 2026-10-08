@@ -5,6 +5,7 @@
 
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QSet>
 
 namespace
 {
@@ -722,6 +723,24 @@ QJsonObject
         );
 
     eventTable.insert(
+        QStringLiteral("manuallyResizedColumns"),
+        intVectorToJson(
+            state.eventTable.manuallyResizedColumns
+            )
+        );
+
+    if (std::isfinite(
+            state.eventTable.columnWidthScaleFactor
+            )
+        && state.eventTable.columnWidthScaleFactor > 0.0) {
+
+        eventTable.insert(
+            QStringLiteral("columnWidthScaleFactor"),
+            state.eventTable.columnWidthScaleFactor
+            );
+    }
+
+    eventTable.insert(
         QStringLiteral("sortColumn"),
         state.eventTable.sortColumn
         );
@@ -933,6 +952,86 @@ PresentationStateDeserializationResult
 
     state.eventTable.columnWidths =
         *columnWidths;
+
+
+    const QJsonValue manualColumnsValue =
+        eventTable.value(
+            QStringLiteral("manuallyResizedColumns")
+            );
+
+    if (manualColumnsValue.isUndefined()) {
+        /*
+         * Older workspaces did not distinguish manual
+         * widths from automatic widths.
+         *
+         * Treat existing non-final column widths as
+         * manual to preserve their previous scaling
+         * behavior.
+         */
+        for (int column = 0;
+             column + 1
+             < state.eventTable.columnWidths.size();
+             ++column) {
+            state.eventTable.manuallyResizedColumns.append(
+                column
+                );
+        }
+    } else {
+        const auto manualColumns =
+            intVectorFromJson(
+                manualColumnsValue
+                );
+
+        if (!manualColumns.has_value()) {
+            return failure(
+                QStringLiteral(
+                    "eventTable manuallyResizedColumns "
+                    "contains invalid values."
+                    )
+                );
+        }
+
+        QSet<int> seen;
+
+        for (int column : *manualColumns) {
+            if (column >=
+                    state.eventTable.columnWidths.size() - 1
+                || seen.contains(column)) {
+                return failure(
+                    QStringLiteral(
+                        "eventTable manuallyResizedColumns "
+                        "contains invalid column indices."
+                        )
+                    );
+            }
+
+            seen.insert(column);
+        }
+
+        state.eventTable.manuallyResizedColumns =
+            *manualColumns;
+    }
+
+    const QJsonValue scaleValue =
+        eventTable.value(
+            QStringLiteral("columnWidthScaleFactor")
+            );
+
+    if (!scaleValue.isUndefined()) {
+        if (!scaleValue.isDouble()
+            || !std::isfinite(scaleValue.toDouble())
+            || scaleValue.toDouble() <= 0.0) {
+            return failure(
+                QStringLiteral(
+                    "eventTable columnWidthScaleFactor "
+                    "must be a positive finite number."
+                    )
+                );
+        }
+
+        state.eventTable.columnWidthScaleFactor =
+            scaleValue.toDouble();
+    }
 
     state.eventTable.sortOrder =
         *sortOrder;

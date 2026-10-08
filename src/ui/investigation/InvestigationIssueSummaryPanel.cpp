@@ -2,14 +2,20 @@
 
 #include <QAbstractItemView>
 #include <QHeaderView>
+#include <QItemSelectionModel>
+#include <QModelIndex>
 #include <QScrollBar>
+#include <QSignalBlocker>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
-#include <QSignalBlocker>
 
 #include <algorithm>
 
+#include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../analysis/TelemetryIssueGroup.h"
 
 InvestigationIssueSummaryPanel::
@@ -35,6 +41,14 @@ InvestigationIssueSummaryPanel::
         tr("Total")
     });
 
+    m_table->horizontalHeader()->setHighlightSections(false);
+    m_table->verticalHeader()->setHighlightSections(false);
+
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
     m_table
         ->horizontalHeader()
         ->setSectionResizeMode(
@@ -52,7 +66,7 @@ InvestigationIssueSummaryPanel::
         );
 
     m_table->setSelectionBehavior(
-        QAbstractItemView::SelectItems
+        QAbstractItemView::SelectRows
         );
 
     m_table->setSelectionMode(
@@ -72,6 +86,12 @@ InvestigationIssueSummaryPanel::
             "Double-click a summary value to filter "
             "the investigation to the represented "
             "issues."
+            )
+        );
+
+    m_table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_table
             )
         );
 
@@ -270,6 +290,25 @@ void InvestigationIssueSummaryPanel::clear()
     updateMinimumTableWidth();
 }
 
+void InvestigationIssueSummaryPanel::
+    clearSelection()
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    m_table->clearSelection();
+
+    if (m_table->selectionModel() != nullptr) {
+        m_table
+            ->selectionModel()
+            ->setCurrentIndex(
+                QModelIndex(),
+                QItemSelectionModel::NoUpdate
+                );
+    }
+}
+
 int InvestigationIssueSummaryPanel::
     preferredCompactWidth() const
 {
@@ -287,10 +326,16 @@ int InvestigationIssueSummaryPanel::
               ->verticalScrollBar()
               ->sizeHint()
               .width()
-        + 8;
+        + InterfaceScale::pixels(
+            8,
+            this
+            );
 
     return preferredTableWidth
-           + 30;
+           + InterfaceScale::pixels(
+               30,
+               this
+               );
 }
 
 InvestigationTablePresentationState
@@ -379,6 +424,76 @@ void InvestigationIssueSummaryPanel::
                 )
             );
     }
+}
+
+
+void InvestigationIssueSummaryPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * Allow the application font and native style
+     * metrics to settle before measuring table rows.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_table == nullptr) {
+                return;
+            }
+
+            QHeaderView *header =
+                m_table->verticalHeader();
+
+            if (header == nullptr) {
+                return;
+            }
+
+            const int nativeDefault =
+                header->style()->pixelMetric(
+                    QStyle::PM_HeaderDefaultSectionSizeVertical,
+                    nullptr,
+                    header
+                    );
+
+            const int headerMargin =
+                header->style()->pixelMetric(
+                    QStyle::PM_HeaderMargin,
+                    nullptr,
+                    header
+                    );
+
+            const int textHeight =
+                std::max(
+                    m_table->fontMetrics().height(),
+                    header->fontMetrics().height()
+                    );
+
+            const int contentHeight =
+                textHeight
+                + 2 * headerMargin
+                + InterfaceScale::pixels(
+                    4,
+                    header
+                    );
+
+            header->setDefaultSectionSize(
+                std::max({
+                    nativeDefault,
+                    header->minimumSectionSize(),
+                    contentHeight
+                })
+                );
+
+            updateMinimumTableWidth();
+
+            m_table->updateGeometry();
+            m_table->viewport()->update();
+
+            updateGeometry();
+            update();
+        }
+        );
 }
 
 void InvestigationIssueSummaryPanel::

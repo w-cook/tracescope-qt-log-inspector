@@ -14,6 +14,7 @@
 class InvestigationSession;
 class QLabel;
 class QGroupBox;
+class QHBoxLayout;
 class QPlainTextEdit;
 class QPushButton;
 class QTableWidget;
@@ -42,6 +43,8 @@ public:
 
     void clear();
 
+    void clearOverviewSelection();
+
     InvestigationAnalyticsPresentationState
     capturePresentationState() const;
 
@@ -49,11 +52,25 @@ public:
         const InvestigationAnalyticsPresentationState &state
         );
 
+    void refreshInterfaceScale();
+
+    int minimumUsefulBurstHeight() const;
+
 signals:
+    void eventCodeDrillDownRequested(
+        const QString &eventCode
+        );
+
+    void entityDrillDownRequested(
+        const QString &entity
+        );
+
     void burstDrillDownRequested(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp
         );
+
+    void burstConfigurationChanged();
 
 private:
     void restoreSelectedTab();
@@ -67,6 +84,14 @@ private:
         );
 
     void showBurstSettingsDialog();
+
+    void requestEventCodeDrillDown(
+        int row
+        );
+
+    void requestEntityDrillDown(
+        int row
+        );
 
     void requestBurstDrillDown(
         int row
@@ -127,5 +152,11 @@ private:
         nullptr;
 
     QSplitter *m_burstSplitter =
+        nullptr;
+
+    QHBoxLayout *m_burstToolbarLayout =
+        nullptr;
+
+    QGroupBox *m_burstListGroup =
         nullptr;
 };

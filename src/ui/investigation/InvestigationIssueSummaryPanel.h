@@ -32,6 +32,8 @@ public:
 
     void clear();
 
+    void clearSelection();
+
     int preferredCompactWidth() const;
 
     InvestigationTablePresentationState
@@ -40,6 +42,8 @@ public:
     void restorePresentationState(
         const InvestigationTablePresentationState &state
         );
+
+    void refreshInterfaceScale();
 
 signals:
     void drillDownRequested(

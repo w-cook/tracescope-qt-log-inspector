@@ -4,24 +4,28 @@
 
 #include <QAbstractItemView>
 #include <QAbstractTextDocumentLayout>
+#include <QAction>
 #include <QApplication>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMargins>
+#include <QMenu>
 #include <QPainter>
-#include <QStyledItemDelegate>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStyle>
+#include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTextDocument>
 #include <QTextOption>
+#include <QTimer>
 #include <QVBoxLayout>
-#include <QScrollBar>
-#include <QAction>
-#include <QHBoxLayout>
-#include <QMargins>
-#include <QMenu>
-#include <QPushButton>
 
+#include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../domain/InvestigationRecord.h"
 #include "../../domain/InvestigationRecordState.h"
 #include "../../workspace/InvestigationSession.h"
@@ -52,13 +56,17 @@ QString findingStatusDisplayText(
 }
 
 class FindingTextDelegate
-    : public QStyledItemDelegate
+    : public ItemViewFocusDelegate
 {
 public:
     explicit FindingTextDelegate(
-        QObject *parent = nullptr
+        QObject *parent = nullptr,
+        bool preserveContextSelection = false
         )
-        : QStyledItemDelegate(parent)
+        : ItemViewFocusDelegate(
+              parent,
+              preserveContextSelection
+              )
     {
     }
 
@@ -76,6 +84,17 @@ public:
             &itemOption,
             index
             );
+
+        applyContextSelectionPresentation(
+            itemOption
+            );
+
+        const bool hasFocus =
+            itemOption.state
+            & QStyle::State_HasFocus;
+
+        itemOption.state &=
+            ~QStyle::State_HasFocus;
 
         QStyle *style =
             itemOption.widget != nullptr
@@ -119,8 +138,17 @@ public:
             text
             );
 
-        constexpr int horizontalPadding = 8;
-        constexpr int verticalPadding = 4;
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                4,
+                itemOption.widget
+                );
 
         document.setTextWidth(
             std::max(
@@ -193,8 +221,16 @@ public:
         painter->save();
 
         painter->translate(
-            option.rect.left() + 4,
-            option.rect.top() + 2
+            option.rect.left()
+                + InterfaceScale::pixels(
+                    4,
+                    itemOption.widget
+                    ),
+            option.rect.top()
+                + InterfaceScale::pixels(
+                    2,
+                    itemOption.widget
+                    )
             );
 
         document
@@ -205,6 +241,13 @@ public:
                 );
 
         painter->restore();
+
+        if (hasFocus) {
+            drawCurrentCellIndicator(
+                painter,
+                option
+                );
+        }
     }
 
     QSize sizeHint(
@@ -246,10 +289,23 @@ public:
             itemOption.text
             );
 
+        const int horizontalPadding =
+            InterfaceScale::pixels(
+                8,
+                itemOption.widget
+                );
+
+        const int verticalPadding =
+            InterfaceScale::pixels(
+                6,
+                itemOption.widget
+                );
+
         document.setTextWidth(
             std::max(
                 1,
-                itemOption.rect.width() - 8
+                itemOption.rect.width()
+                    - horizontalPadding
                 )
             );
 
@@ -257,7 +313,8 @@ public:
             itemOption.rect.width(),
             static_cast<int>(
                 document.size().height()
-                ) + 6
+                )
+                + verticalPadding
             );
     }
 };
@@ -326,7 +383,10 @@ InvestigationFindingsPanel::
         );
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_summaryLabel->setToolTip(
@@ -344,7 +404,10 @@ InvestigationFindingsPanel::
         );
 
     m_headerLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     m_headerLayout->addWidget(
@@ -453,6 +516,11 @@ InvestigationFindingsPanel::
         tr("Finding")
     });
 
+    QFont headerFont = m_table->font();
+    headerFont.setBold(true);
+
+    m_table->horizontalHeader()->setFont(headerFont);
+
     m_table
         ->horizontalHeaderItem(1)
         ->setToolTip(
@@ -491,7 +559,8 @@ InvestigationFindingsPanel::
     m_table->setItemDelegateForColumn(
         3,
         new FindingTextDelegate(
-            m_table
+            m_table,
+            true
             )
         );
 
@@ -521,7 +590,10 @@ InvestigationFindingsPanel::
             m_table
                 ->fontMetrics()
                 .height()
-            + 8
+            + InterfaceScale::pixels(
+                8,
+                m_table
+                )
             );
 
     m_table
@@ -540,7 +612,10 @@ InvestigationFindingsPanel::
 
     m_table->setColumnWidth(
         1,
-        58
+        InterfaceScale::pixels(
+            58,
+            m_table
+            )
         );
 
     m_table
@@ -559,8 +634,16 @@ InvestigationFindingsPanel::
 
     m_table->setToolTip(
         tr(
-            "Review conclusions recorded during "
-            "this investigation"
+            "Select a finding to preview its event. "
+            "Double-click to reveal and focus the event "
+            "in the Event Table."
+            )
+        );
+
+    m_table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_table,
+            true
             )
         );
 
@@ -574,6 +657,50 @@ InvestigationFindingsPanel::
             ) {
             activateRow(
                 row
+                );
+        }
+        );
+
+    connect(
+        m_table,
+        &QTableWidget::currentCellChanged,
+        this,
+        [this](
+            int currentRow,
+            int,
+            int,
+            int
+            ) {
+            if (
+                currentRow < 0
+                || currentRow >= m_table->rowCount()
+                ) {
+                return;
+            }
+
+            QTableWidgetItem *item =
+                m_table->item(
+                    currentRow,
+                    0
+                    );
+
+            if (item == nullptr) {
+                return;
+            }
+
+            const QString recordId =
+                item
+                    ->data(
+                        Qt::UserRole
+                        )
+                    .toString();
+
+            if (recordId.isEmpty()) {
+                return;
+            }
+
+            emit findingSelected(
+                recordId
                 );
         }
         );
@@ -1038,6 +1165,163 @@ void InvestigationFindingsPanel::
         );
 
     updateMinimumUsableWidth();
+}
+
+void InvestigationFindingsPanel::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (m_headerLayout != nullptr) {
+        m_headerLayout->setSpacing(
+            InterfaceScale::pixels(
+                6,
+                this
+                )
+            );
+
+        m_headerLayout->invalidate();
+    }
+
+
+    /*
+     * Finding rows are content-sized because the
+     * description can wrap across multiple lines.
+     *
+     * Wait until the updated font and style settle,
+     * then recalculate the column and row geometry.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_table == nullptr) {
+                return;
+            }
+
+            QHeaderView *header =
+                m_table->verticalHeader();
+
+            if (header == nullptr) {
+                return;
+            }
+
+            /*
+             * Release the previous scale's minimum
+             * section size before measuring rows.
+             */
+            header->setMinimumSectionSize(
+                m_table->fontMetrics().height()
+                + InterfaceScale::pixels(
+                    8,
+                    m_table
+                    )
+                );
+
+            /*
+             * Keep the event-number column at its
+             * intended scaled design width.
+             */
+            m_table->setColumnWidth(
+                1,
+                InterfaceScale::pixels(
+                    58,
+                    m_table
+                    )
+                );
+
+            m_table->resizeColumnToContents(0);
+            m_table->resizeColumnToContents(2);
+
+            /*
+             * Measure wrapped descriptions using
+             * the updated font and column widths.
+             */
+            m_table->resizeRowsToContents();
+
+            updateMinimumUsableWidth();
+
+            m_table->updateGeometry();
+            m_table->viewport()->update();
+
+            updateGeometry();
+            update();
+        }
+        );
+}
+
+void InvestigationFindingsPanel::
+    selectFindingForRecord(
+        const QString &recordId
+        )
+{
+    if (m_table == nullptr) {
+        return;
+    }
+
+    /*
+     * This is synchronization from another investigation
+     * surface, not a user-driven Findings selection.
+     *
+     * Prevent currentCellChanged from feeding the
+     * programmatic selection back through findingSelected.
+     */
+    const QSignalBlocker blocker(
+        m_table
+        );
+
+    m_table->clearSelection();
+
+    if (recordId.isEmpty()) {
+        return;
+    }
+
+    for (
+        int row = 0;
+        row < m_table->rowCount();
+        ++row
+        ) {
+        QTableWidgetItem *item =
+            m_table->item(
+                row,
+                0
+                );
+
+        if (item == nullptr) {
+            continue;
+        }
+
+        const QString rowRecordId =
+            item
+                ->data(
+                    Qt::UserRole
+                    )
+                .toString();
+
+        if (rowRecordId != recordId) {
+            continue;
+        }
+
+        m_table->setCurrentCell(
+            row,
+            0
+            );
+
+        m_table->selectRow(
+            row
+            );
+
+        return;
+    }
 }
 
 void InvestigationFindingsPanel::

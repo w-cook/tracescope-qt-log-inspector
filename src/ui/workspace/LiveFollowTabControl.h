@@ -50,6 +50,8 @@ private:
 
     void refreshTabGeometry();
 
+    void refreshInterfaceScale();
+
     InvestigationSession *m_session =
         nullptr;
 

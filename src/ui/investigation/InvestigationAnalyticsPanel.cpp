@@ -11,19 +11,27 @@
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QLabel>
+#include <QLayout>
+#include <QModelIndex>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStyle>
+#include <QTabBar>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QScrollBar>
 
+#include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../analysis/BurstDetectionSettings.h"
 #include "../../analysis/InvestigationCadence.h"
 #include "../../analysis/InvestigationValueFrequency.h"
@@ -34,6 +42,62 @@ namespace
 {
 
 constexpr int AnalyticsTopEntityCount = 10;
+
+
+void refreshAnalyticsTableRowHeights(
+    QTableWidget *table
+    )
+{
+    if (table == nullptr) {
+        return;
+    }
+
+    QHeaderView *header =
+        table->verticalHeader();
+
+    if (header == nullptr) {
+        return;
+    }
+
+    const int nativeDefault =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderDefaultSectionSizeVertical,
+            nullptr,
+            header
+            );
+
+    const int headerMargin =
+        header->style()->pixelMetric(
+            QStyle::PM_HeaderMargin,
+            nullptr,
+            header
+            );
+
+    const int textHeight =
+        std::max(
+            table->fontMetrics().height(),
+            header->fontMetrics().height()
+            );
+
+    const int contentHeight =
+        textHeight
+        + 2 * headerMargin
+        + InterfaceScale::pixels(
+            4,
+            header
+            );
+
+    const int targetHeight =
+        std::max({
+            nativeDefault,
+            header->minimumSectionSize(),
+            contentHeight
+        });
+
+    header->setDefaultSectionSize(
+        targetHeight
+        );
+}
 
 QString formatDurationMilliseconds(
     qint64 milliseconds
@@ -235,14 +299,20 @@ InvestigationAnalyticsPanel::
             );
 
     overviewLayout->setContentsMargins(
-        4,
-        2,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            4,
+            m_overviewPage
+            )
         );
 
     overviewLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            m_overviewPage
+            )
         );
 
     m_overviewEmptyLabel =
@@ -332,6 +402,27 @@ InvestigationAnalyticsPanel::
             false
             );
 
+    m_eventCodeTable->setToolTip(
+        tr(
+            "Double-click an event code to filter the "
+            "investigation to that event code."
+            )
+        );
+
+    connect(
+        m_eventCodeTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            requestEventCodeDrillDown(
+                row
+                );
+        }
+        );
+
     eventCodeLayout->addWidget(
         m_eventCodeTable
         );
@@ -396,6 +487,39 @@ InvestigationAnalyticsPanel::
             false
             );
 
+    m_entityTable->setToolTip(
+        tr(
+            "Double-click an entity to filter the "
+            "investigation to that entity."
+            )
+        );
+
+    connect(
+        m_entityTable,
+        &QTableWidget::cellDoubleClicked,
+        this,
+        [this](
+            int row,
+            int
+            ) {
+            requestEntityDrillDown(
+                row
+                );
+        }
+        );
+
+    for (QTableWidget *table : {
+             m_eventCodeTable,
+             m_entityTable
+         }) {
+        table->horizontalHeader()->setHighlightSections(false);
+
+        QFont headerFont = table->font();
+        headerFont.setBold(true);
+
+        table->horizontalHeader()->setFont(headerFont);
+    }
+
     entityLayout->addWidget(
         m_entityTable
         );
@@ -418,6 +542,16 @@ InvestigationAnalyticsPanel::
         1
         );
 
+    m_overviewSplitter->setCollapsible(
+        0,
+        false
+        );
+
+    m_overviewSplitter->setCollapsible(
+        1,
+        false
+        );
+
     overviewLayout->addWidget(
         m_overviewSplitter
         );
@@ -434,28 +568,37 @@ InvestigationAnalyticsPanel::
             );
 
     burstsLayout->setContentsMargins(
-        4,
-        2,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            2,
+            4,
+            4,
+            m_burstsPage
+            )
         );
 
     burstsLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            m_burstsPage
+            )
         );
 
-    auto *burstToolbar =
+    m_burstToolbarLayout =
         new QHBoxLayout();
 
-    burstToolbar->setContentsMargins(
+    m_burstToolbarLayout->setContentsMargins(
         0,
         0,
         0,
         0
         );
 
-    burstToolbar->setSpacing(
-        4
+    m_burstToolbarLayout->setSpacing(
+        InterfaceScale::pixels(
+            4,
+            m_burstsPage
+            )
         );
 
     auto *burstHeading =
@@ -482,18 +625,18 @@ InvestigationAnalyticsPanel::
         }
         );
 
-    burstToolbar->addWidget(
+    m_burstToolbarLayout->addWidget(
         burstHeading
         );
 
-    burstToolbar->addStretch();
+    m_burstToolbarLayout->addStretch();
 
-    burstToolbar->addWidget(
+    m_burstToolbarLayout->addWidget(
         m_burstSettingsButton
         );
 
     burstsLayout->addLayout(
-        burstToolbar
+        m_burstToolbarLayout
         );
 
     m_burstSplitter =
@@ -506,7 +649,7 @@ InvestigationAnalyticsPanel::
      * Detected burst list.
      */
 
-    auto *burstListGroup =
+    m_burstListGroup =
         new QGroupBox(
             tr("Detected Bursts"),
             m_burstSplitter
@@ -514,25 +657,31 @@ InvestigationAnalyticsPanel::
 
     auto *burstListLayout =
         new QVBoxLayout(
-            burstListGroup
+            m_burstListGroup
             );
 
     burstListLayout->setContentsMargins(
-        4,
-        4,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            4,
+            4,
+            4,
+            m_burstListGroup
+            )
         );
 
     burstListLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            m_burstListGroup
+            )
         );
 
     m_burstTable =
         new QTableWidget(
             0,
             4,
-            burstListGroup
+            m_burstListGroup
             );
 
     m_burstTable
@@ -542,6 +691,13 @@ InvestigationAnalyticsPanel::
             tr("Elevated"),
             tr("Highest Severity")
         });
+
+    QFont burstHeaderFont = m_burstTable->font();
+    burstHeaderFont.setBold(true);
+
+    m_burstTable->horizontalHeader()->setFont(
+        burstHeaderFont
+        );
 
     m_burstTable->setEditTriggers(
         QAbstractItemView::NoEditTriggers
@@ -578,6 +734,27 @@ InvestigationAnalyticsPanel::
             "Select a burst to review its explanation. "
             "Double-click to filter the investigation "
             "to its contributing elevated events."
+            )
+        );
+
+    for (
+        QTableWidget *table
+        : {
+            m_eventCodeTable,
+            m_entityTable
+        }
+        ) {
+        table->setItemDelegate(
+            new ItemViewFocusDelegate(
+                table
+                )
+            );
+    }
+
+    m_burstTable->setItemDelegate(
+        new ItemViewFocusDelegate(
+            m_burstTable,
+            true
             )
         );
 
@@ -629,14 +806,20 @@ InvestigationAnalyticsPanel::
             );
 
     burstDetailLayout->setContentsMargins(
-        4,
-        4,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            4,
+            4,
+            4,
+            burstDetailGroup
+            )
         );
 
     burstDetailLayout->setSpacing(
-        2
+        InterfaceScale::pixels(
+            2,
+            burstDetailGroup
+            )
         );
 
     m_burstDetailText =
@@ -660,7 +843,7 @@ InvestigationAnalyticsPanel::
         );
 
     m_burstSplitter->addWidget(
-        burstListGroup
+        m_burstListGroup
         );
 
     m_burstSplitter->addWidget(
@@ -675,6 +858,16 @@ InvestigationAnalyticsPanel::
     m_burstSplitter->setStretchFactor(
         1,
         2
+        );
+
+    m_burstSplitter->setCollapsible(
+        0,
+        false
+        );
+
+    m_burstSplitter->setCollapsible(
+        1,
+        false
         );
 
     burstsLayout->addWidget(
@@ -702,17 +895,32 @@ InvestigationAnalyticsPanel::
         &QTabWidget::currentChanged,
         this,
         [this](int index) {
-            if (m_session == nullptr) {
-                return;
-            }
-
             QWidget *currentPage =
                 m_tabs->widget(
                     index
                     );
 
-            if (currentPage
-                == m_overviewPage) {
+            /*
+             * Overview selections are transient interaction
+             * cues only. They do not explain another visible
+             * surface, so do not retain them after leaving
+             * Overview.
+             */
+            if (
+                currentPage
+                != m_overviewPage
+                ) {
+                clearOverviewSelection();
+            }
+
+            if (m_session == nullptr) {
+                return;
+            }
+
+            if (
+                currentPage
+                == m_overviewPage
+                ) {
                 m_session->setAnalyticsTab(
                     InvestigationAnalyticsTab::
                     Overview
@@ -814,6 +1022,33 @@ void InvestigationAnalyticsPanel::clear()
     setSession(
         nullptr
         );
+}
+
+void InvestigationAnalyticsPanel::
+    clearOverviewSelection()
+{
+    for (
+        QTableWidget *table
+        : {
+            m_eventCodeTable,
+            m_entityTable
+        }
+        ) {
+        if (table == nullptr) {
+            continue;
+        }
+
+        table->clearSelection();
+
+        if (table->selectionModel() != nullptr) {
+            table
+                ->selectionModel()
+                ->setCurrentIndex(
+                    QModelIndex(),
+                    QItemSelectionModel::NoUpdate
+                    );
+        }
+    }
 }
 
 InvestigationAnalyticsPresentationState
@@ -1051,6 +1286,283 @@ void InvestigationAnalyticsPanel::
                 );
         }
     }
+}
+
+void InvestigationAnalyticsPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * Overview page.
+     */
+    if (
+        m_overviewPage != nullptr
+        && m_overviewPage->layout()
+               != nullptr
+        ) {
+        QLayout *overviewLayout =
+            m_overviewPage->layout();
+
+        overviewLayout->setContentsMargins(
+            InterfaceScale::margins(
+                4,
+                2,
+                4,
+                4,
+                m_overviewPage
+                )
+            );
+
+        overviewLayout->setSpacing(
+            InterfaceScale::pixels(
+                2,
+                m_overviewPage
+                )
+            );
+
+        overviewLayout->invalidate();
+    }
+
+    /*
+     * Bursts page.
+     */
+    if (
+        m_burstsPage != nullptr
+        && m_burstsPage->layout()
+               != nullptr
+        ) {
+        QLayout *burstsLayout =
+            m_burstsPage->layout();
+
+        burstsLayout->setContentsMargins(
+            InterfaceScale::margins(
+                4,
+                2,
+                4,
+                4,
+                m_burstsPage
+                )
+            );
+
+        burstsLayout->setSpacing(
+            InterfaceScale::pixels(
+                2,
+                m_burstsPage
+                )
+            );
+
+        burstsLayout->invalidate();
+    }
+
+    if (m_burstToolbarLayout != nullptr) {
+        m_burstToolbarLayout->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                m_burstsPage
+                )
+            );
+
+        m_burstToolbarLayout->invalidate();
+    }
+
+    /*
+     * The two burst splitter children are the
+     * Detected Bursts and Burst Explanation groups.
+     * Their layouts own the explicit 4px margins
+     * and 2px spacing from construction.
+     */
+    if (m_burstSplitter != nullptr) {
+        for (
+            int index = 0;
+            index < m_burstSplitter->count();
+            ++index
+            ) {
+            QWidget *child =
+                m_burstSplitter->widget(
+                    index
+                    );
+
+            if (
+                child == nullptr
+                || child->layout() == nullptr
+                ) {
+                continue;
+            }
+
+            child->layout()
+                ->setContentsMargins(
+                    InterfaceScale::margins(
+                        4,
+                        4,
+                        4,
+                        4,
+                        child
+                        )
+                    );
+
+            child->layout()->setSpacing(
+                InterfaceScale::pixels(
+                    2,
+                    child
+                    )
+                );
+
+            child->layout()->invalidate();
+        }
+    }
+
+
+    /*
+     * Native table rows retain their previous default
+     * section heights across live font/style changes.
+     *
+     * Refresh all three Analytics tables after Qt has
+     * processed the new application font.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            for (
+                QTableWidget *table
+                : {
+                    m_eventCodeTable,
+                    m_entityTable,
+                    m_burstTable
+                }
+                ) {
+                if (table == nullptr) {
+                    continue;
+                }
+
+                QFont headerFont = table->font();
+                headerFont.setBold(true);
+
+                table->horizontalHeader()->setFont(headerFont);
+
+                refreshAnalyticsTableRowHeights(
+                    table
+                    );
+
+                table->updateGeometry();
+                table->viewport()->update();
+            }
+
+            updateGeometry();
+            update();
+        }
+        );
+
+    updateGeometry();
+    update();
+}
+
+int InvestigationAnalyticsPanel::
+    minimumUsefulBurstHeight() const
+{
+    if (
+        m_tabs == nullptr
+        || m_tabs->tabBar() == nullptr
+        || m_burstsPage == nullptr
+        || m_burstToolbarLayout == nullptr
+        || m_burstListGroup == nullptr
+        || m_burstTable == nullptr
+        || m_burstTable->horizontalHeader() == nullptr
+        || m_burstTable->verticalHeader() == nullptr
+        ) {
+        return 0;
+    }
+
+    /*
+     * The minimum useful Analytics height is defined
+     * by the Bursts surface:
+     *
+     *   Analytics tab strip
+     *   burst toolbar
+     *   Detected Bursts group
+     *   table header
+     *   first burst row
+     *
+     * This deliberately does not preserve the complete
+     * content-derived minimumSizeHint() of the tables.
+     */
+    const int analyticsTabHeight =
+        m_tabs
+            ->tabBar()
+            ->sizeHint()
+            .height();
+
+    const int tabFrameHeight =
+        2
+        * style()->pixelMetric(
+            QStyle::PM_DefaultFrameWidth,
+            nullptr,
+            m_tabs
+            );
+
+    QLayout *burstsLayout =
+        m_burstsPage->layout();
+
+    const QMargins pageMargins =
+        burstsLayout != nullptr
+            ? burstsLayout->contentsMargins()
+            : QMargins();
+
+    const int pageSpacing =
+        burstsLayout != nullptr
+            ? std::max(
+                  0,
+                  burstsLayout->spacing()
+                  )
+            : 0;
+
+    const int toolbarHeight =
+        m_burstToolbarLayout
+            ->sizeHint()
+            .height();
+
+    const int rowHeight =
+        m_burstTable->rowCount() > 0
+            ? m_burstTable->rowHeight(0)
+            : m_burstTable
+                  ->verticalHeader()
+                  ->defaultSectionSize();
+
+    const int tableHeight =
+        m_burstTable
+            ->horizontalHeader()
+            ->sizeHint()
+            .height()
+        + rowHeight
+        + 2 * m_burstTable->frameWidth();
+
+    /*
+     * Let QGroupBox tell us how much title/frame/layout
+     * chrome surrounds the table, then substitute our
+     * deliberate one-row table height for the table's
+     * ordinary minimumSizeHint().
+     */
+    const int groupOverhead =
+        std::max(
+            0,
+            m_burstListGroup
+                    ->minimumSizeHint()
+                    .height()
+                - m_burstTable
+                      ->minimumSizeHint()
+                      .height()
+            );
+
+    const int burstListHeight =
+        groupOverhead
+        + tableHeight;
+
+    return analyticsTabHeight
+           + tabFrameHeight
+           + pageMargins.top()
+           + pageMargins.bottom()
+           + toolbarHeight
+           + pageSpacing
+           + burstListHeight;
 }
 
 void InvestigationAnalyticsPanel::
@@ -1911,7 +2423,10 @@ void InvestigationAnalyticsPanel::
             );
 
     layout->setSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            &dialog
+            )
         );
 
     /*
@@ -2073,10 +2588,13 @@ void InvestigationAnalyticsPanel::
             );
 
     manualLayout->setContentsMargins(
-        20,
-        0,
-        0,
-        0
+        InterfaceScale::margins(
+            20,
+            0,
+            0,
+            0,
+            manualWidget
+            )
         );
 
     auto *windowSpin =
@@ -2286,7 +2804,24 @@ void InvestigationAnalyticsPanel::
     newSettings.errorCriticalThreshold =
         errorCriticalSpin->value();
 
-    if (manualRadio->isChecked()) {
+    const InvestigationBurstTimingMode
+        previousTimingMode =
+        automatic
+            ? InvestigationBurstTimingMode::
+            Auto
+            : InvestigationBurstTimingMode::
+            Manual;
+
+    InvestigationBurstTimingMode newTimingMode =
+        manualRadio->isChecked()
+            ? InvestigationBurstTimingMode::
+            Manual
+            : InvestigationBurstTimingMode::
+            Auto;
+
+    if (newTimingMode
+        == InvestigationBurstTimingMode::
+        Manual) {
         newSettings.windowMilliseconds =
             std::max<qint64>(
                 1,
@@ -2308,27 +2843,89 @@ void InvestigationAnalyticsPanel::
                         )
                     )
                 );
-
-        m_session->setBurstTimingMode(
-            InvestigationBurstTimingMode::
-            Manual
-            );
-    } else {
-        /*
-         * Preserve the last manual timing values.
-         * Auto replaces them only for analysis.
-         */
-        m_session->setBurstTimingMode(
-            InvestigationBurstTimingMode::
-            Auto
-            );
     }
+
+    /*
+     * Avoid manufacturing an unsaved change when the
+     * user accepts the dialog without modifying anything.
+     */
+    const bool configurationChanged =
+        previousTimingMode
+            != newTimingMode
+        || currentSettings.windowMilliseconds
+               != newSettings.windowMilliseconds
+        || currentSettings.elevatedEventThreshold
+               != newSettings.elevatedEventThreshold
+        || currentSettings.errorCriticalThreshold
+               != newSettings.errorCriticalThreshold
+        || currentSettings.mergeGapMilliseconds
+               != newSettings.mergeGapMilliseconds;
+
+    m_session->setBurstTimingMode(
+        newTimingMode
+        );
 
     m_session->setBurstDetectionSettings(
         newSettings
         );
 
+    if (configurationChanged) {
+        emit burstConfigurationChanged();
+    }
+
     updateBursts();
+}
+
+void InvestigationAnalyticsPanel::
+    requestEventCodeDrillDown(
+        int row
+        )
+{
+    if (row < 0
+        || row >= m_eventCodeTable->rowCount()) {
+        return;
+    }
+
+    QTableWidgetItem *item =
+        m_eventCodeTable->item(
+            row,
+            0
+            );
+
+    if (item == nullptr
+        || item->text().trimmed().isEmpty()) {
+        return;
+    }
+
+    emit eventCodeDrillDownRequested(
+        item->text()
+        );
+}
+
+void InvestigationAnalyticsPanel::
+    requestEntityDrillDown(
+        int row
+        )
+{
+    if (row < 0
+        || row >= m_entityTable->rowCount()) {
+        return;
+    }
+
+    QTableWidgetItem *item =
+        m_entityTable->item(
+            row,
+            0
+            );
+
+    if (item == nullptr
+        || item->text().trimmed().isEmpty()) {
+        return;
+    }
+
+    emit entityDrillDownRequested(
+        item->text()
+        );
 }
 
 void InvestigationAnalyticsPanel::

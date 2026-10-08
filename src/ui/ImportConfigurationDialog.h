@@ -21,13 +21,17 @@ class QComboBox;
 class QDialogButtonBox;
 class QDragEnterEvent;
 class QDropEvent;
+class QGroupBox;
 class QLabel;
 class QLineEdit;
 class QMenu;
 class QPlainTextEdit;
 class QPushButton;
+class QResizeEvent;
+class QScrollArea;
 class QTableWidget;
 class QTimer;
+class QVBoxLayout;
 
 class RotatedSourceSettingsStore;
 
@@ -65,6 +69,10 @@ protected:
 
     void dropEvent(
         QDropEvent *event
+        ) override;
+
+    void resizeEvent(
+        QResizeEvent *event
         ) override;
 
 private:
@@ -140,6 +148,21 @@ private:
     QString previewSourceKey;
     QString customFieldDetectionSourceKey;
     QSet<QString> autoDetectedCustomFieldKeys;
+
+    QWidget *responsiveBody = nullptr;
+    QVBoxLayout *responsiveBodyLayout = nullptr;
+    QScrollArea *responsiveProfileArea = nullptr;
+    QGroupBox *responsivePreviewGroup = nullptr;
+    QWidget *responsiveContent = nullptr;
+
+    bool usingCompactLayout = false;
+    bool responsiveUpdateQueued = false;
+    int lastCompactTabIndex = 0;
+    QList<int> lastWideSplitterSizes;
+
+    QLabel *responsiveIntroLabel = nullptr;
+    QGroupBox *responsiveSourceGroup = nullptr;
+    QScrollArea *responsiveOuterScroll = nullptr;
 
     void buildLayout();
     void browseForFile();
@@ -229,4 +252,6 @@ private:
         );
 
     void refreshRecentProfilesMenu();
+
+    void updateResponsiveLayout();
 };

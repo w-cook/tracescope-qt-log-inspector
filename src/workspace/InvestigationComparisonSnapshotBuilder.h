@@ -13,6 +13,10 @@ public:
         const InvestigationSession &baselineSession,
         const InvestigationSession &comparisonSession,
         std::optional<BurstDetectionSettings>
-            burstSettings = std::nullopt
+            burstSettings = std::nullopt,
+        std::optional<InvestigationComparisonTimeRange>
+            baselineTimeRange = std::nullopt,
+        std::optional<InvestigationComparisonTimeRange>
+            comparisonTimeRange = std::nullopt
         ) const;
 };

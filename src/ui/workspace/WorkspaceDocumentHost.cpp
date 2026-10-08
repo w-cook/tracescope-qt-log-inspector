@@ -1,19 +1,64 @@
 #include "WorkspaceDocumentHost.h"
 
 #include <QApplication>
-#include <QMenu>
-#include <QPoint>
-#include <QSignalBlocker>
-#include <QTabWidget>
-#include <QVBoxLayout>
 #include <QCursor>
 #include <QDrag>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLayout>
+#include <QMenu>
+#include <QPushButton>
+#include <QPoint>
+#include <QResizeEvent>
+#include <QSignalBlocker>
+#include <QSizePolicy>
+#include <QSpacerItem>
+#include <QStyle>
+#include <QTabBar>
+#include <QTabWidget>
+#include <QTimer>
+#include <QVBoxLayout>
 
 #include <utility>
+
+#include "../InterfaceScale.h"
 
 #include "DetachedWorkspaceDocumentWindow.h"
 #include "WorkspaceDocument.h"
 #include "WorkspaceTabBar.h"
+
+WorkspaceDocumentHost::~WorkspaceDocumentHost()
+{
+    /*
+     * Secondary TraceScope windows are intentionally
+     * native top-level peers rather than QWidget
+     * children of the root window.
+     *
+     * The root host therefore owns their application
+     * lifetime explicitly even though it does not own
+     * them through QObject parenting.
+     */
+    if (m_rootHost != this) {
+        return;
+    }
+
+    const QVector<
+        DetachedWorkspaceDocumentWindow *>
+        windows =
+        m_detachedWindows;
+
+    m_detachedWindows.clear();
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : windows) {
+        if (window == nullptr) {
+            continue;
+        }
+
+        window->hide();
+        delete window;
+    }
+}
 
 class WorkspaceTabWidget
     : public QTabWidget
@@ -40,6 +85,63 @@ public:
             tabBar()
             );
     }
+
+    void setEmptyStateWidget(
+        QWidget *widget
+        )
+    {
+        m_emptyStateWidget =
+            widget;
+
+        if (m_emptyStateWidget == nullptr) {
+            return;
+        }
+
+        m_emptyStateWidget->setParent(
+            this
+            );
+
+        updateEmptyStateGeometry();
+    }
+
+    void updateEmptyStateGeometry()
+    {
+        if (m_emptyStateWidget == nullptr) {
+            return;
+        }
+
+        /*
+         * The empty state occupies the complete
+         * document surface. The tab bar is explicitly
+         * raised above it whenever the empty host is
+         * acting as a workspace drop target.
+         */
+        m_emptyStateWidget->setGeometry(
+            rect()
+            );
+
+        m_emptyStateWidget->raise();
+
+        if (tabBar() != nullptr) {
+            tabBar()->raise();
+        }
+    }
+
+protected:
+    void resizeEvent(
+        QResizeEvent *event
+        ) override
+    {
+        QTabWidget::resizeEvent(
+            event
+            );
+
+        updateEmptyStateGeometry();
+    }
+
+private:
+    QWidget *m_emptyStateWidget =
+        nullptr;
 };
 
 WorkspaceDocumentHost::WorkspaceDocumentHost(
@@ -66,8 +168,20 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         0
         );
 
+    /*
+     * The tab widget always owns the complete host
+     * surface. The empty-state presentation is
+     * overlaid inside it rather than occupying a
+     * separate layout row.
+     *
+     * This allows an empty tab bar to temporarily
+     * expand at the top during a workspace-document
+     * drag without moving the drop target into the
+     * middle of the window.
+     */
     layout->addWidget(
-        m_tabs
+        m_tabs,
+        1
         );
 
     m_tabs->setTabsClosable(
@@ -84,6 +198,304 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
 
     m_tabs->setUsesScrollButtons(
         true
+        );
+
+    /*
+     * Empty-workspace presentation.
+     */
+    m_emptyStateWidget =
+        new QWidget(m_tabs);
+
+    auto *emptyStateLayout =
+        new QVBoxLayout(
+            m_emptyStateWidget
+            );
+
+    emptyStateLayout->setContentsMargins(
+        InterfaceScale::margins(
+            20,
+            24,
+            20,
+            24,
+            m_emptyStateWidget
+            )
+        );
+
+    emptyStateLayout->addStretch(
+        1
+        );
+
+
+    m_emptyStateTitleLabel =
+        new QLabel(
+            tr("TraceScope"),
+            m_emptyStateWidget
+            );
+
+    refreshEmptyStateTitleFont();
+
+    m_emptyStateTitleLabel->setAlignment(
+        Qt::AlignHCenter
+        );
+
+    emptyStateLayout->addWidget(
+        m_emptyStateTitleLabel
+        );
+
+    auto *instructionLabel =
+        new QLabel(
+            tr(
+                "Open a log file, Investigation Snapshot, "
+                "or Investigation Workspace to get started."
+                ),
+            m_emptyStateWidget
+            );
+
+    instructionLabel->setAlignment(
+        Qt::AlignHCenter
+        );
+
+    instructionLabel->setWordWrap(
+        true
+        );
+
+    QSizePolicy instructionPolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Minimum
+        );
+
+    instructionPolicy.setHeightForWidth(
+        true
+        );
+
+    instructionLabel->setSizePolicy(
+        instructionPolicy
+        );
+
+    instructionLabel->setMinimumWidth(
+        0
+        );
+
+    emptyStateLayout->addWidget(
+        instructionLabel
+        );
+
+    m_emptyStateActionSpacing =
+        new QSpacerItem(
+            0,
+            InterfaceScale::pixels(
+                14,
+                m_emptyStateWidget
+                ),
+            QSizePolicy::Minimum,
+            QSizePolicy::Fixed
+            );
+
+    emptyStateLayout->addItem(
+        m_emptyStateActionSpacing
+        );
+
+    /*
+     * Empty-workspace actions deliberately emit intent
+     * rather than invoking application workflows directly.
+     *
+     * WorkspaceDocumentHost remains reusable presentation
+     * infrastructure while MainWindow continues to own
+     * file/workspace orchestration.
+     */
+    m_emptyStateOpenLogButton =
+        new QPushButton(
+            tr("Open Log File..."),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateOpenSnapshotButton =
+        new QPushButton(
+            tr("Open Snapshot..."),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateOpenWorkspaceButton =
+        new QPushButton(
+            tr("Open Workspace..."),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateRecentFilesButton =
+        new QPushButton(
+            tr("Recent Files"),
+            m_emptyStateWidget
+            );
+
+    m_emptyStateRecentWorkspacesButton =
+        new QPushButton(
+            tr("Recent Workspaces"),
+            m_emptyStateWidget
+            );
+
+
+    /*
+     * Primary open actions.
+     *
+     * Keeping these controls on one centered row reduces
+     * the start surface's required vertical height.
+     */
+    auto *openActionsLayout =
+        new QHBoxLayout();
+
+    openActionsLayout->addStretch(1);
+
+    openActionsLayout->addWidget(
+        m_emptyStateOpenLogButton
+        );
+
+    openActionsLayout->addWidget(
+        m_emptyStateOpenSnapshotButton
+        );
+
+    openActionsLayout->addWidget(
+        m_emptyStateOpenWorkspaceButton
+        );
+
+    openActionsLayout->addStretch(1);
+
+    emptyStateLayout->addLayout(
+        openActionsLayout
+        );
+
+    /*
+     * Recent-item actions use a separate centered row.
+     *
+     * These retain their existing shared menu population
+     * and enabled-state behavior.
+     */
+    auto *recentActionsLayout =
+        new QHBoxLayout();
+
+    recentActionsLayout->addStretch(1);
+
+    recentActionsLayout->addWidget(
+        m_emptyStateRecentFilesButton
+        );
+
+    recentActionsLayout->addWidget(
+        m_emptyStateRecentWorkspacesButton
+        );
+
+    recentActionsLayout->addStretch(1);
+
+    emptyStateLayout->addLayout(
+        recentActionsLayout
+        );
+
+    emptyStateLayout->addStretch(
+        1
+        );
+
+    connect(
+        m_emptyStateOpenLogButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            emit openLogRequested(
+                this
+                );
+        }
+        );
+
+    connect(
+        m_emptyStateOpenSnapshotButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            emit openSnapshotRequested(
+                this
+                );
+        }
+        );
+
+    connect(
+        m_emptyStateOpenWorkspaceButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            emit openWorkspaceRequested();
+        }
+        );
+
+    connect(
+        m_emptyStateRecentFilesButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            QMenu menu(
+                m_emptyStateRecentFilesButton
+                );
+
+            menu.setToolTipsVisible(
+                true
+                );
+
+            emit recentFilesMenuAboutToShow(
+                &menu,
+                this
+                );
+
+            if (!menu.isEnabled()
+                || menu.actions().isEmpty()) {
+                return;
+            }
+
+            menu.exec(
+                m_emptyStateRecentFilesButton
+                    ->mapToGlobal(
+                        QPoint(
+                            0,
+                            m_emptyStateRecentFilesButton
+                                ->height()
+                            )
+                        )
+                );
+        }
+        );
+
+    connect(
+        m_emptyStateRecentWorkspacesButton,
+        &QPushButton::clicked,
+        this,
+        [this]() {
+            QMenu menu(
+                m_emptyStateRecentWorkspacesButton
+                );
+
+            menu.setToolTipsVisible(
+                true
+                );
+
+            emit recentWorkspacesMenuAboutToShow(
+                &menu
+                );
+
+            if (!menu.isEnabled()
+                || menu.actions().isEmpty()) {
+                return;
+            }
+
+            menu.exec(
+                m_emptyStateRecentWorkspacesButton
+                    ->mapToGlobal(
+                        QPoint(
+                            0,
+                            m_emptyStateRecentWorkspacesButton
+                                ->height()
+                            )
+                        )
+                );
+        }
+        );
+
+    m_tabs->setEmptyStateWidget(
+        m_emptyStateWidget
         );
 
     WorkspaceTabBar *tabBar =
@@ -171,6 +583,51 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
             &WorkspaceDocumentHost::
             documentContextMenuAboutToShow
             );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            openLogRequested,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            openLogRequested
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            openSnapshotRequested,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            openSnapshotRequested
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            openWorkspaceRequested,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            openWorkspaceRequested
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            recentFilesMenuAboutToShow,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            recentFilesMenuAboutToShow
+            );
+
+        connect(
+            this,
+            &WorkspaceDocumentHost::
+            recentWorkspacesMenuAboutToShow,
+            m_rootHost,
+            &WorkspaceDocumentHost::
+            recentWorkspacesMenuAboutToShow
+            );
     }
 
     connect(
@@ -231,7 +688,12 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
         this,
         [this]() {
             m_rootHost
-                ->cleanupEmptyDetachedHost(
+                ->setWorkspaceDocumentDragActive(
+                    false
+                    );
+
+            m_rootHost
+                ->cleanupEmptyHost(
                     this
                     );
         }
@@ -293,6 +755,31 @@ WorkspaceDocumentHost::WorkspaceDocumentHost(
                     );
         }
         );
+
+    connect(
+        tabBar,
+        &QTabBar::tabMoved,
+        this,
+        [this](
+            int,
+            int
+            ) {
+            emit m_rootHost
+                ->workspaceLayoutChanged();
+        }
+        );
+
+    connect(
+        InterfaceScale::instance(),
+        &InterfaceScale::
+        userFactorChanged,
+        this,
+        [this](qreal) {
+            refreshInterfaceScale();
+        }
+        );
+
+    updateEmptyStatePresentation();
 }
 
 int WorkspaceDocumentHost::documentCount()
@@ -460,6 +947,422 @@ WorkspaceDocumentHost::documents()
 }
 
 WorkspaceDocumentHost *
+WorkspaceDocumentHost::documentHostForId(
+    const QString &documentId
+    ) const
+{
+    return m_rootHost->owningHost(
+        documentId
+        );
+}
+
+QVector<DetachedWorkspaceDocumentWindow *>
+WorkspaceDocumentHost::detachedWindows() const
+{
+    return m_rootHost
+        ->m_detachedWindows;
+}
+
+bool WorkspaceDocumentHost::
+    hasOtherVisibleWorkspaceWindow(
+        const QWidget *excludedWindow
+        ) const
+{
+    const WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    QWidget *rootWindow =
+        root->window();
+
+    if (rootWindow != nullptr
+        && rootWindow != excludedWindow
+        && rootWindow->isVisible()) {
+        return true;
+    }
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : root->m_detachedWindows) {
+        if (window != nullptr
+            && window != excludedWindow
+            && window->isVisible()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool WorkspaceDocumentHost::
+    moveDocumentsToAnotherVisibleWindow(
+        WorkspaceDocumentHost *sourceHost
+        )
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    if (sourceHost == nullptr
+        || sourceHost->m_rootHost != root
+        || sourceHost->documentCount() <= 0) {
+        return false;
+    }
+
+    QWidget *sourceWindow =
+        sourceHost == root
+            ? root->window()
+            : static_cast<QWidget *>(
+                  root->windowForHost(
+                      sourceHost
+                      )
+                  );
+
+    if (sourceWindow == nullptr) {
+        return false;
+    }
+
+    /*
+     * Destination selection is intentionally simple
+     * and deterministic.
+     *
+     * Prefer the visible root peer when possible.
+     * Otherwise use the first other visible detached
+     * peer. All documents from the closing window go
+     * to the same destination.
+     */
+    WorkspaceDocumentHost *targetHost =
+        nullptr;
+
+    QWidget *rootWindow =
+        root->window();
+
+    if (rootWindow != nullptr
+        && rootWindow != sourceWindow
+        && rootWindow->isVisible()) {
+        targetHost =
+            root;
+    }
+
+    if (targetHost == nullptr) {
+        for (
+            DetachedWorkspaceDocumentWindow *window
+            : std::as_const(
+                root->m_detachedWindows
+                )
+            ) {
+            if (window == nullptr
+                || window == sourceWindow
+                || !window->isVisible()
+                || window->documentHost()
+                       == nullptr) {
+                continue;
+            }
+
+            targetHost =
+                window->documentHost();
+
+            break;
+        }
+    }
+
+    if (targetHost == nullptr
+        || targetHost == sourceHost) {
+        return false;
+    }
+
+    QVector<QString> documentIds;
+
+    documentIds.reserve(
+        sourceHost->documentCount()
+        );
+
+    for (
+        WorkspaceDocument *document
+        : sourceHost->localDocuments()
+        ) {
+        if (document == nullptr) {
+            return false;
+        }
+
+        documentIds.append(
+            document->documentId()
+            );
+    }
+
+    const QString sourceCurrentId =
+        sourceHost->currentDocument()
+                != nullptr
+            ? sourceHost
+                  ->currentDocument()
+                  ->documentId()
+            : QString();
+
+    const QString targetCurrentId =
+        targetHost->currentDocument()
+                != nullptr
+            ? targetHost
+                  ->currentDocument()
+                  ->documentId()
+            : QString();
+
+    QVector<QString> movedDocumentIds;
+
+    /*
+     * Suppress QTabWidget selection notifications
+     * during the batch operation.
+     *
+     * Removing the current tab from the source would
+     * otherwise walk the global active-session state
+     * through each remaining source tab. Likewise,
+     * insertion must not disturb the destination's
+     * current tab.
+     */
+    const QSignalBlocker sourceTabBlocker(
+        sourceHost->m_tabs
+        );
+
+    const QSignalBlocker targetTabBlocker(
+        targetHost->m_tabs
+        );
+
+    auto restoreOriginalState =
+        [&]() {
+            /*
+             * Put every document that was already moved
+             * back into the source host. A failure in
+             * this internal move operation should not
+             * leave a partially migrated window.
+             */
+            for (
+                const QString &documentId
+                : std::as_const(
+                    movedDocumentIds
+                    )
+                ) {
+                WorkspaceDocument *document =
+                    targetHost
+                        ->takeLocalDocument(
+                            documentId
+                            );
+
+                if (document != nullptr) {
+                    sourceHost
+                        ->insertLocalDocument(
+                            document,
+                            sourceHost
+                                ->documentCount(),
+                            false
+                            );
+                }
+            }
+
+            /*
+             * Restore the original source order after
+             * reinsertion.
+             */
+            for (
+                int index = 0;
+                index < documentIds.size();
+                ++index
+                ) {
+                sourceHost
+                    ->moveLocalDocumentToIndex(
+                        documentIds.at(index),
+                        index
+                        );
+            }
+
+            const int sourceCurrentIndex =
+                sourceHost->indexOfDocument(
+                    sourceCurrentId
+                    );
+
+            if (sourceCurrentIndex >= 0) {
+                sourceHost
+                    ->ensureLocalCurrentDocument(
+                        sourceCurrentIndex
+                        );
+            }
+
+            const int targetCurrentIndex =
+                targetHost->indexOfDocument(
+                    targetCurrentId
+                    );
+
+            if (targetCurrentIndex >= 0) {
+                targetHost
+                    ->ensureLocalCurrentDocument(
+                        targetCurrentIndex
+                        );
+            }
+        };
+
+    for (
+        const QString &documentId
+        : std::as_const(
+            documentIds
+            )
+        ) {
+        WorkspaceDocument *document =
+            sourceHost
+                ->takeLocalDocument(
+                    documentId
+                    );
+
+        if (document == nullptr) {
+            restoreOriginalState();
+            return false;
+        }
+
+        if (!targetHost
+                 ->insertLocalDocument(
+                     document,
+                     targetHost
+                         ->documentCount(),
+                     false
+                     )) {
+            /*
+             * The document has already been detached
+             * from the source but was not adopted by
+             * the destination. Return it before rolling
+             * back the documents moved earlier.
+             */
+            sourceHost
+                ->insertLocalDocument(
+                    document,
+                    sourceHost
+                        ->documentCount(),
+                    false
+                    );
+
+            restoreOriginalState();
+            return false;
+        }
+
+        movedDocumentIds.append(
+            documentId
+            );
+    }
+
+    /*
+     * Explicitly retain the destination's previously
+     * selected tab. If the destination was empty, its
+     * first inserted document naturally becomes current.
+     */
+    if (!targetCurrentId.isEmpty()) {
+        const int targetCurrentIndex =
+            targetHost->indexOfDocument(
+                targetCurrentId
+                );
+
+        if (targetCurrentIndex >= 0) {
+            targetHost
+                ->ensureLocalCurrentDocument(
+                    targetCurrentIndex
+                    );
+        }
+    }
+
+    /*
+     * The source is now empty. Normal workspace-window
+     * cleanup hides the root peer or destroys a
+     * redundant detached peer as appropriate.
+     */
+    root->cleanupEmptyHost(
+        sourceHost
+        );
+
+    /*
+     * Treat the entire migration as one user-visible
+     * workspace layout change.
+     */
+    emit root->workspaceLayoutChanged();
+
+    WorkspaceDocument *targetCurrent =
+        targetHost->currentDocument();
+
+    if (targetCurrent != nullptr) {
+        const QString targetDocumentId =
+            targetCurrent->documentId();
+
+        /*
+         * Selection signals were intentionally blocked
+         * during migration, so synchronize the global
+         * workspace selection once with the destination
+         * tab that actually remained selected.
+         */
+        root->m_activeDocumentId =
+            targetDocumentId;
+
+        emit root->currentDocumentChanged(
+            targetDocumentId
+            );
+
+        QWidget *targetWindow =
+            targetHost == root
+                ? root->window()
+                : static_cast<QWidget *>(
+                      root->windowForHost(
+                          targetHost
+                          )
+                      );
+
+        if (targetWindow != nullptr) {
+            targetWindow->show();
+            targetWindow->raise();
+            targetWindow->activateWindow();
+        }
+    }
+
+    return true;
+}
+
+void WorkspaceDocumentHost::
+    resetWindowLayout()
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    if (root != this) {
+        root->resetWindowLayout();
+        return;
+    }
+
+    /*
+     * Full workspace replacement deliberately discards
+     * the previous multi-window presentation.
+     *
+     * Ordinary document removal preserves one final
+     * empty window, but that rule must not leave an old
+     * empty peer behind while a different .tsw layout is
+     * being installed.
+     */
+    const QVector<
+        DetachedWorkspaceDocumentWindow *>
+        windows =
+        root->m_detachedWindows;
+
+    root->m_detachedWindows.clear();
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : windows) {
+        if (window == nullptr) {
+            continue;
+        }
+
+        window->hide();
+        window->deleteLater();
+    }
+
+    root->m_activeDocumentId.clear();
+
+    QWidget *rootWindow =
+        root->window();
+
+    if (rootWindow != nullptr) {
+        rootWindow->show();
+    }
+}
+
+WorkspaceDocumentHost *
 WorkspaceDocumentHost::owningHost(
     const QString &documentId
     ) const
@@ -528,11 +1431,19 @@ bool WorkspaceDocumentHost::addDocument(
         return false;
     }
 
-    return insertLocalDocument(
-        document,
-        m_tabs->count(),
-        makeCurrent
-        );
+    const bool added =
+        insertLocalDocument(
+            document,
+            m_tabs->count(),
+            makeCurrent
+            );
+
+    if (added) {
+        emit m_rootHost
+            ->workspaceLayoutChanged();
+    }
+
+    return added;
 }
 
 WorkspaceDocument *
@@ -595,6 +1506,8 @@ WorkspaceDocument *
     m_tabs->removeTab(
         index
         );
+
+    updateEmptyStatePresentation();
 
     document->hide();
 
@@ -679,6 +1592,8 @@ bool WorkspaceDocumentHost::
     if (insertedIndex < 0) {
         return false;
     }
+
+    updateEmptyStatePresentation();
 
     m_tabs->tabBar()
         ->setTabData(
@@ -794,9 +1709,14 @@ WorkspaceDocumentHost::removeDocument(
             documentId
             );
 
-    root->cleanupEmptyDetachedHost(
+    root->cleanupEmptyHost(
         host
         );
+
+    if (document != nullptr) {
+        emit root
+            ->workspaceLayoutChanged();
+    }
 
     return document;
 }
@@ -841,17 +1761,19 @@ bool WorkspaceDocumentHost::setCurrentDocument(
     root->m_activeDocumentId =
         documentId;
 
-    if (host != root) {
-        DetachedWorkspaceDocumentWindow *window =
-            root->windowForHost(
-                host
-                );
+    QWidget *targetWindow =
+        host == root
+            ? root->window()
+            : static_cast<QWidget *>(
+                  root->windowForHost(
+                      host
+                      )
+                  );
 
-        if (window != nullptr) {
-            window->show();
-            window->raise();
-            window->activateWindow();
-        }
+    if (targetWindow != nullptr) {
+        targetWindow->show();
+        targetWindow->raise();
+        targetWindow->activateWindow();
     }
 
     return true;
@@ -909,10 +1831,13 @@ bool WorkspaceDocumentHost::transferDocument(
 
     if (cleanupEmptySource) {
         m_rootHost
-            ->cleanupEmptyDetachedHost(
+            ->cleanupEmptyHost(
                 sourceHost
                 );
     }
+
+    emit m_rootHost
+        ->workspaceLayoutChanged();
 
     return true;
 }
@@ -925,10 +1850,21 @@ WorkspaceDocumentHost::createDetachedWindow(
     WorkspaceDocumentHost *root =
         m_rootHost;
 
+    /*
+     * Visible TraceScope windows are native top-level
+     * peers. The root WorkspaceDocumentHost remains the
+     * logical workspace coordinator, but it must not be
+     * the QWidget owner of secondary windows.
+     *
+     * Giving a secondary top-level window the root
+     * window as its QWidget parent creates an OS-level
+     * owned-window relationship on Windows, which forces
+     * the secondary window to remain above its owner.
+     */
     auto *window =
         new DetachedWorkspaceDocumentWindow(
             root,
-            root
+            nullptr
             );
 
     root->m_detachedWindows
@@ -936,71 +1872,34 @@ WorkspaceDocumentHost::createDetachedWindow(
             window
             );
 
+    /*
+     * Secondary windows no longer have QObject/QWidget
+     * ownership through the root window, so keep the
+     * root's non-owning window registry synchronized
+     * explicitly.
+     */
     connect(
         window,
-        &DetachedWorkspaceDocumentWindow::
-        redockAllRequested,
+        &QObject::destroyed,
         root,
-        [root](
-            DetachedWorkspaceDocumentWindow
-                *requestedWindow
-            ) {
-            root->redockDetachedWindow(
-                requestedWindow
-                );
+        [
+            root,
+            window
+        ]() {
+            root->m_detachedWindows
+                .removeOne(
+                    window
+                    );
         }
         );
 
-    connect(
-        window,
-        &DetachedWorkspaceDocumentWindow::
-        closeAllRequested,
-        root,
-        [root](
-            DetachedWorkspaceDocumentWindow
-                *requestedWindow
-            ) {
-            if (requestedWindow == nullptr
-                || requestedWindow
-                    ->documentHost()
-                        == nullptr) {
-                return;
-            }
-
-            const QVector<WorkspaceDocument *>
-                documents =
-                requestedWindow
-                    ->documentHost()
-                    ->localDocuments();
-
-            /*
-             * Snapshot IDs before emitting anything.
-             * Each close request may synchronously cause
-             * MainWindow/InvestigationWorkspace to remove
-             * that document from this tab group.
-             */
-            QVector<QString> documentIds;
-
-            documentIds.reserve(
-                documents.size()
-                );
-
-            for (WorkspaceDocument *document
-                 : documents) {
-                if (document != nullptr) {
-                    documentIds.push_back(
-                        document->documentId()
-                        );
-                }
-            }
-
-            for (const QString &documentId
-                 : documentIds) {
-                emit root->documentCloseRequested(
-                    documentId
-                    );
-            }
-        }
+    /*
+     * The root application coordinator can now wire
+     * this otherwise ordinary workspace window into
+     * shared TraceScope commands and command state.
+     */
+    emit root->detachedWindowCreated(
+        window
         );
 
     /*
@@ -1011,8 +1910,14 @@ WorkspaceDocumentHost::createDetachedWindow(
     window->move(
         globalPosition
         - QPoint(
-            80,
-            20
+            InterfaceScale::pixels(
+                80,
+                this
+                ),
+            InterfaceScale::pixels(
+                20,
+                this
+                )
             )
         );
 
@@ -1295,7 +2200,7 @@ void WorkspaceDocumentHost::
         }
 
         if (targetHost->documentCount() <= 0) {
-            root->cleanupEmptyDetachedHost(
+            root->cleanupEmptyHost(
                 targetHost
                 );
 
@@ -1361,6 +2266,16 @@ void WorkspaceDocumentHost::
             state.activeDocumentId
             );
     }
+
+    /*
+     * A saved workspace may legitimately contain only
+     * secondary document groups. Once restoration has
+     * recreated those windows, eliminate an empty root
+     * presentation just as interactive tab movement would.
+     */
+    root->cleanupEmptyHost(
+        root
+        );
 }
 
 void WorkspaceDocumentHost::
@@ -1429,6 +2344,12 @@ void WorkspaceDocumentHost::
         return;
     }
 
+    /*
+     * The document has successfully moved between
+     * workspace tab groups.
+     */
+    emit root->workspaceLayoutChanged();
+
     pending.clear();
 
     if (sourceWasRoot
@@ -1496,6 +2417,8 @@ void WorkspaceDocumentHost::
 
         pending.clear();
 
+        pending.clear();
+
         return;
     }
 
@@ -1522,8 +2445,13 @@ void WorkspaceDocumentHost::
 
         pending.clear();
 
+        pending.clear();
+
         return;
     }
+
+    emit root
+        ->workspaceLayoutChanged();
 
     pending.clear();
 
@@ -1557,7 +2485,7 @@ WorkspaceDocumentHost::windowForHost(
 }
 
 void WorkspaceDocumentHost::
-    cleanupEmptyDetachedHost(
+    cleanupEmptyHost(
         WorkspaceDocumentHost *host
         )
 {
@@ -1565,8 +2493,31 @@ void WorkspaceDocumentHost::
         m_rootHost;
 
     if (host == nullptr
-        || host == root
         || host->documentCount() > 0) {
+        return;
+    }
+
+    /*
+     * The internal root window is not privileged in
+     * the visible UI.
+     *
+     * If its last document moved elsewhere, hide it
+     * once another workspace window exists. If it is
+     * the final window, leave it visible with the
+     * empty-workspace start state.
+     */
+    if (host == root) {
+        QWidget *rootWindow =
+            root->window();
+
+        if (rootWindow != nullptr
+            && root
+                   ->hasOtherVisibleWorkspaceWindow(
+                       rootWindow
+                       )) {
+            rootWindow->hide();
+        }
+
         return;
     }
 
@@ -1579,62 +2530,37 @@ void WorkspaceDocumentHost::
         return;
     }
 
-    root->m_detachedWindows
-        .removeOne(
-            window
-            );
+    /*
+     * A root host containing documents must itself
+     * remain a visible peer. This also covers the
+     * programmatic redock path where the root may
+     * previously have been hidden.
+     */
+    QWidget *rootWindow =
+        root->window();
 
-    window->hide();
-    window->deleteLater();
-}
+    if (root->documentCount() > 0
+        && rootWindow != nullptr
+        && !rootWindow->isVisible()) {
+        rootWindow->show();
+    }
 
-void WorkspaceDocumentHost::
-    redockDetachedWindow(
-        DetachedWorkspaceDocumentWindow *window
-        )
-{
-    WorkspaceDocumentHost *root =
-        m_rootHost;
-
-    if (window == nullptr
-        || window->documentHost()
-               == nullptr) {
+    /*
+     * Preserve the final visible window even when its
+     * last document closes. It becomes the ordinary
+     * TraceScope empty-workspace window.
+     */
+    if (!root
+             ->hasOtherVisibleWorkspaceWindow(
+                 window
+                 )) {
         return;
     }
 
-    WorkspaceDocumentHost *sourceHost =
-        window->documentHost();
-
-    const QVector<WorkspaceDocument *>
-        sourceDocuments =
-        sourceHost
-            ->localDocuments();
-
-    QString lastDocumentId;
-
-    for (WorkspaceDocument *document
-         : sourceDocuments) {
-        if (document == nullptr) {
-            continue;
-        }
-
-        lastDocumentId =
-            document->documentId();
-
-        if (root->transferDocument(
-                sourceHost,
-                document->documentId(),
-                root,
-                root->documentCount(),
-                false,
-                false
-                )) {
-            emit root->documentRedocked(
-                document->documentId()
-                );
-        }
-    }
-
+    /*
+     * Another usable TraceScope window remains, so
+     * this empty peer is redundant.
+     */
     root->m_detachedWindows
         .removeOne(
             window
@@ -1642,12 +2568,6 @@ void WorkspaceDocumentHost::
 
     window->hide();
     window->deleteLater();
-
-    if (!lastDocumentId.isEmpty()) {
-        root->setCurrentDocument(
-            lastDocumentId
-            );
-    }
 }
 
 void WorkspaceDocumentHost::updateDocumentTitle(
@@ -1827,6 +2747,10 @@ void WorkspaceDocumentHost::
         .sourceIndex =
         sourceIndex;
 
+    root->setWorkspaceDocumentDragActive(
+        true
+        );
+
     /*
      * Do NOT clean up an empty detached source
      * window yet. Its tab bar is still executing
@@ -1919,4 +2843,394 @@ bool WorkspaceDocumentHost::
         );
 
     return true;
+}
+
+void WorkspaceDocumentHost::
+    setWorkspaceDocumentDragActive(
+        bool active
+        )
+{
+    WorkspaceDocumentHost *root =
+        m_rootHost;
+
+    root->m_workspaceDocumentDragActive =
+        active;
+
+    root->updateEmptyStatePresentation();
+
+    for (DetachedWorkspaceDocumentWindow *window
+         : std::as_const(
+             root->m_detachedWindows
+             )) {
+        if (window == nullptr
+            || window->documentHost()
+                   == nullptr) {
+            continue;
+        }
+
+        window->documentHost()
+            ->updateEmptyStatePresentation();
+    }
+}
+
+void WorkspaceDocumentHost::
+    refreshEmptyStateTitleFont()
+{
+    if (m_emptyStateTitleLabel == nullptr) {
+        return;
+    }
+
+    /*
+     * Always derive the title from the current
+     * application font, never the title's previously
+     * scaled font.
+     *
+     * This reproduces the same result whether the
+     * application starts at a particular scale or
+     * changes to it while running.
+     */
+    QFont titleFont =
+        QApplication::font();
+
+    titleFont.setBold(true);
+
+    if (titleFont.pointSizeF() > 0.0) {
+        titleFont.setPointSizeF(
+            titleFont.pointSizeF() * 1.5
+            );
+    } else if (titleFont.pixelSize() > 0) {
+        titleFont.setPixelSize(
+            qRound(
+                titleFont.pixelSize() * 1.5
+                )
+            );
+    }
+
+    m_emptyStateTitleLabel->setFont(
+        titleFont
+        );
+}
+
+void WorkspaceDocumentHost::
+    updateEmptyStatePresentation()
+{
+    if (m_tabs == nullptr) {
+        return;
+    }
+
+    const bool empty =
+        m_tabs->count() == 0;
+
+    if (m_emptyStateWidget != nullptr) {
+        m_emptyStateWidget->setVisible(
+            empty
+            && !m_rootHost
+                    ->m_workspaceDocumentDragActive
+            );
+    }
+
+    WorkspaceTabBar *tabBar =
+        m_tabs->workspaceTabBar();
+
+    if (tabBar != nullptr) {
+        tabBar->setEmptyDropTargetActive(
+            empty
+            && m_rootHost
+                   ->m_workspaceDocumentDragActive
+            );
+    }
+
+    /*
+     * The empty page is an overlay, not a normal tab.
+     * Qt therefore excludes its content from the
+     * tab widget's natural minimum height.
+     *
+     * Reserve both its actual content requirement
+     * and the normal styled tab-row height.
+     *
+     * Release the explicit constraint when a document
+     * opens. Normal document sizing then takes over.
+     */
+    int minimumHeight = 0;
+
+    if (empty
+        && m_emptyStateWidget != nullptr) {
+        minimumHeight =
+            m_emptyStateWidget
+                ->minimumSizeHint()
+                .height()
+            + InterfaceScale::pixels(
+                2,
+                m_emptyStateWidget
+                );
+
+        if (tabBar != nullptr) {
+            minimumHeight +=
+                tabBar->normalTabRowHeight();
+
+            minimumHeight += std::max(
+                0,
+                m_tabs->style()->pixelMetric(
+                    QStyle::PM_DefaultFrameWidth,
+                    nullptr,
+                    m_tabs
+                    )
+                );
+        }
+    }
+
+    m_tabs->setMinimumHeight(
+        minimumHeight + (empty ? 1 : 0)
+        );
+
+    m_tabs->updateEmptyStateGeometry();
+
+    m_tabs->updateGeometry();
+    updateGeometry();
+}
+
+void WorkspaceDocumentHost::
+    setFileOperationsEnabled(
+        bool enabled
+        )
+{
+    m_fileOperationsEnabled =
+        enabled;
+
+    if (m_emptyStateOpenLogButton != nullptr) {
+        m_emptyStateOpenLogButton
+            ->setEnabled(
+                enabled
+                );
+    }
+
+    if (m_emptyStateOpenSnapshotButton != nullptr) {
+        m_emptyStateOpenSnapshotButton
+            ->setEnabled(
+                enabled
+                );
+    }
+
+    if (m_emptyStateOpenWorkspaceButton != nullptr) {
+        m_emptyStateOpenWorkspaceButton
+            ->setEnabled(
+                enabled
+                );
+    }
+
+    if (m_emptyStateRecentFilesButton
+        != nullptr) {
+        m_emptyStateRecentFilesButton
+            ->setEnabled(
+                enabled
+                && m_recentFilesAvailable
+                );
+    }
+
+    if (m_emptyStateRecentWorkspacesButton
+        != nullptr) {
+        m_emptyStateRecentWorkspacesButton
+            ->setEnabled(
+                enabled
+                && m_recentWorkspacesAvailable
+                );
+    }
+}
+
+void WorkspaceDocumentHost::
+    setRecentFilesAvailable(
+        bool available
+        )
+{
+    m_recentFilesAvailable =
+        available;
+
+    if (m_emptyStateRecentFilesButton
+        != nullptr) {
+        m_emptyStateRecentFilesButton
+            ->setEnabled(
+                m_fileOperationsEnabled
+                && m_recentFilesAvailable
+                );
+    }
+}
+
+void WorkspaceDocumentHost::
+    setRecentWorkspacesAvailable(
+        bool available
+        )
+{
+    m_recentWorkspacesAvailable =
+        available;
+
+    if (m_emptyStateRecentWorkspacesButton
+        != nullptr) {
+        m_emptyStateRecentWorkspacesButton
+            ->setEnabled(
+                m_fileOperationsEnabled
+                && m_recentWorkspacesAvailable
+                );
+    }
+}
+
+void WorkspaceDocumentHost::
+    refreshInterfaceScale()
+{
+    refreshEmptyStateTitleFont();
+
+    if (m_emptyStateWidget != nullptr) {
+        if (QLayout *emptyLayout =
+            m_emptyStateWidget->layout();
+            emptyLayout != nullptr) {
+            emptyLayout->setContentsMargins(
+                InterfaceScale::margins(
+                    20,
+                    24,
+                    20,
+                    24,
+                    m_emptyStateWidget
+                    )
+                );
+
+            emptyLayout->invalidate();
+        }
+    }
+
+    if (m_emptyStateActionSpacing != nullptr) {
+        m_emptyStateActionSpacing->changeSize(
+            0,
+            InterfaceScale::pixels(
+                14,
+                m_emptyStateWidget
+                ),
+            QSizePolicy::Minimum,
+            QSizePolicy::Fixed
+            );
+    }
+
+    if (m_tabs != nullptr) {
+        WorkspaceTabBar *tabBar =
+            m_tabs->workspaceTabBar();
+
+        if (tabBar != nullptr) {
+            /*
+             * WorkspaceTabBar calculates its scaled
+             * empty-target dimensions dynamically in
+             * sizeHint()/paintEvent(), so it only needs
+             * geometry invalidation and repainting.
+             */
+            tabBar->updateGeometry();
+            tabBar->update();
+        }
+    }
+
+    for (
+        WorkspaceDocument *document
+        : localDocuments()
+        ) {
+        if (document != nullptr) {
+            document->refreshInterfaceScale();
+        }
+    }
+
+    updateGeometry();
+    update();
+
+
+    updateEmptyStatePresentation();
+
+    /*
+     * The application has changed its font and style,
+     * but Qt may still have pending layout updates.
+     *
+     * Recalculate the empty overlay's minimum after
+     * that layout work has had an opportunity to run.
+     * Do not resize the outer window.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (
+                m_tabs == nullptr
+                || m_emptyStateWidget == nullptr
+                || m_tabs->count() != 0
+                ) {
+                return;
+            }
+
+            if (QLayout *emptyLayout =
+                m_emptyStateWidget->layout();
+                emptyLayout != nullptr) {
+                emptyLayout->invalidate();
+                emptyLayout->activate();
+            }
+
+            updateEmptyStatePresentation();
+        }
+        );
+
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_tabs == nullptr) {
+                return;
+            }
+
+            WorkspaceTabBar *tabBar =
+                m_tabs->workspaceTabBar();
+
+            if (tabBar == nullptr) {
+                return;
+            }
+
+            for (int index = 0;
+                 index < tabBar->count();
+                 ++index) {
+                QWidget *closeButton =
+                    tabBar->tabButton(
+                        index,
+                        QTabBar::RightSide
+                        );
+
+                if (closeButton == nullptr) {
+                    continue;
+                }
+
+                const QSize preferredSize =
+                    closeButton->sizeHint();
+
+                if (closeButton->size()
+                    == preferredSize) {
+                    continue;
+                }
+
+                /*
+                 * Restore the native button's current
+                 * preferred size and make QTabBar rebuild
+                 * its layout around that button.
+                 */
+                closeButton->resize(
+                    preferredSize
+                    );
+
+                tabBar->setTabButton(
+                    index,
+                    QTabBar::RightSide,
+                    nullptr
+                    );
+
+                tabBar->setTabButton(
+                    index,
+                    QTabBar::RightSide,
+                    closeButton
+                    );
+            }
+
+            tabBar->updateGeometry();
+            m_tabs->updateGeometry();
+        }
+        );
 }

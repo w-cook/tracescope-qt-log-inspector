@@ -1,11 +1,17 @@
 #include <QtTest>
 
-#include <QCoreApplication>
-#include <QPushButton>
 #include <QBarCategoryAxis>
 #include <QChartView>
-#include <QScrollBar>
+#include <QCoreApplication>
+#include <QGroupBox>
+#include <QHeaderView>
 #include <QMenu>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QTableWidget>
+#include <QTableView>
+#include <QTemporaryFile>
+#include <QToolButton>
 
 #include <memory>
 #include <utility>
@@ -13,6 +19,8 @@
 #include "../src/domain/InvestigationRecord.h"
 #include "../src/importing/ImportProfile.h"
 #include "../src/importing/ImportResult.h"
+#include "../src/live/LiveSessionFollowCoordinator.h"
+#include "../src/ui/InterfaceScale.h"
 #include "../src/ui/investigation/InvestigationAnalyticsPanel.h"
 #include "../src/ui/investigation/InvestigationEventDetailPanel.h"
 #include "../src/ui/investigation/InvestigationEventPanel.h"
@@ -21,18 +29,21 @@
 #include "../src/ui/investigation/InvestigationReviewPanel.h"
 #include "../src/ui/investigation/InvestigationTimelinePanel.h"
 #include "../src/ui/workspace/InvestigationSessionView.h"
+#include "../src/ui/workspace/LiveFollowTabControl.h"
 #include "../src/workspace/InvestigationPresentationState.h"
 #include "../src/workspace/InvestigationSession.h"
 
 namespace
 {
 
-InvestigationSession makeSession()
+InvestigationSession makeSession(
+    int recordCount = 100
+    )
 {
     ImportResult result;
 
     for (int index = 0;
-         index < 100;
+         index < recordCount;
          ++index) {
         InvestigationRecord record;
 
@@ -286,7 +297,11 @@ private slots:
     void newSessionKeepsEventDetailsVisible();
     void autoTimelineDensityAdaptsToWidth();
     void manualTimelineDensityAdaptsToWidth();
+    void timelineFollowNewestAnchorsManualScroll();
+    void liveFollowTransientErrorPreservesFollowNewestIntent();
     void sessionViewPopulatesExportMenu();
+    void analyticsOverviewDrillDownFiltersInvestigation();
+    void eventTableRestoresWidthsAcrossInterfaceScales();
 };
 
 void InvestigationPresentationStateTests::
@@ -327,6 +342,8 @@ void InvestigationPresentationStateTests::
         width = 240;
     }
 
+    desired.manuallyResizedColumns = {1};
+
     desired.selectedRecordId =
         QStringLiteral("record-040");
 
@@ -361,6 +378,11 @@ void InvestigationPresentationStateTests::
     const InvestigationEventTablePresentationState
         saved =
         panel.capturePresentationState();
+
+    QCOMPARE(
+        saved.manuallyResizedColumns,
+        desired.manuallyResizedColumns
+        );
 
     QCOMPARE(
         saved.selectedRecordId,
@@ -468,6 +490,11 @@ void InvestigationPresentationStateTests::
     QCOMPARE(
         restored.columnWidths,
         saved.columnWidths
+        );
+
+    QCOMPARE(
+        restored.manuallyResizedColumns,
+        saved.manuallyResizedColumns
         );
 
     QCOMPARE(
@@ -864,6 +891,45 @@ void InvestigationPresentationStateTests::
         );
 
     processUi();
+
+    QTableWidget *table =
+        panel.findChild<QTableWidget *>();
+
+    QVERIFY(
+        table != nullptr
+        );
+
+    if (table == nullptr) {
+        return;
+    }
+
+    const QModelIndex currentIndex =
+        table->currentIndex();
+
+    QCOMPARE(
+        currentIndex.row(),
+        40
+        );
+
+    QCOMPARE(
+        currentIndex.column(),
+        2
+        );
+
+    const QModelIndexList selectedRows =
+        table
+            ->selectionModel()
+            ->selectedRows();
+
+    QCOMPARE(
+        selectedRows.size(),
+        1
+        );
+
+    QCOMPARE(
+        selectedRows.first().row(),
+        40
+        );
 
     /*
      * Capture the effective state after Qt has applied
@@ -1492,6 +1558,34 @@ void InvestigationPresentationStateTests::
             .verticalValue
         > 0
         );
+
+    QCOMPARE(
+        restored.overviewSplitterSizes.size(),
+        2
+        );
+
+    for (
+        const int size
+        : restored.overviewSplitterSizes
+        ) {
+        QVERIFY(
+            size > 0
+            );
+    }
+
+    QCOMPARE(
+        restored.burstSplitterSizes.size(),
+        2
+        );
+
+    for (
+        const int size
+        : restored.burstSplitterSizes
+        ) {
+        QVERIFY(
+            size > 0
+            );
+    }
 }
 
 void InvestigationPresentationStateTests::
@@ -2456,6 +2550,442 @@ void InvestigationPresentationStateTests::
 }
 
 void InvestigationPresentationStateTests::
+    timelineFollowNewestAnchorsManualScroll()
+{
+    /*
+     * Begin with only the first 40 seconds actually
+     * belonging to the session. This matters because
+     * the timeline's overall time domain comes from
+     * the session's first/last timestamps, not merely
+     * from the records supplied to updateRecords().
+     */
+    InvestigationSession session =
+        makeSession(40);
+
+    InvestigationTimelinePanel panel;
+
+    /*
+     * Keep the viewport narrow enough that a
+     * one-second manual resolution requires
+     * horizontal navigation.
+     */
+    panel.resize(
+        320,
+        240
+        );
+
+    panel.setSession(
+        &session
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    InvestigationTimelinePresentationState
+        manualState;
+
+    manualState.intervalMilliseconds =
+        1000;
+
+    manualState.breakdown =
+        InvestigationTimelineBreakdown::
+        Severity;
+
+    manualState.subsystemTrendLimit =
+        5;
+
+    manualState.horizontalScrollValue =
+        0;
+
+    panel.restorePresentationState(
+        manualState
+        );
+
+    panel.show();
+
+    processUi();
+
+    QCOMPARE(
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue,
+        0
+        );
+
+    /*
+     * Enabling Follow Newest should immediately move
+     * the existing manual-resolution timeline to its
+     * newest visible bucket window.
+     */
+    panel.setFollowNewestEnabled(
+        true
+        );
+
+    processUi();
+
+    const int initialFollowPosition =
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue;
+
+    QVERIFY(
+        initialFollowPosition > 0
+        );
+
+    /*
+     * Simulate the next sixty records arriving through
+     * the same session-level path used by live following.
+     *
+     * This expands both the underlying record collection
+     * and the session's lastTimestamp(), which is what
+     * actually extends the timeline's navigable domain.
+     */
+    ImportResult appendedResult;
+
+    for (int index = 40;
+         index < 100;
+         ++index) {
+        InvestigationRecord record;
+
+        record.recordId =
+            QStringLiteral("record-%1")
+                .arg(
+                    index,
+                    3,
+                    10,
+                    QLatin1Char('0')
+                    );
+
+        record.timestamp =
+            QDateTime::fromString(
+                QStringLiteral(
+                    "2026-08-28T12:00:00Z"
+                    ),
+                Qt::ISODate
+                )
+                .addSecs(index);
+
+        record.severity =
+            index % 10 == 0
+                ? RecordSeverity::Warning
+                : RecordSeverity::Info;
+
+        record.subsystem =
+            QStringLiteral("Backend");
+
+        record.message =
+            QStringLiteral("Event %1")
+                .arg(index);
+
+        record.source.sourcePath =
+            QStringLiteral(
+                "presentation-test.jsonl"
+                );
+
+        record.source.sourceName =
+            QStringLiteral(
+                "presentation-test.jsonl"
+                );
+
+        record.source.recordNumber =
+            index + 1;
+
+        appendedResult.records.append(
+            std::move(record)
+            );
+    }
+
+    appendedResult.processedRecordCount =
+        appendedResult.records.size();
+
+    session.appendLiveImportResult(
+        std::move(appendedResult)
+        );
+
+    panel.updateRecords(
+        session
+            .investigationController()
+            ->recordsForAnalysis()
+        );
+
+    processUi();
+
+    const int expandedFollowPosition =
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue;
+
+    /*
+     * The live append extended the session from a
+     * 40-second timeline to a 100-second timeline.
+     * Follow Newest must therefore have advanced to
+     * the newly expanded right edge.
+     */
+    QVERIFY(
+        expandedFollowPosition
+        > initialFollowPosition
+        );
+
+    /*
+     * Once Follow Newest is disabled, ordinary manual
+     * navigation must remain under user control.
+     */
+    panel.setFollowNewestEnabled(
+        false
+        );
+
+    InvestigationTimelinePresentationState
+        oldestState =
+        panel.capturePresentationState();
+
+    oldestState.horizontalScrollValue =
+        0;
+
+    panel.restorePresentationState(
+        oldestState
+        );
+
+    processUi();
+
+    QCOMPARE(
+        panel
+            .capturePresentationState()
+            .horizontalScrollValue,
+        0
+        );
+}
+
+void InvestigationPresentationStateTests::
+    liveFollowTransientErrorPreservesFollowNewestIntent()
+{
+    /*
+     * Use a real temporary source path so the normal
+     * session-owned live coordinator can enter its
+     * Following state without depending on an
+     * external test fixture.
+     */
+    QTemporaryFile sourceFile;
+
+    QVERIFY(
+        sourceFile.open()
+        );
+
+    const QString sourcePath =
+        sourceFile.fileName();
+
+    sourceFile.close();
+
+    ImportProfile profile;
+
+    profile.importerId =
+        QStringLiteral(
+            "json-lines"
+            );
+
+    profile.canonicalFields.messagePath =
+        QStringLiteral(
+            "message"
+            );
+
+    profile.preserveUnmappedFields =
+        true;
+
+    ImportResult initialResult;
+
+    InvestigationSession session(
+        sourcePath,
+        profile,
+        std::move(
+            initialResult
+            )
+        );
+
+    session.setInitialLiveFollowByteOffset(
+        0
+        );
+
+    LiveSessionFollowCoordinator *coordinator =
+        session.ensureLiveFollowCoordinator();
+
+    QVERIFY(
+        coordinator != nullptr
+        );
+
+    const LiveSessionFollowStartResult
+        startResult =
+        coordinator->start();
+
+    QVERIFY2(
+        startResult.succeeded,
+        qPrintable(
+            startResult.errorMessage
+            )
+        );
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .status(),
+        LiveFileFollowStatus::Following
+        );
+
+    LiveFollowTabControl control(
+        &session
+        );
+
+    processUi();
+
+    QToolButton *followNewestButton =
+        control.findChild<QToolButton *>(
+            QStringLiteral(
+                "liveFollowNewestButton"
+                )
+            );
+
+    if (followNewestButton == nullptr) {
+        QFAIL(
+            "Expected Follow Newest button was not found."
+            );
+    }
+
+    QVERIFY(
+        followNewestButton->isEnabled()
+        );
+
+    control.setFollowNewestEnabled(
+        true
+        );
+
+    QVERIFY(
+        followNewestButton->isChecked()
+        );
+
+    QSignalSpy followNewestSpy(
+        &control,
+        &LiveFollowTabControl::
+        followNewestChanged
+        );
+
+    /*
+     * Reproduce the presentation state caused by a
+     * recoverable polling/read failure.
+     *
+     * The underlying coordinator remains Following.
+     */
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            coordinator,
+            "pollError",
+            Qt::DirectConnection,
+            Q_ARG(
+                QString,
+                QStringLiteral(
+                    "Transient live-source read failure."
+                    )
+                )
+            )
+        );
+
+    processUi();
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .status(),
+        LiveFileFollowStatus::Following
+        );
+
+    /*
+     * The control is temporarily unavailable while
+     * the error is being presented, but the user's
+     * Follow Newest intent must survive.
+     */
+    QVERIFY(
+        followNewestButton->isChecked()
+        );
+
+    QVERIFY(
+        !followNewestButton->isEnabled()
+        );
+
+    QCOMPARE(
+        followNewestSpy.count(),
+        0
+        );
+
+    /*
+     * A subsequent successful live update clears the
+     * transient error. Follow Newest should resume
+     * automatically because its intent was preserved.
+     */
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            coordinator,
+            "sessionUpdated",
+            Qt::DirectConnection
+            )
+        );
+
+    processUi();
+
+    QVERIFY(
+        followNewestButton->isChecked()
+        );
+
+    QVERIFY(
+        followNewestButton->isEnabled()
+        );
+
+    QCOMPARE(
+        followNewestSpy.count(),
+        0
+        );
+
+    /*
+     * A genuine lifecycle transition away from
+     * Following remains different from a transient
+     * poll error. Pausing must still abandon Follow
+     * Newest exactly as before.
+     */
+    QVERIFY(
+        coordinator->pause()
+        );
+
+    processUi();
+
+    QCOMPARE(
+        coordinator
+            ->state()
+            .status(),
+        LiveFileFollowStatus::Paused
+        );
+
+    QVERIFY(
+        !followNewestButton->isChecked()
+        );
+
+    QCOMPARE(
+        followNewestSpy.count(),
+        1
+        );
+
+    const QList<QVariant> arguments =
+        followNewestSpy.takeFirst();
+
+    QCOMPARE(
+        arguments.at(0).toBool(),
+        false
+        );
+
+    QVERIFY(
+        coordinator->stop()
+        );
+}
+
+void InvestigationPresentationStateTests::
     sessionViewPopulatesExportMenu()
 {
     InvestigationSession session =
@@ -2607,6 +3137,358 @@ void InvestigationPresentationStateTests::
     QCOMPARE(
         arguments.at(0).toString(),
         view.documentId()
+        );
+}
+
+void InvestigationPresentationStateTests::
+    analyticsOverviewDrillDownFiltersInvestigation()
+{
+    auto session =
+        makeAnalyticsSession();
+
+    InvestigationSessionView view(
+        session.get(),
+        nullptr
+        );
+
+    view.resize(
+        1000,
+        800
+        );
+
+    view.show();
+
+    processUi();
+
+    InvestigationAnalyticsPanel *analyticsPanel =
+        view.findChild<
+            InvestigationAnalyticsPanel *>();
+
+    QVERIFY(
+        analyticsPanel != nullptr
+        );
+
+    QGroupBox *eventCodeGroup =
+        nullptr;
+
+    QGroupBox *entityGroup =
+        nullptr;
+
+    const QList<QGroupBox *> groups =
+        analyticsPanel
+            ->findChildren<QGroupBox *>();
+
+    for (QGroupBox *group : groups) {
+        if (group == nullptr) {
+            continue;
+        }
+
+        if (group->title()
+            == QStringLiteral(
+                "Event Code Frequencies"
+                )) {
+            eventCodeGroup =
+                group;
+        } else if (
+            group->title()
+            == QStringLiteral(
+                "Top Entities"
+                )
+            ) {
+            entityGroup =
+                group;
+        }
+    }
+
+    QVERIFY(
+        eventCodeGroup != nullptr
+        );
+
+    QVERIFY(
+        entityGroup != nullptr
+        );
+
+    QTableWidget *eventCodeTable =
+        eventCodeGroup != nullptr
+            ? eventCodeGroup
+                  ->findChild<QTableWidget *>()
+            : nullptr;
+
+    QTableWidget *entityTable =
+        entityGroup != nullptr
+            ? entityGroup
+                  ->findChild<QTableWidget *>()
+            : nullptr;
+
+    if (eventCodeTable == nullptr
+        || entityTable == nullptr) {
+        QFAIL(
+            "Expected Analytics overview tables were not found."
+            );
+    }
+
+    QVERIFY(
+        eventCodeTable->rowCount() > 0
+        );
+
+    QVERIFY(
+        entityTable->rowCount() > 0
+        );
+
+    const QString eventCode =
+        eventCodeTable
+            ->item(
+                0,
+                0
+                )
+            ->text();
+
+    /*
+     * Exercise the same signal emitted by a real
+     * table double-click without depending on native
+     * mouse geometry under the minimal QPA backend.
+     */
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            eventCodeTable,
+            "cellDoubleClicked",
+            Qt::DirectConnection,
+            Q_ARG(int, 0),
+            Q_ARG(int, 0)
+            )
+        );
+
+    processUi();
+
+    InvestigationFilterProxyModel *proxy =
+        session
+            ->investigationController()
+            ->proxyModel();
+
+    QVERIFY(
+        proxy != nullptr
+        );
+
+    QCOMPARE(
+        proxy->eventCodeFilters(),
+        QStringList {
+            eventCode
+        }
+        );
+
+    /*
+     * Analytics is rebuilt from the newly filtered
+     * investigation, so reacquire the first entity
+     * from the refreshed table.
+     */
+    QVERIFY(
+        entityTable->rowCount() > 0
+        );
+
+    const QString entity =
+        entityTable
+            ->item(
+                0,
+                0
+                )
+            ->text();
+
+    QVERIFY(
+        QMetaObject::invokeMethod(
+            entityTable,
+            "cellDoubleClicked",
+            Qt::DirectConnection,
+            Q_ARG(int, 0),
+            Q_ARG(int, 0)
+            )
+        );
+
+    processUi();
+
+    QCOMPARE(
+        proxy->eventCodeFilters(),
+        QStringList {
+            eventCode
+        }
+        );
+
+    QCOMPARE(
+        proxy->entityFilters(),
+        QStringList {
+            entity
+        }
+        );
+
+    /*
+     * Both canonical dimensions should now be active
+     * simultaneously rather than the second drilldown
+     * replacing the first one.
+     */
+    const QVector<InvestigationRecord>
+        visibleRecords =
+        session
+            ->investigationController()
+            ->visibleRecords();
+
+    QVERIFY(
+        !visibleRecords.isEmpty()
+        );
+
+    for (
+        const InvestigationRecord &record
+        : visibleRecords
+        ) {
+        QCOMPARE(
+            record.eventCode.value_or(
+                QString()
+                ),
+            eventCode
+            );
+
+        QCOMPARE(
+            record.entityId.value_or(
+                QString()
+                ),
+            entity
+            );
+    }
+}
+
+
+void InvestigationPresentationStateTests::
+    eventTableRestoresWidthsAcrossInterfaceScales()
+{
+    InvestigationSession session = makeSession();
+
+    InvestigationEventPanel panel;
+    panel.resize(1100, 380);
+    panel.setSession(&session);
+    panel.show();
+
+    processUi();
+
+    QTableView *table =
+        panel.findChild<QTableView *>();
+
+    QVERIFY(table != nullptr);
+
+    if (table == nullptr) {
+        return;
+    }
+
+    QHeaderView *header =
+        table->horizontalHeader();
+
+    QVERIFY(header != nullptr);
+
+    if (header == nullptr) {
+        return;
+    }
+
+    QVERIFY(header->count() >= 3);
+
+    constexpr int automaticColumn = 0;
+    constexpr int manualColumn = 1;
+
+    /*
+     * Establish the automatically measured width
+     * at the current interface scale.
+     */
+    table->resizeColumnToContents(automaticColumn);
+
+    const int expectedAutomaticWidth =
+        table->columnWidth(automaticColumn);
+
+    const qreal currentScale =
+        InterfaceScale::geometryFactor(table);
+
+    QVERIFY(currentScale > 0.0);
+
+    /*
+     * Simulate presentation state saved at half
+     * the current interface scale.
+     *
+     * Give the automatic column an intentionally
+     * incorrect saved width. Restoration must
+     * remeasure it instead of scaling that value.
+     */
+    InvestigationEventTablePresentationState saved =
+        panel.capturePresentationState();
+
+    saved.columnWidthScaleFactor =
+        currentScale / 2.0;
+
+    saved.manuallyResizedColumns = {
+        manualColumn
+    };
+
+    const int savedManualWidth =
+        qMax(
+            200,
+            header->minimumSectionSize() + 20
+            );
+
+    saved.columnWidths[automaticColumn] =
+        expectedAutomaticWidth + 80;
+
+    saved.columnWidths[manualColumn] =
+        savedManualWidth;
+
+    panel.restorePresentationState(saved);
+    processUi();
+
+    const InvestigationEventTablePresentationState
+        restored =
+        panel.capturePresentationState();
+
+    /*
+     * Automatic columns use current font metrics.
+     * Manual columns retain proportional widths.
+     */
+    QCOMPARE(
+        restored.columnWidths[automaticColumn],
+        expectedAutomaticWidth
+        );
+
+    QCOMPARE(
+        restored.columnWidths[manualColumn],
+        savedManualWidth * 2
+        );
+
+    QCOMPARE(
+        restored.manuallyResizedColumns,
+        saved.manuallyResizedColumns
+        );
+
+    QCOMPARE(
+        restored.columnWidthScaleFactor,
+        currentScale
+        );
+
+    /*
+     * Legacy presentation state has no recorded
+     * scale. Preserve its saved pixel widths.
+     */
+    saved.columnWidthScaleFactor = 0.0;
+
+    saved.columnWidths[automaticColumn] =
+        expectedAutomaticWidth + 60;
+
+    panel.restorePresentationState(saved);
+    processUi();
+
+    const InvestigationEventTablePresentationState
+        legacyRestored =
+        panel.capturePresentationState();
+
+    QCOMPARE(
+        legacyRestored.columnWidths[automaticColumn],
+        saved.columnWidths[automaticColumn]
+        );
+
+    QCOMPARE(
+        legacyRestored.columnWidths[manualColumn],
+        savedManualWidth
         );
 }
 

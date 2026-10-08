@@ -24,6 +24,8 @@
 #include "../importing/ImportDiagnostic.h"
 #include "../importing/ImportProfile.h"
 
+#include "../workspace/InvestigationComparisonTimeRange.h"
+
 /*
  * ---------------------------------------------------------
  * Source/session context
@@ -353,6 +355,12 @@ struct InvestigationReportComparisonSnapshot
      */
     QString baselineSourceName;
     QString comparisonSourceName;
+
+    std::optional<InvestigationComparisonTimeRange>
+        baselineTimeRange;
+
+    std::optional<InvestigationComparisonTimeRange>
+        comparisonTimeRange;
 
     std::optional<BurstDetectionSettings>
         requestedBurstSettings;

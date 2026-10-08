@@ -31,6 +31,9 @@ captureSource(
     persisted.importedAtUtc =
         source.sourceMetadata.importedAtUtc;
 
+    persisted.capturedTimeRange =
+        source.capturedTimeRange;
+
     return persisted;
 }
 
@@ -59,6 +62,9 @@ restoreSource(
 
     source.sourceMetadata.importedAtUtc =
         persisted.importedAtUtc;
+
+    source.capturedTimeRange =
+        persisted.capturedTimeRange;
 
     return source;
 }

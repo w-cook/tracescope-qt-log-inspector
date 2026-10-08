@@ -6,6 +6,8 @@
 #include <utility>
 
 #include <QAbstractItemView>
+#include <QApplication>
+#include <QFileInfo>
 #include <QFont>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -13,13 +15,16 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
-#include <QVBoxLayout>
-#include <QFileInfo>
 #include <QTimer>
+#include <QVBoxLayout>
 
+#include "../InterfaceScale.h"
+#include "../ItemViewFocusDelegate.h"
 #include "../../domain/RecordSeverity.h"
+#include "../../workspace/InvestigationComparisonWindowRate.h"
 
 namespace
 {
@@ -260,6 +265,35 @@ QString formatTimestamp(
             );
 }
 
+QString comparisonScopeText(
+    const InvestigationComparisonSourceSnapshot &source
+    )
+{
+    if (!source.capturedTimeRange.has_value()) {
+        return QStringLiteral(
+            "Scope: Complete imported session"
+            );
+    }
+
+    const auto &range =
+        *source.capturedTimeRange;
+
+    const QString start =
+        range.startTime.has_value()
+            ? formatTimestamp(*range.startTime)
+            : QStringLiteral("Unbounded");
+
+    const QString end =
+        range.endTime.has_value()
+            ? formatTimestamp(*range.endTime)
+            : QStringLiteral("Unbounded");
+
+    return QStringLiteral(
+               "Scope: %1 to %2 (inclusive)"
+               )
+        .arg(start, end);
+}
+
 QString formatNumericSummary(
     const InvestigationNumericFieldSummary &summary
     )
@@ -426,6 +460,11 @@ QLabel *makeHeading(
         font
         );
 
+    label->setProperty(
+        "comparisonFontRole",
+        QStringLiteral("heading")
+        );
+
     return label;
 }
 
@@ -445,6 +484,19 @@ QLabel *makeUnavailableLabel(
         );
 
     return label;
+}
+
+int comparisonTableRowHeight(QTableWidget *table)
+{
+    if (table == nullptr) {
+        return 0;
+    }
+
+    return std::max(
+        InterfaceScale::pixels(24, table),
+        table->fontMetrics().height()
+            + InterfaceScale::pixels(4, table)
+        );
 }
 
 QTableWidget *makeTable(
@@ -490,7 +542,7 @@ QTableWidget *makeTable(
 
     table->verticalHeader()
         ->setDefaultSectionSize(
-            24
+            comparisonTableRowHeight(table)
             );
 
     table->horizontalHeader()
@@ -505,6 +557,12 @@ QTableWidget *makeTable(
             QHeaderView::Stretch
             );
     }
+
+    table->setItemDelegate(
+        new ItemViewFocusDelegate(
+            table
+            )
+        );
 
     return table;
 }
@@ -662,14 +720,12 @@ QGroupBox *makeSourcesGroup(
         );
 
     const auto addSource =
-        [
-            layout,
-            group
-    ](
+        [layout, group](
             int column,
             const QString &role,
             const InvestigationComparisonSourceSnapshot
-                &source
+                &source,
+            qint64 selectedRecordCount
             ) {
             auto *roleLabel =
                 new QLabel(
@@ -686,6 +742,11 @@ QGroupBox *makeSourcesGroup(
 
             roleLabel->setFont(
                 roleFont
+                );
+
+            roleLabel->setProperty(
+                "comparisonFontRole",
+                QStringLiteral("bold")
                 );
 
             auto *nameLabel =
@@ -725,6 +786,26 @@ QGroupBox *makeSourcesGroup(
                     group
                     );
 
+            auto *scopeLabel =
+                new QLabel(
+                    comparisonScopeText(source),
+                    group
+                    );
+
+            scopeLabel->setWordWrap(true);
+            scopeLabel->setTextInteractionFlags(
+                Qt::TextSelectableByMouse
+                );
+
+            auto *countLabel =
+                new QLabel(
+                    QStringLiteral(
+                        "Compared records: %1"
+                        )
+                        .arg(selectedRecordCount),
+                    group
+                    );
+
             layout->addWidget(
                 roleLabel,
                 0,
@@ -743,6 +824,18 @@ QGroupBox *makeSourcesGroup(
                 column
                 );
 
+            layout->addWidget(
+                scopeLabel,
+                3,
+                column
+                );
+
+            layout->addWidget(
+                countLabel,
+                4,
+                column
+                );
+
             layout->setColumnStretch(
                 column,
                 1
@@ -752,13 +845,17 @@ QGroupBox *makeSourcesGroup(
     addSource(
         0,
         QStringLiteral("Baseline"),
-        snapshot.baselineSource()
+        snapshot.baselineSource(),
+        snapshot.analysis()
+            .totalRecords.baselineCount
         );
 
     addSource(
         1,
         QStringLiteral("Comparison"),
-        snapshot.comparisonSource()
+        snapshot.comparisonSource(),
+        snapshot.analysis()
+            .totalRecords.comparisonCount
         );
 
     return group;
@@ -849,7 +946,7 @@ QGroupBox *makeEventCodeGroup(
         [
             layout,
             group
-    ](
+        ](
             const QString &title,
             const QVector<InvestigationValueDifference>
                 &differences
@@ -873,6 +970,11 @@ QGroupBox *makeEventCodeGroup(
 
             label->setFont(
                 font
+                );
+
+            label->setProperty(
+                "comparisonFontRole",
+                QStringLiteral("bold")
                 );
 
             layout->addWidget(
@@ -1171,6 +1273,11 @@ QGroupBox *makeCustomFieldsGroup(
             font
             );
 
+        label->setProperty(
+            "comparisonFontRole",
+            QStringLiteral("bold")
+            );
+
         layout->addWidget(
             label
             );
@@ -1293,6 +1400,11 @@ QGroupBox *makeCustomFieldsGroup(
 
         label->setFont(
             font
+            );
+
+        label->setProperty(
+            "comparisonFontRole",
+            QStringLiteral("bold")
             );
 
         layout->addWidget(
@@ -1496,7 +1608,7 @@ QGroupBox *makeBurstGroup(
     const auto appendRow =
         [
             table
-    ](
+        ](
             const QString &metric,
             const QString &baseline,
             const QString &comparisonValue
@@ -1655,10 +1767,13 @@ QGroupBox *makeBurstGroup(
 }
 
 QGroupBox *makeSessionContextGroup(
-    const InvestigationSessionComparison &comparison,
+    const InvestigationComparisonSnapshot &snapshot,
     QWidget *parent
     )
 {
+    const InvestigationSessionComparison &comparison =
+        snapshot.analysis();
+
     auto *group =
         new QGroupBox(
             QStringLiteral("Session Context"),
@@ -1689,7 +1804,7 @@ QGroupBox *makeSessionContextGroup(
     const auto appendRow =
         [
             table
-    ](
+        ](
             const QString &metric,
             const QString &baseline,
             const QString &comparisonValue,
@@ -1809,7 +1924,7 @@ QGroupBox *makeSessionContextGroup(
                .rateAvailable();
 
     appendRow(
-        QStringLiteral("Records / Minute"),
+        QStringLiteral("Observed Records / Minute"),
         comparison
                 .baselineTiming
                 .rateAvailable()
@@ -1850,6 +1965,43 @@ QGroupBox *makeSessionContextGroup(
                   )
         );
 
+    const auto baselineWindowRate =
+        comparisonWindowAverageRate(
+            snapshot.baselineSource().capturedTimeRange,
+            comparison.baselineTiming
+            );
+
+    const auto comparisonWindowRate =
+        comparisonWindowAverageRate(
+            snapshot.comparisonSource().capturedTimeRange,
+            comparison.comparisonTiming
+            );
+
+    const bool hasWindowAverage =
+        baselineWindowRate.has_value()
+        || comparisonWindowRate.has_value();
+
+    if (hasWindowAverage) {
+        appendRow(
+            QStringLiteral(
+                "Window-Average Records / Minute"
+                ),
+            baselineWindowRate.has_value()
+                ? formatRate(*baselineWindowRate)
+                : QStringLiteral("—"),
+            comparisonWindowRate.has_value()
+                ? formatRate(*comparisonWindowRate)
+                : QStringLiteral("—"),
+            baselineWindowRate.has_value()
+                    && comparisonWindowRate.has_value()
+                ? formatSignedRate(
+                      *comparisonWindowRate
+                      - *baselineWindowRate
+                      )
+                : QStringLiteral("—")
+            );
+    }
+
     fitTableHeight(
         table
         );
@@ -1857,6 +2009,25 @@ QGroupBox *makeSessionContextGroup(
     layout->addWidget(
         table
         );
+
+    if (hasWindowAverage) {
+        auto *rateExplanation =
+            new QLabel(
+                QStringLiteral(
+                    "Observed rates use the first and last "
+                    "selected event timestamps. Window-average "
+                    "rates include the complete captured time "
+                    "window, including quiet periods. "
+                    "A dash means no bounded window-average "
+                    "rate is available for that side."
+                    ),
+                group
+                );
+
+        rateExplanation->setWordWrap(true);
+
+        layout->addWidget(rateExplanation);
+    }
 
     return group;
 }
@@ -1891,10 +2062,13 @@ InvestigationComparisonDocument::
             );
 
     outerLayout->setContentsMargins(
-        6,
-        4,
-        6,
-        6
+        InterfaceScale::margins(
+            6,
+            4,
+            6,
+            6,
+            this
+            )
         );
 
     m_scrollArea =
@@ -1924,14 +2098,20 @@ InvestigationComparisonDocument::
             );
 
     contentLayout->setContentsMargins(
-        4,
-        4,
-        4,
-        4
+        InterfaceScale::margins(
+            4,
+            4,
+            4,
+            4,
+            content
+            )
         );
 
     contentLayout->setSpacing(
-        8
+        InterfaceScale::pixels(
+            8,
+            content
+            )
         );
 
     contentLayout->addWidget(
@@ -1945,8 +2125,10 @@ InvestigationComparisonDocument::
         new QLabel(
             QStringLiteral(
                 "All deltas are Comparison \u2212 Baseline. "
-                "This document is an immutable snapshot of the "
-                "complete imported sessions."
+                "This document is an immutable snapshot of "
+                "the selected record populations. "
+                "Rates use the observed timestamp span of "
+                "each selected population."
                 ),
             content
             );
@@ -2137,7 +2319,7 @@ InvestigationComparisonDocument::
 
     contentLayout->addWidget(
         makeSessionContextGroup(
-            analysis,
+            m_snapshot,
             content
             )
         );
@@ -2241,4 +2423,124 @@ void InvestigationComparisonDocument::
                     );
         }
         );
+}
+
+void InvestigationComparisonDocument::
+    refreshInterfaceScale()
+{
+    if (layout() != nullptr) {
+        layout()->setContentsMargins(
+            InterfaceScale::margins(
+                6,
+                4,
+                6,
+                6,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    if (
+        m_scrollArea != nullptr
+        && m_scrollArea->widget()
+               != nullptr
+        ) {
+        QWidget *content =
+            m_scrollArea->widget();
+
+        if (QLayout *contentLayout =
+            content->layout();
+            contentLayout != nullptr) {
+            contentLayout->setContentsMargins(
+                InterfaceScale::margins(
+                    4,
+                    4,
+                    4,
+                    4,
+                    content
+                    )
+                );
+
+            contentLayout->setSpacing(
+                InterfaceScale::pixels(
+                    8,
+                    content
+                    )
+                );
+
+            contentLayout->invalidate();
+        }
+    }
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            if (m_scrollArea == nullptr
+                || m_scrollArea->widget() == nullptr) {
+                return;
+            }
+
+            QWidget *content =
+                m_scrollArea->widget();
+
+            const auto labels =
+                content->findChildren<QLabel *>();
+
+            for (QLabel *label : labels) {
+                const QString fontRole =
+                    label->property(
+                             "comparisonFontRole"
+                             ).toString();
+
+                if (fontRole.isEmpty()) {
+                    continue;
+                }
+
+                /*
+                 * Always start from the current application
+                 * font. Never repeatedly scale the label's
+                 * existing font.
+                 */
+                QFont font =
+                    QApplication::font(label);
+
+                font.setBold(true);
+
+                if (fontRole == QStringLiteral("heading")
+                    && font.pointSizeF() > 0.0) {
+                    font.setPointSizeF(
+                        font.pointSizeF() + 2.0
+                        );
+                }
+
+                label->setFont(font);
+                label->updateGeometry();
+            }
+
+            const auto tables =
+                content->findChildren<QTableWidget *>();
+
+            for (QTableWidget *table : tables) {
+                table->verticalHeader()
+                ->setDefaultSectionSize(
+                    comparisonTableRowHeight(table)
+                    );
+
+                fitTableHeight(table);
+                table->updateGeometry();
+            }
+
+            if (content->layout() != nullptr) {
+                content->layout()->invalidate();
+            }
+
+            content->updateGeometry();
+        }
+        );
+
+    WorkspaceDocument::
+        refreshInterfaceScale();
 }

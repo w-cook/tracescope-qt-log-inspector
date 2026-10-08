@@ -1,0 +1,35 @@
+flowchart LR
+
+    subgraph Data["Workspace data"]
+        Workspace["Investigation workspace"]
+        Session["Investigation session"]
+        Comparison["Immutable comparison snapshot"]
+
+        Workspace -->|owns sessions| Session
+    end
+
+    subgraph Documents["Workspace documents"]
+        InvestigationView["Investigation view"]
+        ComparisonView["Comparison document"]
+        Document["Workspace document"]
+
+        InvestigationView -->|presents| Session
+        InvestigationView -->|implements| Document
+
+        ComparisonView -->|presents| Comparison
+        ComparisonView -->|implements| Document
+    end
+
+    subgraph WindowOne["Workspace window A"]
+        HostOne["Document host<br/>root coordination role"]
+    end
+
+    subgraph WindowTwo["Workspace window B"]
+        HostTwo["Document host"]
+    end
+
+    Document -->|hosted in one window at a time| HostOne
+    HostOne -->|transfer document| HostTwo
+    Document -.->|same document identity| HostTwo
+
+    HostOne -.->|coordinate lookup, transfer, and layout| HostTwo

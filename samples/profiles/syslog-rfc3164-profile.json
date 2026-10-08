@@ -6,8 +6,8 @@
         "timestamp": "timestamp",
         "severity": "level",
         "subsystem": "subsystem",
-        "eventCode": "eventCode",
-        "entityId": "entityId",
+        "eventCode": "",
+        "entityId": "",
         "message": "message"
     },
     "customFields": [

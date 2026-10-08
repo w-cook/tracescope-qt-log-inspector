@@ -15,8 +15,10 @@
 class InvestigationSession;
 class QChartView;
 class QComboBox;
+class QHBoxLayout;
 class QLabel;
 class QScrollBar;
+class QSpacerItem;
 class QWidget;
 class QResizeEvent;
 class QTimer;
@@ -36,6 +38,10 @@ public:
         );
 
     InvestigationSession *session() const;
+
+    void setFollowNewestEnabled(
+        bool enabled
+        );
 
     /*
      * Replace the record collection represented by
@@ -57,6 +63,14 @@ public:
     void restorePresentationState(
         const InvestigationTimelinePresentationState &state
         );
+
+    void refreshInterfaceScale();
+
+    void setCollapsed(
+        bool collapsed
+        );
+
+    bool isCollapsed() const;
 
 signals:
     /*
@@ -161,4 +175,19 @@ private:
 
     QTimer *m_resizeRenderTimer =
         nullptr;
+
+    QHBoxLayout *m_controlsLayout =
+        nullptr;
+
+    QSpacerItem *m_intervalBreakdownSpacing =
+        nullptr;
+
+    QSpacerItem *m_rangeSpacing =
+        nullptr;
+
+    bool m_collapsed =
+        false;
+
+    bool m_followNewest =
+        false;
 };

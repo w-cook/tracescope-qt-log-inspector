@@ -6,7 +6,11 @@
 
 #include "../../workspace/WorkspaceDocumentLayoutState.h"
 
+class QLabel;
 class QMenu;
+class QPushButton;
+class QSpacerItem;
+
 class DetachedWorkspaceDocumentWindow;
 class WorkspaceDocument;
 class WorkspaceTabWidget;
@@ -21,6 +25,8 @@ public:
         QWidget *parent = nullptr,
         WorkspaceDocumentHost *rootHost = nullptr
         );
+
+    ~WorkspaceDocumentHost() override;
 
     /*
      * These describe this particular tab group.
@@ -48,6 +54,24 @@ public:
 
     QVector<WorkspaceDocument *>
     documents() const;
+
+    WorkspaceDocumentHost *
+    documentHostForId(
+        const QString &documentId
+        ) const;
+
+    QVector<DetachedWorkspaceDocumentWindow *>
+    detachedWindows() const;
+
+    bool hasOtherVisibleWorkspaceWindow(
+        const QWidget *excludedWindow
+        ) const;
+
+    bool moveDocumentsToAnotherVisibleWindow(
+        WorkspaceDocumentHost *sourceHost
+        );
+
+    void resetWindowLayout();
 
     bool isDocumentDetached(
         const QString &documentId
@@ -86,6 +110,20 @@ public:
         const WorkspaceDocumentLayoutState &state
         );
 
+    void setFileOperationsEnabled(
+        bool enabled
+        );
+
+    void setRecentFilesAvailable(
+        bool available
+        );
+
+    void setRecentWorkspacesAvailable(
+        bool available
+        );
+
+    void refreshInterfaceScale();
+
 signals:
     void currentDocumentChanged(
         const QString &documentId
@@ -99,6 +137,10 @@ signals:
         const QString &documentId
         );
 
+    void detachedWindowCreated(
+        DetachedWorkspaceDocumentWindow *window
+        );
+
     void documentRedocked(
         const QString &documentId
         );
@@ -110,6 +152,27 @@ signals:
 
     void investigationReportExportRequested(
         const QString &documentId
+        );
+
+    void workspaceLayoutChanged();
+
+    void openLogRequested(
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void openSnapshotRequested(
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void openWorkspaceRequested();
+
+    void recentFilesMenuAboutToShow(
+        QMenu *menu,
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void recentWorkspacesMenuAboutToShow(
+        QMenu *menu
         );
 
 private slots:
@@ -196,12 +259,8 @@ private:
         WorkspaceDocumentHost *host
         ) const;
 
-    void cleanupEmptyDetachedHost(
+    void cleanupEmptyHost(
         WorkspaceDocumentHost *host
-        );
-
-    void redockDetachedWindow(
-        DetachedWorkspaceDocumentWindow *window
         );
 
     void beginDocumentDrag(
@@ -225,10 +284,38 @@ private:
         int index
         );
 
+    void setWorkspaceDocumentDragActive(
+        bool active
+        );
+
+    void updateEmptyStatePresentation();
+
+    void refreshEmptyStateTitleFont();
+
     WorkspaceDocumentHost *m_rootHost =
         nullptr;
 
     WorkspaceTabWidget *m_tabs =
+        nullptr;
+
+    QWidget *m_emptyStateWidget =
+        nullptr;
+
+    QLabel *m_emptyStateTitleLabel = nullptr;
+
+    QPushButton *m_emptyStateOpenLogButton =
+        nullptr;
+
+    QPushButton *m_emptyStateOpenSnapshotButton =
+        nullptr;
+
+    QPushButton *m_emptyStateOpenWorkspaceButton =
+        nullptr;
+
+    QPushButton *m_emptyStateRecentFilesButton =
+        nullptr;
+
+    QPushButton *m_emptyStateRecentWorkspacesButton =
         nullptr;
 
     /*
@@ -239,5 +326,20 @@ private:
 
     PendingDocumentDrag m_pendingDocumentDrag;
 
+    bool m_workspaceDocumentDragActive =
+        false;
+
     QString m_activeDocumentId;
+
+    QSpacerItem *m_emptyStateActionSpacing =
+        nullptr;
+
+    bool m_fileOperationsEnabled =
+        true;
+
+    bool m_recentFilesAvailable =
+        false;
+
+    bool m_recentWorkspacesAvailable =
+        false;
 };

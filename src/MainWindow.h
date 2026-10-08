@@ -13,11 +13,13 @@
 #include "importing/ImportProfile.h"
 #include "importing/ImportResult.h"
 #include "preferences/FilterPresetStore.h"
+#include "preferences/InterfaceScaleSettingsStore.h"
 #include "preferences/RecentItemsStore.h"
 #include "preferences/RotatedSourceSettingsStore.h"
 #include "sources/SourceFamilyConfiguration.h"
 #include "workspace/InvestigationWorkspace.h"
 #include "workspace/WorkspacePersistenceState.h"
+#include "workspace/WorkspaceWorkingArtifactStore.h"
 
 using ImportCompletionHandler =
     std::function<
@@ -26,21 +28,21 @@ using ImportCompletionHandler =
             )
         >;
 
-class QLabel;
-class QTableWidget;
-class QVBoxLayout;
-class QPlainTextEdit;
-class QGroupBox;
+class QAction;
+class QCloseEvent;
 class QChartView;
 class QDragEnterEvent;
 class QDropEvent;
-class QAction;
-class QScrollBar;
+class QGroupBox;
+class QLabel;
 class QMenu;
+class QPlainTextEdit;
+class QScrollBar;
+class QTableWidget;
+class QVBoxLayout;
 class QWidget;
-class QCloseEvent;
-class WorkspaceDocumentHost;
-class InvestigationSessionView;
+
+class DetachedWorkspaceDocumentWindow;
 class InvestigationAnalyticsPanel;
 class InvestigationEventDetailPanel;
 class InvestigationEventPanel;
@@ -48,7 +50,9 @@ class InvestigationFilterPanel;
 class InvestigationFindingsPanel;
 class InvestigationIssueSummaryPanel;
 class InvestigationReviewPanel;
+class InvestigationSessionView;
 class InvestigationTimelinePanel;
+class WorkspaceDocumentHost;
 
 enum class InvestigationIssueDrillDownType;
 
@@ -74,6 +78,7 @@ protected:
 
 private:
     QSettings settings;
+    InterfaceScaleSettingsStore interfaceScaleSettingsStore;
     RecentItemsStore recentItemsStore;
     FilterPresetStore filterPresetStore;
     RotatedSourceSettingsStore rotatedSourceSettingsStore;
@@ -86,6 +91,21 @@ private:
     WorkspaceDocumentHost *workspaceDocumentHost =
         nullptr;
 
+    WorkspaceWorkingArtifactStore
+        workspaceWorkingArtifactStore;
+
+    /*
+     * InvestigationWorkspace::addSession() emits
+     * sessionAdded synchronously before activating the
+     * new session. This temporary target tells the
+     * sessionAdded handler which document host should
+     * receive the new InvestigationSessionView.
+     *
+     * nullptr means the root document host.
+     */
+    WorkspaceDocumentHost *sessionDocumentTargetHost =
+        nullptr;
+
     QAction *openAction = nullptr;
     QAction *openSnapshotAction = nullptr;
     QAction *saveSnapshotAction = nullptr;
@@ -94,8 +114,17 @@ private:
     QAction *saveWorkspaceAction = nullptr;
     QAction *saveWorkspaceAsAction = nullptr;
     QAction *openWorkspaceAction = nullptr;
+    QAction *newWorkspaceAction = nullptr;
 
     QString currentWorkspacePath;
+
+    bool workspaceDirty = false;
+
+    bool workspaceMutationTrackingSuppressed =
+        false;
+
+    bool applicationShutdownInProgress =
+        false;
 
     QFutureWatcher<ImportResult> *importWatcher =
         nullptr;
@@ -106,29 +135,47 @@ private:
 
     void buildLayout();
     void createMenus();
+    int addSessionToWorkspace(
+        std::unique_ptr<InvestigationSession> session,
+        WorkspaceDocumentHost *targetHost = nullptr
+        );
     void openLogFile(
         const QString &initialFilePath =
-        QString()
+        QString(),
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
+
     void openInvestigationSnapshot(
         const QString &initialFilePath =
-        QString()
+        QString(),
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
-    void saveInvestigationSnapshot();
+
+    void saveInvestigationSnapshot(
+        WorkspaceDocumentHost *targetHost =
+        nullptr
+        );
+
     void loadLogFile(
         const QString &filePath,
         const ImportProfile &profile,
         const QString &reloadSessionId =
         QString(),
         SourceFamilyConfiguration
-            sourceFamilyConfiguration = {}
+            sourceFamilyConfiguration = {},
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
+
     bool startLogFileImport(
         const QString &activeFilePath,
         const QStringList &orderedSourcePaths,
         const ImportProfile &profile,
         ImportCompletionHandler completion
         );
+
     void completeLogFileImport(
         const QString &filePath,
         const ImportProfile &profile,
@@ -136,10 +183,15 @@ private:
             sourceFamilyConfiguration,
         qint64 initialLiveFollowByteOffset,
         ImportResult result,
-        const QString &reloadSessionId
+        const QString &reloadSessionId,
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
 
-    void reloadActiveSession();
+    void reloadActiveSession(
+        WorkspaceDocumentHost *targetHost =
+        nullptr
+        );
 
     void reconnectSnapshotBackedSession(
         const QString &sessionId
@@ -164,18 +216,24 @@ private:
 
     void createSessionComparison(
         const QString &preferredBaselineSessionId =
-        QString()
+        QString(),
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
     void updateComparisonActionState();
 
     void updateReloadActionState();
+
+    void updateWorkspaceSaveActionState();
 
     void refreshRecentFilesMenu();
 
     void refreshRecentWorkspacesMenu();
 
     void openRecentFile(
-        const QString &filePath
+        const QString &filePath,
+        WorkspaceDocumentHost *targetHost =
+        nullptr
         );
 
     void openRecentWorkspace(
@@ -212,15 +270,11 @@ private:
     captureWorkspaceState() const;
 
     bool saveWorkspaceToFile(
-        const QString &filePath,
-        const QString &snapshotOnlySessionId =
-        QString(),
-        QString *snapshotOnlyPath =
-        nullptr
+        const QString &filePath
         );
 
-    void saveWorkspace();
-    void saveWorkspaceAs();
+    bool saveWorkspace();
+    bool saveWorkspaceAs();
 
     struct WorkspaceOpenOperation;
 
@@ -255,5 +309,64 @@ private:
 
     void preserveSessionAsSnapshotOnly(
         const QString &sessionId
+        );
+
+    InvestigationSession *sessionForHost(
+        WorkspaceDocumentHost *host
+        ) const;
+
+    void configureDetachedWindow(
+        DetachedWorkspaceDocumentWindow *window
+        );
+
+    QString workspaceWindowTitle() const;
+
+    void updateWorkspaceWindowTitles();
+
+    QWidget *workspaceDialogParent() const;
+
+    void setWorkspaceDirty(
+        bool dirty
+        );
+
+    void markWorkspaceDirty();
+
+    void setFileOperationsEnabled(
+        bool enabled
+        );
+
+    void populateRecentFilesMenu(
+        QMenu *menu,
+        WorkspaceDocumentHost *targetHost
+        );
+
+    void populateRecentWorkspacesMenu(
+        QMenu *menu
+        );
+
+    void requestCloseDocumentsInHost(
+        WorkspaceDocumentHost *host
+        );
+
+    void requestWorkspaceWindowClose(
+        WorkspaceDocumentHost *host
+        );
+
+    bool confirmWorkspaceReplacement();
+
+    void newWorkspace();
+
+    void beginApplicationShutdown();
+
+    void requestApplicationClose();
+
+    void closeWorkspaceDocument(
+        const QString &documentId
+        );
+
+    void resetWorkspaceIdentity();
+
+    void applyInterfaceScale(
+        qreal factor
         );
 };

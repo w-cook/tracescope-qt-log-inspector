@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QSpacerItem>
 #include <QTimeZone>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -25,6 +26,7 @@
 #include <QResizeEvent>
 
 #include "../CustomFieldFilterEditor.h"
+#include "../InterfaceScale.h"
 #include "../MultiSelectFilterComboBox.h"
 #include "../../domain/RecordSeverity.h"
 #include "../../preferences/FilterPresetStore.h"
@@ -126,7 +128,10 @@ InvestigationFilterPanel::
         );
 
     layout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     /*
@@ -158,7 +163,10 @@ InvestigationFilterPanel::
     }
 
     m_levelFilterCombo->setMinimumWidth(
-        150
+        InterfaceScale::pixels(
+            150,
+            this
+            )
         );
 
     m_subsystemFilterCombo
@@ -167,7 +175,10 @@ InvestigationFilterPanel::
             );
 
     m_subsystemFilterCombo->setMinimumWidth(
-        190
+        InterfaceScale::pixels(
+            190,
+            this
+            )
         );
 
     m_subsystemFilterCombo
@@ -197,7 +208,10 @@ InvestigationFilterPanel::
         );
 
     eventCodeLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_eventCodeFilterCombo
@@ -207,7 +221,10 @@ InvestigationFilterPanel::
 
     m_eventCodeFilterCombo
         ->setMinimumWidth(
-            170
+            InterfaceScale::pixels(
+                170,
+                this
+                )
             );
 
     eventCodeLayout->addWidget(
@@ -230,7 +247,10 @@ InvestigationFilterPanel::
         );
 
     entityLayout->setSpacing(
-        4
+        InterfaceScale::pixels(
+            4,
+            this
+            )
         );
 
     m_entityFilterCombo
@@ -240,17 +260,20 @@ InvestigationFilterPanel::
 
     m_entityFilterCombo
         ->setMinimumWidth(
-            170
+            InterfaceScale::pixels(
+                170,
+                this
+                )
             );
 
     entityLayout->addWidget(
         m_entityFilterCombo
         );
 
-    auto *primaryFilterLayout =
+    m_primaryFilterLayout =
         new QHBoxLayout();
 
-    primaryFilterLayout
+    m_primaryFilterLayout
         ->setContentsMargins(
             0,
             0,
@@ -258,32 +281,35 @@ InvestigationFilterPanel::
             0
             );
 
-    primaryFilterLayout->setSpacing(
-        8
+    m_primaryFilterLayout->setSpacing(
+        InterfaceScale::pixels(
+            8,
+            this
+            )
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_levelFilterCombo,
         1
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_subsystemFilterCombo,
         1
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_eventCodeFilterWidget,
         1
         );
 
-    primaryFilterLayout->addWidget(
+    m_primaryFilterLayout->addWidget(
         m_entityFilterWidget,
         1
         );
 
     layout->addLayout(
-        primaryFilterLayout
+        m_primaryFilterLayout
         );
 
     for (
@@ -360,7 +386,10 @@ InvestigationFilterPanel::
 
     m_findingStatusFilterCombo
         ->setMinimumWidth(
-            130
+            InterfaceScale::pixels(
+                130,
+                this
+                )
             );
 
     m_findingStatusFilterCombo
@@ -418,7 +447,10 @@ InvestigationFilterPanel::
         );
 
     timeRangeLayout->setSpacing(
-        6
+        InterfaceScale::pixels(
+            6,
+            this
+            )
         );
 
     auto *timeRangeLabel =
@@ -475,7 +507,10 @@ InvestigationFilterPanel::
             );
 
         edit->setMinimumWidth(
-            210
+            InterfaceScale::pixels(
+                210,
+                m_timeRangeFilterWidget
+                )
             );
     }
 
@@ -491,8 +526,19 @@ InvestigationFilterPanel::
         m_timeRangeStartEdit
         );
 
-    timeRangeLayout->addSpacing(
-        12
+    m_timeRangeSpacing =
+        new QSpacerItem(
+            InterfaceScale::pixels(
+                12,
+                m_timeRangeFilterWidget
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+
+    timeRangeLayout->addItem(
+        m_timeRangeSpacing
         );
 
     timeRangeLayout->addWidget(
@@ -559,7 +605,10 @@ InvestigationFilterPanel::
 
     m_customFiltersDialog
         ->setMinimumWidth(
-            600
+            InterfaceScale::pixels(
+                600,
+                m_customFiltersDialog
+                )
             );
 
     auto *customDialogLayout =
@@ -601,12 +650,18 @@ InvestigationFilterPanel::
 
     m_secondaryFilterLayout
         ->setHorizontalSpacing(
-            8
+            InterfaceScale::pixels(
+                8,
+                this
+                )
             );
 
     m_secondaryFilterLayout
         ->setVerticalSpacing(
-            4
+            InterfaceScale::pixels(
+                4,
+                this
+                )
             );
 
     m_filterPresetsButton->setMenu(
@@ -1616,13 +1671,32 @@ void InvestigationFilterPanel::
                 );
     }
 
+    const int popupPadding =
+        InterfaceScale::pixels(
+            40,
+            m_subsystemFilterCombo
+            );
+
+    const int minimumPopupWidth =
+        InterfaceScale::pixels(
+            240,
+            m_subsystemFilterCombo
+            );
+
+    const int maximumPopupWidth =
+        InterfaceScale::pixels(
+            650,
+            m_subsystemFilterCombo
+            );
+
     m_subsystemFilterCombo
         ->view()
         ->setMinimumWidth(
             std::clamp(
-                widestTextWidth + 40,
-                240,
-                650
+                widestTextWidth
+                    + popupPadding,
+                minimumPopupWidth,
+                maximumPopupWidth
                 )
             );
 
@@ -1672,13 +1746,32 @@ void InvestigationFilterPanel::
                         );
             }
 
+            const int popupPadding =
+                InterfaceScale::pixels(
+                    50,
+                    combo
+                    );
+
+            const int minimumPopupWidth =
+                InterfaceScale::pixels(
+                    220,
+                    combo
+                    );
+
+            const int maximumPopupWidth =
+                InterfaceScale::pixels(
+                    700,
+                    combo
+                    );
+
             combo
                 ->view()
                 ->setMinimumWidth(
                     std::clamp(
-                        widestTextWidth + 50,
-                        220,
-                        700
+                        widestTextWidth
+                            + popupPadding,
+                        minimumPopupWidth,
+                        maximumPopupWidth
                         )
                     );
 
@@ -2706,6 +2799,70 @@ bool InvestigationFilterPanel::
 }
 
 bool InvestigationFilterPanel::
+    configureEventCodeDrillDown(
+        const QString &eventCode
+        )
+{
+    if (m_session == nullptr
+        || eventCode.trimmed().isEmpty()
+        || !m_session->hasEventCodeData()
+        || !m_session
+                ->availableEventCodes()
+                .contains(
+                    eventCode
+                    )) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    const QSignalBlocker blocker(
+        m_eventCodeFilterCombo
+        );
+
+    m_eventCodeFilterCombo
+        ->setSelectedValues(
+            QStringList {
+                eventCode
+            }
+            );
+
+    return true;
+}
+
+bool InvestigationFilterPanel::
+    configureEntityDrillDown(
+        const QString &entity
+        )
+{
+    if (m_session == nullptr
+        || entity.trimmed().isEmpty()
+        || !m_session->hasEntityData()
+        || !m_session
+                ->availableEntities()
+                .contains(
+                    entity
+                    )) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    const QSignalBlocker blocker(
+        m_entityFilterCombo
+        );
+
+    m_entityFilterCombo
+        ->setSelectedValues(
+            QStringList {
+                entity
+            }
+            );
+
+    return true;
+}
+
+bool InvestigationFilterPanel::
     configureBurstDrillDown(
         const QDateTime &startTimestamp,
         const QDateTime &endTimestamp
@@ -3356,6 +3513,506 @@ void InvestigationFilterPanel::
     updateResponsiveLayout();
 }
 
+void InvestigationFilterPanel::
+    refreshInterfaceScale()
+{
+    /*
+     * Main vertical filter layout.
+     */
+    if (layout() != nullptr) {
+        layout()->setSpacing(
+            InterfaceScale::pixels(
+                4,
+                this
+                )
+            );
+
+        layout()->invalidate();
+    }
+
+    /*
+     * Primary categorical filters.
+     */
+    m_levelFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            150,
+            this
+            )
+        );
+
+    m_subsystemFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            190,
+            this
+            )
+        );
+
+    m_eventCodeFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            170,
+            this
+            )
+        );
+
+    m_entityFilterCombo->setMinimumWidth(
+        InterfaceScale::pixels(
+            170,
+            this
+            )
+        );
+
+    if (
+        m_eventCodeFilterWidget != nullptr
+        && m_eventCodeFilterWidget->layout()
+               != nullptr
+        ) {
+        m_eventCodeFilterWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    this
+                    )
+                );
+
+        m_eventCodeFilterWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (
+        m_entityFilterWidget != nullptr
+        && m_entityFilterWidget->layout()
+               != nullptr
+        ) {
+        m_entityFilterWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    this
+                    )
+                );
+
+        m_entityFilterWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    if (m_primaryFilterLayout != nullptr) {
+        m_primaryFilterLayout->setSpacing(
+            InterfaceScale::pixels(
+                8,
+                this
+                )
+            );
+
+        m_primaryFilterLayout->invalidate();
+    }
+
+    /*
+     * Secondary/state filters.
+     */
+    m_findingStatusFilterCombo
+        ->setMinimumWidth(
+            InterfaceScale::pixels(
+                130,
+                this
+                )
+            );
+
+    if (m_secondaryFilterLayout != nullptr) {
+        m_secondaryFilterLayout
+            ->setHorizontalSpacing(
+                InterfaceScale::pixels(
+                    8,
+                    this
+                    )
+                );
+
+        m_secondaryFilterLayout
+            ->setVerticalSpacing(
+                InterfaceScale::pixels(
+                    4,
+                    this
+                    )
+                );
+
+        m_secondaryFilterLayout
+            ->invalidate();
+    }
+
+    /*
+     * Time-range dialog.
+     */
+    if (
+        m_timeRangeFilterWidget != nullptr
+        && m_timeRangeFilterWidget
+                   ->layout()
+               != nullptr
+        ) {
+        m_timeRangeFilterWidget
+            ->layout()
+            ->setSpacing(
+                InterfaceScale::pixels(
+                    6,
+                    m_timeRangeFilterWidget
+                    )
+                );
+
+        m_timeRangeFilterWidget
+            ->layout()
+            ->invalidate();
+    }
+
+    for (
+        QDateTimeEdit *edit
+        : {
+            m_timeRangeStartEdit,
+            m_timeRangeEndEdit
+        }
+        ) {
+        if (edit != nullptr) {
+            edit->setMinimumWidth(
+                InterfaceScale::pixels(
+                    210,
+                    m_timeRangeFilterWidget
+                    )
+                );
+        }
+    }
+
+    if (m_timeRangeSpacing != nullptr) {
+        m_timeRangeSpacing->changeSize(
+            InterfaceScale::pixels(
+                12,
+                m_timeRangeFilterWidget
+                ),
+            0,
+            QSizePolicy::Fixed,
+            QSizePolicy::Minimum
+            );
+    }
+
+    /*
+     * Custom-field dialog.
+     */
+    if (m_customFiltersDialog != nullptr) {
+        m_customFiltersDialog
+            ->setMinimumWidth(
+                InterfaceScale::pixels(
+                    600,
+                    m_customFiltersDialog
+                    )
+                );
+    }
+
+    if (m_customFieldFilterEditor != nullptr) {
+        m_customFieldFilterEditor
+            ->refreshInterfaceScale();
+    }
+
+    /*
+     * Popup widths combine font-derived measurements
+     * with explicit scaled padding/bounds. Recalculate
+     * them now that the application font has changed.
+     */
+    if (m_session != nullptr) {
+        refreshSubsystemOptions();
+        refreshCanonicalOptions();
+    }
+
+    resizeCustomFiltersDialogToContents();
+
+    /*
+     * The new scale can move the responsive breakpoint
+     * even though this widget's physical width did not
+     * change.
+     */
+    updateResponsiveLayout();
+
+    updateGeometry();
+    update();
+
+
+    QTimer::singleShot(
+        0,
+        this,
+        [this]() {
+            for (
+                MultiSelectFilterComboBox *combo
+                : {
+                    m_levelFilterCombo,
+                    m_subsystemFilterCombo,
+                    m_eventCodeFilterCombo,
+                    m_entityFilterCombo,
+                    m_findingStatusFilterCombo
+                }
+                ) {
+                if (combo != nullptr) {
+                    combo->refreshInterfaceScale();
+                }
+            }
+
+            updateResponsiveLayout();
+            updateGeometry();
+        }
+        );
+}
+
+bool InvestigationFilterPanel::
+    toggleEventTableValueFilter(
+        const QString &columnKey,
+        const QString &value
+        )
+{
+    if (
+        m_session == nullptr
+        || columnKey.isEmpty()
+        || value.isEmpty()
+        ) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    auto toggleValue =
+        [](
+            MultiSelectFilterComboBox *combo,
+            const QString &targetValue
+            ) {
+            if (combo == nullptr) {
+                return false;
+            }
+
+            QStringList selected =
+                combo->selectedValues();
+
+            if (selected.contains(
+                    targetValue
+                    )) {
+                selected.removeAll(
+                    targetValue
+                    );
+            } else {
+                selected.append(
+                    targetValue
+                    );
+            }
+
+            const QSignalBlocker blocker(
+                combo
+                );
+
+            combo->setSelectedValues(
+                selected
+                );
+
+            return true;
+        };
+
+    if (
+        columnKey
+        == QStringLiteral("severity")
+        ) {
+        return toggleValue(
+            m_levelFilterCombo,
+            value.trimmed().toUpper()
+            );
+    }
+
+    if (
+        columnKey
+        == QStringLiteral("subsystem")
+        ) {
+        return toggleValue(
+            m_subsystemFilterCombo,
+            value
+            );
+    }
+
+    if (
+        columnKey
+        == QStringLiteral("eventCode")
+        ) {
+        return toggleValue(
+            m_eventCodeFilterCombo,
+            value
+            );
+    }
+
+    if (
+        columnKey
+        == QStringLiteral("entityId")
+        ) {
+        return toggleValue(
+            m_entityFilterCombo,
+            value
+            );
+    }
+
+    /*
+     * Everything else reaching this method is a
+     * dynamic custom-field column.
+     */
+    CustomFieldFilterMap filters =
+        m_customFieldFilterEditor
+            ->filters();
+
+    QStringList values =
+        filters.value(
+            columnKey
+            );
+
+    if (values.contains(value)) {
+        values.removeAll(
+            value
+            );
+
+        if (values.isEmpty()) {
+            filters.remove(
+                columnKey
+                );
+        } else {
+            filters.insert(
+                columnKey,
+                values
+                );
+        }
+    } else {
+        values.append(
+            value
+            );
+
+        filters.insert(
+            columnKey,
+            values
+            );
+    }
+
+    {
+        const QSignalBlocker blocker(
+            m_customFieldFilterEditor
+            );
+
+        m_customFieldFilterEditor
+            ->setFilters(
+                filters
+                );
+    }
+
+    updateCustomFiltersButton();
+    resizeCustomFiltersDialogToContents();
+
+    return true;
+}
+
+bool InvestigationFilterPanel::
+    toggleEventTableTimeBoundary(
+        const QDateTime &timestamp,
+        bool startBoundary
+        )
+{
+    if (
+        m_session == nullptr
+        || !timestamp.isValid()
+        ) {
+        return false;
+    }
+
+    m_searchDebounceTimer->stop();
+
+    QCheckBox *checkBox =
+        startBoundary
+            ? m_timeRangeStartCheckBox
+            : m_timeRangeEndCheckBox;
+
+    QDateTimeEdit *edit =
+        startBoundary
+            ? m_timeRangeStartEdit
+            : m_timeRangeEndEdit;
+
+    if (
+        checkBox == nullptr
+        || edit == nullptr
+        ) {
+        return false;
+    }
+
+    const bool removing =
+        checkBox->isChecked()
+        && edit->dateTime()
+               == timestamp;
+
+    {
+        const QSignalBlocker checkBlocker(
+            checkBox
+            );
+
+        const QSignalBlocker editBlocker(
+            edit
+            );
+
+        if (removing) {
+            checkBox->setChecked(
+                false
+                );
+
+            edit->setEnabled(
+                false
+                );
+        } else {
+            checkBox->setChecked(
+                true
+                );
+
+            edit->setEnabled(
+                true
+                );
+
+            edit->setDateTime(
+                timestamp
+                );
+        }
+    }
+
+    if (
+        !removing
+        && startBoundary
+        && m_timeRangeEndCheckBox->isChecked()
+        && timestamp
+               > m_timeRangeEndEdit->dateTime()
+        ) {
+        const QSignalBlocker blocker(
+            m_timeRangeEndEdit
+            );
+
+        m_timeRangeEndEdit->setDateTime(
+            timestamp
+            );
+    }
+
+    if (
+        !removing
+        && !startBoundary
+        && m_timeRangeStartCheckBox->isChecked()
+        && timestamp
+               < m_timeRangeStartEdit->dateTime()
+        ) {
+        const QSignalBlocker blocker(
+            m_timeRangeStartEdit
+            );
+
+        m_timeRangeStartEdit->setDateTime(
+            timestamp
+            );
+    }
+
+    updateTimeRangeButton();
+
+    return true;
+}
+
 int InvestigationFilterPanel::
     secondaryWideLayoutMinimumWidth() const
 {
@@ -3378,8 +4035,11 @@ int InvestigationFilterPanel::
      * switching layouts only once it has collapsed
      * to an impractically tiny field.
      */
-    constexpr int PreferredSearchWidth =
-        260;
+    const int preferredSearchWidth =
+        InterfaceScale::pixels(
+            260,
+            this
+            );
 
     const int spacing =
         m_secondaryFilterLayout != nullptr
@@ -3388,9 +4048,12 @@ int InvestigationFilterPanel::
                   m_secondaryFilterLayout
                       ->horizontalSpacing()
                   )
-            : 8;
+            : InterfaceScale::pixels(
+                8,
+                this
+                );
 
-    return PreferredSearchWidth
+    return preferredSearchWidth
            + controlWidth(
                m_findingStatusFilterCombo
                )
