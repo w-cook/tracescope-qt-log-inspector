@@ -119,7 +119,7 @@ The default is:
 Examples:
 
 - `0.5` — half-speed playback
-- `1` — scenario playback time
+- `1` — normal playback speed, with scenario delays unscaled
 - `2` — twice as fast
 - `10` — ten times as fast
 
@@ -171,7 +171,9 @@ TraceScopeLiveLogGenerator
     --loop-mode restart
 ```
 
-In append mode, each iteration receives a new semantic scenario-start time while the same physical output remains active unless the scenario itself changes it.
+In append mode, the generator advances the semantic scenario-start time deterministically between iterations. The next iteration's first record is timestamped one millisecond after the latest timestamp offset from the preceding iteration. This avoids restarting the scenario's semantic timestamps while continuing to append to the same physical output. Explicit lifecycle steps inside the scenario still apply.
+
+In restart mode, each new iteration uses a fresh UTC scenario-start time instead of continuing the previous iteration's semantic timestamp sequence. The active output is recreated, and rotation numbering is reset for the new iteration.
 
 ## 3. Scenario model
 
@@ -206,7 +208,7 @@ A scenario record contains:
 
 `timestampOffsetMs` is relative to the start of the scenario rather than an absolute date/time. At runtime, the renderer combines that offset with the scenario's actual start time.
 
-The five canonical text fields remain part of the semantic scenario even when the selected output format cannot naturally represent all of them. Renderers decide which values can be expressed faithfully in their target format.
+The five semantic text fields remain part of each scenario record even when the selected output format cannot naturally represent all of them. Renderers decide which values can be expressed faithfully in their target format.
 
 Custom attribute values may be:
 
@@ -247,11 +249,11 @@ The loader requires:
 - `description` to be a string
 - `steps` to be a non-empty array
 
-## Scenario step types
+### Scenario step types
 
 Five step types control playback.
 
-### `record`
+#### `record`
 
 Serializes and writes one semantic record.
 
@@ -277,7 +279,7 @@ Serializes and writes one semantic record.
 
 `severity`, `subsystem`, `eventCode`, `entityId`, and `message` are strings. They may map differently depending on the selected renderer.
 
-#### Partial record writes
+##### Partial record writes
 
 A `record` can be physically written in two parts.
 
@@ -308,7 +310,7 @@ The renderer first creates the complete serialized record. The player then write
 
 This behavior is used to verify that TraceScope does not admit incomplete trailing records or structured fragments prematurely.
 
-### `wait`
+#### `wait`
 
 Pauses physical playback before processing the next step.
 
@@ -321,7 +323,7 @@ Pauses physical playback before processing the next step.
 
 `durationMs` must be a non-negative integer and is affected by the runtime speed multiplier.
 
-### `truncate`
+#### `truncate`
 
 Truncates the currently active output file in place and continues writing to the same path.
 
@@ -333,7 +335,7 @@ Truncates the currently active output file in place and continues writing to the
 
 If the selected format requires a header or outer-container prefix, the generator writes fresh initial content after truncation.
 
-### `replace`
+#### `replace`
 
 Closes and removes the current active file, then creates a new physical file at the same output path.
 
@@ -345,7 +347,7 @@ Closes and removes the current active file, then creates a new physical file at 
 
 This is distinct from in-place truncation even though the user-visible path remains the same.
 
-### `rotate`
+#### `rotate`
 
 Preserves the current active file under a numbered rotated filename and creates a fresh active file at the original path.
 
@@ -428,7 +430,7 @@ The healthy scenario provides a baseline.
 
 The payment-regression scenario introduces provider latency, retries, timeout behavior, checkout failure, circuit-breaker activity, and recovery.
 
-Together they provide deterministic material for exercising TraceScope's Baseline → Comparison workflow without comparing unrelated synthetic systems.
+Together they provide deterministic source data for creating a Baseline → Comparison document from related investigation sessions, rather than comparing unrelated synthetic systems.
 
 ### Web access
 
@@ -658,9 +660,9 @@ A typical workflow is:
 2. Choose a disposable output path.
 3. Start generator playback.
 4. Open or import the active output file in TraceScope using the matching format/profile.
-5. Start Live Follow where appropriate.
+5. Start Live Following where appropriate.
 6. Observe records, source lifecycle changes, filters, analyses, findings, and provenance as the scenario progresses.
-7. Preserve a snapshot or workspace when testing evidence continuity.
+7. Save an investigation session snapshot or workspace when testing evidence continuity.
 8. Repeat the same deterministic scenario when verifying a regression or comparing behavior across builds.
 
 The generator can be used to exercise:
@@ -677,9 +679,13 @@ The generator can be used to exercise:
 - fresh headers/containers after lifecycle changes
 - source generations and physical provenance
 - filtering while records arrive
+- contextual filtering while new records arrive
+- analytics frequency drilldowns during or after live ingestion
 - timeline and analytical refresh
+- Follow Newest behavior in the event table and timeline
 - findings and annotations on live evidence
 - persistence/recovery after source changes
+- recovery and continued investigation using preserved snapshot evidence after source changes
 - comparison capture from known scenarios
 - report/export behavior after live ingestion
 
@@ -701,7 +707,7 @@ The scenarios live under:
 samples/scenarios/
 ```
 
-The generator is part of the root TraceScope CMake project but is not required to run TraceScope.
+The generator is built as part of the root TraceScope CMake project but remains a separate utility. Neither its CLI nor its launcher is required to run TraceScope.
 
 ### Build from source
 

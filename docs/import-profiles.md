@@ -1,6 +1,6 @@
 # Import Profiles in TraceScope
 
-An **import profile** tells TraceScope how to interpret records from a supported source. It identifies the importer, supplies format-specific parsing or record-selection configuration where needed, and maps extracted source values into TraceScope's canonical and custom investigation fields.
+An **import profile** tells TraceScope how to interpret records from a supported source. It identifies the importer, supplies format-specific parsing or record-selection configuration where needed, and maps extracted source values into the canonical and custom fields of TraceScope's normalized investigation records.
 
 This reference describes the import-profile model and saved JSON schema used by TraceScope v1.0.
 
@@ -52,7 +52,7 @@ A profile does not contain:
 - saved comparisons
 - workspace layout
 
-Those belong to the source-selection, investigation, or persistence layers instead.
+Source-file and rotated-source selections belong to the import workflow. Bookmarks, notes, and finding classifications belong to investigation session state, while saved comparisons and workspace layout are managed separately through workspace persistence.
 
 ### One importer can use many profiles
 
@@ -203,7 +203,7 @@ Array indexing, wildcard selectors, predicates, and general query expressions ar
 
 ### Structured JSON
 
-Structured JSON uses the profile's `recordPath` to select records from a complete JSON document.
+Structured JSON uses the profile's `recordPath` to select records from a JSON document. For ordinary static imports, this is typically a complete document; TraceScope can also admit complete records from a supported record array while another process is still writing the enclosing document.
 
 With an empty Record path:
 
@@ -366,6 +366,8 @@ This is TraceScope's normalized source representation, not XPath syntax.
 
 With no Record path, a complete XML document root can be imported as one static record. Live Structured XML requires a **nonempty Record path selecting repeated elements**.
 
+During initial import of a supported growing XML source, TraceScope can also admit complete selected records while the enclosing record container remains open. This requires a configured Record path; an incomplete single-root record is not treated the same way.
+
 ### CSV and TSV
 
 Delimited importers expose header names as source paths.
@@ -445,7 +447,7 @@ Profiles should map those derived fields rather than attempting to treat `date` 
 
 Syslog profiles map values produced by the Syslog parser.
 
-Common extracted fields include:
+Common extracted fields include the following, although availability depends on whether the source uses RFC 5424 or RFC 3164 and which values the original message contains:
 
 ```text
 timestamp
@@ -651,7 +653,7 @@ Each custom mapping contains:
 }
 ```
 
-`name` is the investigation-facing attribute name.
+`name` is the custom-attribute name displayed and used within the investigation session.
 
 `sourcePath` identifies the extracted source value.
 
@@ -688,7 +690,7 @@ When:
 "preserveUnmappedFields": true
 ```
 
-TraceScope retains extracted values that are not already consumed by canonical or explicit custom mappings.
+TraceScope retains additional extracted source values as custom attributes when they have not already been consumed by canonical or explicitly mapped custom fields. This preserves source-specific information without requiring a separate mapping for every available value.
 
 For structured object data, nested values are preserved using dotted source paths where applicable.
 
@@ -783,6 +785,8 @@ The deserializer requires these properties with the indicated JSON types:
 | `severityAliases` | object |
 | `timestampRules` | array |
 | `preserveUnmappedFields` | boolean |
+
+The `customFields` and `timestampRules` arrays may be empty when their corresponding features are not configured, and `severityAliases` may be an empty object. However, `canonicalFields` must still contain all six required string properties, using empty strings for unmapped fields. If a canonical timestamp path is configured, at least one timestamp rule is required.
 
 The serializer also writes:
 
@@ -1075,7 +1079,7 @@ Large Structured JSON and XML documents can require an explicit **Refresh Previe
 
 **Save Profile...** writes the current configuration to JSON.
 
-**Load Profile...** restores a saved profile after deserialization, validation, and importer-availability checks.
+**Load Profile...** restores a saved import configuration after deserialization, validation, and importer-availability checks. It does not restore an earlier investigation session or its records, annotations, or workspace state.
 
 **Recent Profiles** provides shortcuts to previously used profile paths.
 

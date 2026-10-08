@@ -1,6 +1,6 @@
 # Reporting and Exporting Investigation Results in TraceScope
 
-Investigating a log is only part of the job. You may also need to paste one event into a support ticket, give a colleague a filtered set of records, hand off formally reviewed findings, or prepare a readable report covering several investigations and their comparison. TraceScope provides separate export paths for those tasks, so you can share the appropriate amount of information without turning every handoff into a complete workspace transfer.
+Investigating a log is only part of the job. You may also need to paste one event into a support ticket, give a colleague a filtered set of records, hand off formally reviewed findings, or prepare a readable report covering multiple investigation sessions and their comparison documents. TraceScope provides separate export paths for those tasks, so you can share the appropriate amount of information without turning every handoff into a complete workspace transfer.
 
 ![Generated HTML report](screenshots/reporting-and-export-html-report.png)
 
@@ -23,13 +23,13 @@ TraceScope reports the imported evidence, the review decisions you recorded, and
 | Handoff | Use it when you need | Where to start |
 | --- | --- | --- |
 | **Copy an event** | Copy one event's normalized details to the clipboard as structured JSON or readable text, ready to paste into a ticket, message, editor, or another application. | Right-click within **Event Details**. |
-| **Filtered-record CSV** | Create a CSV file containing all records matching the current Event Table filters, ready to open in a spreadsheet application or text editor. | **Exporting > Export Filtered Results...** |
+| **Filtered-record CSV** | Create a CSV file containing all records matching the current event table filters, ready to open in a spreadsheet application or text editor. | **Exporting > Export Filtered Results...** |
 | **Findings CSV** | Create a CSV file of explicitly classified findings, their review state, and source context for a spreadsheet application or other CSV-capable tool. | **Findings > Export**, or **Exporting > Findings**. |
 | **HTML investigation report** | Create a self-contained HTML document combining selected investigations, analysis, findings, and optional comparisons, ready to view in a web browser. | **Exporting > Export Investigation Report...** |
 
 These are *exports*, not alternative workspace formats. An HTML report can be read in a browser, and CSV or copied text can be used outside TraceScope, but they do not restore an editable investigation. To resume your own work with its filters, annotations, documents, and layout, save the `.tsw` workspace and its companion `.sessions/` folder. See [Saving and Restoring](saving-and-restoring.md).
 
-The **Exporting** menu reflects the currently active workspace document. Activate an investigation to access its record and findings exports. An investigation or comparison document can be used to start an HTML report that includes other available workspace documents.
+The **Exporting** menu depends on which workspace document is active. Activate an investigation session to access its record and findings exports. You can start an HTML report from either an investigation session or a comparison document, then select other available workspace documents to include.
 
 ## 2. Copy an individual event
 
@@ -65,7 +65,7 @@ The JSON version is useful when another tool or developer needs the normalized r
 
 ## 3. Export the currently filtered records to CSV
 
-A filtered-record export is useful when you have already narrowed an investigation to the evidence someone else needs. It uses the **complete current filtered record set**, not merely the rows currently visible within the table's on-screen scrolling area.
+A filtered-record export is useful when you have already narrowed an investigation session's visible records to the evidence someone else needs. It uses the **complete current filtered record set**, not merely the rows currently visible within the table's on-screen scrolling area.
 
 1. Keep the Order Fulfillment Incident active. Select **Reset Filters** to establish a predictable starting point.
 
@@ -74,7 +74,7 @@ A filtered-record export is useful when you have already narrowed an investigati
 
    ![Severity filter](screenshots/reporting-and-export-severity-filter.png)
 
-   You can narrow the results further with `DB_TIMEOUT` under **All event codes** if you want an export devoted to that particular event code.
+   You can narrow the results further by selecting `DB_TIMEOUT` in the event-code filter if you want an export devoted to that particular event code.
 
    ![Event code filter](screenshots/reporting-and-export-event-code-filter.png)
 3. Confirm that the **Telemetry Events** table contains matching records. Note the visible record count so you can check your result.
@@ -103,7 +103,7 @@ A finding represents an explicit analyst review decision. Bookmarks and notes al
 
    ![Findings export](screenshots/reporting-and-export-findings-export.png)
 3. Choose the scope appropriate to your task:
-   - **Export All Findings** includes every explicitly classified finding in this investigation, regardless of the current Event Table filters.
+   - **Export All Findings** includes every explicitly classified finding in this investigation, regardless of the current event table filters.
 
       ![Export all findings](screenshots/reporting-and-export-findings-export-all.png)
    - **Export Filtered Findings** includes only classified findings whose records match the active investigation filters.
@@ -112,7 +112,7 @@ A finding represents an explicit analyst review decision. Bookmarks and notes al
    - **Export Bookmarked Findings** includes only classified findings that are also bookmarked, regardless of the active filters.
 
       ![Export bookmarked findings](screenshots/reporting-and-export-findings-export-bookmarked.png)
-4. To test the distinction, apply an Event Table filter that excludes one of your findings.
+4. To test the distinction more clearly, classify at least two records with different severities, then apply a severity filter that excludes one of them. Compare the **All** and **Filtered** export counts. If you only classified one record, excluding it still demonstrates why the filtered count can be zero.
 
    ![Severity filter](screenshots/reporting-and-export-severity-filter-2.png)
 
@@ -127,7 +127,7 @@ A finding represents an explicit analyst review decision. Bookmarks and notes al
 
    ![Exported findings CSV](screenshots/reporting-and-export-findings-csv.png)
 
-You can access the same three scopes from **Exporting > Findings** while the investigation document is active. A scope with zero eligible findings is disabled. The Findings tab itself remains a review list of all your classified records even when an active filter excludes some of them from the Event Table; choosing **Filtered** is what applies that narrower scope to the export.
+You can access the same three scopes from **Exporting > Findings** while the investigation document is active. A scope with zero eligible findings is disabled. The Findings tab itself remains a review list of all your classified records even when an active filter excludes some of them from the event table; choosing **Filtered** is what applies that narrower scope to the export.
 
 Unlike the filtered-record CSV, the findings CSV includes review and provenance information. Its columns include **Finding Status**, **Analyst Note**, **Bookmarked**, **Record ID**, the available canonical and custom fields, source details, and **Raw Source**. That makes it suitable for a structured handoff, but it also warrants particular care: the **Source Path** column and raw log contents may contain information you should not share outside your intended audience.
 
@@ -135,19 +135,19 @@ The findings snapshot is captured before the save dialog opens. Subsequent chang
 
 ## 5. Prepare the Field Gateway HTML report
 
-The HTML report is the broadest handoff in this guide. It can combine multiple open investigations with already-created comparison documents, while preserving each selected document's meaning at the point of export.
+The HTML report is the broadest handoff in this guide. It can combine information from multiple open investigation sessions and previously created comparison documents, preserving each selected document's captured state and analytical results at the point of export.
 
 ![Generated HTML report](screenshots/reporting-and-export-html-report.png)
 
-For the walkthrough, return to the workspace from [Comparing Sessions](comparing-sessions.md). Ideally, it should contain the following three documents:
+For the walkthrough, return to the workspace from [Comparing Sessions](comparing-sessions.md). Ideally, it should contain three open documents: two investigation sessions and the comparison document created from them.
 
-- **Baseline:** [`samples/field-gateway-known-good.log`](../samples/field-gateway-known-good.log)
+- **Baseline investigation session:** [`samples/field-gateway-known-good.log`](../samples/field-gateway-known-good.log)
 
    ![Baseline](screenshots/reporting-and-export-baseline.png)
-- **Comparison:** [`samples/field-gateway-degraded.log`](../samples/field-gateway-degraded.log)
+- **Comparison investigation session:** [`samples/field-gateway-degraded.log`](../samples/field-gateway-degraded.log)
 
    ![Degraded comparison](screenshots/reporting-and-export-degraded.png)
-- **Comparison document:** the Baseline → Comparison snapshot you created from those two sessions.
+- **Comparison document:** the Baseline → Comparison snapshot you created from those sessions.
 
    ![Comparison document](screenshots/reporting-and-export-comparison.png)
 
@@ -176,11 +176,11 @@ Consider whether you want to reset the individual investigation filters before g
 3. Enter optional **Investigation context**, for example: `Review of two fictional Field Gateway runs to document differences in network communication, telemetry buffering, and related events. Observed differences are investigative evidence, not a confirmed root-cause determination.`
 
    ![Report context](screenshots/reporting-and-export-report-context.png)
-4. Under **Included Workspace Documents**, verify that both Field Gateway source investigations are selected under **Sessions** and their comparison is selected under **Comparisons**.
+4. Under **Included Workspace Documents**, verify that both Field Gateway investigation sessions are selected under **Sessions**, and their previously created comparison document is selected under **Comparisons**.
 
    ![Included workspace documents](screenshots/reporting-and-export-report-documents.png)
 
-   Selecting a comparison automatically selects its source investigations *when those investigations are currently open and available*. You can adjust the checkboxes afterward to control the contents of this particular report.
+   Selecting a comparison document automatically selects its source investigation sessions *when those sessions are currently open and available*. You can adjust the checkboxes afterward, including deselecting an automatically selected source investigation session, to control which available documents appear in this particular report.
 5. Leave **Include supporting evidence records** checked for the first walkthrough.
 
    ![Include supporting evidence](screenshots/reporting-and-export-report-evidence.png)
@@ -267,7 +267,7 @@ When at least one side captured a positive-duration window with **both** start a
 
 ### Review each investigation
 
-Open the sections for the known-good and degraded source investigations. Among the material captured, look for:
+Open the report sections generated from the known-good and degraded investigation sessions. Among the material captured, look for:
 
 - **Investigation Scope** and **Severity Summary**, which distinguish the complete imported population, the visible filtered population, and the analysis population.
 
@@ -298,9 +298,9 @@ Open the sections for the known-good and degraded source investigations. Among t
 
    ![Import and data-quality context](screenshots/reporting-and-export-html-context.png)
 
-The **visible population** applies the current Event Table filters, including review-oriented bookmark or finding-status filters. The **analysis population** deliberately ignores those annotation-only restrictions while retaining the source-data filters. This prevents marking or dismissing a finding from silently changing the underlying event-oriented analytical interpretation.
+The **visible population** applies the current event table filters, including review-oriented bookmark or finding-status filters. The **analysis population** deliberately ignores those annotation-only restrictions while retaining the source-data filters. This prevents marking or dismissing a finding from silently changing the underlying event-oriented analytical interpretation.
 
-![Visible vs analysis poulations](screenshots/reporting-and-export-html-visible-analysis.png)
+![Visible vs analysis populations](screenshots/reporting-and-export-html-visible-analysis.png)
 
 An open **SnapshotBacked** investigation can be included in an HTML report just like a **SourceBacked** investigation. The report reflects the records and metadata available to that particular investigation. If you exported an investigation to a standalone `.tsinv` file and later reopened it, some earlier import-provenance information—for example, its original import timestamp—may be unavailable even when the underlying investigation evidence matches the original. Existing comparison documents still retain their earlier captured results; generating the report does not recalculate them.
 
@@ -314,7 +314,7 @@ The exported HTML is self-contained: its presentation and captured data are in o
 
 ![Browser printing to PDF](screenshots/reporting-and-export-html-print.png)
 
-**Always inspect your browser's print preview** before saving or sharing a PDF, especially for long tables, source text, evidence records, and page boundaries. The layout provides pagination guidance, but exact breaks depend on your browser, paper settings, and content; the original self-contained HTML remains preferable when a recipient needs interactive expansion and navigation. TraceScope does not provide a separate native PDF exporter.
+**Always inspect your browser's print preview** before saving or sharing a PDF, especially for long tables, source text, evidence records, and page boundaries. The layout provides pagination guidance, but exact breaks depend on your browser, paper settings, and content; the original self-contained HTML remains preferable when a recipient needs interactive expansion and navigation.
 
 TraceScope deliberately omits the originating workstation's local source-file paths from the shareable HTML report. **That is not automatic redaction of the underlying evidence.** Raw log text, custom attributes, your optional report context, and analyst notes can still contain sensitive information or paths written into the original messages. Inspect the final HTML before distributing it. The same caution applies even more directly to record copies and findings CSV exports, which can explicitly contain source paths.
 
@@ -322,12 +322,12 @@ Finally, distinguish an exported handoff from preserved working evidence. An HTM
 
 ## 8. What each export captures and what to check before sharing
 
-All four handoff methods **leave your original TraceScope investigation unchanged**. However, they capture different information, and none automatically updates an already-copied or exported result when you continue working.
+All four handoff methods **leave the source investigation sessions, comparison documents, and workspace state unchanged**. However, they capture different information, and none automatically updates an already-copied or exported result when you continue working.
 
 | Handoff | What is captured | What remains unchanged afterward | Check before sharing |
 | --- | --- | --- | --- |
 | **Copy an event** | One selected event's available canonical fields, custom attributes, record ID, source metadata, and raw source content, as formatted text or structured JSON on the clipboard. The current commands do **not** include its separate analyst note or finding classification. | The investigation, review state, and source records remain unchanged. Pasted text is a static copy; other clipboard operations can replace the clipboard contents. | Check the recipient and format. Copies can contain local source paths, raw log text, and sensitive source-specific attributes. |
-| **Filtered-record CSV** | All records passing the current Event Table filters, with available canonical and custom fields. This is **not** a findings export; it omits analyst notes, finding classifications, and the findings export's detailed source-provenance columns. | Filters, annotations, and source records remain unchanged. The saved CSV stays as exported even if the investigation changes. | Check the active filters, matching record count, and values in any custom fields before distributing the file. |
+| **Filtered-record CSV** | All records passing the current event table filters, with available canonical and custom fields. This is **not** a findings export; it omits analyst notes, finding classifications, and the findings export's detailed source-provenance columns. | Filters, annotations, and source records remain unchanged. The saved CSV stays as exported even if the investigation changes. | Check the active filters, matching record count, and values in any custom fields before distributing the file. |
 | **Findings CSV** | Explicitly classified findings in the chosen **All**, **Filtered**, or **Bookmarked** scope, including finding status, analyst note, bookmark state, available record fields, source provenance, and raw source text. | Classifications, bookmarks, filters, notes, and source records remain unchanged. The saved CSV does not reflect subsequent review changes. | Check the chosen scope, exported count, analyst-written notes, **Source Path** column, and raw source contents. |
 | **HTML investigation report** | The selected source investigations' captured scope, analysis, findings, annotations, available source/import context, and any selected **previously created** complete or time-scoped comparison results and captured boundaries. The optional checkboxes control extra burst-supporting evidence and the full technical import-profile appendix. | The source investigations and comparisons remain unchanged. The HTML is a separate, immutable point-in-time handoff; it does not become an editable TraceScope workspace. | Check included documents, current session filters, each comparison's captured scope and rate interpretation, optional detail levels, report context, notes, raw evidence, and final browser and print-preview rendering. |
 

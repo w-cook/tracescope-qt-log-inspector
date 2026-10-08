@@ -1,6 +1,6 @@
 # Supported Log Formats in TraceScope
 
-TraceScope imports supported file-based log formats into a common investigation model. The selected **Format** determines how source records are read; an **import profile** determines how the values extracted from those records map to TraceScope's canonical and custom fields.
+TraceScope imports supported file-based log formats into a common normalized record model used by investigation sessions. The selected **Format** determines how source records are read; an **import profile** determines how the values extracted from those records map to TraceScope's canonical and custom fields.
 
 This reference describes the built-in importer families, recognized layouts, source requirements, bundled examples, and Live Following compatibility in TraceScope v1.0.
 
@@ -54,8 +54,8 @@ Windows Event support applies to **XML-formatted events and event collections**.
 
 The following are application persistence formats rather than source-log import formats:
 
-- `.tsinv` — saved investigation evidence
-- `.tsw` — saved workspace manifest
+- `.tsinv` — a saved investigation session snapshot, containing captured records and supporting import/source information rather than the complete investigation session state
+- `.tsw` — a saved workspace manifest, accompanied by a matching `.sessions/` folder containing managed investigation session snapshots
 
 Open those using TraceScope's investigation/workspace commands rather than Import Configuration. See [Saving and Restoring](saving-and-restoring.md).
 
@@ -80,7 +80,7 @@ Extensions such as `.log` and `.txt` are not specific enough to identify one imp
 
 ### Content-based suggestions
 
-For generic text files, TraceScope can inspect representative source content and recognize patterns such as:
+For generic text files, TraceScope can inspect a limited sample of the source content and recognize patterns such as:
 
 - JSON objects on successive lines
 - Key-Value / logfmt assignments
@@ -228,7 +228,7 @@ The CSV parser supports:
 - quoted fields
 - doubled quotation marks inside quoted values
 
-Each physical line is treated as one record. Quoted fields that span multiple physical lines are not supported.
+Each physical line is treated as one record, even when fields are quoted. A quoted value containing an embedded newline is therefore not supported and may produce an import diagnostic.
 
 Records with malformed quoting or inconsistent field counts produce diagnostics.
 
@@ -355,13 +355,7 @@ Example:
 
 **Importer ID:** `iis-w3c`
 
-The IIS importer reads W3C Extended Log records using an active:
-
-```text
-#Fields:
-```
-
-directive.
+The IIS importer uses the active `#Fields:` directive to determine the names and order of the fields in subsequent W3C Extended Log records.
 
 Representative source:
 
@@ -600,7 +594,7 @@ A Structured JSON root object can be imported statically, but it is not a repeat
 
 For Live Following, TraceScope must be able to locate an array of record objects.
 
-Valid live shapes include:
+For example, an actively written source may currently contain one of the following partial documents. The outer array or object has not closed yet, but the individual record objects shown are complete.
 
 ```json
 [
@@ -647,7 +641,9 @@ It is not:
 - a socket or pipe consumer
 - a database reader
 - a direct application integration
-- a live view over a standalone `.tsinv` snapshot
+- a live connection to a standalone `.tsinv` investigation session snapshot
+
+An investigation session snapshot contains previously captured evidence; it is not a growing external log file. To follow additional records, the investigation session must have a suitable connected source.
 
 For source replacement, truncation, rotation, and evidence-continuity behavior, see [Live Following](live-following.md) and [Saving and Restoring](saving-and-restoring.md).
 

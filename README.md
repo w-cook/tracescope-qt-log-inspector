@@ -38,7 +38,7 @@ The goal is to help you build and test an investigation path from the evidence i
 
 Keep working in the same investigation while another application continues writing to the source file. New complete records can join the existing evidence as they arrive, so your filters, findings, timeline, and analytical context can continue alongside the changing log instead of requiring a fresh import each time the file grows.
 
-Pause ingestion when you want to hold the current view, resume to catch up with source data that is still available, or stop following when the live portion of the investigation is complete. TraceScope can keep the table and timeline positioned on the newest visible records as they arrive, and you can turn that behavior off when you want to stay focused on older evidence while new records continue to arrive.
+Pause ingestion when you want to temporarily stop admitting new records, resume to catch up with source data that is still available, or stop following when the live portion of the investigation is complete. TraceScope can keep the table and timeline positioned on the newest visible records as they arrive, and you can turn that behavior off when you want to stay focused on older evidence while new records continue to arrive.
 
 TraceScope also keeps source changes understandable as the investigation evolves. Incomplete writes are admitted only when a complete record is available, rotated files can remain part of one logical source family, and same-path truncation or replacement is tracked as a new source generation. When evidence needs to outlive the external file that produced it, you can preserve the admitted investigation state and continue working from that evidence later.
 
@@ -48,11 +48,11 @@ TraceScope also keeps source changes understandable as the investigation evolves
 
 ## Compare what changed between sessions
 
-Compare related investigations when you want to understand what changed between runs, environments, versions, or operating periods. Choose one investigation as the **Baseline** and another as the **Comparison**, then review differences in severity, event codes, subsystem and entity activity, shared custom fields, and burst behavior wherever the available data supports them.
+Compare related investigations when you want to understand what changed between runs, environments, versions, or operating periods. Choose one investigation session as the **Baseline** and another as the **Comparison**, then review differences in severity, event codes, subsystem and entity activity, shared custom fields, and burst behavior wherever the available data supports them.
 
-You can compare the complete evidence currently admitted to each investigation or independently focus either side on an active time range. That lets you compare whole sessions, matching periods, or a focused interval from one investigation against a broader capture from another, depending on the question you are trying to answer.
+You can compare the complete evidence currently admitted to each investigation session or independently focus either side on a selected time range. That lets you compare whole sessions, matching periods, or a focused interval from one investigation against a broader capture from another, depending on the question you are trying to answer.
 
-Each comparison captures the selected populations and results at the moment you create it. You can continue filtering, following, or otherwise working in the source investigations without changing that saved comparison, then return to the original investigations when a difference gives you something worth examining more closely.
+Each comparison document captures the analytical results, selected evidence scope, and relevant source context at the moment you create it, rather than copying the complete underlying record sets. You can continue filtering, following, or otherwise working in the source investigation sessions without changing that captured comparison, then return to the original sessions when a difference gives you something worth examining more closely.
 
 ![TraceScope investigation comparison](docs/media/comparing-sessions-overview.gif)
 
@@ -64,9 +64,9 @@ Bookmarks, analyst notes, and finding statuses let you keep important observatio
 
 ![TraceScope findings and analyst notes](docs/screenshots/readme-findings.png)
 
-Saving the complete workspace lets you return later with its investigations, filters, findings, comparisons, and window layout intact. A standalone snapshot gives you another option when the admitted evidence from one investigation needs to be preserved independently of the broader workspace.
+Saving the complete workspace lets you return later with its investigation sessions, filters, findings, comparison documents, and window layout intact. A standalone investigation session snapshot (`.tsinv`) provides another option for preserving admitted evidence independently of the broader workspace.
 
-When someone else needs the result, you can choose the level of handoff that fits the situation. Individual records can be copied to the **clipboard** as formatted text or JSON and pasted into another application. Filtered records or classified findings can be exported as **CSV spreadsheets** for further review or sharing. For a fuller handoff, you can generate a self-contained **HTML report** from selected investigations and comparisons, preserving that point-in-time result in a file that can be opened in a browser, reviewed offline, and printed or saved as PDF.
+When someone else needs the result, you can choose the level of handoff that fits the situation. Individual records can be copied to the **clipboard** as formatted text or JSON and pasted into another application. Filtered records or classified findings can be exported as **CSV files** for further review in spreadsheet applications or sharing. For a fuller handoff, you can generate a self-contained **HTML report** from selected investigation sessions and comparison documents, preserving that point-in-time result in a file that can be opened in a browser, reviewed offline, and printed or saved as PDF.
 
 ![TraceScope generated HTML investigation report](docs/screenshots/readme-report.png)
 

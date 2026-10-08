@@ -26,7 +26,7 @@ For each import scenario:
 
 1. the source and its matching import configuration were selected
 2. elapsed time began when **Import** was activated in the Import Configuration dialog
-3. timing ended when the resulting investigation was fully displayed and responsive
+3. timing ended when the resulting investigation session was fully displayed and the application was responsive
 4. the import was repeated three times
 5. the median of the three elapsed times was recorded
 
@@ -38,9 +38,9 @@ It includes work such as:
 - applying the configured field mappings
 - creating normalized investigation records
 - preserving raw-source and source-metadata values
-- installing the records into the investigation model
+- installing the normalized records into the investigation session's table/model infrastructure
 - preparing the table and filter state
-- refreshing summary and timeline presentation required for the completed investigation
+- preparing the summary and timeline presentation associated with the completed investigation session
 
 The measurements were taken manually. The reported tenths of a second are useful for comparing repeated runs of these specific workflows, but they should not be interpreted as high-precision microbenchmark results.
 
@@ -90,7 +90,7 @@ The figures below should therefore be read together with this environment rather
 | Windows Event XML collection | 90,000 | ~102 MiB | 14.9 s | 14.8 s | 14.7 s | **14.8 s** |
 | Structured JSON | 120,000 | ~64 MiB | 7.3 s | 6.2 s | 6.5 s | **6.5 s** |
 
-All five measured investigations completed successfully and remained usable after import.
+All five measured imports completed successfully and produced usable investigation sessions.
 
 The application also remained responsive during the import operations rather than entering a prolonged non-responsive UI state.
 
@@ -119,7 +119,7 @@ The measured JSON Lines, CSV, IIS W3C, and Windows Event XML imports reported de
 
 The Structured JSON scenario used indeterminate progress.
 
-Structured JSON is parsed as a complete structured document rather than through the streamed record-by-record path used by several other importers. That work still runs outside the Qt UI thread, so the application remains responsive while the import is active.
+The measured Structured JSON scenario used complete-document parsing rather than the incremental file-reading path used by several other importers. Structured JSON also supports framing complete records from certain still-open record arrays, but the initial file import still reads the source into memory. The measured import used indeterminate progress, and parsing ran outside the Qt UI thread so the application remained responsive.
 
 TraceScope does not display a fabricated percentage when meaningful incremental progress is not available from the active import path.
 
@@ -176,7 +176,7 @@ TraceScope does not publish a fixed maximum supported file size or record count.
 
 Several line-oriented and XML paths process source data incrementally. This avoids requiring the complete source file to exist as one in-memory input buffer before parsing.
 
-The resulting investigation itself is still retained in memory.
+The imported normalized records and associated investigation session state are still retained in memory.
 
 Memory can therefore grow with:
 
@@ -189,13 +189,13 @@ Memory can therefore grow with:
 - derived analysis state
 - other active investigation data
 
-Streaming reduces one category of input-memory pressure; it does not make investigation memory usage constant.
+Streaming reduces one category of input-memory pressure; it does not make an investigation session's memory usage constant.
 
 ### Structured JSON has different characteristics
 
-Structured JSON uses complete-document parsing and therefore has different memory behavior from the streamed source paths.
+Structured JSON initial imports read the source into memory. Complete documents are parsed as structured JSON, while supported still-open record arrays can use incremental record framing to identify complete records already present in the source. This framing capability does not make the initial file-reading path constant-memory.
 
-Its practical memory requirements depend on both the structured source representation and the normalized investigation constructed from it.
+Practical memory requirements depend on the source buffer, structured parsing or framing, the number and complexity of normalized records, and the retained investigation session state.
 
 ### File size alone is not a sufficient limit
 
@@ -221,7 +221,7 @@ On the documented v1.0 test system, the measured scenarios covered:
 - approximately **20 MiB to 109 MiB** source files
 - median end-to-end import times from **3.0 to 14.8 seconds**
 
-These observations show that the documented workloads completed successfully and produced usable investigations on that system.
+These observations show that the documented import workloads completed successfully and produced usable investigation sessions on that system.
 
 They do **not** establish:
 
@@ -234,6 +234,8 @@ They do **not** establish:
 - equivalent performance on different hardware or operating systems
 - sustained live-follow ingestion capacity
 - performance for arbitrary third-party source structures
+
+These measurements cover initial imports through the point at which the resulting investigation session is displayed and responsive. They do not independently benchmark subsequent interactive operations such as filtering, analytics drilldowns, interface-scale changes, multi-window document movement, or sustained timeline updates during Live Following. Those behaviors require separate measurements if performance claims are made about them.
 
 The results are best understood as reproducible reference workloads for the v1.0 release.
 

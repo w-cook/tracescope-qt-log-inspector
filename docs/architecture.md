@@ -17,7 +17,7 @@ TraceScope is a native, offline Qt/C++ desktop application for investigating fil
 
 ## 1. System overview
 
-TraceScope separates **source interpretation** from the **normalized investigation**, and separates that investigation from its **presentation and durable artifacts**. This allows different source formats to converge on one investigation model without requiring every format to provide the same fields, and allows admitted evidence to remain meaningful even when the original source later changes or becomes unavailable.
+TraceScope separates **source interpretation** from the **normalized records and investigation session state**, and separates those from **workspace presentation and durable persistence artifacts**. This allows different source formats to converge on one investigation model without requiring every format to provide the same fields, and allows admitted evidence to remain meaningful even when the original source later changes or becomes unavailable.
 
 ![TraceScope system overview](diagrams/system-overview.svg)
 
@@ -41,7 +41,7 @@ Optional canonical fields are deliberate. A source may contain useful investigat
 
 An import profile (`src/importing/ImportProfile.h`) selects an importer and defines how source data maps into canonical and custom fields. Depending on the importer, it can also supply record paths, regular expressions, severity aliases, timestamp rules, and unmapped-field preservation. Import profiles are **parsing configurations**, not saved investigations; see [Import Profiles](import-profiles.md).
 
-`ImportResult` is the boundary between parsing and investigation creation or reload. It carries normalized records, diagnostics, processing counts, and cancellation/truncation state. Stable record identity and provenance are subsequently used by selection, annotations, persistence, live-source continuity, and reconciliation.
+`ImportResult` is the boundary between source parsing and the creation, reloading, or reconstruction of an investigation session. It carries normalized records, diagnostics, processing counts, and cancellation/truncation state. Stable record identity and provenance are subsequently used by selection, annotations, persistence, live-source continuity, and reconciliation.
 
 ## 3. Import pipeline
 
@@ -77,7 +77,7 @@ This passive-reader rule is part of TraceScope's source boundary: investigating 
 
 Full log imports run asynchronously so file parsing does not block the Qt event loop. The import path provides cancellation and forwards measurable importer progress when the selected importer can report it.
 
-Line-oriented and other streamable formats can process source data incrementally. Structured JSON requires complete-document handling and therefore has different memory and progress characteristics. The architecture does not treat every supported format as a constant-memory stream.
+Line-oriented and other streamable formats can process source data incrementally. Structured JSON requires structured-document parsing or record framing rather than independent physical-line processing, and may have different buffering, memory, and progress characteristics. The architecture does not treat every supported format as a constant-memory stream.
 
 After parsing, the normalized records themselves become part of the in-memory investigation. Streaming the input file therefore does not imply fixed application memory usage as an investigation grows. Measured behavior and its test environment are documented separately in [Performance Notes](performance.md).
 
@@ -85,7 +85,7 @@ After parsing, the normalized records themselves become part of the in-memory in
 
 ### Session, model, and investigation state
 
-[`InvestigationSession`](../src/workspace/InvestigationSession.h) owns the investigation's normalized records through `InvestigationController`, along with source/backing metadata, import diagnostics, annotations, and session-specific presentation state. [`InvestigationWorkspace`](../src/workspace/InvestigationWorkspace.h) owns the collection of open sessions; an investigation remains the same session regardless of which workspace window currently presents it.
+[`InvestigationSession`](../src/workspace/InvestigationSession.h) owns its normalized records through `InvestigationController`, along with source/backing metadata, import diagnostics, annotations, and session-specific presentation state. [`InvestigationWorkspace`](../src/workspace/InvestigationWorkspace.h) owns the collection of open sessions; an investigation session retains its identity regardless of which workspace window currently presents it.
 
 `InvestigationController` coordinates an `InvestigationTableModel` source model with an `InvestigationFilterProxyModel`. The source model exposes canonical fields and discovered custom-field columns; the proxy provides sorting and filtering. Operations that originate from a visible table row must resolve through the proxy back to the underlying record rather than treating a displayed row number as record identity.
 
@@ -93,11 +93,13 @@ Bookmarks, notes, and finding classifications are stored separately from importe
 
 The filter model supports severity, subsystem, event code, entity, time range, dynamic custom fields, text search, finding status, and bookmark state.
 
+Contextual filtering provides entry points into the same investigation filter state from outside the main filter controls. Event-table selections and supported analytics frequency results can establish corresponding filter criteria, allowing analysts to move from an observed value or aggregate result to the matching records. These interactions reuse the session's existing filtering and analysis infrastructure rather than establishing independent filter populations.
+
 ### Analysis scope
 
 Focused analyzers under `src/analysis/` provide timeline aggregation, issue grouping, value frequencies and trends, cadence analysis, burst detection, and session comparison.
 
-Analysis population is explicit rather than assumed to be synonymous with the rows currently visible in the Event Table. Different features may intentionally operate on filtered records, complete admitted populations, or separately captured comparison populations. Code that introduces a new analysis should define that scope deliberately and preserve it through any resulting snapshot or export.
+The analysis population is explicitly defined rather than assumed to match the records currently visible in the event table. Different features intentionally use different populations: the records admitted into an investigation session, the source-data-filtered analysis population, the records currently visible after review-only filtering, or the population selected when a comparison is created. Code that introduces a new analysis should define that scope deliberately and preserve it through any resulting snapshot or export.
 
 `InvestigationSessionView` composes the investigation-facing presentation and coordinates selection, navigation, filtering, annotations, and refresh of derived analysis views. It remains a presentation layer over the session rather than a second owner of investigation evidence.
 
@@ -107,21 +109,27 @@ Investigation and comparison views implement the common `WorkspaceDocument` abst
 
 The visible windows are peers from the user's perspective: document-scoped actions target the window that invoked them, while workspace-level operations apply to the shared workspace. A root host coordinates cross-window document lookup, transfer, and layout internally; it is not a privileged user-facing workspace window.
 
+Workspace lifecycle coordination also protects document state independently of any particular window. Workspace changes are tracked for unsaved-state handling, and window-close operations account for documents hosted elsewhere in the shared workspace. When another suitable workspace window remains visible, documents can be transferred rather than discarded with their former host. These safeguards preserve the distinction between closing a presentation window and intentionally closing workspace documents.
+
 ![TraceScope investigation and analysis workspace presentation](diagrams/investigation-and-analysis.svg)
 
-Presentation behavior that must remain consistent across documents is centralized rather than embedded independently in individual panels. `InterfaceScale` provides application-wide user scaling on top of the operating system's display/font scaling, while `InvestigationSectionResizePolicy` centralizes constrained-height resize, collapse, and recovery decisions for the main investigation layout. These mechanisms affect presentation only; they do not alter normalized evidence or analysis semantics.
+Presentation behavior that must remain consistent across documents is centralized rather than embedded independently in individual panels. `InterfaceScale` provides persisted, live application-wide user scaling on top of operating-system display and font scaling. Persistent UI surfaces respond to scale changes by recalculating their own geometry, including relevant table, control, and document-layout measurements. DPI-aware presentation infrastructure also addresses native-widget geometry and rendering consistency.
+
+`InvestigationSectionResizePolicy` centralizes constrained-height resizing, manual section collapse, preferred-size restoration, and recovery decisions for the main investigation layout. These mechanisms affect presentation only; they do not alter normalized evidence or analysis semantics.
 
 See [Investigating Logs](investigating-logs.md), [Findings](findings.md), and [Comparing Sessions](comparing-sessions.md) for the corresponding user-facing workflows.
 
 ## 5. Live following and source identity
 
-Live following extends the **same `InvestigationSession`, normalized record model, and investigation state used for static imports**. Newly admitted records join the existing investigation rather than entering a parallel live-only representation.
+Live Following extends the **same `InvestigationSession`, normalized record model, and session state used for static imports**. Newly admitted records enter the existing investigation session rather than a separate live-only representation.
 
 [`LiveSessionFollowCoordinator`](../src/live/LiveSessionFollowCoordinator.h) connects a session to `LiveFileFollower` and the format-specific incremental parsing state required by the session's importer. The follower observes newly available source bytes through the shared passive-read boundary described in [Import pipeline](#3-import-pipeline), while the coordinator turns complete new source content into ordinary `ImportResult` records and admits them through the session's existing append path.
 
 Incremental framing depends on the source format. Line-oriented formats retain incomplete trailing records until later source content completes them. Structured JSON and XML maintain parser state across observations so partial objects or elements are not admitted prematurely. Structured XML live following relies on a repeatable configured record path.
 
 Appending records updates the existing table/model path rather than rebuilding the investigation. Derived analyses and other higher-cost presentation state can be refreshed separately from immediate record admission, allowing live ingestion and analytical presentation to operate at appropriate cadences.
+
+Live ingestion and presentation-follow behavior remain separate concerns. **Following** controls whether new source content is admitted, while **Follow Newest** coordinates how the event table and timeline track newly arriving evidence. Pausing or changing presentation positioning does not redefine the underlying normalized records or their source provenance.
 
 ### Physical files and logical sources
 
@@ -139,13 +147,13 @@ See [Live Following](live-following.md) for the user-facing workflow and [Live-L
 
 TraceScope separates the **evidence currently authoritative for an open investigation** from the fact that durable copies of evidence may also exist. This distinction allows a workspace to preserve recoverable evidence without silently changing how an active investigation should reload or continue.
 
-### Investigation snapshots
+### Investigation session snapshots
 
-A `.tsinv` snapshot stores the normalized investigation evidence captured at a point in time, together with the import profile, import counts and diagnostics, and optional source-continuity metadata. In v1.0, snapshots preserve the normalized interpretation of the source; they do not embed a complete copy of the original source bytes for arbitrary future re-import.
+A `.tsinv` investigation session snapshot stores normalized evidence captured at a point in time, together with the import profile, import counts and diagnostics, and optional source-continuity metadata. In v1.0, snapshots preserve the normalized interpretation of the source; they do not embed a complete copy of the original source bytes for arbitrary future re-import.
 
 Source-continuity metadata can retain the physical path, stable logical source identity, source-family configuration, source generation, and physical-source identity needed for later verification or reconnection. That metadata records where the evidence came from; its presence does not by itself make the external source authoritative for a reopened snapshot.
 
-A standalone `.tsinv` captures investigation evidence but not the broader workspace state such as bookmarks, notes, finding classifications, filters, comparisons, or document layout. Those belong to workspace persistence.
+A standalone `.tsinv` investigation session snapshot preserves captured evidence but not the complete investigation session state or the broader workspace state such as bookmarks, notes, finding classifications, filters, comparisons, or document layout. Those belong to workspace persistence.
 
 ### Backing modes and evidence authority
 
@@ -157,7 +165,7 @@ A standalone `.tsinv` captures investigation evidence but not the broader worksp
 | `SnapshotBacked` | The saved TraceScope snapshot is authoritative. The investigation does not depend on the external source's current contents. |
 | `Hybrid` | Saved snapshot evidence forms the durable baseline, while a verified external source can contribute compatible continuation evidence. |
 
-Backing mode is therefore independent of whether the workspace has recently been saved. Saving a `SourceBacked` session creates durable recovery evidence without automatically converting that open session to `SnapshotBacked` or `Hybrid`.
+Backing mode is therefore independent of whether the workspace has recently been saved. Saving a `SourceBacked` investigation session creates durable recovery evidence without automatically converting that open session to `SnapshotBacked` or `Hybrid`.
 
 Transitions between these modes are explicit. Preserving an investigation as snapshot-only removes its dependence on the current external source. Reconnecting eligible snapshot evidence to a verified source creates a Hybrid relationship without replacing the saved baseline. Conversely, **Use Source as Authoritative** deliberately abandons snapshot authority and reconstructs from the verified external source; it is not an implicit consequence of ordinary reload or recovery.
 
@@ -166,6 +174,8 @@ Transitions between these modes are explicit. Preserving an investigation as sna
 ### Workspace persistence
 
 A `.tsw` workspace stores the relationships and state needed to reconstruct the broader investigation environment: session backing information, investigator-authored record state, filters and presentation state, immutable comparisons, and workspace document layout.
+
+Uncommitted workspace state uses a separate working-artifact boundary. `WorkspaceWorkingArtifactStore` manages temporary investigation session snapshot files needed during workspace operations without treating them as committed workspace package contents. These working artifacts remain separate from the durable snapshots referenced by a saved `.tsw` manifest and can be cleaned up when their working context is no longer needed. This prevents temporary evidence artifacts from being confused with committed workspace persistence.
 
 Each saved workspace is accompanied by a `<workspace-name>.sessions/` directory containing durable `.tsinv` snapshots for its investigations. `WorkspaceSavePackageService` writes the new session snapshots before committing the workspace manifest. Only after the new manifest has been committed are superseded managed snapshots eligible for cleanup. This ordering prevents an interrupted save from causing an existing workspace manifest to begin referring to partially replaced evidence.
 
@@ -191,17 +201,17 @@ See [Saving and Restoring](saving-and-restoring.md) for the corresponding user-f
 
 [`InvestigationComparisonSnapshotBuilder`](../src/workspace/InvestigationComparisonSnapshotBuilder.cpp) creates a comparison from two open investigations with an explicit **Baseline → Comparison** orientation. Each side is captured from either its complete admitted record population or an independently selected time range.
 
-Time-scoped comparison capture is deliberately independent of the investigations' other active filters. The selected record populations, optional time boundaries, requested burst settings, source context, and derived analysis are captured when the comparison is created. The resulting `InvestigationComparisonSnapshot` is immutable: later filtering, navigation, live additions, reloads, or source changes do not redefine it.
+Time-scoped comparison capture is deliberately independent of the investigations' other active filters. The selected record populations are analyzed when the comparison is created. The resulting `InvestigationComparisonSnapshot` captures source context, optional time boundaries, requested burst settings, and derived analytical results rather than retaining complete copies of the selected records. Later filtering, navigation, live additions, reloads, or source changes therefore do not redefine the comparison.
 
 `InvestigationSessionComparisonAnalyzer` performs deterministic analysis over those captured populations. Comparison persistence stores the captured source context, optional time ranges, analysis result, and presentation state so reopening a workspace restores the original comparison rather than recalculating it from the current sessions.
 
-This makes a comparison document an analytical artifact in its own right. It can remain meaningful even if one of its original source investigations is later changed, unavailable, or omitted during workspace restoration.
+This makes a comparison document an independent, immutable analytical capture within the workspace. It can remain meaningful even if one of its original source investigations is later changed, unavailable, or omitted during workspace restoration.
 
 ![TraceScope comparison and reporting](diagrams/comparison-and-reporting.svg)
 
 ### Report capture
 
-HTML report generation introduces a second immutable boundary. `InvestigationReportSnapshotBuilder` captures the selected investigation and comparison material into an `InvestigationReportSnapshot` before rendering begins.
+HTML report generation introduces a separate point-in-time capture boundary for exported reporting. `InvestigationReportSnapshotBuilder` captures the selected investigation session state and existing comparison results into an `InvestigationReportSnapshot` before HTML rendering begins. This creates a separate report-time capture without modifying the underlying investigation sessions or recalculating existing comparison documents.
 
 Investigation report snapshots preserve the report-relevant source context, active investigation filters, record populations, analysis results, findings/evidence, and other selected report state. Included comparisons reuse their already-captured `InvestigationComparisonSnapshot` analysis and scope; report generation does not recalculate them from potentially newer session contents.
 

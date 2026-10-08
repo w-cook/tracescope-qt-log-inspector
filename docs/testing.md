@@ -19,7 +19,7 @@ The current test configuration in [`tests/CMakeLists.txt`](../tests/CMakeLists.t
 
 TraceScope uses **Qt Test / QTest**, CMake, and CTest. Most automated tests exercise focused domain, importer, analysis, persistence, or policy classes using deterministic inputs. Other suites exercise Qt models, dialogs, document hosts, source lifecycle behavior, or integration across several services.
 
-Each registered CTest program is a separate executable and may contain multiple QTest functions. [`tests/CMakeLists.txt`](../tests/CMakeLists.txt) is the source of truth for the current automated inventory.
+Each registered CTest test program corresponds to a separate executable and may contain multiple QTest test functions or cases. [`tests/CMakeLists.txt`](../tests/CMakeLists.txt) is the source of truth for the current automated inventory.
 
 The following groups describe the major areas covered by the suite. Test names are representative rather than exhaustive.
 
@@ -27,19 +27,20 @@ The following groups describe the major areas covered by the suite. Test names a
 | --- | --- | --- |
 | Domain, parsing, and profile rules | `InvestigationRecordTests`, `RecordSeverityTests`, `ImportProfileTests`, `ImportProfileSerializationTests`, `ImportProfileValidatorTests` | Optional normalized fields, severity handling, profile structure, validation, and schema round trips |
 | Importers, preview, and source access | `JsonLinesImporterTests`, `StructuredJsonImporterTests`, `XmlImporterTests`, `SyslogImporterTests`, `IisW3cImporterTests`, `ImportPreviewServiceTests`, `SourceFamilyImportServiceTests`, `SharedReadFileTests` | Format normalization, diagnostics, bounded preview, rotated source families, and passive access to producer-owned files |
-| Table, filters, navigation, and layout policy | `InvestigationTableModelTests`, `InvestigationFilterProxyModelTests`, `InvestigationControllerTests`, `FilterPresetStoreTests`, `InvestigationSectionResizePolicyTests` | Dynamic columns, source/proxy mapping, filters, navigation state, presets, and deterministic constrained-height behavior |
+| Table, filters, navigation, and layout policy | `InvestigationTableModelTests`, `InvestigationFilterProxyModelTests`, `InvestigationControllerTests`, `FilterPresetStoreTests`, `InvestigationSectionResizePolicyTests`, `InvestigationPresentationStateTests` | Dynamic columns, source/proxy mapping, filters, navigation state, presets, constrained-height behavior, presentation-state persistence, scale-aware column restoration, timeline positioning, and analytics drilldowns |
 | Analysis and comparison | `EventTimelineAnalyzerTests`, `InvestigationAnalyticsAnalyzerTests`, `InvestigationBurstAnalyzerTests`, `InvestigationCadenceAnalyzerTests`, `InvestigationSessionComparisonAnalyzerTests`, `InvestigationComparisonSnapshotBuilderTests`, `InvestigationComparisonPersistenceTests` | Timeline aggregation, issue metrics, cadence and bursts, independently time-scoped comparisons, immutable capture, and persistence |
 | Findings, reporting, and export | `InvestigationFindingExportSnapshotBuilderTests`, `InvestigationFindingsCsvExporterTests`, `InvestigationReportSelectionModelTests`, `InvestigationReportSessionSnapshotBuilderTests`, `InvestigationReportSnapshotBuilderTests`, `InvestigationReportHtmlRendererTests` | Findings selection, report capture boundaries, frozen analytical state, structured export, and escaped/self-contained HTML rendering |
-| Workspace and evidence continuity | `InvestigationSessionBackingTests`, `InvestigationSessionBackingPersistenceSerializationTests`, `InvestigationSessionRestorationServiceTests`, `InvestigationSessionSnapshotSerializationTests`, `WorkspaceSerializationTests`, `WorkspaceSavePackageServiceTests`, `WorkspaceDocumentHostTests` | Backing modes, versioned persistence, recovery and reconciliation, save-package durability, document ownership, and cross-window movement |
+| Workspace and evidence continuity | `InvestigationSessionBackingTests`, `InvestigationSessionBackingPersistenceSerializationTests`, `InvestigationSessionRestorationServiceTests`, `InvestigationSessionSnapshotSerializationTests`, `WorkspaceSerializationTests`, `WorkspaceSavePackageServiceTests`, `WorkspaceWorkingArtifactStoreTests`, `WorkspaceDocumentHostTests` | Backing modes, versioned persistence, recovery and reconciliation, committed save-package durability, temporary working-artifact isolation and cleanup, document ownership, and cross-window movement |
 | Live following and physical-source identity | `LiveFileFollowerTests`, `LiveSessionFollowCoordinatorTests`, `LiveLineImportAdapterTests`, `LiveStructuredJsonImportAdapterTests`, `LiveStructuredXmlImportAdapterTests`, `LiveLineSourceContextTests`, `SourcePhysicalIdentityTests` | Appends, partial records, generation changes, format-specific incremental parsing, source continuity, and safe observation of changing files |
 | Standalone Live-Log Generator | `LiveLogScenarioLoaderTests`, `LiveLogScenarioPlayerTests`, `LogRecordRendererFactoryTests`, and renderer-specific suites | Deterministic scenario parsing/playback and source-format rendering used for real-file live-follow verification |
 
 Several v1.0 behaviors deliberately have tests at more than one layer. For example:
 
 - `SharedReadFileTests` verify that TraceScope's read handle does not prevent an external writer from continuing to write and, where the platform supports the operation, remove or rename the source while the TraceScope handle remains open.
-- comparison tests cover complete-session capture, independently selected time ranges, invalid or empty ranges, persistence, and the rule that an existing comparison does not change after later live additions to its source sessions.
-- workspace document-host tests cover ownership-preserving transfers and movement between visible peer windows rather than treating detached windows as disposable copies of documents.
+- comparison tests cover complete investigation session capture, independently selected time ranges, invalid or empty ranges, persistence, and the rule that an existing comparison document does not change after later live additions to its source investigation sessions.
+- `WorkspaceDocumentHostTests` verify document identity and ownership, detachment and redocking, close-request handling, movement to another visible peer window without discarding documents, selection preservation, and workspace-layout round trips.
 - `InvestigationSectionResizePolicyTests` exercise automatic shrink/growth and collapse/recovery rules independently from the widget hierarchy.
+- `InvestigationPresentationStateTests` exercise selected presentation and interaction contracts, including timeline Follow Newest positioning, analytics frequency drilldowns, and event-table column-width restoration across interface scales. These tests complement rather than replace visual regression testing on real displays.
 
 These focused tests complement rather than replace end-to-end and visual verification.
 
@@ -159,10 +160,10 @@ A representative manual live-follow session covers the following areas.
    Exercise truncation, same-path replacement, and rotated source families as separate concepts. Verify source-generation changes and physical-file provenance rather than treating rotation as a generation change.
 
 6. **Evidence continuity**  
-   Save snapshots and workspaces where appropriate. Verify source-unavailable recovery, SnapshotBacked and Hybrid behavior, source reconnection, and explicit source-authority transitions without silently discarding preserved evidence.
+   Save investigation session snapshots and workspaces where appropriate. Verify recovery when external sources are unavailable, **SnapshotBacked** and **Hybrid** investigation session behavior, verified source reconnection, and explicit source-authority transitions without silently discarding preserved evidence.
 
 7. **Investigation and comparison behavior**  
-   Exercise filtering, findings, annotations, timeline/analytics, and comparison capture after the live run. For time-scoped comparisons, verify that each side retains its independently captured range and that subsequent live records do not change an existing comparison.
+   Exercise filtering, findings, annotations, timeline/analytics, and comparison creation after the live run. For time-scoped comparison documents, verify that each side retains its independently captured time range and that subsequently admitted live records do not change the existing comparison results. Also verify contextual filtering from the event table, analytics frequency drilldowns, Follow Newest behavior in both the event table and timeline, and preservation of manual column widths across interface-scale changes.
 
 8. **Reporting and export**  
    Produce CSV and HTML output from the resulting investigation. Confirm that a generated report represents its captured state rather than continuing to change with the live session.
@@ -186,7 +187,7 @@ Generate test output into a disposable directory rather than an important diagno
 
 The v1.0 release combines automated CI gates with manual acceptance checks that are difficult or inappropriate to reduce to headless tests.
 
-Release verification includes:
+The v1.0 release verification checklist includes:
 
 - a clean Release build and complete CTest run on the v1.0 revision on both Windows and Linux CI environments
 - successful creation and startup smoke testing of the Windows portable package and Linux AppImage
@@ -197,7 +198,7 @@ Release verification includes:
 - SnapshotBacked/Hybrid continuity and an explicit return to source authority
 - complete-session and independently time-scoped comparison capture, including confirmation that captured comparisons remain unchanged after later session mutations
 - HTML report generation from restored/captured state and offline review of the resulting document
-- multi-window document movement and workspace restoration across peer windows
+- multi-window document movement, window-close protection, document identity and selection preservation, and workspace restoration across peer windows
 - real-desktop checks for native/fractional DPI behavior, Interface Scale changes, constrained-height section behavior, focus/navigation, and the final major UI surfaces
 - review of the packaged application rather than only the development build
 
@@ -226,7 +227,7 @@ Measured performance observations and their test environment are documented sepa
    Keep parsing, profile mapping, preview, incremental/live behavior, and generator rendering separately testable where they express different contracts.
 
 7. **Test workspace ownership separately from window appearance.**  
-   Document-transfer and persistence logic belongs in deterministic host/layout tests; native frame behavior, display scaling, visual spacing, and focus still require manual desktop regression checks.
+   Document ownership, transfer, workspace-layout persistence, and presentation-state rules should be tested independently where practical. Deterministic host/layout and presentation-state tests should cover document identity, cross-window lifecycle, section resize policies, scale-related state restoration, and interaction behavior. Native frame rendering, fractional DPI, visual spacing, accessibility, and focus still require manual desktop regression checks.
 
 8. **Register new suites with CTest and run both focused and complete verification.**  
    Add the executable and `add_test` registration in `tests/CMakeLists.txt`, run the affected program while developing, and run the complete suite before merging.

@@ -1,6 +1,8 @@
 # Saving and Restoring Investigations in TraceScope
 
-TraceScope is designed for investigations that may span several files, multiple working sessions, and sources that do not stay unchanged. Saving your work involves two related but different things: preserving the **log evidence** you have collected and preserving the **workspace context** in which you investigated it.
+TraceScope is designed for investigations that may span several files, continue over multiple days, and involve sources that change over time. Saving your work involves two related but different things: preserving the **log evidence** you have collected and preserving the **workspace context** in which you investigated it.
+
+![Saved workspace overview](screenshots/saving-and-restoring-overview.png)
 
 This guide explains when to save a complete workspace, when to save an individual investigation snapshot, and how to restore your work when the original log has moved, changed, or disappeared. It includes a safe walkthrough using a *copy* of a supplied sample file, so you can try missing-source recovery without touching your own logs.
 
@@ -18,13 +20,13 @@ If you have not yet imported a log, start with [Getting Started](getting-started
 
 ## 1. Understand what TraceScope saves
 
-A TraceScope investigation can involve three different kinds of file. They serve different purposes and should not be treated as interchangeable.
+TraceScope uses different files to preserve source evidence, investigation snapshots, and workspace state. These files serve different purposes and should not be treated as interchangeable.
 
 | File or folder | What it contains | What it is for |
 | --- | --- | --- |
 | **External log file** (for example, `.jsonl` or `.csv`) | The source records written by the original application. | Importing, reloading, or continuing to follow the source. TraceScope does not control whether another application later truncates or replaces it. |
 | **Investigation snapshot** (`.tsinv`) | A point-in-time copy of normalized records already admitted to one investigation, together with its import profile, import diagnostics and counts, and available source-continuity information. | Keeping the captured evidence independent of the original log file. |
-| **Workspace** (`.tsw` **plus its companion `.sessions/` folder**) | The overall workspace, its saved investigation snapshots, investigation annotations and filters, immutable comparison documents (including any independently captured time boundaries), and applicable document, window, and presentation state. | Stopping work and returning later with the wider investigation context restored. |
+| **Workspace** (`.tsw` **plus its companion `.sessions/` folder**) | The workspace's collection of documents—including investigation sessions and immutable comparisons—along with investigation annotations and filters, saved evidence snapshots, and applicable document, window, and presentation state. | Stopping work and returning later with the wider investigation context restored. |
 
 **The central rule: save the workspace if you want to preserve your investigation, not just its raw evidence.**
 
@@ -40,7 +42,7 @@ gateway-review.sessions/
     ...one or more .tsinv investigation snapshots...
 ```
 
-The `.tsw` file is the workspace's manifest and broader investigation state, including previously created immutable comparison results. Its `.sessions/` folder holds durable evidence snapshots for the investigations saved in that workspace. Both parts are needed. The folder is managed by TraceScope; there is normally no reason to open or rename its individual snapshot files.
+The `.tsw` file is the workspace's manifest and broader investigation state, including previously created immutable comparison results. Its `.sessions/` folder holds durable evidence snapshots for the investigation sessions saved in that workspace. Both parts are needed. The folder is managed by TraceScope; there is normally no reason to open or rename its individual snapshot files.
 
 **Keep the `.tsw` file and its matching `.sessions/` folder together** when copying, backing up, or sharing a workspace. Copying only the `.tsw` file does not preserve the complete saved package.
 
@@ -75,7 +77,7 @@ Using a copy is important: neither the original bundled sample nor any important
 
 In the imported investigation:
 
-1. Filter the **Telemetry Events** table to `WARN` and `ERROR`.
+1. In the severity filter, select `WARN` and `ERROR` to narrow the records displayed in **Telemetry Events**.
 
     ![Severity filters](screenshots/saving-and-restoring-severity-filters.png)
 2. Select a `DB_POOL_HIGH` event and inspect it in **Event Details**.
@@ -99,7 +101,7 @@ In the imported investigation:
 
     ![Findings tab and note](screenshots/saving-and-restoring-findings-note.png)
 
-You have now created several distinct pieces of workspace state: a source/profile association, an active filter, a bookmark, a finding status, a note, and a selected investigation context.
+You have now created state associated with your investigation session, including its source/profile association, active filter, bookmark, finding status, and analyst note. Saving the workspace preserves that state along with the broader workspace context.
 
 ### Save the workspace
 
@@ -112,7 +114,7 @@ You have now created several distinct pieces of workspace state: a source/profil
 
 Subsequent uses of **Save Workspace** update the saved workspace. **File > Save Workspace As...** lets you save the current workspace under a different name or location; its new companion folder is created for that saved workspace.
 
-TraceScope captures a durable evidence snapshot for each investigation when saving. However, the act of saving **does not automatically change which source is authoritative** for an open investigation. Your newly imported session remains **SourceBacked**, with the copied log still serving as its authoritative external source.
+When saving a workspace, TraceScope captures a durable evidence snapshot for each open investigation session. However, saving **does not automatically change an investigation session's backing mode or its authoritative evidence source**. Your newly imported session remains **SourceBacked**, with the copied log still serving as its authoritative external source.
 
 ### Reopen the saved workspace
 
@@ -180,7 +182,7 @@ Other choices in the missing-source prompt are useful in different circumstances
 
 The **Open Saved Snapshot** option appears when a usable saved snapshot is available. If a snapshot is missing or cannot be read, that particular recovery option may not be available.
 
-If you want to retain your recovered SnapshotBacked version *and* keep the original SourceBacked exercise unchanged, use **File > Save Workspace As...** and save the recovered workspace under a new name. Do not overwrite the original exercise workspace just to experiment.
+**Save the workspace if you want to retain the recovered SnapshotBacked state.** To preserve the original SourceBacked exercise as well, choose **File > Save Workspace As...** and save the recovered workspace under a different name. This keeps the original workspace available for repeating the missing-source recovery exercise.
 
 Afterward, you can rename the disposable log back to `order-fulfillment-demo.jsonl` if you want to repeat the original SourceBacked opening exercise.
 
@@ -200,7 +202,7 @@ A standalone snapshot is useful when you need a fixed copy of the evidence colle
 
 TraceScope captures the currently admitted investigation evidence. If the investigation was following a file, this command **does not stop live following or switch its backing mode**. The `.tsinv` represents the captured point in time; subsequent incoming records do not silently modify that saved file.
 
-You can later choose **File > Open Investigation Snapshot...** to open a `.tsinv` as a separate SnapshotBacked investigation.
+You can later choose **File > Open Investigation Snapshot...** to open a `.tsinv` as a new SnapshotBacked investigation session in the workspace.
 
 ![Open investigation snapshot](screenshots/saving-and-restoring-open-snapshot.png)
 
@@ -208,11 +210,11 @@ No original external log is needed to inspect the evidence contained in that sna
 
 The standalone snapshot includes the normalized records and the supporting import and source information that was captured. It is not a substitute for saving analyst work: if you also need bookmarks, notes, finding dispositions, active filters, comparison documents, or layout, **save the `.tsw` workspace**.
 
-Opening a standalone `.tsinv` creates a new investigation from its evidence. It does not silently merge that file into an existing investigation or restore another workspace's annotations.
+Opening a standalone `.tsinv` does not merge its evidence into an existing session or restore annotations and other state from another workspace.
 
 ## 5. Understand the three backing modes
 
-The backing mode answers one essential question: **What is the authoritative source of evidence for this open investigation?** It is separate from whether a workspace has recently been saved.
+An investigation session's backing mode answers one essential question: **What is the authoritative source of evidence for this session?** It is separate from whether the workspace has recently been saved.
 
 | Backing mode | Authoritative evidence | Typical situation |
 | --- | --- | --- |
@@ -220,7 +222,7 @@ The backing mode answers one essential question: **What is the authoritative sou
 | **SnapshotBacked** | Durable TraceScope snapshot evidence. | You opened a standalone `.tsinv`, recovered an unavailable source from a saved workspace snapshot, or deliberately preserved an open investigation as snapshot-only. |
 | **Hybrid** | Saved snapshot evidence forms the durable baseline; a verified connected external source can contribute continuation records. | You reconnect a suitable external source to a SnapshotBacked investigation while retaining the evidence that was already preserved. |
 
-TraceScope exposes the current backing mode and source information in the investigation's tab presentation and tooltip. 
+TraceScope displays each investigation session's backing mode and source information in its workspace tab and tooltip. 
 
 ![Tab tooltip](screenshots/saving-and-restoring-tab-tooltip.png)
 
@@ -230,13 +232,13 @@ The distinction is especially important if a producer truncates or replaces a fi
 
 Use this when keeping all **currently admitted evidence** is more important than continuing to treat the external file as authoritative.
 
-1. Right-click the investigation's **workspace tab**.
+1. Right-click the investigation session's tab in the workspace.
 2. Open **Source > Preserve as Snapshot Only...**.
 
-    ![Preserve as snaphot only](screenshots/saving-and-restoring-preserve-snapshot-only.png)
+    ![Preserve as snapshot only](screenshots/saving-and-restoring-preserve-snapshot-only.png)
 3. Let TraceScope capture the evidence and complete the transition.
 
-This changes the *open investigation* from SourceBacked or Hybrid to **SnapshotBacked**. If live following was active, the transition establishes a stable capture boundary and does not resume following after it succeeds. The investigation no longer depends on the external source to retain its captured evidence.
+This changes the open investigation session's backing mode from SourceBacked or Hybrid to **SnapshotBacked**. If live following was active, the transition establishes a stable capture boundary and does not resume following after it succeeds. The investigation no longer depends on the external source to retain its captured evidence.
 
 **Save the workspace after this transition.** The new backing mode and provisional snapshot initially belong to the current working workspace; saving commits that state to your `.tsw` and its managed companion snapshots. Any later changes to bookmarks, notes, filters, or other workspace state also require another workspace save.
 
@@ -249,7 +251,7 @@ Some SnapshotBacked investigations retain sufficient information about their pre
 1. Restore the recorded source file at its original path, or use **Source > Redefine Source Path...** if you have a verifiable relocated copy and that action is available.
 
     ![Redefine source path](screenshots/saving-and-restoring-redefine-source.png)
-2. Right-click the investigation tab and choose **Source > Reconnect Source**.
+2. Right-click the investigation session's tab and choose **Source > Reconnect Source**.
 
     ![Reconnect source](screenshots/saving-and-restoring-reconnect-source.png)
 3. If TraceScope verifies the source and reconstructs the continuation successfully, the investigation becomes **Hybrid**.
@@ -268,7 +270,7 @@ If you need the accumulated Hybrid evidence instead, leave the snapshot authorit
 
 ## 6. Reload, relocate, and resume work deliberately
 
-Choose **File > Reload Current Session** when you intentionally want to reconstruct the active investigation according to its backing mode.
+With an investigation session active, choose **File > Reload Current Session** when you want to reconstruct that session's evidence according to its backing mode.
 
 ![Reload](screenshots/saving-and-restoring-reload.png)
 
@@ -284,14 +286,14 @@ Where supported, reload preparation occurs before the current investigation is r
 
 A moved source is different from a changed source. Use the correct recovery path for the situation:
 
-- **Reopening a saved SourceBacked workspace whose file is missing:** use **Locate File...** at the missing-source prompt,
+- **Reopening a saved workspace containing a SourceBacked investigation session whose external file is missing:** use **Locate File...** at the missing-source prompt,
 
     ![Locate File](screenshots/saving-and-restoring-locate-file.png)
 
     or **Open Saved Snapshot** to recover saved evidence instead.
 
     ![Open saved snapshot](screenshots/saving-and-restoring-restore-from-snapshot.png)
-- **Changing the recorded location of an already open investigation:** right-click its tab and look under **Source > Redefine Source Path...**. 
+- **Changing the recorded location of an already open investigation:** right-click the investigation session's tab and look under **Source > Redefine Source Path...**. 
 
     ![Redefine source path](screenshots/saving-and-restoring-redefine-source.png)
 

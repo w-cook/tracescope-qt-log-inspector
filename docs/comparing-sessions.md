@@ -1,6 +1,6 @@
 # Comparing Investigation Sessions in TraceScope
 
-A log file can reveal what happened during one run. **Session Comparison** helps you identify how two recorded runs differ—for example, a known-good engineering capture and a later degraded capture. TraceScope compares the normalized records in both investigations and presents differences in event codes, severity, elevated activity, selected source-specific attributes, and optionally detected bursts.
+A log file can reveal what happened during one run. **Session Comparison** helps you identify how two recorded runs differ—for example, a known-good engineering capture and a later degraded capture. TraceScope compares the normalized records from two investigation sessions and presents the results in a separate comparison document, highlighting differences in event codes, severity, elevated activity, selected source-specific attributes, and optionally detected bursts.
 
 ![Comparing investigation sessions](media/comparing-sessions-overview.gif)
 
@@ -42,7 +42,7 @@ The samples use key-value/logfmt records. Their matching profile maps timestamps
 
 ## 2. Open the baseline and comparison investigations
 
-Both sessions must be open in the **same TraceScope workspace** before you create a comparison.
+Import each log as a separate investigation session. Both sessions must be open in the **same TraceScope workspace** before you create a comparison document.
 
 1. Choose **File > Open Log File...**,
 
@@ -52,7 +52,7 @@ Both sessions must be open in the **same TraceScope workspace** before you creat
     
     ![Select the log](screenshots/comparing-sessions-known-good.png)
     
-    and load `field-gateway-support-session-profile.json`using **Load Profile...** in **Import Configuration**.
+    and load `field-gateway-support-session-profile.json` using **Load Profile...** in **Import Configuration**.
 
     ![Load profile](screenshots/comparing-sessions-load-profile.png)
 2. Confirm that the selected format is **Key-Value / logfmt**,
@@ -69,13 +69,13 @@ Both sessions must be open in the **same TraceScope workspace** before you creat
 3. Repeat those steps for `field-gateway-degraded.log`, using **the same profile**.
 
     ![Repeat for the degraded run log](screenshots/comparing-sessions-degraded.png)
-4. Confirm that both investigation tabs are present.
+4. Confirm that both investigation sessions are open as separate tabs in the workspace.
 
     ![Confirm both are present](screenshots/comparing-sessions-both-tabs.png)
 
     Leave the degraded investigation active for the next step.
 
-If you are using the packaged Windows release, look under its included `samples/` directory. For the Linux AppImage, obtain the separate static samples archive or use the repository's sample files, as explained in [Getting Started](getting-started.md#2-find-the-example-log-and-its-profile).
+If you are using the packaged Windows release, look under its included `samples/` directory. For the Linux AppImage, obtain the separate static samples archive or use the repository's sample files, as explained in [Getting Started](getting-started.md#3-find-the-example-log-and-its-profile).
 
 You can inspect and filter either investigation before proceeding. **By default**, a comparison uses all records currently admitted to each investigation, not merely the records visible under its active filters. Alternatively, you can independently capture one or both sessions' **active time-range boundaries** when creating the comparison. Only those boundaries restrict a scoped population; search, severity, subsystem, entity, custom-field, bookmark, and finding-status filters do not. For a live or previously reloaded session, the comparison captures evidence actually held at creation time; it cannot reconstruct historical bytes that were never admitted or are no longer available.
 
@@ -87,7 +87,7 @@ With the degraded investigation active:
 
     ![Compare sessions](screenshots/comparing-sessions-compare.png)
 
-    The command is available when at least two investigation sessions are open. You can also right-click an investigation's workspace tab and choose **Create Comparison...**.
+    The command is available when at least two investigation sessions are open. You can also right-click an investigation session's tab and choose **Create Comparison...**.
 
     ![Compare sessions](screenshots/comparing-sessions-compare-2.png)
 2. In **Compare Investigation Sessions**, set **Baseline** to `field-gateway-known-good.log` and **Comparison** to `field-gateway-degraded.log`.
@@ -96,7 +96,7 @@ With the degraded investigation active:
 3. Read the orientation above the selectors: every displayed delta is **Comparison − Baseline**. Use **Swap Baseline / Comparison** if the sessions are reversed.
 
     ![Swap baseline and comparison](screenshots/comparing-sessions-swap.png)
-4. Leave both **Use this session's active time range** checkboxes unchecked for the first walkthrough, so the known-good and degraded captures are compared in full.
+4. Leave **Use this session's active time range** unchecked for both **Baseline** and **Comparison**. This first walkthrough compares all currently admitted records in each investigation session.
 
     ![Unchecked active time ranges](screenshots/comparing-sessions-active-time-range.png)
 
@@ -110,13 +110,15 @@ With the degraded investigation active:
 
 TraceScope prevents you from selecting the same investigation for both roles. The active session normally defaults to **Comparison**, while another open session is suggested as **Baseline**. Right-clicking a different session's tab can also suggest that clicked session as the baseline; always verify both selectors before continuing.
 
-The comparison appears as its **own workspace document**, with a compact title indicating `Baseline → Comparison`. It does not replace or merge the original investigations.
+The comparison opens as a **separate comparison document** in the workspace, with a compact title indicating `Baseline → Comparison`. It does not replace, merge, or modify either source investigation session.
 
 ![Comparison document](screenshots/comparing-sessions-document.png)
 
 ### Optionally compare selected time ranges
 
-You can compare different periods of two investigations without applying their other temporary Event Table filters to the comparison. Configure the desired **Time Range** filter separately in each source investigation *before* opening **Compare Sessions...**, then use the independent **Use this session's active time range** checkbox under Baseline, Comparison, or both.
+Comparing complete investigation sessions is useful when both captures cover similar periods and operating conditions. When they don't, you may want to compare only the relevant intervals—for example, the period surrounding a failure in a degraded run against a comparable period of normal activity in the baseline. This helps focus the comparison on the behavior you're investigating rather than unrelated activity elsewhere in either capture.
+
+You can compare different periods of two investigation sessions without applying their other active event table filters to the comparison. Configure the desired **Time Range** filter separately in each source investigation *before* opening **Compare Sessions...**, then use the independent **Use this session's active time range** checkbox under Baseline, Comparison, or both.
 
 ![Set time range filter](screenshots/comparing-sessions-set-time-range.png)
 
@@ -209,17 +211,17 @@ Check this section before interpreting a large count difference. If your own com
 
 ## 7. Investigate the differences in the original sessions
 
-The comparison document is a **read-only analytical summary**, not a merged Event Table. Its summary tables do not replace source-record inspection or automatically navigate into individual source events.
+The comparison document is a **read-only analytical summary**, not a merged event table. Its summary tables do not replace source-record inspection or automatically navigate into individual source events.
 
 To follow up on a changed event code or subsystem:
 
 1. Note the event code, subsystem, or entity of interest from **Key Differences**.
-2. Switch to the degraded investigation tab and use its **All event codes**, **All subsystems**, or other available filters to find the corresponding source records.
+2. Switch to the degraded investigation session's tab. Use the event-code filter, subsystem filter, or another available criterion to find the corresponding source records.
 3. Inspect the matching records in **Telemetry Events** and **Event Details**. Broaden filters and examine surrounding activity before interpreting the difference.
 4. Switch to the known-good investigation and examine the corresponding value or nearby activity, when applicable.
 5. Bookmark records, add analyst notes, or create findings in the **individual investigation** if you want to preserve your review decisions. See [Findings](findings.md).
 
-You can place the comparison and its source investigations side by side by detaching or moving their workspace documents into other TraceScope windows. In a narrow window, the comparison document scrolls vertically, and long result tables can have their own scroll areas. Arrange the documents for your available display space rather than expecting everything to fit at once.
+You can place the comparison document and its source investigation sessions side by side by detaching their tabs into separate TraceScope windows. In a narrow window, the comparison document scrolls vertically, and long result tables can have their own scroll areas. Arrange the documents for your available display space rather than expecting everything to fit at once.
 
 ### Know when you need a new comparison
 
@@ -229,13 +231,13 @@ This is intentional: an existing result must keep its original meaning, includin
 
 ## 8. Save or share the comparison
 
-Choose **File > Save Workspace** to preserve the open investigations **and** comparison documents in a `.tsw` workspace.
+Choose **File > Save Workspace** to preserve the workspace's open investigation sessions, comparison documents, and associated state in a `.tsw` workspace package.
 
 ![Save workspace](screenshots/comparing-sessions-save-workspace.png)
 
 The saved workspace also has a companion `<workspace-name>.sessions/` folder holding the investigations' durable evidence snapshots. Keep the `.tsw` file and its matching folder together when moving or backing up your work; see [Saving and Restoring](saving-and-restoring.md).
 
-A saved comparison contains an independent point-in-time result, including the original selected populations' analysis and any independently captured time boundaries. It can still be restored as part of the workspace even if one of its original investigations cannot be reopened and you choose to skip that session during missing-source recovery. A saved comparison is not a substitute for keeping the original source evidence when you need to inspect individual events again.
+A saved comparison contains an independent point-in-time result, including the original selected populations' analysis and any independently captured time boundaries. The comparison document can still be restored as part of the workspace even if one of its source investigation sessions cannot be reopened and you choose **Skip Session** during missing-source recovery. A saved comparison is not a substitute for keeping the original source evidence when you need to inspect individual events again.
 
 For an offline handoff that recipients can read **without TraceScope**, you can create a self-contained HTML report and include the comparison among its selected documents.
 
@@ -250,7 +252,7 @@ A report is another fixed snapshot—not a live connection to either investigati
 | **Compare Sessions...** is unavailable | You need at least **two distinct open investigation sessions** in the current workspace. A comparison document is not itself another source investigation. See [Open the baseline and comparison investigations](#2-open-the-baseline-and-comparison-investigations) for more information. |
 | The dialog will not accept your choices | **Baseline** and **Comparison** must refer to different open investigations. A checked time range must be valid and contain at least one timestamped record. See [Create the comparison](#3-create-the-comparison) and [Optionally compare selected time ranges](#optionally-compare-selected-time-ranges). |
 | A session's time-scope checkbox is disabled | Configure at least one usable **Time Range** boundary in that investigation before opening the comparison dialog. The active range must select timestamped records; other filters do not determine whether a scoped population has matches. See [Optionally compare selected time ranges](#optionally-compare-selected-time-ranges). |
-| The scoped comparison has different counts from the filtered Event Table | This is expected when other source-data or review-only filters are active: an optional comparison scope uses **time boundaries alone** over the complete admitted population. See [Optionally compare selected time ranges](#optionally-compare-selected-time-ranges). |
+| The scoped comparison has different counts from the filtered event table | This is expected when other source-data or review-only filters are active: an optional comparison scope uses **time boundaries alone** over the complete admitted population. See [Optionally compare selected time ranges](#optionally-compare-selected-time-ranges). |
 | Window-Average Records / Minute does not appear | At least one side needs both captured time boundaries with a positive interval. Start-only, end-only, and complete-session sides have no window-average value; the row is omitted if neither side qualifies. See [Use Session Context](#6-use-session-context-to-keep-the-differences-in-perspective). |
 | A field is marked **Unavailable** | Confirm that **both** source investigations contain usable data for the relevant mapped dimension. Missing fields are not assumed to mean zero occurrences. See [Read the comparison from top to bottom](#4-read-the-comparison-from-top-to-bottom) and [Importing Logs](importing-logs.md#3-configure-an-import-profile) for related information. |
 | A custom field you expected does not appear | Check that both profiles use the **same exact custom-field name**, the data contains usable values, and the conservative numeric/categorical comparison rules apply. See [Understand the custom-field limitations](#understand-the-custom-field-limitations) for more information. |

@@ -1,6 +1,6 @@
 # Building TraceScope from Source
 
-This guide covers local developer builds of the TraceScope desktop application, its automated test programs, and the standalone Live-Log Generator. It describes the repository's supported CMake/Qt build structure and the environments used for continuous integration.
+This guide covers local source builds of the TraceScope desktop application, its automated test programs, and the standalone Live-Log Generator CLI and launcher. It describes the repository's supported CMake/Qt build structure and the environments used for continuous integration.
 
 For release packaging, the repository workflow is the authoritative recipe. A successful local source build and a verified portable release artifact are related but separate results.
 
@@ -27,7 +27,7 @@ The configured build requires these Qt components:
 - Qt Concurrent
 - Qt Test
 
-Qt Core is used throughout the application and by the Live-Log Generator CLI. TraceScope itself uses Widgets, Charts, and Concurrent. Qt Test is required because the root build also configures the repository's automated test programs.
+Qt Core is used throughout the application and by the Live-Log Generator CLI. TraceScope itself uses Widgets, Charts, and Concurrent. Qt Test is required for the repository's automated test programs, which are configured as part of the root CMake project.
 
 The root project includes:
 
@@ -75,7 +75,7 @@ Qt Creator is the simplest development path when the installed Qt kit already pr
 3. Configure the project.
 4. Choose the desired build configuration:
    - **Debug** for debugging and development diagnostics
-   - **Release** when reproducing release-like behavior or packaging-related checks
+   - **Release** for optimized builds, release-like behavior, or preparation for packaging verification
 5. Build the `TraceScope` target.
 6. Run `TraceScope` through the configured kit.
 
@@ -90,6 +90,8 @@ If Qt Creator reports that `Qt6Charts` is unavailable, install the Charts module
 ## 3. Windows command-line build
 
 Use a terminal where CMake, Ninja, and the compiler associated with the selected Qt kit are available.
+
+Before configuring, ensure that the selected Qt kit's compatible MinGW `bin` directory is on `PATH` and takes precedence over unrelated compiler installations. The `g++.exe` selected by CMake must match the compiler ABI expected by the Qt installation. If multiple MinGW toolchains are installed, provide the matching compiler's full path rather than relying on `PATH` ordering.
 
 The following PowerShell example uses a placeholder Qt installation path. Replace it with the directory for the installed 64-bit kit that contains `lib/cmake/Qt6`.
 
@@ -119,6 +121,7 @@ Check the active tools when diagnosing configuration or linker problems:
 ```powershell
 cmake --version
 g++ --version
+Get-Command g++ | Select-Object -ExpandProperty Source
 qmake --version
 ```
 
@@ -175,7 +178,7 @@ If the executable builds but fails during startup with a platform-plugin or disp
 
 ### Run the automated test suite
 
-The root project enables testing and configures the programs declared in [`tests/CMakeLists.txt`](../tests/CMakeLists.txt).
+The root CMake project enables testing and configures the registered CTest test programs declared in [`tests/CMakeLists.txt`](../tests/CMakeLists.txt).
 
 After configuring and building:
 
@@ -184,7 +187,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-List the registered CTest programs:
+List the registered CTest test programs:
 
 ```sh
 ctest --test-dir build -N
@@ -258,9 +261,9 @@ This local convenience target is separate from the versioned Live-Log Generator 
 
 ### Developer build versus release artifact
 
-A successful source build proves that the selected source revision can compile in that development environment. It does not establish that the executable is portable to another machine.
+A successful source build establishes that the selected source revision compiled successfully with the configured toolchain and dependencies. It does not, by itself, verify automated tests, interactive application behavior, or deployment completeness. It does not establish that the executable is portable to another machine.
 
-The v1.0 [GitHub Actions workflow](../.github/workflows/ci.yml) produces and verifies the release-oriented artifacts:
+The v1.0 [GitHub Actions workflow](../.github/workflows/ci.yml) is configured to build, package, and verify the following release-oriented artifacts:
 
 - **Windows x64 TraceScope package** — portable ZIP assembled with `windeployqt` and compiler-runtime dependencies
 - **Linux x86_64 TraceScope package** — AppImage assembled using pinned `linuxdeploy` tooling
@@ -270,7 +273,7 @@ The v1.0 [GitHub Actions workflow](../.github/workflows/ci.yml) produces and ver
 
 The application packages include the relevant bundled samples and documentation files.
 
-The workflow verifies required files before publishing its artifacts and performs startup smoke tests against the **deployed packages**, not merely the executables in the build tree.
+During CI execution, the workflow checks required deployment files, performs startup smoke tests against the assembled packages rather than only build-tree executables, and uploads the resulting artifacts when the relevant steps succeed.
 
 The Windows application package is extracted before its smoke test. The Linux AppImage is launched from the packaged artifact with the offscreen Qt platform for CI startup verification.
 

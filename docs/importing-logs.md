@@ -1,6 +1,8 @@
 # Importing Logs into TraceScope
 
-TraceScope works with log files on your computer. Before opening a file as an investigation, you use **Import Configuration** to choose how its records should be interpreted. This guide covers that process, from importing a familiar format to configuring an unfamiliar source and combining related rotated files.
+TraceScope works with log files on your computer. Before importing a log into an investigation session, you use the **Import Configuration window** to choose how its records should be interpreted. This guide covers that process, from importing a familiar format to configuring an unfamiliar source and combining related rotated files.
+
+![Import Configuration window overview](screenshots/readme-import.png)
 
 An import profile describes how TraceScope reads a source and maps its fields. You can reuse a supplied profile, build one from a source, or save your own configuration for later. Importing does not rewrite the original log.
 
@@ -23,7 +25,7 @@ If you have not used TraceScope before, start with [Getting Started](getting-sta
 
 ## 1. Import a log file
 
-1. Choose **File > Open Log File...** (`Ctrl+O` on Windows). TraceScope opens **Import Configuration**.
+1. Choose **File > Open Log File...** (`Ctrl+O` on Windows). TraceScope opens the **Import Configuration window**.
 
     ![Open a log file](screenshots/importing-logs-open-log-file.png)
 
@@ -31,7 +33,7 @@ If you have not used TraceScope before, start with [Getting Started](getting-sta
     
     ![Drag and drop](screenshots/importing-logs-drag-and-drop.png)
 
-    Import Configuration still gives you a chance to inspect it before importing.
+    The **Import Configuration window** still gives you a chance to inspect the file before importing it.
 2. Under **Source**, choose **Browse...** and select your log file. Alternatively, enter its path in the **File** field.
 
     ![Browse for a log file](screenshots/importing-logs-browse-for-log-file.png)
@@ -63,9 +65,11 @@ If you have not used TraceScope before, start with [Getting Started](getting-sta
     ![Validation](screenshots/importing-logs-validation.png)
 
     Examine the preview to confirm that the records contain the information you expect.
-6. Select **Import**. TraceScope processes the selected source and opens it as an investigation document.
+6. Select **Import**.
 
     ![Import](screenshots/importing-logs-import.png)
+
+    TraceScope processes the selected source, creates an **investigation session** containing the imported records, and opens that session as a document in your workspace.
 
 **A format suggestion is a starting point, not a guarantee.** TraceScope can recognize several common formats, but an extension such as `.log` does not reveal every custom log structure. A profile that passes validation can still produce missing values or unexpected results if its mappings do not match your data. Check the preview rather than importing solely because a format was suggested.
 
@@ -75,7 +79,7 @@ If you already have a profile for the source, **Load Profile...** is usually the
 
 ## 2. Find your way around Import Configuration
 
-The dialog is divided into four functional areas:
+The **Import Configuration window** is divided into four functional areas:
 
 | Area | What it controls |
 | --- | --- |
@@ -84,19 +88,19 @@ The dialog is divided into four functional areas:
 | **Source Record Preview** | A limited preview of interpreted records and the original source text of the selected preview row |
 | **Validation** | Whether the current profile configuration is structurally valid |
 
-The profile controls include **New From Source**, **Load Profile...**, **Recent Profiles**, and **Save Profile...**. The **Import** and **Cancel** buttons remain available at the bottom of the dialog.
+The profile controls include **New From Source**, **Load Profile...**, **Recent Profiles**, and **Save Profile...**. The **Import** and **Cancel** buttons remain available at the bottom of the window.
 
-### If the dialog looks different on your screen
+### If the Import Configuration window looks different on your screen
 
 The arrangement responds to the available screen space and interface scaling. On a sufficiently wide display, profile controls and source preview appear beside each other, separated by a **resizable vertical divider**. Drag the divider left if you want to give the preview more room, or right if you need more space to edit the profile and mappings. In a more constrained layout, the content may instead appear under separate **Profile & Mappings** and **Source Preview** tabs. The **Source** and **Validation** areas remain accessible, and you can scroll within the relevant content.
 
 ![Compact view](screenshots/importing-logs-compact-view.png)
 
-You can resize the dialog if your screen permits it. To adjust TraceScope's additional interface scaling, close Import Configuration, choose **View > Interface Scale** from the main application window, and reopen the import dialog.
+You can resize the Import Configuration window if your screen permits it. To adjust TraceScope's interface scaling, close the window, choose **View > Interface Scale** from the main application window, and reopen Import Configuration.
 
 ![Interface scale](screenshots/importing-logs-interface-scale.png)
 
-**100% (System)** uses the operating system's scaling without an additional TraceScope multiplier. The [Getting Started guide](getting-started.md#adjust-the-layout-for-your-screen) explains these options in more detail.
+**100% (System)** uses your operating system's current display scaling as TraceScope's baseline. Other percentages adjust the size of TraceScope's interface relative to that baseline; they do not change your system's display settings. The [Getting Started guide](getting-started.md#adjust-the-layout-for-your-screen) explains how to choose an appropriate scale for your screen.
 
 The location of a control may change between layouts, but its function does not.
 
@@ -129,7 +133,7 @@ The following summarizes the available source families and the main configuratio
 | Regex plain text | Supply a named-capture regular expression, then map its captured fields |
 | Common Apache/Nginx access logs | Use the suggested regex-based preset where the log matches a recognized layout |
 
-The **Supported Formats** reference will describe format-specific expectations and limitations in detail. In particular, Windows Event support is for XML-formatted records and collections; TraceScope does not directly import native binary `.evtx` files.
+The [Supported Formats](supported-formats.md) reference describes each built-in importer, recognized source layouts, format-specific requirements, and limitations in detail. In particular, Windows Event support is limited to XML-formatted records and collections; TraceScope does not directly import native binary `.evtx` files.
 
 Selecting the correct importer matters more than the filename. If no format is suggested for a custom text log, choose **Regex Plain Text** and provide a suitable pattern, or load a profile that already contains one.
 
@@ -139,7 +143,7 @@ The **Canonical Field Mapping** section contains six optional destinations.
 
 ![Canonical field mapping](screenshots/importing-logs-canonical-field-mapping.png)
 
-Enter the *source field or path* containing each value; do not type a sample value from a record.
+Enter the *source field name or path* containing each value, not an example value from a record. For structured sources, a path such as `service.name` identifies a value within the selected record; it is not a filesystem path or a general JSONPath expression. See [Import Profiles](import-profiles.md#3-source-paths-and-format-specific-configuration) for the full source-path rules.
 
 | Destination | Example source field | Used for |
 | --- | --- | --- |
@@ -153,6 +157,8 @@ Enter the *source field or path* containing each value; do not type a sample val
 A JSON source might use `level` for severity, while another might use `priority`; both can map to TraceScope's **Severity** field. The dot-separated examples above illustrate nested paths, not literal field names required by TraceScope.
 
 **Canonical fields are optional.** Leave a mapping blank when the source genuinely lacks that information. TraceScope can still retain and display useful records, although views or filters that depend on an unavailable field may not be offered. Do not invent values merely to make every destination appear populated.
+
+If you map a **Timestamp** field, you must also configure at least one **Timestamp Rule** so TraceScope knows how to interpret its values. See [Parse timestamps](#parse-timestamps) for the available rule types and examples.
 
 For a concrete nested example, open the supplied `samples/structured-json-nested-session.json` and load `samples/profiles/structured-json-nested-profile.json`. This profile maps `observedAt` to Timestamp, `priority` to Severity, `service.name` to Subsystem, and other nested paths to their respective destinations.
 
@@ -199,7 +205,7 @@ Custom fields can become investigation columns and provide additional search and
 
 Keeping it enabled is generally useful when exploring an unfamiliar source: the preview can then help you identify fields you may want to map deliberately. Turning it off is an explicit choice to omit those unmapped attributes from the normalized custom-field data. The original raw source remains available for inspection.
 
-TraceScope can also detect candidate custom fields from previewed source content for supported formats. Review any resulting mappings instead of assuming that automatically discovered fields have the most useful display names.
+TraceScope can also detect candidate custom fields from previewed source content for supported formats. This is a starting point, not a complete scan of every field in the source; fields that occur only in later records may not be discovered. Review the suggested mappings and their display names, and add any important missing fields explicitly.
 
 ### Interpret nonstandard severity values
 
@@ -229,7 +235,7 @@ or **Remove Selected** to remove one you no longer need.
 
 ![Remove timestamp rule](screenshots/importing-logs-remove-timestamp-rule.png)
 
-The bundled JSON and CSV examples use ISO 8601 timestamps, such as `2026-08-11T09:00:05.120Z`. For a different timestamp representation, configure a matching format rather than assuming TraceScope can infer every possible date convention.
+The bundled JSON and CSV examples use ISO 8601 timestamps, such as `2026-08-11T09:00:05.120Z`. For timestamps that do not use ISO 8601, see [Timestamp rules](import-profiles.md#timestamp-rules) in the Import Profiles reference for guidance on configuring Qt-format rules, including format-string examples.
 
 Verify the resulting timestamp column in **Source Record Preview**. A field name can be correct even when its value cannot be parsed using the selected rule; in that case, the record may remain usable without a normalized timestamp, but time-dependent features will have less information.
 
@@ -238,6 +244,8 @@ Verify the resulting timestamp column in **Source Record Preview**. A field name
 For custom line-oriented text, choose **Regex Plain Text** and provide a regular expression with named captures. The capture names become source fields that you can map in **Canonical Field Mapping** or **Custom Field Mappings**.
 
 ![Regular expressions](screenshots/importing-logs-regex.png)
+
+The expression must match the **entire log line**, not just a portion of it. A pattern that matches only part of a record may appear successful in a regex testing tool but will cause TraceScope to skip that record. Using `^` and `$` anchors is a useful starting point when constructing your pattern.
 
 For a working example, open `samples/general-application.log` with `samples/profiles/general-application-regex-profile.json`. The supplied profile captures timestamps, levels, subsystems, event codes, entity IDs, request IDs, and messages from the sample's bracketed log format.
 
@@ -253,7 +261,7 @@ Whether you write the regex yourself or use assistance, first confirm that it ma
 
 ## 4. Save, load, and reset profiles
 
-Once your preview looks right, save the configuration so you do not have to recreate it for the next file from the same source.
+The **Import Configuration window** lets you save, load, and reset import profiles. Once your preview looks right, save the configuration so you do not have to recreate it for the next file from the same source.
 
 **Save a profile:** Choose **Save Profile...** and select a location for the `.json` profile file. Give the profile a meaningful name in the **Name** field before saving. The button requires a valid profile configuration.
 
@@ -275,11 +283,11 @@ Confirm the selected source and preview after loading; a valid profile may not m
 
 If you have edited the current profile, TraceScope requests confirmation before replacing it. Save changes you want to keep first.
 
-Profiles describe **import behavior**. They are not investigation files and do not contain your bookmarks, analyst notes, finding statuses, or saved workspace layout. A saved workspace and a standalone investigation snapshot serve different purposes; see [Getting Started](getting-started.md#7-save-your-workspace) for the introductory distinction.
+Profiles describe **import behavior**. They are not saved investigation sessions or investigation snapshots, and they do not contain your imported records, bookmarks, analyst notes, finding statuses, or saved workspace layout. A saved workspace and a standalone investigation snapshot serve different purposes; see [Getting Started](getting-started.md#8-save-your-workspace) for the introductory distinction.
 
 ## 5. Verify the preview and validation
 
-This is the most important check before importing unfamiliar data. Configuration validation and record preview answer *different* questions.
+Before importing unfamiliar data, use **Validation** and **Source Record Preview** in the **Import Configuration window** to check your current configuration. These are two different checks: validation determines whether the profile is structurally acceptable, while preview helps you determine whether the selected source is being interpreted correctly.
 
 ### Check Validation
 
@@ -291,7 +299,7 @@ Correct errors before proceeding. A warning can identify a questionable setting 
 
 ### Inspect Source Record Preview
 
-The preview shows normalized columns according to your current mappings, including configured custom fields and an **Unmapped Custom Fields** column.
+The preview shows normalized columns according to your current mappings, including configured custom fields. The **Unmapped Custom Fields** column shows additional preserved source attributes when they are available; it may be empty when no unmapped values are retained.
 
 ![Unmapped custom fields](screenshots/importing-logs-unmapped-custom-fields.png)
 
@@ -328,7 +336,7 @@ If the preview is empty or misleading, correct the configuration and preview aga
 
 Some applications move older records into rotated files while continuing to write to an active file. You can import related physical files as one logical source family rather than investigating them in isolation.
 
-1. In **Source**, select the **active log file**: the path that the application currently uses for new writes.
+1. In the **Source** section of the **Import Configuration window**, select the **active log file**: the path that the application currently uses for new writes.
 2. Look beside **Likely format**. If TraceScope detects related rotated files, it offers **Include rotations** with the detected count.
 
     ![Detected rotations](screenshots/importing-logs-detected-rotations.png)
@@ -360,7 +368,7 @@ Some applications move older records into rotated files while continuing to writ
 
 A conventional sequence might be `service.log.3`, `service.log.2`, `service.log.1`, followed by the active `service.log`. Other producers number or timestamp rotations differently, so review the chronology rather than assuming it.
 
-TraceScope keeps each physical file identifiable while investigating the combined logical source. The rotated files are imported in the configured order, with the active file last. A rotated file is not the same concept as a *source generation*, which describes truncation or same-path replacement during live following.
+TraceScope keeps each physical file identifiable while investigating the combined logical source. The rotated files are imported in the configured chronological order, from oldest to newest, with the active file last. A rotated file is not the same concept as a *source generation*, which describes truncation or same-path replacement during live following.
 
 If no rotations are detected, **Review...** can still be used to configure a different naming rule for a valid selected source. The inclusion checkbox is disabled when the current rule finds no eligible rotated files.
 
@@ -372,7 +380,7 @@ A full import runs outside the main UI thread. For importers that report measura
 
 ![Canceling large imports](screenshots/importing-logs-large-imports.png)
 
-Cancelling an import does not install a partially imported investigation. If you are reloading an existing investigation and cancel, its previous contents remain available.
+Cancelling an import does not create a partially imported investigation session in your workspace. If you cancel a reload of an existing investigation session, its previously loaded records remain available.
 
 There is no fixed maximum file-size guarantee. Open investigations retain normalized records and related data in memory, and requirements depend on the source's structure and your machine. Start with representative files when evaluating your own workload. See [Performance Notes](performance.md) for measured scenarios and their limits.
 
@@ -389,7 +397,7 @@ If importing a large structured document, remember that **Refresh Preview** is s
 | Timestamps are missing or unexpectedly blank | Check **Timestamp** mapping and **Timestamp Rules** against representative source values. See [Parse timestamps](#parse-timestamps) for more information. |
 | A custom text source skips records | Review the **Regex pattern** and confirm it matches representative lines. See [Import text using a regular expression](#import-text-using-a-regular-expression) for more information. |
 | Large structured JSON/XML does not preview automatically | Choose **Refresh Preview**. Automatic preview is intentionally disabled for these files above 16 MiB. See [Large structured documents have an explicit preview action](#large-structured-documents-have-an-explicit-preview-action) for more information. |
-| The profile or preview pane seems too narrow | Resize the divider to redistribute space. Use the compact **Profile & Mappings** / **Source Preview** tabs, resize the dialog, or adjust Interface Scale if the available screen width is insufficient. See [Find your way around Import Configuration](#2-find-your-way-around-import-configuration). |
+| The profile or preview pane seems too narrow | Resize the divider to redistribute space. Use the compact **Profile & Mappings** / **Source Preview** tabs, resize the Import Configuration window, or adjust Interface Scale if the available screen width is insufficient. See [Find your way around Import Configuration](#2-find-your-way-around-import-configuration). |
 | Expected rotated files are absent | Confirm that you selected the active file, then use **Review...** to check the naming scheme, file list, and chronology. See [Import a rotated source family](#6-import-a-rotated-source-family) for more information. |
 | The preview looks right, but some later records are missing | Remember that preview is limited. Examine the complete source's consistency and any available import diagnostics; do not assume the first 50 processed records represent the entire file. See [Verify the preview and validation](#5-verify-the-preview-and-validation) and [Import large files](#7-import-large-files) for related information. |
 | The import opens an investigation with no events | Check the importer, paths, record structure, and source content. Try the matching sample profile for a known working example before changing several settings at once. See [Import a log file](#1-import-a-log-file) and [Configure an import profile](#3-configure-an-import-profile) for related information. |
@@ -398,4 +406,4 @@ If importing a large structured document, remember that **Refresh Preview** is s
 
 Once your source is imported, the next task is investigating it: filtering records, following event relationships, exploring the timeline, and interpreting deterministic analytics. Those operations belong in the [Investigating Logs](investigating-logs.md) guide.
 
-For format-by-format requirements and the exact saved profile schema, use the separate **Supported Formats** and **Import Profiles** references when they are available. This guide is intentionally focused on the import workflow rather than duplicating those references.
+For format-specific requirements and limitations, see [Supported Formats](supported-formats.md). For the saved profile schema, source-path rules, and configuration details, see [Import Profiles](import-profiles.md). This guide focuses on the import workflow rather than duplicating those references.

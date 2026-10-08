@@ -1,6 +1,8 @@
 # Investigating Logs with TraceScope
 
-TraceScope helps you move from a large set of imported log records to the smaller set relevant to a question. Its Event Table, filters, timeline, Issue Summary, and Analytics views work together: you can narrow the records, inspect individual events, and follow patterns without changing the original log file.
+TraceScope helps you move from a large set of imported log records to the smaller set relevant to a question. Its event table, filters, timeline, Issue Summary, and Analytics views work together: you can narrow the records, inspect individual events, and follow patterns without changing the original log file.
+
+![Workspace overview](screenshots/investigating-logs-overview.png)
 
 This guide continues the fictional **Order Fulfillment Incident** used in [Getting Started](getting-started.md). It focuses on investigating an existing session. For help importing an unfamiliar source or configuring its fields, see [Importing Logs](importing-logs.md).
 
@@ -8,7 +10,7 @@ This guide continues the fictional **Order Fulfillment Incident** used in [Getti
 
 **In this guide, you will:**
 
-1. [Understand the Event Table](#1-open-an-investigation-and-get-oriented) and [how investigation filters interact](#2-understand-what-filtering-changes).
+1. [Understand the event table](#1-open-an-investigation-and-get-oriented) and [how investigation filters interact](#2-understand-what-filtering-changes).
 2. Use [search and categorical filters](#4-search-for-text-and-filter-by-event-code-or-entity), [time ranges](#7-focus-on-a-time-window), and [source-specific attributes](#5-filter-using-source-specific-custom-attributes).
 3. [Navigate between relevant records](#6-follow-records-using-navigation-and-sorting) without losing track of their original identity.
 4. Use the [timeline](#8-explore-the-event-timeline), [Issue Summary](#9-use-issue-summary-as-another-entry-point), and [Analytics views](#10-explore-frequencies-and-detected-bursts) to move between an overview and individual evidence.
@@ -26,7 +28,7 @@ For a predictable starting point, select **Reset Filters** before following the 
 
 The main investigation areas are:
 
-- **Telemetry Events:** The Event Table displays imported records using canonical and custom fields supplied by the import profile. Select a record *row* here to inspect it. Values participating in active categorical filters are bold within the table.
+- **Telemetry Events:** The event table displays imported records using canonical and custom fields supplied by the import profile. Select a record *row* here to inspect it. Values participating in active categorical filters are bold within the table.
 
     ![Events table](screenshots/investigating-logs-event-table.png)
 
@@ -34,7 +36,7 @@ The main investigation areas are:
 
     ![Events details](screenshots/investigating-logs-event-details.png)
 
-- **Filters and search:** Control which records appear in the Event Table.
+- **Filters and search:** Control which records appear in the event table.
 
     ![Filters and search](screenshots/investigating-logs-filters.png)
 
@@ -46,7 +48,7 @@ The main investigation areas are:
 
     ![Issue summary, findings, and analytics](screenshots/investigating-logs-summary-findings-analytics.png)
 
-**Your layout may differ.** Window dimensions, monitor resolution, operating-system display scaling, and **View > Interface Scale** determine how much can fit at once. TraceScope may automatically collapse the timeline, the Event Table, or the lower investigation area on a constrained display. Use the chevrons at the right of those section headings to expand or collapse them; enlarging the window or selecting a smaller Interface Scale can create more room. Expanding one section when space is limited may collapse another. You do not need every area expanded simultaneously to follow this guide.
+**Your layout may differ.** Window dimensions, monitor resolution, operating-system display scaling, and **View > Interface Scale** determine how much can fit at once. TraceScope may automatically collapse the timeline, the event table, or the lower investigation area on a constrained display. Use the chevrons at the right of those section headings to expand or collapse them; enlarging the window or selecting a smaller Interface Scale can create more room. Expanding one section when space is limited may collapse another. You do not need every area expanded simultaneously to follow this guide.
 
 ## 2. Understand what filtering changes
 
@@ -56,17 +58,17 @@ The filter controls available in a session depend on its data. For example, a fi
 
 Filters work together to narrow the results. You can select multiple values *within* a categorical filter—for example, `WARN` **or** `ERROR`—and combine that selection with another criterion, such as the `Database` subsystem. An additional text search or time window narrows the result further. If several filters leave you with no visible rows, clear one or use **Reset Filters** rather than assuming your records have disappeared.
 
-The **visible-record count** changes as you narrow the Event Table. The Issue Summary, timeline, and Analytics views also respond to filters on source data—such as severity, subsystem, event code, entity, time, custom attributes, and search—but intentionally **ignore review-only filters** such as **Bookmarks only** and **Finding status**. Those two controls narrow the Event Table without redefining the population used by deterministic analysis. Keep this distinction in mind when interpreting counts and patterns.
+The **visible-record count** changes as you narrow the event table. The Issue Summary, timeline, and Analytics views also respond to filters on source data—such as severity, subsystem, event code, entity, time, custom attributes, and search—but intentionally **ignore review-only filters** such as **Bookmarks only** and **Finding status**. Those two controls narrow the event table without redefining the population used by deterministic analysis. For example, enabling **Bookmarks only** may leave just a few rows visible in the event table while the timeline and Analytics continue showing results for all records matching the source-data filters.
 
 ## 3. Isolate elevated events and inspect a record
 
 Let's begin with the period of database trouble in the order-processing sample.
 
-1. Open the severity control, initially labeled **All severities**, and select `WARN` and `ERROR`.
+1. Open the severity filter (which displays **All severities** when no values are selected), and select `WARN` and `ERROR`.
 
     ![Severity filtering](screenshots/investigating-logs-severity-filtering.png)
 
-2. Open the subsystem control, initially labeled **All subsystems**, and select `Database`.
+2. Open the subsystem filter (which displays **All subsystems** when no values are selected), and select `Database`.
 
     ![Subsystem filtering](screenshots/investigating-logs-subsystem-filtering.png)
 
@@ -78,7 +80,7 @@ Let's begin with the period of database trouble in the order-processing sample.
 
     ![Selected event details](screenshots/investigating-logs-selected-event-details.png)
 
-5. Notice the **bold** severity and subsystem values in the Event Table: they indicate values that currently participate in an active filter.
+5. Notice the **bold** severity and subsystem values in the event table: they indicate values that currently participate in an active filter.
 
     ![Bold filter values](screenshots/investigating-logs-bold-filters.png)
 
@@ -86,11 +88,11 @@ You have combined two categorical criteria to focus on one subsystem's warning a
 
 To compare the database events with surrounding activity, clear the subsystem selection while keeping `WARN` and `ERROR` selected. You will now see elevated events from other subsystems as well. This is a useful habit: narrow to inspect a suspected pattern, then widen the context before interpreting it.
 
-**Tip:** You can also right-click a filterable **cell in the Event Table** and select **Filter by This Value**.
+**Tip:** You can also right-click a filterable **cell in the event table** and select **Filter by This Value**.
 
 ![Filter by this value](screenshots/investigating-logs-filter-by-value.png)
 
-The context menu offers **Remove This Filter** when that exact value is already selected. This works for populated severity, subsystem, event-code, entity, and custom-attribute cells; the message column is not an exact-value filter. The Event Table highlights active categorical filter values in bold.
+The context menu offers **Remove This Filter** when that exact value is already selected. This works for populated severity, subsystem, event-code, entity, and custom-attribute cells; the message column is not an exact-value filter. The event table highlights active categorical filter values in bold.
 
 ## 4. Search for text and filter by event code or entity
 
@@ -104,15 +106,15 @@ Categorical filters select known values from your imported data. Text search is 
 
     ![Text search](screenshots/investigating-logs-text-search.png)
 
-3. Examine the Event Table. Search is case-insensitive and looks for the supplied text in the preserved source representation and available mapped fields; it is **not** a regular-expression editor.
+3. Examine the event table. Search is case-insensitive and looks for the supplied text in the preserved source representation and available mapped fields; it is **not** a regular-expression editor.
 4. Clear the search text to restore the previous unsearched view.
-5. Open **All event codes** and select `DB_TIMEOUT` to isolate that particular event code. Select one of the rows and inspect its details.
+5. Open the event-code filter and select `DB_TIMEOUT` to isolate that particular event code. Select one of the rows and inspect its details.
 
     ![Event code filtering](screenshots/investigating-logs-event-code-filtering.png)
 
-When a source provides an entity ID, **All entities** similarly lets you investigate records associated with a specific entity. The sample includes order and other source identifiers; the available options reflect the values actually imported.
+When a source provides an entity ID, the entity filter similarly lets you investigate records associated with a specific entity. The sample includes order and other source identifiers; the available options reflect the values actually imported.
 
-For an exact-value shortcut, right-click a populated **Event Code** or **Entity ID** cell in the Event Table and select **Filter by This Value**. This can save you a trip to the filter control when you notice a relevant value while reading a record.
+For an exact-value shortcut, right-click a populated **Event Code** or **Entity ID** cell in the event table and select **Filter by This Value**. This can save you a trip to the filter control when you notice a relevant value while reading a record.
 
 ![Filter by this value](screenshots/investigating-logs-filter-by-value-2.png)
 
@@ -130,11 +132,11 @@ Not every useful source field fits a standard category. The supplied profile ret
 
     ![Custom filters](screenshots/investigating-logs-custom-filters.png)
 
-3. Choose an available field, such as **Host**, and enter an exact value observed in the Event Table or Event Details, such as `api-01`.
+3. Choose an available field, such as **Host**, and enter an exact value observed in the event table or Event Details, such as `api-01`.
 
     ![Choose custom filter field](screenshots/investigating-logs-custom-filters-field.png)
 
-4. Select **Add**, then return to the Event Table to inspect the narrower selection.
+4. Select **Add**, then return to the event table to inspect the narrower selection.
 
     ![Add custom filter](screenshots/investigating-logs-add-custom-filter.png)
 
@@ -142,15 +144,15 @@ Not every useful source field fits a standard category. The supplied profile ret
 
     ![Custom filters](screenshots/investigating-logs-custom-filters-2.png)
 
-Alternatively, right-click a populated custom-field cell in the Event Table and choose **Filter by This Value**.
+Alternatively, right-click a populated custom-field cell in the event table and choose **Filter by This Value**.
 
 ![Filter by this value](screenshots/investigating-logs-filter-by-value-3.png)
 
-A custom-field filter is an **exact-value** criterion, not a substring search. If a field or value is absent from some records, those records will not match a filter requiring that field and value. A different log format or import profile may expose different custom fields; refer to [Importing Logs](importing-logs.md#keep-source-specific-information-with-custom-fields) if an expected attribute is missing entirely.
+A custom-field filter is an **exact-value** criterion, not a substring search. If a field or value is absent from some records, those records will not match a filter requiring that field and value. You can also filter for multiple accepted values of the same custom field; a record matches that field's criterion if its value equals any of the selected values. A different log format or import profile may expose different custom fields; refer to [Importing Logs](importing-logs.md#keep-source-specific-information-with-custom-fields) if an expected attribute is missing entirely.
 
 ## 6. Follow records using navigation and sorting
 
-When you have isolated a set of interesting events, the Event Table's navigation controls make it easier to move through them.
+When you have isolated a set of interesting events, the event table's navigation controls make it easier to move through them.
 
 1. Select **Reset Filters**,
 
@@ -166,15 +168,17 @@ When you have isolated a set of interesting events, the Event Table's navigation
 4. Use **Previous Issue** and **Next Issue** to jump between **visible** `WARN`, `ERROR`, or `CRITICAL` records. These controls are particularly useful when the current view also contains routine messages.
 
     ![Issue navigation](screenshots/investigating-logs-issue-navigation.png)
-5. Select a different column heading to change the Event Table's sort order, then observe how navigation follows the displayed order.
+5. Select a different column heading to change the event table's sort order, then observe how navigation follows the displayed order.
 
     ![Sort order](screenshots/investigating-logs-sort-order.png)
 
-The number shown in the Event Table's left-hand gutter identifies the event's position in the underlying imported investigation. Filtering or sorting does **not** renumber that event. A bookmarked event receives a **star** beside its number to indicate its bookmarked status.
+**Navigation at the ends of the list:** **Previous Event** and **Next Event** stop at the first or last visible record. **Previous Issue** and **Next Issue** instead wrap around, returning to the last or first visible elevated-severity record when you reach the opposite end.
+
+The number shown in the event table's left-hand gutter identifies the event's position in the underlying imported investigation. Filtering or sorting does **not** renumber that event. A bookmarked event receives a **star** beside its number to indicate its bookmarked status.
 
 **Context matters:** Navigation follows the *currently visible, sorted* rows. If you want to inspect what happened immediately before or after a selected event in the broader source, clear overly restrictive filters and use an appropriate chronological sort. Adjacent rows in a filtered list are not necessarily consecutive events in the original source.
 
-The **Event Details** panel follows your selected Event Table record. Its **Custom Attributes** appear before the **Source / Provenance** block; if the record has a saved note, you can read it at the top without opening the note editor.
+The **Event Details** panel follows your selected event table record. Its **Custom Attributes** appear before the **Source / Provenance** block; if the record has a saved note, you can read it at the top without opening the note editor.
 
 ## 7. Focus on a time window
 
@@ -187,29 +191,29 @@ When your log has valid mapped timestamps, TraceScope lets you narrow an investi
     and choose **Time Range**.
 
     ![Time range](screenshots/investigating-logs-time-range.png)
-2. In **Time Range Filter**, enable **From**, **To**, or both, and set the boundaries you want to inspect. The dialog labels its controls **UTC**.
+2. In the **Time Range Filter** dialog, enable **From**, **To**, or both, and set the boundaries you want to inspect. The date and time controls use **UTC**.
 
     ![Time range dialog](screenshots/investigating-logs-time-range-dialog.png)
-3. Close the dialog and observe the updated Event Table and summary. The **Time Range** button reflects the active bounds.
+3. The time-range filter updates as you change its controls; you do not need to confirm the selection separately. Close the **Time Range Filter** dialog when you're finished and observe the updated event table and summary. The **Time Range** button indicates when a time-range filter is active.
 
     ![Time range active](screenshots/investigating-logs-time-range-active.png)
-4. To return to the full time span, reopen **Time Range** and disable the active boundaries, or use **Reset Filters**.
+4. To return to the full time span, select **Time Range** again and disable the active boundaries, or use **Reset Filters**.
 
     ![Reset filters](screenshots/investigating-logs-reset-filters.png)
 
 The time boundaries are **inclusive**. Records without usable timestamps cannot match an active time-range filter. Be sure you understand the source's time zone and the import profile's timestamp rules before drawing conclusions about the sequence of events.
 
-You can also right-click a valid **Timestamp** cell in the Event Table and choose **Filter From This Timestamp** or **Filter Through This Timestamp**.
+You can also right-click a valid **Timestamp** cell in the event table and choose **Filter From This Timestamp** or **Filter Through This Timestamp**.
 
 ![Filter from this timestamp](screenshots/investigating-logs-filter-from-value.png)
 
 If you choose a boundary that is already active on that timestamp, the menu offers its removal instead.
 
-**Comparing a period between investigations:** These same active From/To boundaries can optionally be captured *independently* for Baseline and Comparison when you create a new session comparison. Only the selected time boundaries apply to its scoped record population; unrelated Event Table filters do not. See [Comparing Sessions](comparing-sessions.md#optionally-compare-selected-time-ranges) for that separate workflow.
+**Comparing a period between investigations:** These same active From/To boundaries can optionally be captured *independently* for Baseline and Comparison when you create a new session comparison. Only the selected time boundaries apply to its scoped record population; unrelated event table filters do not. See [Comparing Sessions](comparing-sessions.md#optionally-compare-selected-time-ranges) for that separate workflow.
 
 ## 8. Explore the event timeline
 
-**Event Counts Over Time** shows the distribution of records matching your source-data filters (regardless of any review-only bookmark or finding-status filter). It is often a faster starting point for locating a concentrated period of activity than scanning the entire Event Table.
+**Event Counts Over Time** shows the distribution of records matching your source-data filters (regardless of any review-only bookmark or finding-status filter). It is often a faster starting point for locating a concentrated period of activity than scanning the entire event table.
 
 1. Select **Reset Filters** 
 
@@ -217,7 +221,7 @@ If you choose a boundary that is already active on that timestamp, the menu offe
 
     and expand **Event Counts Over Time** if it is collapsed.
 2. Examine the chart for changes across the sample's recorded interval. The sample includes routine activity followed by database and other operational problems, making it suitable for exploring shifts in activity.
-3. Use **Bucket size**. **Auto** chooses an interval suited to the available chart space and time span; choosing a specific interval gives you a more detailed or broader view.
+3. Use **Bucket size**. **Auto** chooses an interval that keeps the complete timeline readable within the available chart space. Selecting a specific interval preserves that bucket size and allows you to scroll horizontally when the resulting timeline is wider than the chart.
 
     ![Bucket size](screenshots/investigating-logs-bucket-size.png)
 
@@ -239,7 +243,7 @@ If you choose a boundary that is already active on that timestamp, the menu offe
 
     When you double-click a severity or subsystem series, the drill-down also narrows to that series.
 
-Look back at the filter controls after a timeline drill-down. The timeline is not a separate selection system: it configures the same investigation filters used by the Event Table and other views. Drilling down narrows the current investigation; it does not silently broaden filters you had already applied.
+Look back at the filter controls after a timeline drill-down. The timeline is not a separate selection system: it configures the same investigation filters used by the event table and other views. Drilling down narrows the current investigation; it does not silently broaden filters you had already applied.
 
 If a time-based chart is unavailable or unhelpful for your own log, confirm that the import profile maps timestamps correctly. A timeline is only as meaningful as its source timestamps and the interval you choose.
 
@@ -255,10 +259,10 @@ The lower investigation area's **Issue Summary** tab groups `WARN`, `ERROR`, and
 2. Compare the **Warnings**, **Errors**, and **Total** columns across the listed subsystems.
 
     ![Issue summary](screenshots/investigating-logs-issue-summary.png)
-3. **Double-click** a populated warning or error count for a subsystem. TraceScope updates the investigation filters to show the corresponding issue category for that subsystem.
+3. **Double-click** a populated **Warnings** or **Errors** count to filter the investigation to that category within the selected subsystem. You can also double-click a subsystem name or its **Total** count to investigate all elevated-severity events for that subsystem.
 
     ![Issue summary drill-down](media/investigating-logs-issue-summary-drill-down.gif)
-4. Inspect the matching rows in the Event Table. To consider a broader explanation, reset or widen your filters and compare other subsystems and nearby timestamps.
+4. Inspect the matching rows in the event table. To consider a broader explanation, reset or widen your filters and compare other subsystems and nearby timestamps.
 
 The **Errors** drill-down includes `ERROR` and `CRITICAL` events; the **Total** represents the subsystem's elevated-severity records. An entry without a subsystem may appear in the summary, but it cannot be used for an exact subsystem drill-down.
 
@@ -284,7 +288,7 @@ The lower **Analytics** tab provides additional, deterministic views over record
 
     ![Event code drill-down](media/investigating-logs-analytics-overview-drill-down.gif)
 
-    Inspect the resulting Event Table rows and, when useful, their surrounding records.
+    Inspect the resulting event table rows and, when useful, their surrounding records.
 
 A high frequency is an observation about the available records, not automatically a fault. Routine health checks and expected retries can also be frequent. Narrowing or widening your filters changes which records are included in these counts.
 
@@ -302,7 +306,7 @@ A high frequency is an observation about the available records, not automaticall
 
     ![Burst settings](screenshots/investigating-logs-burst-settings.png)
 
-    **Auto** derives its timing window and merge gap from the cadence of the records being analyzed; **Manual** uses the timing values you specify.
+    **Auto** derives its timing window and merge gap from the cadence of the records being analyzed; **Manual** uses the timing values you specify. A burst can qualify by meeting either the **WARN/ERROR/CRITICAL** event-count threshold or the separate **ERROR/CRITICAL** threshold within the detection window.
 
     ![Burst settings dialog](screenshots/investigating-logs-burst-dialog.png)
 
@@ -311,7 +315,7 @@ A high frequency is an observation about the available records, not automaticall
 
     ![Burst drill-down](media/investigating-logs-burst-drill-down.gif)
 
-    Inspect those records in the Event Table and Event Details, then return to **Analytics > Bursts** and observe the updated results.
+    Inspect those records in the event table and Event Details, then return to **Analytics > Bursts** and observe the updated results.
 5. Select **Reset Filters** to restore the broader investigation and compare its detected bursts with the narrower view.
 
     ![Reset filters](screenshots/investigating-logs-reset-filters.png)
@@ -342,6 +346,8 @@ Presets can retain more than categorical selections: they include search text, a
 
 ![Delete filter preset](screenshots/investigating-logs-delete-filter-preset.png)
 
+Saved filter presets are stored in TraceScope's application settings and remain available across investigations.
+
 **Check presets after applying them to a different investigation.** Available fields and recorded values vary by source. A saved exact event code, subsystem, timestamp window, or custom-field criterion may make sense for one file but leave no visible matches in another. A preset preserves a useful question; it does not guarantee that a different source can answer it.
 
 For a specific investigation you want to resume later, **File > Save Workspace** also preserves the broader investigation context, including its current filter state. A workspace is not a replacement for a reusable preset, and a preset is not a replacement for saving your investigation.
@@ -350,8 +356,8 @@ For a specific investigation you want to resume later, **File > Save Workspace**
 
 | Situation | What to check |
 | --- | --- |
-| The Event Table is empty after selecting filters | Inspect the combined criteria. Reset filters and add them one at a time; a matching value in one category does not guarantee a record matches every active category. See [Understand what filtering changes](#2-understand-what-filtering-changes) for more information. |
-| The timeline, Issue Summary, or Analytics counts differ from the Event Table | Check the active filters. The analysis views respond to source-data filters, but ignore review-only **Bookmarks only** and **Finding status** selections. See [Understand what filtering changes](#2-understand-what-filtering-changes) for more information. |
+| The event table is empty after selecting filters | Inspect the combined criteria. Reset filters and add them one at a time; a matching value in one category does not guarantee a record matches every active category. See [Understand what filtering changes](#2-understand-what-filtering-changes) for more information. |
+| The timeline, Issue Summary, or Analytics counts differ from the event table | Check the active filters. The analysis views respond to source-data filters, but ignore review-only **Bookmarks only** and **Finding status** selections. See [Understand what filtering changes](#2-understand-what-filtering-changes) for more information. |
 | An expected filter control or analytical tab is missing | Check whether the imported source has the necessary canonical fields. Use Import Configuration and the source preview to review mappings. See [Open an investigation and get oriented](#1-open-an-investigation-and-get-oriented) and [Importing Logs](importing-logs.md#3-configure-an-import-profile) for related information. |
 | A time-range filter hides records you expected to see | Check UTC boundaries, imported timestamp validity, and the source's time-zone conventions. See [Focus on a time window](#7-focus-on-a-time-window) for more information. |
 | A custom-field filter finds no results | Confirm the exact field name and exact recorded value in Event Details; not every record necessarily contains that field. See [Filter using source-specific custom attributes](#5-filter-using-source-specific-custom-attributes) for more information. |
