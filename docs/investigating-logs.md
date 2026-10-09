@@ -199,7 +199,7 @@ When your log has valid mapped timestamps, TraceScope lets you narrow an investi
     ![Time range active](screenshots/investigating-logs-time-range-active.png)
 4. To return to the full time span, select **Time Range** again and disable the active boundaries, or use **Reset Filters**.
 
-    ![Reset filters](screenshots/investigating-logs-reset-filters.png)
+    ![Reset filters](screenshots/investigating-logs-reset-filters-2.png)
 
 The time boundaries are **inclusive**. Records without usable timestamps cannot match an active time-range filter. Be sure you understand the source's time zone and the import profile's timestamp rules before drawing conclusions about the sequence of events.
 

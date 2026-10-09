@@ -52,7 +52,7 @@ Compare related investigations when you want to understand what changed between 
 
 You can compare the complete evidence currently admitted to each investigation session or independently focus either side on a selected time range. That lets you compare whole sessions, matching periods, or a focused interval from one investigation against a broader capture from another, depending on the question you are trying to answer.
 
-Each comparison document captures the analytical results, selected evidence scope, and relevant source context at the moment you create it, rather than copying the complete underlying record sets. You can continue filtering, following, or otherwise working in the source investigation sessions without changing that captured comparison, then return to the original sessions when a difference gives you something worth examining more closely.
+Each comparison document captures the analytical results, selected evidence scope, and relevant source context at the moment you create it, rather than copying the complete underlying record sets. You can continue filtering, following, or otherwise working in the source investigation sessions without changing that captured comparison. Return to the original sessions when a difference gives you something worth examining more closely.
 
 ![TraceScope investigation comparison](docs/media/comparing-sessions-overview.gif)
 
